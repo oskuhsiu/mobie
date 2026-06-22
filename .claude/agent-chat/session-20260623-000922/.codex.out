@@ -1,0 +1,2 @@
+Q1 我表態 **改，但只做載入邊界的最小 sanitization**：`speciesId` 無效直接丟棄，`level/ivs/nature` clamp 到合法範圍。這不是把 localStorage 當不可信輸入大做 schema，而是保護「壞檔讓 PWA 永久開不起來」這個高痛點失敗模式；尤其 `speciesId` crash 會跨重開持續存在，成本和收益不成比例地值得做。Q2 我表態 **不改**：`QUALITY_ENERGY/energyGain` 目前是單一 UI 流程的手感參數，不是 engine domain rule；除非之後出現非 UI 戰鬥模擬、測試需要固定能量模型、或多個 battle presenter 共用，才有下沉理由。  
+STATUS: AGREE

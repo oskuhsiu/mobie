@@ -1,0 +1,20 @@
+{
+  "topic": "pokemon-mezastar code review 兩個判斷題：(1) 是否該對載入 localStorage 的存檔做欄位級 sanitization（clamp level 1..100 / ivs 0..31 / nature 0..24 / 驗 speciesId）？(2) 能量/QTE 調校常數 QUALITY_ENERGY/energyGain 是否該從 ui/BattleScreen 下沉到 game/engine？背景：單人 iPad 自用 PWA，資料只由遊戲自己寫入，key 已版本化。請各自對兩題明確表態（改/不改）+理由。",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 3,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T00:09:22+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-000922",
+  "models": {}
+}
