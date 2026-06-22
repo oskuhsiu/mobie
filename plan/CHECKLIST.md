@@ -67,6 +67,27 @@
 - [ ] 程序化 preset SFX：命中/倒下/選取/效果絕佳/低血量嗶；chiptune BGM loop
 - [ ] setIntensity：低血量警報 / BGM crossfade，不停 transport
 
+## M1.5 進階 — 意外機制 + 個體差異/成長（依 07-systems-design.md）
+### M1.5e 個體差異
+- [ ] `individual.ts`：seed→{ivs(0-31), nature(25種), shiny} 決定論 roll
+- [ ] `stats.ts` 補 nature 乘數（±10%）
+- [ ] 個體 UI：星級 IV(1-5)、性格名、能力值紅(加)藍(減)色標、異色；0-31 放長按/debug
+- [ ] vitest：seed 決定論、nature 乘數、IV→星級門檻
+### M1.5f 成長
+- [ ] `growth.ts`：Medium Fast n^3 曲線、gainExp(依被擊敗者等級)、levelUp 重算
+- [ ] 資料模型 OwnedUnit(canonical) vs BattleUnit(派生)
+- [ ] `PersistenceAdapter` 介面 + `LocalStorageAdapter`（只存 canonical OwnedUnit roster+exp）
+- [ ] 勝利結算顯示 EXP/升級；vitest：n^3 曲線、升級重算
+### M1.5g 意外機制
+- [ ] 統一 RandomEvent `{type,actorId,roll,outcome,source}`；reducer 隨機點全走它
+- [ ] 支援輪盤：每隔 N 回合，隨機 攻擊UP/必定會心/支援補刀/摃龜
+- [ ] 捕獲球輪盤：球種→捕獲率係數
+- [ ] 攻擊 QTE 加「連打蓄力」色階加成段
+- [ ] vitest：支援輪盤/球輪盤決定論、共用 RandomEvent
+### M1.5h 星擊 Finisher（延後）
+- [ ] 能量槽：只由 QTE 表現+連鎖累積（不綁隨機），極簡細條 UI
+- [ ] 滿槽放自製大招「星擊」演出（FxCanvas+audio）
+
 ## M2 — QR 掃描 + 卡庫
 - [ ] `parseCardCode()`：MZ1 解析 + CRC 校驗
 - [ ] BarcodeDetector 掃描 + zxing fallback
