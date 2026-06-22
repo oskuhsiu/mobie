@@ -79,11 +79,12 @@
 - [x] `stats.ts` 補 nature 乘數（±10%、最後套用）；`buildBattlePokemon` 依 cardId roll 個體；野生不再用固定 IV
 - [x] 個體 UI（`IndividualInfo`）：星級 IV(1-5)、性格名+加紅減藍箭頭、異色；Encounter 顯 0-31 明細、CardSelect 卡片顯星級+性格
 - [x] vitest（10）：seed 決定論、IV 範圍、性格表(25/5 neutral)、nature 乘數、IV→星級單調
-### M1.5f 成長
-- [ ] `growth.ts`：Medium Fast n^3 曲線、gainExp(依被擊敗者等級)、levelUp 重算
-- [ ] 資料模型 OwnedUnit(canonical) vs BattleUnit(派生)
-- [ ] `PersistenceAdapter` 介面 + `LocalStorageAdapter`（只存 canonical OwnedUnit roster+exp）
-- [ ] 勝利結算顯示 EXP/升級；vitest：n^3 曲線、升級重算
+### M1.5f 成長 ✅ 完成（實機驗證 EXP+持久化）
+- [x] `growth.ts`：Medium Fast `n^3`（expForLevel/levelFromExp 互逆）、`expYield`(依被擊敗者等級)、`applyExp` 升級重算（等級只增不減）、`createOwnedUnit`/`ownedToCard`
+- [x] 資料模型 `OwnedUnit`(canonical：id/level/exp/ivs/nature/seed/shiny) → buildBattlePokemon 派生
+- [x] `PersistenceAdapter` 介面 + `LocalStorageAdapter`（只存 canonical OwnedUnit）+ `MemoryAdapter`(測試)
+- [x] `rosterStore`：開場 load/seed、勝利 `grantBattleExp` 加經驗存檔；CardSelect 從 roster、結算顯示 EXP/升級
+- [x] vitest（11）：n^3 往返、expYield 單調、applyExp 升級/不降/封頂、create 決定論、Adapter 契約；實機驗證 +334EXP 與 localStorage 持久化
 ### M1.5g 意外機制
 - [ ] 統一 RandomEvent `{type,actorId,roll,outcome,source}`；reducer 隨機點全走它
 - [ ] 支援輪盤：每隔 N 回合，隨機 攻擊UP/必定會心/支援補刀/摃龜

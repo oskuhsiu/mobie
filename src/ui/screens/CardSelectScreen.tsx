@@ -2,7 +2,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { TEAM_SIZE } from '@/game/machine/gameMachine'
-import { PLAYER_CARDS } from '@/game/data/playerCards'
+import { useRoster } from '@/store/rosterStore'
+import { ownedToCard } from '@/game/growth'
 import { buildBattlePokemon } from '@/game/stats'
 import { typeEffectiveness } from '@/game/data/typeChart'
 import { audio } from '@/audio/audioEngine'
@@ -17,9 +18,13 @@ export function CardSelectScreen() {
     [context.foeTeam],
   )
 
+  const roster = useRoster((s) => s.roster)
   const cards = useMemo(
-    () => PLAYER_CARDS.map((c) => ({ card: c, mon: buildBattlePokemon(c) })),
-    [],
+    () => roster.map((u) => {
+      const card = ownedToCard(u)
+      return { card, mon: buildBattlePokemon(card) }
+    }),
+    [roster],
   )
 
   // 已選卡片 id（依點選順序，最多 TEAM_SIZE 隻）
@@ -37,7 +42,7 @@ export function CardSelectScreen() {
   const engage = () => {
     if (picked.length !== TEAM_SIZE) return
     const chosen = picked
-      .map((id) => PLAYER_CARDS.find((c) => c.cardId === id))
+      .map((id) => cards.find((c) => c.card.cardId === id)?.card)
       .filter((c): c is NonNullable<typeof c> => Boolean(c))
     send({ type: 'SELECT_TEAM', cards: chosen })
   }

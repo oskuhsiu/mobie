@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { GameProvider, useGame } from '@/app/GameProvider'
+import { useRoster } from '@/store/rosterStore'
 import { getRegion } from '@/game/data/regions'
 import { TitleScreen } from '@/ui/screens/TitleScreen'
 import { RegionSelectScreen } from '@/ui/screens/RegionSelectScreen'
@@ -43,6 +45,8 @@ function Stage() {
 }
 
 export function App() {
+  // 開場載入持久化 roster（localStorage；空則 seed 預設並存檔）
+  useEffect(() => { void useRoster.getState().load() }, [])
   return (
     <GameProvider>
       <Stage />

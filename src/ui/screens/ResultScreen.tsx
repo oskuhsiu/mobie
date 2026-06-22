@@ -4,6 +4,8 @@ import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
 import { attemptCapture } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
+import { useRoster } from '@/store/rosterStore'
+import { getSpecies } from '@/game/data/species'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 
 function Pokeball({ size = 64 }: { size?: number }) {
@@ -152,11 +154,36 @@ export function ResultScreen() {
   const isWin = context.outcome === 'win'
   const [captureDone, setCaptureDone] = useState(!isWin)
 
+  // 勝利：給參戰隊伍加經驗、升級、存檔（只做一次）
+  const grantBattleExp = useRoster((s) => s.grantBattleExp)
+  const lastResults = useRoster((s) => s.lastResults)
+  const grantedRef = useRef(false)
+  useEffect(() => {
+    if (!isWin || grantedRef.current) return
+    grantedRef.current = true
+    void grantBattleExp(
+      context.playerTeam.map((c) => c.cardId),
+      context.foeTeam.map((c) => c.level),
+    )
+  }, [isWin, context.playerTeam, context.foeTeam, grantBattleExp])
+
   return (
     <div className="col" style={{ flex: 1 }}>
       {isWin
         ? <WinView onCaptured={(ok) => { send({ type: 'SET_CAPTURED', captured: ok }); setCaptureDone(true) }} />
         : <LoseView />}
+
+      {isWin && lastResults.length > 0 && (
+        <motion.div className="exp-summary" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          {lastResults.map((r) => (
+            <div key={r.unit.id} className="exp-row">
+              <span className="exp-row__name">{getSpecies(r.unit.speciesId).nameZh}</span>
+              <span className="exp-row__exp">+{r.gained} EXP</span>
+              {r.leveledUp && <span className="exp-row__up">Lv.{r.fromLevel}→{r.toLevel}！</span>}
+            </div>
+          ))}
+        </motion.div>
+      )}
 
       <AnimatePresence>
         {captureDone && (

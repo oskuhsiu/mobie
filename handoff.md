@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-M1、**M1.5 a–e 全部完成並驗證**：a 可玩 3v3、b 主動換人＋防禦 QTE、c FxCanvas 粒子、d Tone.js 音效、e 個體差異（IV/性格/異色 + 個體 UI）。下一步 **M1.5f：成長（EXP/升級 n^3 + PersistenceAdapter）**。目標：完成全部 M1.x（剩 f、g、h）。
+M1、**M1.5 a–f 全部完成並驗證**：a 可玩 3v3、b 換人＋防禦 QTE、c FxCanvas 粒子、d Tone.js 音效、e 個體差異、f 成長（EXP/升級 n³ + localStorage 持久化 roster）。下一步 **M1.5g：意外機制（支援輪盤+球輪盤+連打蓄力+統一 RandomEvent）**。目標：完成全部 M1.x（剩 g、h）。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
 

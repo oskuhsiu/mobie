@@ -312,6 +312,18 @@ body {
 .indiv__iv { font-variant-numeric: tabular-nums; opacity: 0.92; }
 .indiv__iv b { margin-left: 3px; }
 
+/* ============ EXP 結算 ============ */
+.exp-summary {
+  display: flex; flex-direction: column; gap: 6px;
+  max-width: 420px; width: 100%; margin: 8px auto 0;
+  padding: 12px 16px; border-radius: 14px;
+  background: rgba(0,0,0,0.4); border: 1px solid var(--stroke);
+}
+.exp-row { display: flex; gap: 10px; align-items: baseline; font-size: 15px; }
+.exp-row__name { font-weight: 800; min-width: 5em; }
+.exp-row__exp { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
+.exp-row__up { color: var(--good); font-weight: 900; margin-left: auto; }
+
 /* ============ Misc layout ============ */
 .row { display: flex; align-items: center; gap: 12px; }
 .col { display: flex; flex-direction: column; }

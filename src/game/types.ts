@@ -45,9 +45,26 @@ export interface Card {
   cardId: string
   speciesId: number
   level: number
-  /** 個體值種子；M1 用固定值，未提供則視為良好個體 */
+  /** 個體值；未提供則由 cardId 決定論 roll */
   ivs?: Partial<Stats>
+  /** 性格 id；未提供則由 cardId 決定論 roll */
+  nature?: NatureId
   shiny?: boolean
+}
+
+/**
+ * 擁有的寶可夢（canonical，唯一持久化的資料；M1.5f）。
+ * 派生的戰鬥數值一律由此經 buildBattlePokemon 算出，不存中間態。
+ */
+export interface OwnedUnit {
+  id: string
+  speciesId: number
+  level: number
+  exp: number
+  ivs: Stats
+  nature: NatureId
+  seed: string
+  shiny: boolean
 }
 
 /** 進入戰鬥的實例：最終數值已由 buildBattlePokemon 算好 */

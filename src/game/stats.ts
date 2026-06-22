@@ -30,7 +30,7 @@ export function buildBattlePokemon(card: Card): BattlePokemon {
     hp: ivOf('hp'), atk: ivOf('atk'), def: ivOf('def'),
     spa: ivOf('spa'), spd: ivOf('spd'), spe: ivOf('spe'),
   }
-  const nature = ind.nature
+  const nature = card.nature ?? ind.nature
   const maxHp = hpStat(b.hp, ivs.hp, lv)
 
   return {
