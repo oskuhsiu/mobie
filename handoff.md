@@ -9,7 +9,16 @@
 
 > **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
 
-> commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
+> **玩測回饋修正（2026-06-22 晚）**：使用者實玩後回報。已做並 Chrome CDP 實機驗證完整 loop：
+> 1) **修勝利畫面卡死**（WinView 計時器依賴不穩定 onCaptured 被 cleanup 清掉）→ callback ref + 一次性 effect。
+> 2) **捕獲真的入隊**：`rosterStore.captureUnit`（cardId 當 seed，個體與戰鬥一致），收服 boss 加入並存檔。
+> 3) **戰敗也給部分經驗**（`grantBattleExp` 加 ratio，`LOSS_EXP_RATIO=0.15`），破解「要先贏才能變強」死結。
+> 4) **練習模式**：`practiceRegion`（低等級常見、無傳說 boss）+ `regionLookup`，RegionSelect 練習入口。
+> 5) **戰鬥回合上限** `MAX_TURNS=30`（reducer 依剩餘血量判勝，避免免疫/極低傷打不完）。
+> 6) **HP 牌貼角色同側**（不易看錯）；**選寶可夢對全 3 隻對手剋制建議 + 一鍵推薦**（`recommend.ts`）。
+> 詳見 `plan/07-systems-design.md` H 段。`species/moves/regions/playerCards.ts` 仍為產生檔勿手改；`practiceRegion.ts` 是手動維護的非產生檔。
+
+> commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）
 - 設計總覽與里程碑：`plan/README.md`
