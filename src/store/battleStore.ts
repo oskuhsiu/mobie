@@ -41,7 +41,7 @@ interface BattleUiState {
   init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
   setBattle: (battle: BattleState) => void
-  /** 單隻 HP（觸發 HpBar tween） */
+  /** 單隻 HP（觸發血條 tween） */
   setMemberHp: (side: Side, index: number, hp: number) => void
   /** 換上場（主動或強制） */
   setActiveIndex: (side: Side, index: number) => void

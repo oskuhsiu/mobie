@@ -128,7 +128,7 @@ function TeamTray({ members, activeIndex, align }: {
 
 /** 緊貼立繪的精簡 HP 牌：名稱 + Lv + 血條（自家顯示數字）。放在角色同側，避免看錯誰的血。 */
 function HpPlate({ mon, owner, label }: { mon: BattlePokemon; owner: boolean; label: string }) {
-  const ratio = Math.max(0, mon.currentHp / mon.maxHp)
+  const ratio = Math.max(0, mon.currentHp) / mon.maxHp
   const tone = hpToneClass(ratio, 'hpbar__fill')
   return (
     <div className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}>

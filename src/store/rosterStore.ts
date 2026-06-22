@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Card, OwnedUnit } from '@/game/types'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { applyExp, createOwnedUnit, expYield, type ExpResult } from '@/game/growth'
+import { sanitizeRoster } from '@/game/rosterSanitize'
 import { LocalStorageAdapter, type PersistenceAdapter } from '@/game/persistence'
 
 const adapter: PersistenceAdapter = new LocalStorageAdapter()
@@ -37,12 +38,15 @@ export const useRoster = create<RosterState>((set, get) => ({
 
   load: async () => {
     const saved = await adapter.loadRoster()
-    if (saved.length === 0) {
+    // 載入邊界防護：丟棄壞項 / 夾合法範圍，擋「壞檔讓遊戲開不起來」的死迴圈
+    const clean = sanitizeRoster(saved)
+    if (clean.length === 0) {
       const seeded = defaultRoster()
       await adapter.saveRoster(seeded)
       set({ roster: seeded, loaded: true })
     } else {
-      set({ roster: saved, loaded: true })
+      if (clean.length !== saved.length) await adapter.saveRoster(clean) // 有丟棄壞項 → 修檔回寫
+      set({ roster: clean, loaded: true })
     }
   },
 
