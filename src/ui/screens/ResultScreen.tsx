@@ -8,6 +8,9 @@ import { useRoster } from '@/store/rosterStore'
 import { getSpecies } from '@/game/data/species'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 
+/** 戰敗仍給的經驗比例（相對勝利全額）——讓每場都有累積，破解「要先贏才能變強」死結 */
+const LOSS_EXP_RATIO = 0.15
+
 function Pokeball({ size = 64, color = '#ff5161' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64">
@@ -143,7 +146,7 @@ function LoseView() {
         </motion.div>
       )}
       <div className="h-title" style={{ fontSize: 30 }}>你被擊敗了…</div>
-      <div className="h-sub">換一隻屬性相剋的寶可夢再挑戰看看</div>
+      <div className="h-sub">雖敗猶榮，仍獲得了一些經驗。換隻屬性相剋的，或先去練習場練等再來！</div>
     </div>
   )
 }
@@ -153,19 +156,20 @@ export function ResultScreen() {
   const isWin = context.outcome === 'win'
   const [captureDone, setCaptureDone] = useState(!isWin)
 
-  // 勝利：給參戰隊伍加經驗、升級、存檔（只做一次）
+  // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
   const captureUnit = useRoster((s) => s.captureUnit)
   const lastResults = useRoster((s) => s.lastResults)
   const grantedRef = useRef(false)
   useEffect(() => {
-    if (!isWin || grantedRef.current) return
+    if (!context.outcome || grantedRef.current) return
     grantedRef.current = true
     void grantBattleExp(
       context.playerTeam.map((c) => c.cardId),
       context.foeTeam.map((c) => c.level),
+      isWin ? 1 : LOSS_EXP_RATIO,
     )
-  }, [isWin, context.playerTeam, context.foeTeam, grantBattleExp])
+  }, [isWin, context.outcome, context.playerTeam, context.foeTeam, grantBattleExp])
 
   // 收服回呼：穩定參照（避免 WinView 計時器 effect 因父層 re-render churn）
   const onCaptured = useCallback((ok: boolean) => {
@@ -183,8 +187,9 @@ export function ResultScreen() {
         ? <WinView onCaptured={onCaptured} />
         : <LoseView />}
 
-      {isWin && lastResults.length > 0 && (
+      {lastResults.length > 0 && (
         <motion.div className="exp-summary" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          {!isWin && <div className="exp-summary__head">獲得經驗</div>}
           {lastResults.map((r) => (
             <div key={r.unit.id} className="exp-row">
               <span className="exp-row__name">{getSpecies(r.unit.speciesId).nameZh}</span>

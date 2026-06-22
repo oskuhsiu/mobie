@@ -109,3 +109,18 @@ interface PersistenceAdapter {
 - 星級 IV 分級門檻（IV 總和 → 1–5 星）。
 - EXP 取得量公式（依被擊敗者等級）。
 - 球種對捕獲率的係數。
+
+## H. 玩測回饋衍生（2026-06-22，使用者實玩後）
+已實作：
+- **捕獲入隊修正**：勝利收服的 boss 之前只播動畫沒真的入隊（`rosterStore` 無 add 路徑）。
+  新增 `captureUnit(card)`：以 `cardId` 當 seed 建 canonical `OwnedUnit`（個體與戰鬥畫面一致），加入並存檔。
+  同時修掉 `ResultScreen` WinView 計時器卡死（依賴不穩定 `onCaptured` 被 cleanup 清掉）→ 改 callback ref + 一次性 effect。
+- **戰敗也給部分經驗**：`grantBattleExp` 加 `ratio`，敗北給 `LOSS_EXP_RATIO`（0.15，約 15%），打破「要先贏才能變強」死結。
+- **練習模式**：`practiceRegion`（低等級常見寶可夢、無傳說 boss）+ `regionLookup`；低風險刷經驗練等。
+- **戰鬥回合上限**：`MAX_TURNS`，超過依雙方剩餘血量比例判勝（避免相剋免疫造成打不完）。
+- **HP 牌貼角色**、**選寶可夢對全 3 隻對手的剋制建議 + 一鍵推薦**（純 UI/輔助）。
+
+未來（記下，暫不做）：
+- **受傷寶可夢需要時間恢復**：戰鬥後未滿血的隊員不立即回滿，需經過一段（真實/遊戲內）時間或道具才恢復，
+  增加隊伍輪替與養成深度。實作要點：`OwnedUnit` 增 `currentHp`/`restingUntil` 之類 canonical 欄位（或獨立 status 表）、
+  選隊畫面顯示恢復中、戰鬥載入時夾現有 HP。需與「HP 跨換人持續、不自動回復」的戰鬥內規則區分（這是「跨場」恢復）。
