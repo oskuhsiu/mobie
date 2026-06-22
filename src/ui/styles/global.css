@@ -301,6 +301,17 @@ body {
   box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
+/* ============ Individual (個體值/性格) ============ */
+.indiv { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.indiv__row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; font-size: 12px; }
+.indiv__stars { color: var(--accent); letter-spacing: 1px; font-size: 12px; }
+.indiv__stars--dim { color: rgba(255,255,255,0.22); }
+.indiv__nature { font-weight: 800; color: var(--text-dim); }
+.indiv__shiny { color: var(--accent); font-weight: 800; font-size: 11px; }
+.indiv__ivs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 11px; }
+.indiv__iv { font-variant-numeric: tabular-nums; opacity: 0.92; }
+.indiv__iv b { margin-left: 3px; }
+
 /* ============ Misc layout ============ */
 .row { display: flex; align-items: center; gap: 12px; }
 .col { display: flex; flex-direction: column; }

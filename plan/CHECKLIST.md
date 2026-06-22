@@ -74,11 +74,11 @@
 - [x] 驗證：START→動態載 tone、全場戰鬥 SFX/BGM 零 console error
 
 ## M1.5 進階 — 意外機制 + 個體差異/成長（依 07-systems-design.md）
-### M1.5e 個體差異
-- [ ] `individual.ts`：seed→{ivs(0-31), nature(25種), shiny} 決定論 roll
-- [ ] `stats.ts` 補 nature 乘數（±10%）
-- [ ] 個體 UI：星級 IV(1-5)、性格名、能力值紅(加)藍(減)色標、異色；0-31 放長按/debug
-- [ ] vitest：seed 決定論、nature 乘數、IV→星級門檻
+### M1.5e 個體差異 ✅ 完成（實機驗證）
+- [x] `individual.ts`：seed→{ivs(0-31), nature(25種), shiny} 決定論 roll（mulberry32+fnv1a hash）
+- [x] `stats.ts` 補 nature 乘數（±10%、最後套用）；`buildBattlePokemon` 依 cardId roll 個體；野生不再用固定 IV
+- [x] 個體 UI（`IndividualInfo`）：星級 IV(1-5)、性格名+加紅減藍箭頭、異色；Encounter 顯 0-31 明細、CardSelect 卡片顯星級+性格
+- [x] vitest（10）：seed 決定論、IV 範圍、性格表(25/5 neutral)、nature 乘數、IV→星級單調
 ### M1.5f 成長
 - [ ] `growth.ts`：Medium Fast n^3 曲線、gainExp(依被擊敗者等級)、levelUp 重算
 - [ ] 資料模型 OwnedUnit(canonical) vs BattleUnit(派生)

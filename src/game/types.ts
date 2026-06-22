@@ -7,6 +7,9 @@ export type TypeName =
 
 export type MoveCategory = 'physical' | 'special'
 
+/** 性格 id（0–24），對應 individual.ts 的 NATURES 表 */
+export type NatureId = number
+
 export interface Stats {
   hp: number
   atk: number
@@ -64,6 +67,10 @@ export interface BattlePokemon {
   move: Move
   artworkUrl: string
   shiny: boolean
+  /** 個體值（0–31/項，M1.5e） */
+  ivs: Stats
+  /** 性格 id（0–24） */
+  nature: NatureId
 }
 
 export interface Region {

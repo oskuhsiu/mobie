@@ -8,6 +8,7 @@ import { typeEffectiveness } from '@/game/data/typeChart'
 import { audio } from '@/audio/audioEngine'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
+import { IndividualInfo } from '@/ui/components/IndividualInfo'
 
 export function CardSelectScreen() {
   const { context, send } = useGame()
@@ -100,6 +101,7 @@ export function CardSelectScreen() {
               </div>
               <div className="poke-card__name">{mon.nameZh}</div>
               <div className="poke-card__types"><TypeBadges types={mon.types} /></div>
+              <IndividualInfo mon={mon} />
             </motion.button>
           )
         })}

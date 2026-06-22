@@ -13,6 +13,7 @@ function mon(over: Partial<BattlePokemon> = {}): BattlePokemon {
     speciesId: 0, name: 'Mon', nameZh: '怪', types: ['normal'], level: 10,
     maxHp: 100, currentHp: 100, atk: 50, def: 50, spa: 50, spd: 50, spe: 50,
     artworkUrl: '', shiny: false,
+    ivs: { hp: 16, atk: 16, def: 16, spa: 16, spd: 16, spe: 16 }, nature: 0,
     ...over,
     move: over.move ?? move('normal'),
   }

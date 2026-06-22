@@ -4,6 +4,7 @@ import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
+import { IndividualInfo } from '@/ui/components/IndividualInfo'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
@@ -41,6 +42,7 @@ export function EncounterScreen() {
             {wild.nameZh} <span className="hpbar__lv">Lv.{wild.level}</span>
           </div>
           <TypeBadges types={wild.types} />
+          <IndividualInfo mon={wild} detailed />
           {/* 對手隊伍縮圖（最後一隻為 boss） */}
           <div className="row" style={{ gap: 10, marginTop: 6 }}>
             {foes.map((f, i) => (

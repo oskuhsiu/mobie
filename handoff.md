@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-M1 與 **M1.5 主線 a–d 全部完成並驗證**：a 可玩 3v3、b 主動換人＋防禦 QTE、c FxCanvas 粒子+shake+倒下淡出、d Tone.js 音效（動態載入、SFX+BGM+intensity）。下一步 **M1.5e：個體差異（IV/性格/異色）**。目標：完成全部 M1.x（剩 e、f、g、h）。
+M1、**M1.5 a–e 全部完成並驗證**：a 可玩 3v3、b 主動換人＋防禦 QTE、c FxCanvas 粒子、d Tone.js 音效、e 個體差異（IV/性格/異色 + 個體 UI）。下一步 **M1.5f：成長（EXP/升級 n^3 + PersistenceAdapter）**。目標：完成全部 M1.x（剩 f、g、h）。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
 
