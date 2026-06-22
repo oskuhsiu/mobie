@@ -1,0 +1,79 @@
+// 共用型別定義 — M1 戰鬥與資料層
+
+export type TypeName =
+  | 'normal' | 'fire' | 'water' | 'electric' | 'grass' | 'ice'
+  | 'fighting' | 'poison' | 'ground' | 'flying' | 'psychic' | 'bug'
+  | 'rock' | 'ghost' | 'dragon' | 'dark' | 'steel' | 'fairy'
+
+export type MoveCategory = 'physical' | 'special'
+
+export interface Stats {
+  hp: number
+  atk: number
+  def: number
+  spa: number
+  spd: number
+  spe: number
+}
+
+export interface Move {
+  id: number
+  name: string
+  nameZh: string
+  type: TypeName
+  power: number
+  accuracy: number // 0–100
+  category: MoveCategory
+}
+
+export interface Species {
+  id: number // 全國圖鑑編號
+  name: string
+  nameZh: string
+  types: TypeName[] // 1–2 屬性
+  baseStats: Stats
+  moveId: number // M1：單一專屬招式
+  /** PokéAPI 官方 artwork（billboard / 立繪用），runtime 載入 */
+  artworkUrl: string
+}
+
+/** 實體卡（M2 由 QR 反查），M1 用本地假卡 roster 取代 */
+export interface Card {
+  cardId: string
+  speciesId: number
+  level: number
+  /** 個體值種子；M1 用固定值，未提供則視為良好個體 */
+  ivs?: Partial<Stats>
+  shiny?: boolean
+}
+
+/** 進入戰鬥的實例：最終數值已由 buildBattlePokemon 算好 */
+export interface BattlePokemon {
+  speciesId: number
+  name: string
+  nameZh: string
+  types: TypeName[]
+  level: number
+  maxHp: number
+  currentHp: number
+  atk: number
+  def: number
+  spa: number
+  spd: number
+  spe: number
+  move: Move
+  artworkUrl: string
+  shiny: boolean
+}
+
+export interface Region {
+  id: string
+  name: string
+  /** 主題色（漸層起訖），用於畫面背景 */
+  gradient: [string, string]
+  /** emoji / 圖示 */
+  icon: string
+  blurb: string
+  /** 野生遭遇表：speciesId → 權重，等級區間 */
+  encounters: Array<{ speciesId: number; weight: number; minLevel: number; maxLevel: number }>
+}

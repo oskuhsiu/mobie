@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.vite
+
+# 使用者本機 drop-in 的 3D 模型，不入庫（責任框架：repo 不散布侵權資產）
+public/models/*
+!public/models/.gitkeep
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea
