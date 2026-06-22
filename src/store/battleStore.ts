@@ -29,6 +29,8 @@ interface BattleUiState {
   hitFx: HitFx | null
   fxCounter: number
   captured: boolean | null
+  /** 正在倒下淡出的一方（其當前 active），活躍換上後清掉 */
+  fainting: Side | null
 
   init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
@@ -41,6 +43,7 @@ interface BattleUiState {
   pushLog: (msg: string) => void
   setBanner: (b: string | null) => void
   setAttacking: (s: Side | null) => void
+  setFainting: (s: Side | null) => void
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
@@ -55,12 +58,13 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   hitFx: null,
   fxCounter: 0,
   captured: null,
+  fainting: null,
 
   init: (playerMembers, foeMembers) =>
     set({
       battle: createBattleState(playerMembers, foeMembers),
       phase: 'intro', log: [], banner: null,
-      attacking: null, hitFx: null, fxCounter: 0, captured: null,
+      attacking: null, hitFx: null, fxCounter: 0, captured: null, fainting: null,
     }),
 
   setBattle: (battle) => set({ battle }),
@@ -83,6 +87,7 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   pushLog: (msg) => set((s) => ({ log: [...s.log.slice(-4), msg] })),
   setBanner: (banner) => set({ banner }),
   setAttacking: (attacking) => set({ attacking }),
+  setFainting: (fainting) => set({ fainting }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null, attacking: null }),

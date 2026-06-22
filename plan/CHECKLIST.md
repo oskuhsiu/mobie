@@ -61,11 +61,11 @@
 - [x] 防濫用：換人＝整回合（每回合一次）、剛換下鎖一回合不能換回；換上即倒→立即強制換（reducer 測試覆蓋）
 - [x] 攻擊 QTE / 防禦 QTE 共用 `qualityFromPointer` seam（`TimingBar` 加 `hint` prop 切換文案）
 - [x] 底部隊伍 tray（3 HP pip + 倒下灰階，M1.5a 已做）+ 換人面板（active/倒下/剛換下 disabled）
-### M1.5c 視覺特效
-- [ ] FxCanvas（imperative canvas2D 粒子，不過 React state）：屬性受擊粒子/攻擊軌跡/會心
-- [ ] framer-motion：角色位移、螢幕 shake、受擊 flash、倒下淡出
-- [ ] 換人動畫：收回光束/放出開球閃光
-- [ ] BattleScreen display-state 依序消費 event queue（await FX/motion callback）
+### M1.5c 視覺特效 ✅ 完成（實機驗證粒子）
+- [x] `scene/fx/FxCanvas`（imperative canvas2D 粒子，自有 rAF、不過 React state）：屬性色受擊粒子 + 會心金星 spark + 倒下灰煙 puff + 擴張環 ring + 螢幕閃光 flash
+- [x] framer-motion：角色 lunge 位移、螢幕 shake（rootShake 依會心/剋制加重）、受擊 brightness flash、倒下淡出（`fainting` 旗標 grayscale 淡出）
+- [x] 換人動畫：放出開球閃光（activeChanged → ring + white flash）；收回光束簡化為換上入場（remount entrance）
+- [x] BattleScreen display-state 依序消費 events、在對應節點觸發 FX（`fxRef.burst/ring/flash`）
 ### M1.5d 音效 + BGM
 - [ ] audioEngine 介面：unlock()（iOS 首次觸控）/ play(sfxId) / setIntensity(level)
 - [ ] Tone.js 在 unlock 時動態 import（控 bundle）

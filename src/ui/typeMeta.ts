@@ -7,3 +7,12 @@ export const TYPE_LABEL_ZH: Record<TypeName, string> = {
 }
 
 export const typeColor = (t: TypeName) => `var(--t-${t})`
+
+/** 屬性色 hex（給 canvas 粒子用，對齊 global.css :root 的 --t-*） */
+export const TYPE_HEX: Record<TypeName, string> = {
+  normal: '#9fa19f', fire: '#e62829', water: '#2980ef', electric: '#fac000',
+  grass: '#3fa129', ice: '#3fd8ff', fighting: '#ff8000', poison: '#9141cb',
+  ground: '#b9772f', flying: '#81b9ef', psychic: '#ef4179', bug: '#91a119',
+  rock: '#afa981', ghost: '#704170', dragon: '#5060e1', dark: '#50413f',
+  steel: '#60a1b8', fairy: '#ef70ef',
+}
