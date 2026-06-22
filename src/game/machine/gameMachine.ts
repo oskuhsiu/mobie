@@ -1,6 +1,6 @@
 import { setup, assign } from 'xstate'
 import type { Card } from '@/game/types'
-import { getRegion } from '@/game/data/regions'
+import { lookupRegion } from '@/game/data/regionLookup'
 import { rollEncounterTeam } from '@/game/encounter'
 
 export type Outcome = 'win' | 'lose'
@@ -49,7 +49,7 @@ export const gameMachine = setup({
   actions: {
     rollFoes: assign(({ event }) => {
       if (event.type !== 'SELECT_REGION') return {}
-      const region = getRegion(event.regionId)
+      const region = lookupRegion(event.regionId)
       return { regionId: event.regionId, foeTeam: rollEncounterTeam(region, TEAM_SIZE) }
     }),
     pickTeam: assign(({ event }) => {
@@ -69,7 +69,7 @@ export const gameMachine = setup({
     })),
     rerollFoes: assign(({ context }) => {
       if (!context.regionId) return {}
-      const region = getRegion(context.regionId)
+      const region = lookupRegion(context.regionId)
       return { foeTeam: rollEncounterTeam(region, TEAM_SIZE), playerTeam: [], outcome: null, captured: false }
     }),
   },

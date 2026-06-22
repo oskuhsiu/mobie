@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { GameProvider, useGame } from '@/app/GameProvider'
 import { useRoster } from '@/store/rosterStore'
-import { getRegion } from '@/game/data/regions'
+import { lookupRegion } from '@/game/data/regionLookup'
 import { TitleScreen } from '@/ui/screens/TitleScreen'
 import { RegionSelectScreen } from '@/ui/screens/RegionSelectScreen'
 import { EncounterScreen } from '@/ui/screens/EncounterScreen'
@@ -22,7 +22,7 @@ function Stage() {
   const { value, context } = game
 
   // 依區域主題化背景
-  const region = context.regionId ? getRegion(context.regionId) : null
+  const region = context.regionId ? lookupRegion(context.regionId) : null
   const themed = ['encounter', 'cardSelect', 'battle', 'result'].includes(value) && region
   const bg = themed
     ? `radial-gradient(120% 100% at 50% 0%, ${region.gradient[0]} 0%, ${region.gradient[1]} 55%, #060a1c 100%)`

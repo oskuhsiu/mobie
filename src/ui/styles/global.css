@@ -333,6 +333,22 @@ body {
 .battle-log__line { color: var(--text); }
 .battle-log__line--dim { color: var(--text-dim); }
 
+/* ============ 練習場入口 ============ */
+.practice-cta {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(58, 74, 114, 0.55), rgba(25, 31, 51, 0.55));
+  border: 1px dashed var(--accent);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+.practice-cta:active { transform: translateY(2px) scale(0.99); }
+.practice-cta__icon { font-size: 34px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4)); }
+.practice-cta__body { flex: 1; }
+.practice-cta__title { font-size: 19px; font-weight: 900; }
+.practice-cta__sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.practice-cta__go { font-size: 14px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+
 /* ============ Region cards ============ */
 .region-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
 @media (min-width: 760px) { .region-grid { grid-template-columns: repeat(3, 1fr); } }
