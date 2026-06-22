@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import type { BattlePokemon } from '@/game/types'
-import { createBattleState, type BattleState, type Side } from '@/game/battle/reducer'
+import { createBattleState, type BattleState, type Side, type SupportOutcome } from '@/game/battle/reducer'
 
 export type { Side }
 
 export type BattlePhase =
-  | 'intro' | 'playerChoice' | 'qte'
+  | 'intro' | 'playerChoice' | 'qte' | 'mash'
   | 'switchSelect' | 'defenseQte'
   | 'busy' | 'won' | 'lost'
 
@@ -31,6 +31,8 @@ interface BattleUiState {
   captured: boolean | null
   /** 正在倒下淡出的一方（其當前 active），活躍換上後清掉 */
   fainting: Side | null
+  /** 支援輪盤結果 overlay（null=不顯示） */
+  support: SupportOutcome | null
 
   init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
@@ -44,6 +46,7 @@ interface BattleUiState {
   setBanner: (b: string | null) => void
   setAttacking: (s: Side | null) => void
   setFainting: (s: Side | null) => void
+  setSupport: (o: SupportOutcome | null) => void
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
@@ -59,12 +62,13 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   fxCounter: 0,
   captured: null,
   fainting: null,
+  support: null,
 
   init: (playerMembers, foeMembers) =>
     set({
       battle: createBattleState(playerMembers, foeMembers),
       phase: 'intro', log: [], banner: null,
-      attacking: null, hitFx: null, fxCounter: 0, captured: null, fainting: null,
+      attacking: null, hitFx: null, fxCounter: 0, captured: null, fainting: null, support: null,
     }),
 
   setBattle: (battle) => set({ battle }),
@@ -88,6 +92,7 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   setBanner: (banner) => set({ banner }),
   setAttacking: (attacking) => set({ attacking }),
   setFainting: (fainting) => set({ fainting }),
+  setSupport: (support) => set({ support }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null, attacking: null }),

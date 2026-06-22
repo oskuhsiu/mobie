@@ -2,23 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
-import { attemptCapture } from '@/game/battle/engine'
+import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { getSpecies } from '@/game/data/species'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 
-function Pokeball({ size = 64 }: { size?: number }) {
+function Pokeball({ size = 64, color = '#ff5161' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64">
-      <defs>
-        <linearGradient id="pb" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ff5161" />
-          <stop offset="1" stopColor="#c81e2c" />
-        </linearGradient>
-      </defs>
       <circle cx="32" cy="32" r="29" fill="#f4f6ff" stroke="#11131a" strokeWidth="3" />
-      <path d="M5 30a27 27 0 0 1 54 0z" fill="url(#pb)" stroke="#11131a" strokeWidth="3" />
+      <path d="M5 30a27 27 0 0 1 54 0z" fill={color} stroke="#11131a" strokeWidth="3" />
       <rect x="4" y="29" width="56" height="6" fill="#11131a" />
       <circle cx="32" cy="32" r="9" fill="#f4f6ff" stroke="#11131a" strokeWidth="3" />
       <circle cx="32" cy="32" r="3.6" fill="#cdd3f0" />
@@ -35,7 +29,11 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
     const boss = context.foeTeam[context.foeTeam.length - 1]
     return boss ? buildBattlePokemon(boss) : null
   }, [context.foeTeam])
-  const success = useRef<boolean>(wild ? attemptCapture(wild) : false)
+  // 捕獲球輪盤：轉出球種 → 套捕獲率係數
+  const ball = useRef(getBall(rollBall()))
+  const success = useRef<boolean>(
+    wild ? Math.random() < captureChanceWithBall(wild, ball.current.mult) : false,
+  )
   const [stage, setStage] = useState<Stage>('throw')
   const ranRef = useRef(false)
 
@@ -58,7 +56,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
     <div className="center" style={{ flex: 1, gap: 18 }}>
       <motion.div className="eyebrow"
         initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        戰鬥勝利！
+        戰鬥勝利！　<span style={{ color: ball.current.color }}>🎯 {ball.current.nameZh}</span>
       </motion.div>
 
       <div style={{ position: 'relative', width: 'min(60vw,260px)', height: 'min(60vw,260px)' }}>
@@ -93,7 +91,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
               ? { duration: 1.6, times: [0, 0.2, 0.45, 0.65, 0.85, 1] }
               : { type: 'spring', stiffness: 140, damping: 12 }}
           >
-            <Pokeball size={72} />
+            <Pokeball size={72} color={ball.current.color} />
           </motion.div>
         ) : null}
 

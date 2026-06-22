@@ -3,8 +3,8 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
 import { buildBattlePokemon } from '@/game/stats'
-import { resolveTurn, type BattleEvent, type BattleState } from '@/game/battle/reducer'
-import type { QteQuality } from '@/game/battle/engine'
+import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } from '@/game/battle/reducer'
+import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattlePokemon } from '@/game/types'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { HpBar } from '@/ui/components/HpBar'
@@ -15,6 +15,12 @@ import { audio } from '@/audio/audioEngine'
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
+const SUPPORT_LABEL: Record<SupportOutcome, string> = {
+  attackUp: '⚡ 攻擊力上升！',
+  crit: '🎯 必定會心！',
+  ally: '🤝 夥伴補刀！',
+  dud: '… 可惜，摃龜',
+}
 // FxCanvas 上的概略打點位置（對齊版面：敵方上、我方下）
 const FX_POS: Record<Side, { nx: number; ny: number }> = {
   foe: { nx: 0.72, ny: 0.22 },
@@ -164,6 +170,44 @@ function SwitchPanel({ members, activeIndex, lockedIndex, onPick, onCancel }: {
   )
 }
 
+/** 連打蓄力：限時內瘋狂點擊累積色階加成（計數走 ref，不過 React state） */
+function MashMeter({ onDone }: { onDone: (count: number) => void }) {
+  const countRef = useRef(0)
+  const barRef = useRef<HTMLDivElement>(null)
+  const labelRef = useRef<HTMLDivElement>(null)
+  const doneRef = useRef(false)
+
+  useEffect(() => {
+    countRef.current = 0
+    doneRef.current = false
+    const t = setTimeout(() => {
+      if (doneRef.current) return
+      doneRef.current = true
+      onDone(countRef.current)
+    }, 950)
+    return () => clearTimeout(t)
+  }, [onDone])
+
+  const tap = () => {
+    if (doneRef.current) return
+    const c = (countRef.current += 1)
+    const tier = chargeTier(c)
+    if (barRef.current) {
+      barRef.current.style.width = `${Math.min(100, (c / 24) * 100)}%`
+      barRef.current.style.background = tier.color
+    }
+    if (labelRef.current) labelRef.current.textContent = tier.label || '蓄力中…'
+  }
+
+  return (
+    <div className="mash" onPointerDown={tap} role="button" tabIndex={0}>
+      <div className="mash__hint">連打蓄力！瘋狂點擊衝高傷害</div>
+      <div className="mash__track"><div ref={barRef} className="mash__fill" style={{ width: '0%' }} /></div>
+      <div ref={labelRef} className="mash__tier">蓄力中…</div>
+    </div>
+  )
+}
+
 export function BattleScreen() {
   const { context, send } = useGame()
   const battle = useBattleStore((s) => s.battle)
@@ -172,6 +216,7 @@ export function BattleScreen() {
   const attacking = useBattleStore((s) => s.attacking)
   const hitFx = useBattleStore((s) => s.hitFx)
   const fainting = useBattleStore((s) => s.fainting)
+  const support = useBattleStore((s) => s.support)
   const log = useBattleStore((s) => s.log)
 
   const fxRef = useRef<FxHandle>(null)
@@ -179,6 +224,8 @@ export function BattleScreen() {
   const initedRef = useRef(false)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
+  // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
+  const pendingQualityRef = useRef<QteQuality>('normal')
   // 防濫用：剛換下的那隻，下一個換人不能立刻換回（一回合後解鎖）
   const [lockedIndex, setLockedIndex] = useState<number | null>(null)
 
@@ -300,18 +347,29 @@ export function BattleScreen() {
         await wait(640)
         store().setBanner(null)
         await wait(110)
+      } else if (e.type === 'random' && e.event.type === 'supportRoulette') {
+        const outcome = e.event.outcome as SupportOutcome
+        store().setSupport(outcome)
+        audio.play('select')
+        await wait(950)
+        audio.play(outcome === 'dud' ? 'select' : 'super')
+        store().pushLog(`支援輪盤：${SUPPORT_LABEL[outcome]}`)
+        await wait(800)
+        store().setSupport(null)
+        await wait(150)
       }
+      // 其餘 random（accuracy/crit）：UI 不另演，已併入 damageApplied
       // battleEnded：迴圈結束後依 nextState.winner 設 phase
     }
   }, [rootShake])
 
-  const runPlayerTurn = useCallback(async (quality: QteQuality) => {
+  const runPlayerTurn = useCallback(async (quality: QteQuality, mashCount = 0) => {
     const store = useBattleStore.getState
     const b0 = store().battle
     if (!b0) return
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount })
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -339,6 +397,11 @@ export function BattleScreen() {
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
   }, [playEvents])
+
+  // 連打蓄力結束 → 帶 timing 品質 + 連打次數解算攻擊回合
+  const onMashDone = useCallback((count: number) => {
+    void runPlayerTurn(pendingQualityRef.current, count)
+  }, [runPlayerTurn])
 
   if (!battle) return <div className="center" style={{ flex: 1 }}>準備戰鬥…</div>
 
@@ -377,6 +440,25 @@ export function BattleScreen() {
             transition={{ duration: 0.2 }}
           >
             {banner}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 支援輪盤 overlay */}
+      <AnimatePresence>
+        {support && (
+          <motion.div
+            key="support"
+            className="support-overlay"
+            initial={{ opacity: 0, scale: 0.6, rotate: -8 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            exit={{ opacity: 0, scale: 1.2 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+          >
+            <div className="support-overlay__title">支援輪盤！</div>
+            <div className={`support-overlay__result ${support === 'dud' ? 'is-dud' : ''}`}>
+              {SUPPORT_LABEL[support]}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -437,7 +519,11 @@ export function BattleScreen() {
           />
         )}
 
-        {phase === 'qte' && <TimingBar onResult={runPlayerTurn} />}
+        {phase === 'qte' && (
+          <TimingBar onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }} />
+        )}
+
+        {phase === 'mash' && <MashMeter onDone={onMashDone} />}
 
         {phase === 'defenseQte' && (
           <TimingBar

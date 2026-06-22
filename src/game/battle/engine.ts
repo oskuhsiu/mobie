@@ -34,6 +34,8 @@ export interface AttackOptions {
   qteMult?: number
   /** 額外傷害倍率（防禦抵減 <1 / 支援UP >1），預設 1.0 */
   damageMult?: number
+  /** 強制會心（支援輪盤「必定會心」用）；仍會消耗 crit 亂數以保持順序 */
+  forceCrit?: boolean
 }
 
 export interface AttackResult {
@@ -46,6 +48,10 @@ export interface AttackResult {
   crit: boolean
   defenderHpAfter: number
   defenderFainted: boolean
+  /** 命中判定的原始亂數（給統一 RandomEvent 用） */
+  accuracyRoll: number
+  /** 會心判定的原始亂數；未擲到（miss / 無效）時為 -1 */
+  critRoll: number
 }
 
 const CRIT_RATE = 1 / 16
@@ -68,12 +74,14 @@ export function resolveAttack(
   const effectiveness = typeEffectiveness(move.type, defender.types)
 
   // ① 命中判定
-  const missed = rng() * 100 >= move.accuracy
+  const accuracyRoll = rng()
+  const missed = accuracyRoll * 100 >= move.accuracy
   if (missed) {
     return {
       damage: 0, effectiveness, effectivenessText: null,
       missed: true, crit: false,
       defenderHpAfter: defender.currentHp, defenderFainted: false,
+      accuracyRoll, critRoll: -1,
     }
   }
 
@@ -83,6 +91,7 @@ export function resolveAttack(
       damage: 0, effectiveness, effectivenessText: effectivenessLabel(0),
       missed: false, crit: false,
       defenderHpAfter: defender.currentHp, defenderFainted: false,
+      accuracyRoll, critRoll: -1,
     }
   }
 
@@ -97,7 +106,8 @@ export function resolveAttack(
   const stab = attacker.types.includes(move.type) ? 1.5 : 1
   // ② 傷害變異
   const variance = 0.85 + rng() * 0.15
-  const crit = rng() < CRIT_RATE
+  const critRoll = rng()
+  const crit = options.forceCrit === true || critRoll < CRIT_RATE
   const critMult = crit ? CRIT_MULT : 1
 
   let damage = Math.floor(base * stab * effectiveness * variance * critMult * qteMult * damageMult)
@@ -113,6 +123,7 @@ export function resolveAttack(
     crit,
     defenderHpAfter,
     defenderFainted: defenderHpAfter <= 0,
+    accuracyRoll, critRoll,
   }
 }
 
@@ -134,4 +145,54 @@ export function captureChance(wild: BattlePokemon): number {
 
 export function attemptCapture(wild: BattlePokemon, rng: () => number = Math.random): boolean {
   return rng() < captureChance(wild)
+}
+
+// ── 捕獲球輪盤（M1.5g）──────────────────────────────────────────
+export type BallId = 'poke' | 'great' | 'ultra'
+
+export interface Ball { id: BallId; nameZh: string; mult: number; color: string }
+
+export const BALLS: Ball[] = [
+  { id: 'poke', nameZh: '精靈球', mult: 1.0, color: '#e7503a' },
+  { id: 'great', nameZh: '超級球', mult: 1.4, color: '#3a7be7' },
+  { id: 'ultra', nameZh: '高級球', mult: 1.9, color: '#f0b429' },
+]
+
+export const getBall = (id: BallId): Ball => BALLS.find((b) => b.id === id) ?? BALLS[0]
+
+/** 輪盤轉出球種（輪盤上精靈球較多、高級球較稀有） */
+export function rollBall(rng: () => number = Math.random): BallId {
+  const r = rng()
+  if (r < 0.55) return 'poke'
+  if (r < 0.85) return 'great'
+  return 'ultra'
+}
+
+/** 套球種係數後的捕獲機率（封頂 0.98） */
+export function captureChanceWithBall(wild: BattlePokemon, ballMult: number): number {
+  return Math.min(0.98, captureChance(wild) * ballMult)
+}
+
+// ── 攻擊 QTE 連打蓄力（M1.5g）─────────────────────────────────
+export interface ChargeTier { label: string; color: string; mult: number }
+
+const CHARGE_TIERS: Array<{ min: number } & ChargeTier> = [
+  { min: 0, label: '', color: '#9fa19f', mult: 1.0 },
+  { min: 1, label: 'RED', color: '#ff5161', mult: 1.06 },
+  { min: 5, label: 'BLUE', color: '#3a7be7', mult: 1.12 },
+  { min: 10, label: 'YELLOW', color: '#f0b429', mult: 1.2 },
+  { min: 16, label: 'PURPLE', color: '#9141cb', mult: 1.28 },
+  { min: 24, label: 'RAINBOW', color: '#ff7ae0', mult: 1.38 },
+]
+
+/** 連打次數 → 色階加成段（red→rainbow） */
+export function chargeTier(mashCount: number): ChargeTier {
+  let t = CHARGE_TIERS[0]
+  for (const tier of CHARGE_TIERS) if (mashCount >= tier.min) t = tier
+  return { label: t.label, color: t.color, mult: t.mult }
+}
+
+/** 攻擊 QTE 最終倍率 = timing 品質 × 連打蓄力色階 */
+export function attackQteMultiplier(quality: QteQuality, mashCount = 0): number {
+  return qteMultiplier(quality) * chargeTier(mashCount).mult
 }

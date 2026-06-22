@@ -108,11 +108,12 @@ describe('resolveTurn — SWITCH 主動換人 + 防禦 QTE', () => {
       { rng: RNG },
     )
 
-    const types = events.map((e) => e.type)
+    const dom = events.filter((e) => e.type !== 'random')
+    const types = dom.map((e) => e.type)
     expect(types).toEqual(['activeChanged', 'switchDefenseResolved', 'damageApplied'])
-    expect(events[0]).toMatchObject({ side: 'player', fromIndex: 0, toIndex: 1, forced: false })
-    expect(events[1]).toMatchObject({ side: 'player', index: 1, defenseQuality: 'good', damageMult: 0.4 })
-    expect(events[2]).toMatchObject({ attackerSide: 'foe', targetSide: 'player', targetIndex: 1 })
+    expect(dom[0]).toMatchObject({ side: 'player', fromIndex: 0, toIndex: 1, forced: false })
+    expect(dom[1]).toMatchObject({ side: 'player', index: 1, defenseQuality: 'good', damageMult: 0.4 })
+    expect(dom[2]).toMatchObject({ attackerSide: 'foe', targetSide: 'player', targetIndex: 1 })
     expect(nextState.player.activeIndex).toBe(1)
     expect(nextState.winner).toBeNull()
   })
@@ -145,7 +146,8 @@ describe('resolveTurn — SWITCH 主動換人 + 防禦 QTE', () => {
       { rng: RNG },
     )
 
-    const types = events.map((e) => e.type)
+    const dom = events.filter((e) => e.type !== 'random')
+    const types = dom.map((e) => e.type)
     expect(types).toEqual([
       'activeChanged', // 主動換上 index 1
       'switchDefenseResolved',
@@ -153,8 +155,8 @@ describe('resolveTurn — SWITCH 主動換人 + 防禦 QTE', () => {
       'memberFainted',
       'activeChanged', // 立即強制換到第一個存活者
     ])
-    expect(events[3]).toMatchObject({ side: 'player', index: 1 })
-    expect(events[4]).toMatchObject({ side: 'player', fromIndex: 1, toIndex: 0, forced: true })
+    expect(dom[3]).toMatchObject({ side: 'player', index: 1 })
+    expect(dom[4]).toMatchObject({ side: 'player', fromIndex: 1, toIndex: 0, forced: true })
     expect(nextState.player.activeIndex).toBe(0)
     expect(nextState.winner).toBeNull()
   })

@@ -85,12 +85,12 @@
 - [x] `PersistenceAdapter` 介面 + `LocalStorageAdapter`（只存 canonical OwnedUnit）+ `MemoryAdapter`(測試)
 - [x] `rosterStore`：開場 load/seed、勝利 `grantBattleExp` 加經驗存檔；CardSelect 從 roster、結算顯示 EXP/升級
 - [x] vitest（11）：n^3 往返、expYield 單調、applyExp 升級/不降/封頂、create 決定論、Adapter 契約；實機驗證 +334EXP 與 localStorage 持久化
-### M1.5g 意外機制
-- [ ] 統一 RandomEvent `{type,actorId,roll,outcome,source}`；reducer 隨機點全走它
-- [ ] 支援輪盤：每隔 N 回合，隨機 攻擊UP/必定會心/支援補刀/摃龜
-- [ ] 捕獲球輪盤：球種→捕獲率係數
-- [ ] 攻擊 QTE 加「連打蓄力」色階加成段
-- [ ] vitest：支援輪盤/球輪盤決定論、共用 RandomEvent
+### M1.5g 意外機制 ✅ 完成（實機驗證四項）
+- [x] 統一 `RandomEvent {type,actorId,roll,outcome,source}`；reducer 隨機點（accuracy/crit/supportRoulette）全走它；engine 回報 accuracyRoll/critRoll
+- [x] 支援輪盤：每 `SUPPORT_EVERY`(3) 回合，攻擊UP/必定會心(forceCrit)/支援補刀(待命隊友多打一刀)/摃龜 + overlay
+- [x] 捕獲球輪盤：`rollBall`→精靈/超級/高級球，`captureChanceWithBall` 套係數封頂 0.98；結算顯示球種
+- [x] 攻擊 QTE 加「連打蓄力」：`chargeTier`(red→rainbow)、`attackQteMultiplier`=timing×色階；MashMeter（計數走 ref）
+- [x] vitest（+9）：球輪盤/連打/支援輪盤決定論、補刀 attackerIndex、共用 RandomEvent；實機驗證 mash/support/ball
 ### M1.5h 星擊 Finisher（延後）
 - [ ] 能量槽：只由 QTE 表現+連鎖累積（不綁隨機），極簡細條 UI
 - [ ] 滿槽放自製大招「星擊」演出（FxCanvas+audio）
