@@ -43,6 +43,30 @@
 - [x] vitest 全綠（21 測試）
 - [x] dev server 跑通完整 loop（直式+橫式截圖：勝利捕獲 + 落敗兩條路徑）
 
+## M1.5 — 完成戰鬥：3v3 + 主動換人 + 聲光（依 06-battle-reference.md）
+### M1.5a 隊伍模型 + 3v3 依序 + 純 reducer
+- [ ] BattlePokemon party 模型（雙方各 3 隻 + activeIndex）
+- [ ] cardSelect 改多選 3 隻組隊
+- [ ] `resolveTurn(state, action) → { nextState, events[] }` 純函數
+- [ ] domain events：damageApplied / memberFainted / activeChanged / switchDefenseResolved / battleEnded
+- [ ] 倒下→自動送下一隻、全滅判定勝負
+- [ ] vitest：3v3 依序 KO、強制換、全滅勝負
+### M1.5b 主動換人 + 防禦 QTE + 隊伍 UI
+- [ ] 換人行動：收回→放出→對手打換上的→防禦 QTE 抵減（90/60/30/0）
+- [ ] 防濫用：每回合一次、剛換上不能換回；換上即倒→立即強制換（測試）
+- [ ] 攻擊 QTE / 防禦 QTE 共用 qualityFromPointer seam
+- [ ] 底部隊伍 tray（3 隻 HP pip + 倒下灰階）+ 換人面板
+### M1.5c 視覺特效
+- [ ] FxCanvas（imperative canvas2D 粒子，不過 React state）：屬性受擊粒子/攻擊軌跡/會心
+- [ ] framer-motion：角色位移、螢幕 shake、受擊 flash、倒下淡出
+- [ ] 換人動畫：收回光束/放出開球閃光
+- [ ] BattleScreen display-state 依序消費 event queue（await FX/motion callback）
+### M1.5d 音效 + BGM
+- [ ] audioEngine 介面：unlock()（iOS 首次觸控）/ play(sfxId) / setIntensity(level)
+- [ ] Tone.js 在 unlock 時動態 import（控 bundle）
+- [ ] 程序化 preset SFX：命中/倒下/選取/效果絕佳/低血量嗶；chiptune BGM loop
+- [ ] setIntensity：低血量警報 / BGM crossfade，不停 transport
+
 ## M2 — QR 掃描 + 卡庫
 - [ ] `parseCardCode()`：MZ1 解析 + CRC 校驗
 - [ ] BarcodeDetector 掃描 + zxing fallback

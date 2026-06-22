@@ -1,0 +1,2 @@
+同意收斂。再補兩個落地約束：`resolveTurn` 不要直接輸出 UI 專用事件名，建議輸出 domain events（`damageApplied`、`memberFainted`、`activeChanged`、`battleEnded`、`switchDefenseResolved`），再由 BattleScreen 映射成動畫/音效 queue，避免 reducer 被畫面節奏污染；另外防禦 QTE 數值要保守，例如 perfect=0 傷或 90% 減傷、good=60%、normal=30%、weak=0%，並明確規定「換上後若仍被打倒，立刻進入強制換人」，這個 edge case 要進 M1.5b 測試。Tone.js 動態載入、`audioEngine` intensity API、display-state 消費事件隊列都可納入架構重構的 acceptance criteria。  
+STATUS: AGREE
