@@ -7,7 +7,14 @@ import type { QteQuality } from '@/game/battle/engine'
  * 指針位置用 requestAnimationFrame 直接寫 DOM style，不經 React state，
  * 預先養成 M3/M4 的效能紅線習慣（高頻值不過 React render）。
  */
-export function TimingBar({ onResult }: { onResult: (q: QteQuality) => void }) {
+export function TimingBar({
+  onResult,
+  hint = '點擊任意處，停在正中可造成最大傷害！',
+}: {
+  onResult: (q: QteQuality) => void
+  /** 提示語（攻擊/防禦模式不同） */
+  hint?: string
+}) {
   const pointerRef = useRef<HTMLDivElement>(null)
   const posRef = useRef(0) // 0..1
   const doneRef = useRef(false)
@@ -43,7 +50,7 @@ export function TimingBar({ onResult }: { onResult: (q: QteQuality) => void }) {
 
   return (
     <div className="qte" onPointerDown={stop} role="button" tabIndex={0}>
-      <div className="qte__hint">點擊任意處，停在正中可造成最大傷害！</div>
+      <div className="qte__hint">{hint}</div>
       <div className="qte__bar">
         {zones.map((z) => (
           <div

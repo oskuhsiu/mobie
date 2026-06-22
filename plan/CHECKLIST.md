@@ -56,11 +56,11 @@
 - [x] battleStore 改持 `BattleState`(display) + 逐 event setter；BattleScreen 用 reducer 跑回合、依序消費 events 演出
 - [x] 底部隊伍 tray（雙方各 3 HP pip + 倒下灰階/✕ + active 高亮）
 - [x] 實機（Chrome headless+CDP）驗證：遭遇顯示對手 3 隻 → 選 3 隻 → 3v3 攻擊+自動換上 → 勝利捕獲 boss
-### M1.5b 主動換人 + 防禦 QTE + 隊伍 UI
-- [ ] 換人行動：收回→放出→對手打換上的→防禦 QTE 抵減（90/60/30/0）
-- [ ] 防濫用：每回合一次、剛換上不能換回；換上即倒→立即強制換（測試）
-- [ ] 攻擊 QTE / 防禦 QTE 共用 qualityFromPointer seam
-- [ ] 底部隊伍 tray（3 隻 HP pip + 倒下灰階）+ 換人面板
+### M1.5b 主動換人 + 防禦 QTE + 隊伍 UI ✅ 完成（實機驗證）
+- [x] 換人行動：選隊友→防禦 QTE→`resolveTurn(SWITCH)`→對手打換上的、抵減（90/60/30/0）
+- [x] 防濫用：換人＝整回合（每回合一次）、剛換下鎖一回合不能換回；換上即倒→立即強制換（reducer 測試覆蓋）
+- [x] 攻擊 QTE / 防禦 QTE 共用 `qualityFromPointer` seam（`TimingBar` 加 `hint` prop 切換文案）
+- [x] 底部隊伍 tray（3 HP pip + 倒下灰階，M1.5a 已做）+ 換人面板（active/倒下/剛換下 disabled）
 ### M1.5c 視覺特效
 - [ ] FxCanvas（imperative canvas2D 粒子，不過 React state）：屬性受擊粒子/攻擊軌跡/會心
 - [ ] framer-motion：角色位移、螢幕 shake、受擊 flash、倒下淡出

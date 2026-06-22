@@ -5,9 +5,9 @@
 ---
 
 ## 1. 現況一句話
-M1 與 **M1.5a（3v3 依序＋自動換上＋隊伍 tray，純 reducer 驅動）皆已完成並實機驗證**（Chrome headless+CDP 跑完 遭遇對手3隻→選3隻→3v3攻擊→勝利捕獲 boss）。下一步是 **M1.5b：玩家主動換人 + 防禦 QTE + tray 互動**（見 §5b）。
+M1、**M1.5a（可玩 3v3）**、**M1.5b（主動換人＋防禦 QTE）**皆已完成並實機驗證。下一步 **M1.5c：視覺特效（FxCanvas 粒子 + framer shake/flash + 換人光束）**（見 §5b）。目標：完成全部 M1.x（M1.5a–h）。
 
-> ⚠️ commit 狀態：reducer 地基已 commit（`3e7fb96`）。**UI 接線（gameMachine/encounter/CardSelect/Encounter/Battle/Result/battleStore/global.css）已實作並驗證，但尚未 commit**。使用者全域規則「未經要求不 commit」，留待決定。typecheck/build/test（32）全綠。
+> commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）
 - 設計總覽與里程碑：`plan/README.md`
@@ -50,14 +50,19 @@ M1 與 **M1.5a（3v3 依序＋自動換上＋隊伍 tray，純 reducer 驅動）
 - `ResultScreen` 捕獲對象＝foeTeam 末隻 boss；LoseView 用 playerTeam lead。
 - 驗證：Chrome headless+CDP 跑完整 loop，**勝利並捕獲 boss**（截圖在 `/tmp/mz_shots/`）。
 
-## 5b. 下一步：M1.5b 主動換人 + 防禦 QTE + tray 互動
-reducer 已支援 `SWITCH` action（含 `switchDefenseResolved` event 與 `defenseMultiplier`），只差 UI：
-- 行動選單加「換人」：開隊伍面板（從 tray 點未倒/非在場的隊友）→ 選人 → **防禦 QTE**（複用 `TimingBar`/`qualityFromPointer`，做成防禦模式）→ `resolveTurn(battle, {type:'SWITCH', index, defenseQuality})` → 依序消費含 `activeChanged(forced:false)`/`switchDefenseResolved`/`damageApplied` 的 events。
-- 防濫用：每回合最多換一次、剛換上不能立刻再換回（action 層擋，reducer 不管）。
-- BattleScreen 換人演出：收回光束 / 放出開球閃光（framer，先簡版）。
-- 驗證「換上即倒→立即強制換」在 UI 也正確。
+## 5b. 已完成 M1.5b：主動換人 + 防禦 QTE（實機驗證）
+- 行動選單「攻擊 / 換人」；`SwitchPanel`（player 隊友卡，active/倒下/剛換下 disabled）→ 選人 → **防禦 QTE**（`TimingBar` 加 `hint` prop）→ `runSwitchTurn` 呼 `resolveTurn(SWITCH)` → 依序演出 `activeChanged(forced:false)`/`switchDefenseResolved`(banner 減傷%)/`damageApplied`。
+- 防濫用在 **display 層**：換人＝整回合；`lockedIndex` 鎖住剛換下的那隻一回合（攻擊後解鎖）。reducer 維持純淨。
+- 驗證：換人面板→傑尼龜換上→對手剋制攻擊（效果絕佳/減傷 30%）正確。
 
-後續順序：c 視覺特效(FxCanvas+framer) → d 音效(Tone.js audioEngine) → e 個體差異 → f 成長(+PersistenceAdapter localStorage) → g 意外(輪盤+`RandomEvent`) → h 星擊。
+## 下一步：M1.5c → d → e → f → g → h（完成全部 M1.x）
+- **c 視覺特效**：`scene/fx/FxCanvas`（imperative canvas2D 粒子，不過 React state，subscribe hitFx/事件）：屬性受擊粒子/攻擊軌跡/會心；framer 螢幕 shake、受擊 flash、倒下淡出；換人收回光束/放出閃光。BattleScreen display-state 依序消費 event 時觸發。
+- **d 音效**：`audio/audioEngine` 介面（`unlock()`/`play(sfxId)`/`setIntensity()`），Tone.js 在 unlock 時動態 import，全程序化 preset SFX + chiptune BGM。
+- **e 個體差異**：`individual.ts`（seed→ivs/nature/shiny 決定論）、`stats.ts` 補 nature 乘數、個體 UI（星級/紅藍色標/異色）+ 測試。
+- **f 成長**：`growth.ts`（n^3 曲線/gainExp/levelUp）、`OwnedUnit`(canonical) vs `BattleUnit`、`PersistenceAdapter`+`LocalStorageAdapter`（只存 canonical）+ 測試。
+- **g 意外**：統一 `RandomEvent`、支援輪盤（每 N 回合 攻擊UP/必定會心/支援補刀/摃龜）、捕獲球輪盤、連打蓄力 + 測試。
+- **h 星擊**：QTE/連鎖累積能量槽（不綁隨機）+ 自製大招演出。
+- 細節真相見 `plan/06`（對戰常識）、`plan/07`（意外+個體/成長）。
 
 ## 6. 硬性約束 / 偏好（務必遵守）
 - **平台 Web/PWA**（使用者已拍板，非原生 iOS；原生留作日後效能逃生路線）。

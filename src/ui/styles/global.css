@@ -221,6 +221,35 @@ body {
   font-size: 8px; font-weight: 900; color: var(--text-dim);
 }
 
+/* ============ Switch panel (換人面板) ============ */
+.switch-panel {
+  width: 100%; max-width: 620px;
+  display: flex; flex-direction: column; gap: 12px; align-items: stretch;
+  padding: 14px; border-radius: 16px;
+  background: rgba(0,0,0,0.5); border: 1px solid var(--stroke);
+}
+.switch-panel__title { font-weight: 900; font-size: 16px; text-align: center; color: var(--accent); }
+.switch-panel__list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.switch-card {
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  padding: 10px 8px; border-radius: 12px;
+  background: linear-gradient(160deg, var(--panel-strong), var(--panel));
+  border: 1px solid var(--stroke);
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+.switch-card:active:not(:disabled) { transform: translateY(2px) scale(0.97); }
+.switch-card:not(:disabled) { border-color: var(--accent); }
+.switch-card:disabled { opacity: 0.45; filter: grayscale(0.6); }
+.switch-card__art { width: 100%; aspect-ratio: 1; }
+.switch-card__name { font-weight: 800; font-size: 13px; }
+.switch-card .hpbar__track { width: 100%; }
+.switch-card__tag {
+  position: absolute; top: 6px; right: 6px;
+  font-size: 10px; font-weight: 800; color: var(--text-dim);
+  background: rgba(0,0,0,0.5); border-radius: 999px; padding: 2px 7px;
+}
+
 /* ============ Battle log ============ */
 .battle-log {
   width: 100%; max-width: 620px; min-height: 64px;

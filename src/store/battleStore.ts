@@ -4,7 +4,10 @@ import { createBattleState, type BattleState, type Side } from '@/game/battle/re
 
 export type { Side }
 
-export type BattlePhase = 'intro' | 'playerChoice' | 'qte' | 'busy' | 'won' | 'lost'
+export type BattlePhase =
+  | 'intro' | 'playerChoice' | 'qte'
+  | 'switchSelect' | 'defenseQte'
+  | 'busy' | 'won' | 'lost'
 
 /** 一次受擊的視覺效果（低頻：每次攻擊一次，走 React state 沒問題） */
 export interface HitFx {

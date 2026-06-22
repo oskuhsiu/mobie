@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
@@ -104,6 +104,55 @@ function TeamTray({ members, activeIndex, align }: {
   )
 }
 
+/** 換人面板：選一個未倒下、非在場、未鎖的隊友換上 */
+function SwitchPanel({ members, activeIndex, lockedIndex, onPick, onCancel }: {
+  members: BattlePokemon[]
+  activeIndex: number
+  lockedIndex: number | null
+  onPick: (i: number) => void
+  onCancel: () => void
+}) {
+  return (
+    <motion.div
+      className="switch-panel"
+      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+    >
+      <div className="switch-panel__title">換上哪一隻？</div>
+      <div className="switch-panel__list">
+        {members.map((m, i) => {
+          const fainted = m.currentHp <= 0
+          const isActive = i === activeIndex
+          const locked = i === lockedIndex
+          const disabled = fainted || isActive || locked
+          const frac = Math.max(0, m.currentHp) / m.maxHp
+          const tone = frac > 0.5 ? '' : frac > 0.2 ? 'hpbar__fill--mid' : 'hpbar__fill--low'
+          const tag = isActive ? '出戰中' : fainted ? '倒下' : locked ? '剛換下' : null
+          return (
+            <button
+              key={i}
+              className="switch-card"
+              disabled={disabled}
+              onClick={() => !disabled && onPick(i)}
+            >
+              <div className="switch-card__art">
+                <img src={m.artworkUrl} alt={m.nameZh} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              </div>
+              <div className="switch-card__name">{m.nameZh} <span className="hpbar__lv">Lv.{m.level}</span></div>
+              <div className="hpbar__track" style={{ height: 8 }}>
+                <div className={`hpbar__fill ${tone}`} style={{ width: `${frac * 100}%` }} />
+              </div>
+              {tag && <span className="switch-card__tag">{tag}</span>}
+            </button>
+          )
+        })}
+      </div>
+      <button className="btn btn--ghost" style={{ alignSelf: 'center', padding: '10px 28px' }} onClick={onCancel}>
+        取消
+      </button>
+    </motion.div>
+  )
+}
+
 export function BattleScreen() {
   const { context, send } = useGame()
   const battle = useBattleStore((s) => s.battle)
@@ -114,6 +163,10 @@ export function BattleScreen() {
   const log = useBattleStore((s) => s.log)
 
   const initedRef = useRef(false)
+  // 換人面板選中的隊友索引（等防禦 QTE）
+  const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
+  // 防濫用：剛換下的那隻，下一個換人不能立刻換回（一回合後解鎖）
+  const [lockedIndex, setLockedIndex] = useState<number | null>(null)
 
   // 初始化：建出雙方 3 隻隊伍，進場
   useEffect(() => {
@@ -188,6 +241,17 @@ export function BattleScreen() {
         await wait(640)
         store().setBanner(null)
         await wait(120)
+      } else if (e.type === 'switchDefenseResolved') {
+        const pct = Math.round((1 - e.damageMult) * 100)
+        const label =
+          e.defenseQuality === 'perfect' ? '完美防禦！'
+            : e.defenseQuality === 'good' ? '防禦成功！'
+              : e.defenseQuality === 'normal' ? '勉強防禦' : '防禦失敗…'
+        store().setBanner(pct > 0 ? `${label}　減傷 ${pct}%` : label)
+        store().pushLog(`${label}（減傷 ${pct}%）`)
+        await wait(640)
+        store().setBanner(null)
+        await wait(110)
       }
       // battleEnded：迴圈結束後依 nextState.winner 設 phase
     }
@@ -203,6 +267,26 @@ export function BattleScreen() {
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
+    setLockedIndex(null) // 攻擊一回合後解除換回鎖
+    if (nextState.winner === 'player') store().setPhase('won')
+    else if (nextState.winner === 'foe') store().setPhase('lost')
+    else store().setPhase('playerChoice')
+  }, [playEvents])
+
+  // 主動換人：收回換上 index → 對手打換上的 → 防禦 QTE 抵減
+  const runSwitchTurn = useCallback(async (index: number, defenseQuality: QteQuality) => {
+    const store = useBattleStore.getState
+    const b0 = store().battle
+    if (!b0) return
+    const fromIndex = b0.player.activeIndex
+    setPendingSwitch(null)
+    store().setPhase('busy')
+
+    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality })
+    await playEvents(b0, events)
+    store().setBattle(nextState)
+
+    setLockedIndex(fromIndex) // 剛換下的不能立刻換回
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
@@ -212,6 +296,9 @@ export function BattleScreen() {
 
   const player = battle.player.members[battle.player.activeIndex]
   const foe = battle.foe.members[battle.foe.activeIndex]
+  const switchable = battle.player.members.some(
+    (m, i) => i !== battle.player.activeIndex && m.currentHp > 0 && i !== lockedIndex,
+  )
 
   return (
     <div className="col" style={{ flex: 1, position: 'relative' }}>
@@ -271,17 +358,44 @@ export function BattleScreen() {
         </div>
 
         {phase === 'playerChoice' && (
-          <motion.button
-            className="btn" style={{ fontSize: 19, padding: '16px 52px' }}
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => useBattleStore.getState().setPhase('qte')}
-          >
-            ⚔ 攻擊　<span style={{ fontSize: 14, opacity: 0.8 }}>{player.move.nameZh}</span>
-          </motion.button>
+          <motion.div className="row" style={{ gap: 12, justifyContent: 'center' }}
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <motion.button
+              className="btn" style={{ fontSize: 19, padding: '16px 36px' }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => useBattleStore.getState().setPhase('qte')}
+            >
+              ⚔ 攻擊　<span style={{ fontSize: 14, opacity: 0.8 }}>{player.move.nameZh}</span>
+            </motion.button>
+            <motion.button
+              className="btn btn--ghost" style={{ fontSize: 18, padding: '16px 26px' }}
+              whileTap={switchable ? { scale: 0.96 } : undefined}
+              disabled={!switchable}
+              onClick={() => useBattleStore.getState().setPhase('switchSelect')}
+            >
+              🔄 換人
+            </motion.button>
+          </motion.div>
+        )}
+
+        {phase === 'switchSelect' && (
+          <SwitchPanel
+            members={battle.player.members}
+            activeIndex={battle.player.activeIndex}
+            lockedIndex={lockedIndex}
+            onPick={(i) => { setPendingSwitch(i); useBattleStore.getState().setPhase('defenseQte') }}
+            onCancel={() => useBattleStore.getState().setPhase('playerChoice')}
+          />
         )}
 
         {phase === 'qte' && <TimingBar onResult={runPlayerTurn} />}
+
+        {phase === 'defenseQte' && (
+          <TimingBar
+            hint="換人中！點擊停在正中可大幅減傷！"
+            onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }}
+          />
+        )}
 
         {(phase === 'busy' || phase === 'intro') && (
           <div className="hpbar__num" style={{ height: 46, display: 'grid', placeItems: 'center' }}>…</div>
