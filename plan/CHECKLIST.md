@@ -103,6 +103,7 @@
 - [ ] 掃描→反查→存入「我的寶可夢」
 - [ ] 自製產卡/印卡工具
 - [ ] 掃描失敗 UI 回饋
+- [ ] **持久化換 Dexie 時導入 `SaveEnvelope`（`updatedAt`/`revision`/`deviceId`/`schemaVersion`）** → 為 M5 雲端同步鋪路（見 `08-cloud-sync.md` C/H 段）
 
 ## M3 — R3F 3D 場景 + 造型層
 - [ ] R3F 戰鬥舞台（台座、光照、運鏡）
@@ -120,3 +121,12 @@
 - [ ] `MediaPipeInput` 實作 `InputSource`，與 TouchInput 熱切換
 - [ ] 主執行緒節流 PoC → Worker/OffscreenCanvas 升級
 - [ ] 效能紅線：連續座標只寫 Zustand
+
+## M5 — 雲端同步記錄（見 `08-cloud-sync.md`）
+- [ ] `SaveEnvelope` 信封（`schemaVersion`/`deviceId`/`updatedAt`/`revision`/`roster`）+ 本地遷移（裸陣列 → 信封）
+- [ ] `rosterStore` 存檔時 bump `updatedAt`/`revision`
+- [ ] `CloudSyncAdapter` 介面（`pull`/`push`/可選 `subscribe`）+ 後端供應商抉擇（vendor 中立、secret 不入庫）
+- [ ] `SyncCoordinator`：Pull→Merge→Push、觸發點（開啟/online/visibility/存檔 debounce）、非阻塞容錯
+- [ ] 比對新舊：LWW by `updatedAt`→`revision`→server time；divergence 偵測 + 舊檔本地備份
+- [ ] 同步狀態 UI：上次同步時間 / 已最新 / 同步中 / 離線 / 手動立即同步
+- [ ] 邊界：雲端空、本地空（新裝置）、schema 遷移、時鐘偏移
