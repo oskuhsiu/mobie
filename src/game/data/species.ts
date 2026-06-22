@@ -3,67 +3,1264 @@ import type { Species } from '@/game/types'
 const artwork = (id: number) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`
 
-/** M1 種族 seed：12 隻，屬性分布利於屬性相剋對戰 */
+/** 全國圖鑑 1–251（第一、二世代），由 PokéAPI 產生器寫出。
+ *  屬性/種族值/中文名來自 PokéAPI（zh-Hant）；artwork 走官方 raw URL，runtime 載入、不內建。
+ *  moveId 依主屬性 + 種族值總和 tier 決定論指派（見 moves.ts）。請勿手改，改請改產生器。 */
 export const SPECIES: Record<number, Species> = {
   1: {
     id: 1, name: 'Bulbasaur', nameZh: '妙蛙種子', types: ['grass', 'poison'],
     baseStats: { hp: 45, atk: 49, def: 49, spa: 65, spd: 65, spe: 45 },
-    moveId: 22, artworkUrl: artwork(1),
+    moveId: 1040, artworkUrl: artwork(1),
+  },
+  2: {
+    id: 2, name: 'Ivysaur', nameZh: '妙蛙草', types: ['grass', 'poison'],
+    baseStats: { hp: 60, atk: 62, def: 63, spa: 80, spd: 80, spe: 60 },
+    moveId: 1041, artworkUrl: artwork(2),
+  },
+  3: {
+    id: 3, name: 'Venusaur', nameZh: '妙蛙花', types: ['grass', 'poison'],
+    baseStats: { hp: 80, atk: 82, def: 83, spa: 100, spd: 100, spe: 80 },
+    moveId: 1042, artworkUrl: artwork(3),
   },
   4: {
     id: 4, name: 'Charmander', nameZh: '小火龍', types: ['fire'],
     baseStats: { hp: 39, atk: 52, def: 43, spa: 60, spd: 50, spe: 65 },
-    moveId: 52, artworkUrl: artwork(4),
+    moveId: 1010, artworkUrl: artwork(4),
+  },
+  5: {
+    id: 5, name: 'Charmeleon', nameZh: '火恐龍', types: ['fire'],
+    baseStats: { hp: 58, atk: 64, def: 58, spa: 80, spd: 65, spe: 80 },
+    moveId: 1011, artworkUrl: artwork(5),
+  },
+  6: {
+    id: 6, name: 'Charizard', nameZh: '噴火龍', types: ['fire', 'flying'],
+    baseStats: { hp: 78, atk: 84, def: 78, spa: 109, spd: 85, spe: 100 },
+    moveId: 1012, artworkUrl: artwork(6),
   },
   7: {
     id: 7, name: 'Squirtle', nameZh: '傑尼龜', types: ['water'],
     baseStats: { hp: 44, atk: 48, def: 65, spa: 50, spd: 64, spe: 43 },
-    moveId: 55, artworkUrl: artwork(7),
+    moveId: 1020, artworkUrl: artwork(7),
   },
-  25: {
-    id: 25, name: 'Pikachu', nameZh: '皮卡丘', types: ['electric'],
-    baseStats: { hp: 35, atk: 55, def: 40, spa: 50, spd: 50, spe: 90 },
-    moveId: 85, artworkUrl: artwork(25),
+  8: {
+    id: 8, name: 'Wartortle', nameZh: '卡咪龜', types: ['water'],
+    baseStats: { hp: 59, atk: 63, def: 80, spa: 65, spd: 80, spe: 58 },
+    moveId: 1021, artworkUrl: artwork(8),
+  },
+  9: {
+    id: 9, name: 'Blastoise', nameZh: '水箭龜', types: ['water'],
+    baseStats: { hp: 79, atk: 83, def: 100, spa: 85, spd: 105, spe: 78 },
+    moveId: 1022, artworkUrl: artwork(9),
   },
   10: {
     id: 10, name: 'Caterpie', nameZh: '綠毛蟲', types: ['bug'],
     baseStats: { hp: 45, atk: 30, def: 35, spa: 20, spd: 20, spe: 45 },
-    moveId: 450, artworkUrl: artwork(10),
+    moveId: 1110, artworkUrl: artwork(10),
+  },
+  11: {
+    id: 11, name: 'Metapod', nameZh: '鐵甲蛹', types: ['bug'],
+    baseStats: { hp: 50, atk: 20, def: 55, spa: 25, spd: 25, spe: 30 },
+    moveId: 1110, artworkUrl: artwork(11),
+  },
+  12: {
+    id: 12, name: 'Butterfree', nameZh: '巴大蝶', types: ['bug', 'flying'],
+    baseStats: { hp: 60, atk: 45, def: 50, spa: 90, spd: 80, spe: 70 },
+    moveId: 1111, artworkUrl: artwork(12),
+  },
+  13: {
+    id: 13, name: 'Weedle', nameZh: '獨角蟲', types: ['bug', 'poison'],
+    baseStats: { hp: 40, atk: 35, def: 30, spa: 20, spd: 20, spe: 50 },
+    moveId: 1110, artworkUrl: artwork(13),
+  },
+  14: {
+    id: 14, name: 'Kakuna', nameZh: '鐵殼蛹', types: ['bug', 'poison'],
+    baseStats: { hp: 45, atk: 25, def: 50, spa: 25, spd: 25, spe: 35 },
+    moveId: 1110, artworkUrl: artwork(14),
+  },
+  15: {
+    id: 15, name: 'Beedrill', nameZh: '大針蜂', types: ['bug', 'poison'],
+    baseStats: { hp: 65, atk: 90, def: 40, spa: 45, spd: 80, spe: 75 },
+    moveId: 1111, artworkUrl: artwork(15),
   },
   16: {
     id: 16, name: 'Pidgey', nameZh: '波波', types: ['normal', 'flying'],
     baseStats: { hp: 40, atk: 45, def: 40, spa: 35, spd: 35, spe: 56 },
-    moveId: 16, artworkUrl: artwork(16),
+    moveId: 1000, artworkUrl: artwork(16),
   },
-  74: {
-    id: 74, name: 'Geodude', nameZh: '小拳石', types: ['rock', 'ground'],
-    baseStats: { hp: 40, atk: 80, def: 100, spa: 30, spd: 30, spe: 20 },
-    moveId: 88, artworkUrl: artwork(74),
+  17: {
+    id: 17, name: 'Pidgeotto', nameZh: '比比鳥', types: ['normal', 'flying'],
+    baseStats: { hp: 63, atk: 60, def: 55, spa: 50, spd: 50, spe: 71 },
+    moveId: 1000, artworkUrl: artwork(17),
   },
-  66: {
-    id: 66, name: 'Machop', nameZh: '腕力', types: ['fighting'],
-    baseStats: { hp: 70, atk: 80, def: 50, spa: 35, spd: 35, spe: 35 },
-    moveId: 2, artworkUrl: artwork(66),
+  18: {
+    id: 18, name: 'Pidgeot', nameZh: '大比鳥', types: ['normal', 'flying'],
+    baseStats: { hp: 83, atk: 80, def: 75, spa: 70, spd: 70, spe: 101 },
+    moveId: 1001, artworkUrl: artwork(18),
   },
-  92: {
-    id: 92, name: 'Gastly', nameZh: '鬼斯', types: ['ghost', 'poison'],
-    baseStats: { hp: 30, atk: 35, def: 30, spa: 100, spd: 35, spe: 80 },
-    moveId: 247, artworkUrl: artwork(92),
+  19: {
+    id: 19, name: 'Rattata', nameZh: '小拉達', types: ['normal'],
+    baseStats: { hp: 30, atk: 56, def: 35, spa: 25, spd: 35, spe: 72 },
+    moveId: 1000, artworkUrl: artwork(19),
   },
-  133: {
-    id: 133, name: 'Eevee', nameZh: '伊布', types: ['normal'],
-    baseStats: { hp: 55, atk: 55, def: 50, spa: 45, spd: 65, spe: 55 },
-    moveId: 98, artworkUrl: artwork(133),
+  20: {
+    id: 20, name: 'Raticate', nameZh: '拉達', types: ['normal'],
+    baseStats: { hp: 55, atk: 81, def: 60, spa: 50, spd: 70, spe: 97 },
+    moveId: 1001, artworkUrl: artwork(20),
+  },
+  21: {
+    id: 21, name: 'Spearow', nameZh: '烈雀', types: ['normal', 'flying'],
+    baseStats: { hp: 40, atk: 60, def: 30, spa: 31, spd: 31, spe: 70 },
+    moveId: 1000, artworkUrl: artwork(21),
+  },
+  22: {
+    id: 22, name: 'Fearow', nameZh: '大嘴雀', types: ['normal', 'flying'],
+    baseStats: { hp: 65, atk: 90, def: 65, spa: 61, spd: 61, spe: 100 },
+    moveId: 1001, artworkUrl: artwork(22),
+  },
+  23: {
+    id: 23, name: 'Ekans', nameZh: '阿柏蛇', types: ['poison'],
+    baseStats: { hp: 35, atk: 60, def: 44, spa: 40, spd: 54, spe: 55 },
+    moveId: 1070, artworkUrl: artwork(23),
+  },
+  24: {
+    id: 24, name: 'Arbok', nameZh: '阿柏怪', types: ['poison'],
+    baseStats: { hp: 60, atk: 95, def: 69, spa: 65, spd: 79, spe: 80 },
+    moveId: 1071, artworkUrl: artwork(24),
+  },
+  25: {
+    id: 25, name: 'Pikachu', nameZh: '皮卡丘', types: ['electric'],
+    baseStats: { hp: 35, atk: 55, def: 40, spa: 50, spd: 50, spe: 90 },
+    moveId: 1030, artworkUrl: artwork(25),
+  },
+  26: {
+    id: 26, name: 'Raichu', nameZh: '雷丘', types: ['electric'],
+    baseStats: { hp: 60, atk: 90, def: 55, spa: 90, spd: 80, spe: 110 },
+    moveId: 1032, artworkUrl: artwork(26),
+  },
+  27: {
+    id: 27, name: 'Sandshrew', nameZh: '穿山鼠', types: ['ground'],
+    baseStats: { hp: 50, atk: 75, def: 85, spa: 20, spd: 30, spe: 40 },
+    moveId: 1080, artworkUrl: artwork(27),
+  },
+  28: {
+    id: 28, name: 'Sandslash', nameZh: '穿山王', types: ['ground'],
+    baseStats: { hp: 75, atk: 100, def: 110, spa: 45, spd: 55, spe: 65 },
+    moveId: 1081, artworkUrl: artwork(28),
+  },
+  29: {
+    id: 29, name: 'Nidoran F', nameZh: '尼多蘭', types: ['poison'],
+    baseStats: { hp: 55, atk: 47, def: 52, spa: 40, spd: 40, spe: 41 },
+    moveId: 1070, artworkUrl: artwork(29),
+  },
+  30: {
+    id: 30, name: 'Nidorina', nameZh: '尼多娜', types: ['poison'],
+    baseStats: { hp: 70, atk: 62, def: 67, spa: 55, spd: 55, spe: 56 },
+    moveId: 1070, artworkUrl: artwork(30),
+  },
+  31: {
+    id: 31, name: 'Nidoqueen', nameZh: '尼多后', types: ['poison', 'ground'],
+    baseStats: { hp: 90, atk: 92, def: 87, spa: 75, spd: 85, spe: 76 },
+    moveId: 1072, artworkUrl: artwork(31),
+  },
+  32: {
+    id: 32, name: 'Nidoran M', nameZh: '尼多朗', types: ['poison'],
+    baseStats: { hp: 46, atk: 57, def: 40, spa: 40, spd: 40, spe: 50 },
+    moveId: 1070, artworkUrl: artwork(32),
+  },
+  33: {
+    id: 33, name: 'Nidorino', nameZh: '尼多力諾', types: ['poison'],
+    baseStats: { hp: 61, atk: 72, def: 57, spa: 55, spd: 55, spe: 65 },
+    moveId: 1070, artworkUrl: artwork(33),
+  },
+  34: {
+    id: 34, name: 'Nidoking', nameZh: '尼多王', types: ['poison', 'ground'],
+    baseStats: { hp: 81, atk: 102, def: 77, spa: 85, spd: 75, spe: 85 },
+    moveId: 1072, artworkUrl: artwork(34),
+  },
+  35: {
+    id: 35, name: 'Clefairy', nameZh: '皮皮', types: ['fairy'],
+    baseStats: { hp: 70, atk: 45, def: 48, spa: 60, spd: 65, spe: 35 },
+    moveId: 1170, artworkUrl: artwork(35),
+  },
+  36: {
+    id: 36, name: 'Clefable', nameZh: '皮可西', types: ['fairy'],
+    baseStats: { hp: 95, atk: 70, def: 73, spa: 95, spd: 90, spe: 60 },
+    moveId: 1172, artworkUrl: artwork(36),
   },
   37: {
     id: 37, name: 'Vulpix', nameZh: '六尾', types: ['fire'],
     baseStats: { hp: 38, atk: 41, def: 40, spa: 50, spd: 65, spe: 65 },
-    moveId: 53, artworkUrl: artwork(37),
+    moveId: 1010, artworkUrl: artwork(37),
+  },
+  38: {
+    id: 38, name: 'Ninetales', nameZh: '九尾', types: ['fire'],
+    baseStats: { hp: 73, atk: 76, def: 75, spa: 81, spd: 100, spe: 100 },
+    moveId: 1012, artworkUrl: artwork(38),
+  },
+  39: {
+    id: 39, name: 'Jigglypuff', nameZh: '胖丁', types: ['normal', 'fairy'],
+    baseStats: { hp: 115, atk: 45, def: 20, spa: 45, spd: 25, spe: 20 },
+    moveId: 1000, artworkUrl: artwork(39),
+  },
+  40: {
+    id: 40, name: 'Wigglytuff', nameZh: '胖可丁', types: ['normal', 'fairy'],
+    baseStats: { hp: 140, atk: 70, def: 45, spa: 85, spd: 50, spe: 45 },
+    moveId: 1001, artworkUrl: artwork(40),
+  },
+  41: {
+    id: 41, name: 'Zubat', nameZh: '超音蝠', types: ['poison', 'flying'],
+    baseStats: { hp: 40, atk: 45, def: 35, spa: 30, spd: 40, spe: 55 },
+    moveId: 1070, artworkUrl: artwork(41),
+  },
+  42: {
+    id: 42, name: 'Golbat', nameZh: '大嘴蝠', types: ['poison', 'flying'],
+    baseStats: { hp: 75, atk: 80, def: 70, spa: 65, spd: 75, spe: 90 },
+    moveId: 1071, artworkUrl: artwork(42),
+  },
+  43: {
+    id: 43, name: 'Oddish', nameZh: '走路草', types: ['grass', 'poison'],
+    baseStats: { hp: 45, atk: 50, def: 55, spa: 75, spd: 65, spe: 30 },
+    moveId: 1040, artworkUrl: artwork(43),
+  },
+  44: {
+    id: 44, name: 'Gloom', nameZh: '臭臭花', types: ['grass', 'poison'],
+    baseStats: { hp: 60, atk: 65, def: 70, spa: 85, spd: 75, spe: 40 },
+    moveId: 1041, artworkUrl: artwork(44),
+  },
+  45: {
+    id: 45, name: 'Vileplume', nameZh: '霸王花', types: ['grass', 'poison'],
+    baseStats: { hp: 75, atk: 80, def: 85, spa: 110, spd: 90, spe: 50 },
+    moveId: 1042, artworkUrl: artwork(45),
+  },
+  46: {
+    id: 46, name: 'Paras', nameZh: '派拉斯', types: ['bug', 'grass'],
+    baseStats: { hp: 35, atk: 70, def: 55, spa: 45, spd: 55, spe: 25 },
+    moveId: 1110, artworkUrl: artwork(46),
+  },
+  47: {
+    id: 47, name: 'Parasect', nameZh: '派拉斯特', types: ['bug', 'grass'],
+    baseStats: { hp: 60, atk: 95, def: 80, spa: 60, spd: 80, spe: 30 },
+    moveId: 1111, artworkUrl: artwork(47),
+  },
+  48: {
+    id: 48, name: 'Venonat', nameZh: '毛球', types: ['bug', 'poison'],
+    baseStats: { hp: 60, atk: 55, def: 50, spa: 40, spd: 55, spe: 45 },
+    moveId: 1110, artworkUrl: artwork(48),
+  },
+  49: {
+    id: 49, name: 'Venomoth', nameZh: '摩魯蛾', types: ['bug', 'poison'],
+    baseStats: { hp: 70, atk: 65, def: 60, spa: 90, spd: 75, spe: 90 },
+    moveId: 1111, artworkUrl: artwork(49),
+  },
+  50: {
+    id: 50, name: 'Diglett', nameZh: '地鼠', types: ['ground'],
+    baseStats: { hp: 10, atk: 55, def: 25, spa: 35, spd: 45, spe: 95 },
+    moveId: 1080, artworkUrl: artwork(50),
+  },
+  51: {
+    id: 51, name: 'Dugtrio', nameZh: '三地鼠', types: ['ground'],
+    baseStats: { hp: 35, atk: 100, def: 50, spa: 50, spd: 70, spe: 120 },
+    moveId: 1081, artworkUrl: artwork(51),
+  },
+  52: {
+    id: 52, name: 'Meowth', nameZh: '喵喵', types: ['normal'],
+    baseStats: { hp: 40, atk: 45, def: 35, spa: 40, spd: 40, spe: 90 },
+    moveId: 1000, artworkUrl: artwork(52),
+  },
+  53: {
+    id: 53, name: 'Persian', nameZh: '貓老大', types: ['normal'],
+    baseStats: { hp: 65, atk: 70, def: 60, spa: 65, spd: 65, spe: 115 },
+    moveId: 1001, artworkUrl: artwork(53),
+  },
+  54: {
+    id: 54, name: 'Psyduck', nameZh: '可達鴨', types: ['water'],
+    baseStats: { hp: 50, atk: 52, def: 48, spa: 65, spd: 50, spe: 55 },
+    moveId: 1020, artworkUrl: artwork(54),
+  },
+  55: {
+    id: 55, name: 'Golduck', nameZh: '哥達鴨', types: ['water'],
+    baseStats: { hp: 80, atk: 82, def: 78, spa: 95, spd: 80, spe: 85 },
+    moveId: 1022, artworkUrl: artwork(55),
+  },
+  56: {
+    id: 56, name: 'Mankey', nameZh: '猴怪', types: ['fighting'],
+    baseStats: { hp: 40, atk: 80, def: 35, spa: 35, spd: 45, spe: 70 },
+    moveId: 1060, artworkUrl: artwork(56),
+  },
+  57: {
+    id: 57, name: 'Primeape', nameZh: '火爆猴', types: ['fighting'],
+    baseStats: { hp: 65, atk: 105, def: 60, spa: 60, spd: 70, spe: 95 },
+    moveId: 1061, artworkUrl: artwork(57),
+  },
+  58: {
+    id: 58, name: 'Growlithe', nameZh: '卡蒂狗', types: ['fire'],
+    baseStats: { hp: 55, atk: 70, def: 45, spa: 70, spd: 50, spe: 60 },
+    moveId: 1010, artworkUrl: artwork(58),
+  },
+  59: {
+    id: 59, name: 'Arcanine', nameZh: '風速狗', types: ['fire'],
+    baseStats: { hp: 90, atk: 110, def: 80, spa: 100, spd: 80, spe: 95 },
+    moveId: 1012, artworkUrl: artwork(59),
   },
   60: {
     id: 60, name: 'Poliwag', nameZh: '蚊香蝌蚪', types: ['water'],
     baseStats: { hp: 40, atk: 50, def: 40, spa: 40, spd: 40, spe: 90 },
-    moveId: 145, artworkUrl: artwork(60),
+    moveId: 1020, artworkUrl: artwork(60),
+  },
+  61: {
+    id: 61, name: 'Poliwhirl', nameZh: '蚊香君', types: ['water'],
+    baseStats: { hp: 65, atk: 65, def: 65, spa: 50, spd: 50, spe: 90 },
+    moveId: 1021, artworkUrl: artwork(61),
+  },
+  62: {
+    id: 62, name: 'Poliwrath', nameZh: '蚊香泳士', types: ['water', 'fighting'],
+    baseStats: { hp: 90, atk: 95, def: 95, spa: 70, spd: 90, spe: 70 },
+    moveId: 1022, artworkUrl: artwork(62),
+  },
+  63: {
+    id: 63, name: 'Abra', nameZh: '凱西', types: ['psychic'],
+    baseStats: { hp: 25, atk: 20, def: 15, spa: 105, spd: 55, spe: 90 },
+    moveId: 1100, artworkUrl: artwork(63),
+  },
+  64: {
+    id: 64, name: 'Kadabra', nameZh: '勇基拉', types: ['psychic'],
+    baseStats: { hp: 40, atk: 35, def: 30, spa: 120, spd: 70, spe: 105 },
+    moveId: 1101, artworkUrl: artwork(64),
+  },
+  65: {
+    id: 65, name: 'Alakazam', nameZh: '胡地', types: ['psychic'],
+    baseStats: { hp: 55, atk: 50, def: 45, spa: 135, spd: 95, spe: 120 },
+    moveId: 1102, artworkUrl: artwork(65),
+  },
+  66: {
+    id: 66, name: 'Machop', nameZh: '腕力', types: ['fighting'],
+    baseStats: { hp: 70, atk: 80, def: 50, spa: 35, spd: 35, spe: 35 },
+    moveId: 1060, artworkUrl: artwork(66),
+  },
+  67: {
+    id: 67, name: 'Machoke', nameZh: '豪力', types: ['fighting'],
+    baseStats: { hp: 80, atk: 100, def: 70, spa: 50, spd: 60, spe: 45 },
+    moveId: 1061, artworkUrl: artwork(67),
+  },
+  68: {
+    id: 68, name: 'Machamp', nameZh: '怪力', types: ['fighting'],
+    baseStats: { hp: 90, atk: 130, def: 80, spa: 65, spd: 85, spe: 55 },
+    moveId: 1062, artworkUrl: artwork(68),
+  },
+  69: {
+    id: 69, name: 'Bellsprout', nameZh: '喇叭芽', types: ['grass', 'poison'],
+    baseStats: { hp: 50, atk: 75, def: 35, spa: 70, spd: 30, spe: 40 },
+    moveId: 1040, artworkUrl: artwork(69),
+  },
+  70: {
+    id: 70, name: 'Weepinbell', nameZh: '口呆花', types: ['grass', 'poison'],
+    baseStats: { hp: 65, atk: 90, def: 50, spa: 85, spd: 45, spe: 55 },
+    moveId: 1041, artworkUrl: artwork(70),
+  },
+  71: {
+    id: 71, name: 'Victreebel', nameZh: '大食花', types: ['grass', 'poison'],
+    baseStats: { hp: 80, atk: 105, def: 65, spa: 100, spd: 70, spe: 70 },
+    moveId: 1042, artworkUrl: artwork(71),
+  },
+  72: {
+    id: 72, name: 'Tentacool', nameZh: '瑪瑙水母', types: ['water', 'poison'],
+    baseStats: { hp: 40, atk: 40, def: 35, spa: 50, spd: 100, spe: 70 },
+    moveId: 1020, artworkUrl: artwork(72),
+  },
+  73: {
+    id: 73, name: 'Tentacruel', nameZh: '毒刺水母', types: ['water', 'poison'],
+    baseStats: { hp: 80, atk: 70, def: 65, spa: 80, spd: 120, spe: 100 },
+    moveId: 1022, artworkUrl: artwork(73),
+  },
+  74: {
+    id: 74, name: 'Geodude', nameZh: '小拳石', types: ['rock', 'ground'],
+    baseStats: { hp: 40, atk: 80, def: 100, spa: 30, spd: 30, spe: 20 },
+    moveId: 1120, artworkUrl: artwork(74),
+  },
+  75: {
+    id: 75, name: 'Graveler', nameZh: '隆隆石', types: ['rock', 'ground'],
+    baseStats: { hp: 55, atk: 95, def: 115, spa: 45, spd: 45, spe: 35 },
+    moveId: 1121, artworkUrl: artwork(75),
+  },
+  76: {
+    id: 76, name: 'Golem', nameZh: '隆隆岩', types: ['rock', 'ground'],
+    baseStats: { hp: 80, atk: 120, def: 130, spa: 55, spd: 65, spe: 45 },
+    moveId: 1122, artworkUrl: artwork(76),
+  },
+  77: {
+    id: 77, name: 'Ponyta', nameZh: '小火馬', types: ['fire'],
+    baseStats: { hp: 50, atk: 85, def: 55, spa: 65, spd: 65, spe: 90 },
+    moveId: 1011, artworkUrl: artwork(77),
+  },
+  78: {
+    id: 78, name: 'Rapidash', nameZh: '烈焰馬', types: ['fire'],
+    baseStats: { hp: 65, atk: 100, def: 70, spa: 80, spd: 80, spe: 105 },
+    moveId: 1012, artworkUrl: artwork(78),
+  },
+  79: {
+    id: 79, name: 'Slowpoke', nameZh: '呆呆獸', types: ['water', 'psychic'],
+    baseStats: { hp: 90, atk: 65, def: 65, spa: 40, spd: 40, spe: 15 },
+    moveId: 1020, artworkUrl: artwork(79),
+  },
+  80: {
+    id: 80, name: 'Slowbro', nameZh: '呆殼獸', types: ['water', 'psychic'],
+    baseStats: { hp: 95, atk: 75, def: 110, spa: 100, spd: 80, spe: 30 },
+    moveId: 1022, artworkUrl: artwork(80),
+  },
+  81: {
+    id: 81, name: 'Magnemite', nameZh: '小磁怪', types: ['electric', 'steel'],
+    baseStats: { hp: 25, atk: 35, def: 70, spa: 95, spd: 55, spe: 45 },
+    moveId: 1030, artworkUrl: artwork(81),
+  },
+  82: {
+    id: 82, name: 'Magneton', nameZh: '三合一磁怪', types: ['electric', 'steel'],
+    baseStats: { hp: 50, atk: 60, def: 95, spa: 120, spd: 70, spe: 70 },
+    moveId: 1031, artworkUrl: artwork(82),
+  },
+  83: {
+    id: 83, name: 'Farfetchd', nameZh: '大蔥鴨', types: ['normal', 'flying'],
+    baseStats: { hp: 52, atk: 90, def: 55, spa: 58, spd: 62, spe: 60 },
+    moveId: 1000, artworkUrl: artwork(83),
+  },
+  84: {
+    id: 84, name: 'Doduo', nameZh: '嘟嘟', types: ['normal', 'flying'],
+    baseStats: { hp: 35, atk: 85, def: 45, spa: 35, spd: 35, spe: 75 },
+    moveId: 1000, artworkUrl: artwork(84),
+  },
+  85: {
+    id: 85, name: 'Dodrio', nameZh: '嘟嘟利', types: ['normal', 'flying'],
+    baseStats: { hp: 60, atk: 110, def: 70, spa: 60, spd: 60, spe: 110 },
+    moveId: 1001, artworkUrl: artwork(85),
+  },
+  86: {
+    id: 86, name: 'Seel', nameZh: '小海獅', types: ['water'],
+    baseStats: { hp: 65, atk: 45, def: 55, spa: 45, spd: 70, spe: 45 },
+    moveId: 1020, artworkUrl: artwork(86),
+  },
+  87: {
+    id: 87, name: 'Dewgong', nameZh: '白海獅', types: ['water', 'ice'],
+    baseStats: { hp: 90, atk: 70, def: 80, spa: 70, spd: 95, spe: 70 },
+    moveId: 1021, artworkUrl: artwork(87),
+  },
+  88: {
+    id: 88, name: 'Grimer', nameZh: '臭泥', types: ['poison'],
+    baseStats: { hp: 80, atk: 80, def: 50, spa: 40, spd: 50, spe: 25 },
+    moveId: 1070, artworkUrl: artwork(88),
+  },
+  89: {
+    id: 89, name: 'Muk', nameZh: '臭臭泥', types: ['poison'],
+    baseStats: { hp: 105, atk: 105, def: 75, spa: 65, spd: 100, spe: 50 },
+    moveId: 1072, artworkUrl: artwork(89),
+  },
+  90: {
+    id: 90, name: 'Shellder', nameZh: '大舌貝', types: ['water'],
+    baseStats: { hp: 30, atk: 65, def: 100, spa: 45, spd: 25, spe: 40 },
+    moveId: 1020, artworkUrl: artwork(90),
+  },
+  91: {
+    id: 91, name: 'Cloyster', nameZh: '刺甲貝', types: ['water', 'ice'],
+    baseStats: { hp: 50, atk: 95, def: 180, spa: 85, spd: 45, spe: 70 },
+    moveId: 1022, artworkUrl: artwork(91),
+  },
+  92: {
+    id: 92, name: 'Gastly', nameZh: '鬼斯', types: ['ghost', 'poison'],
+    baseStats: { hp: 30, atk: 35, def: 30, spa: 100, spd: 35, spe: 80 },
+    moveId: 1130, artworkUrl: artwork(92),
+  },
+  93: {
+    id: 93, name: 'Haunter', nameZh: '鬼斯通', types: ['ghost', 'poison'],
+    baseStats: { hp: 45, atk: 50, def: 45, spa: 115, spd: 55, spe: 95 },
+    moveId: 1131, artworkUrl: artwork(93),
+  },
+  94: {
+    id: 94, name: 'Gengar', nameZh: '耿鬼', types: ['ghost', 'poison'],
+    baseStats: { hp: 60, atk: 65, def: 60, spa: 130, spd: 75, spe: 110 },
+    moveId: 1132, artworkUrl: artwork(94),
+  },
+  95: {
+    id: 95, name: 'Onix', nameZh: '大岩蛇', types: ['rock', 'ground'],
+    baseStats: { hp: 35, atk: 45, def: 160, spa: 30, spd: 45, spe: 70 },
+    moveId: 1121, artworkUrl: artwork(95),
+  },
+  96: {
+    id: 96, name: 'Drowzee', nameZh: '催眠貘', types: ['psychic'],
+    baseStats: { hp: 60, atk: 48, def: 45, spa: 43, spd: 90, spe: 42 },
+    moveId: 1100, artworkUrl: artwork(96),
+  },
+  97: {
+    id: 97, name: 'Hypno', nameZh: '引夢貘人', types: ['psychic'],
+    baseStats: { hp: 85, atk: 73, def: 70, spa: 73, spd: 115, spe: 67 },
+    moveId: 1102, artworkUrl: artwork(97),
+  },
+  98: {
+    id: 98, name: 'Krabby', nameZh: '大鉗蟹', types: ['water'],
+    baseStats: { hp: 30, atk: 105, def: 90, spa: 25, spd: 25, spe: 50 },
+    moveId: 1020, artworkUrl: artwork(98),
+  },
+  99: {
+    id: 99, name: 'Kingler', nameZh: '巨鉗蟹', types: ['water'],
+    baseStats: { hp: 55, atk: 130, def: 115, spa: 50, spd: 50, spe: 75 },
+    moveId: 1021, artworkUrl: artwork(99),
+  },
+  100: {
+    id: 100, name: 'Voltorb', nameZh: '霹靂電球', types: ['electric'],
+    baseStats: { hp: 40, atk: 30, def: 50, spa: 55, spd: 55, spe: 100 },
+    moveId: 1030, artworkUrl: artwork(100),
+  },
+  101: {
+    id: 101, name: 'Electrode', nameZh: '頑皮雷彈', types: ['electric'],
+    baseStats: { hp: 60, atk: 50, def: 70, spa: 80, spd: 80, spe: 150 },
+    moveId: 1032, artworkUrl: artwork(101),
+  },
+  102: {
+    id: 102, name: 'Exeggcute', nameZh: '蛋蛋', types: ['grass', 'psychic'],
+    baseStats: { hp: 60, atk: 40, def: 80, spa: 60, spd: 45, spe: 40 },
+    moveId: 1040, artworkUrl: artwork(102),
+  },
+  103: {
+    id: 103, name: 'Exeggutor', nameZh: '椰蛋樹', types: ['grass', 'psychic'],
+    baseStats: { hp: 95, atk: 95, def: 85, spa: 125, spd: 75, spe: 55 },
+    moveId: 1042, artworkUrl: artwork(103),
+  },
+  104: {
+    id: 104, name: 'Cubone', nameZh: '卡拉卡拉', types: ['ground'],
+    baseStats: { hp: 50, atk: 50, def: 95, spa: 40, spd: 50, spe: 35 },
+    moveId: 1080, artworkUrl: artwork(104),
+  },
+  105: {
+    id: 105, name: 'Marowak', nameZh: '嘎啦嘎啦', types: ['ground'],
+    baseStats: { hp: 60, atk: 80, def: 110, spa: 50, spd: 80, spe: 45 },
+    moveId: 1081, artworkUrl: artwork(105),
+  },
+  106: {
+    id: 106, name: 'Hitmonlee', nameZh: '飛腿郎', types: ['fighting'],
+    baseStats: { hp: 50, atk: 120, def: 53, spa: 35, spd: 110, spe: 87 },
+    moveId: 1061, artworkUrl: artwork(106),
+  },
+  107: {
+    id: 107, name: 'Hitmonchan', nameZh: '快拳郎', types: ['fighting'],
+    baseStats: { hp: 50, atk: 105, def: 79, spa: 35, spd: 110, spe: 76 },
+    moveId: 1061, artworkUrl: artwork(107),
+  },
+  108: {
+    id: 108, name: 'Lickitung', nameZh: '大舌頭', types: ['normal'],
+    baseStats: { hp: 90, atk: 55, def: 75, spa: 60, spd: 75, spe: 30 },
+    moveId: 1001, artworkUrl: artwork(108),
+  },
+  109: {
+    id: 109, name: 'Koffing', nameZh: '瓦斯彈', types: ['poison'],
+    baseStats: { hp: 40, atk: 65, def: 95, spa: 60, spd: 45, spe: 35 },
+    moveId: 1070, artworkUrl: artwork(109),
+  },
+  110: {
+    id: 110, name: 'Weezing', nameZh: '雙彈瓦斯', types: ['poison'],
+    baseStats: { hp: 65, atk: 90, def: 120, spa: 85, spd: 70, spe: 60 },
+    moveId: 1072, artworkUrl: artwork(110),
+  },
+  111: {
+    id: 111, name: 'Rhyhorn', nameZh: '獨角犀牛', types: ['ground', 'rock'],
+    baseStats: { hp: 80, atk: 85, def: 95, spa: 30, spd: 30, spe: 25 },
+    moveId: 1080, artworkUrl: artwork(111),
+  },
+  112: {
+    id: 112, name: 'Rhydon', nameZh: '鑽角犀獸', types: ['ground', 'rock'],
+    baseStats: { hp: 105, atk: 130, def: 120, spa: 45, spd: 45, spe: 40 },
+    moveId: 1082, artworkUrl: artwork(112),
+  },
+  113: {
+    id: 113, name: 'Chansey', nameZh: '吉利蛋', types: ['normal'],
+    baseStats: { hp: 250, atk: 5, def: 5, spa: 35, spd: 105, spe: 50 },
+    moveId: 1001, artworkUrl: artwork(113),
+  },
+  114: {
+    id: 114, name: 'Tangela', nameZh: '蔓藤怪', types: ['grass'],
+    baseStats: { hp: 65, atk: 55, def: 115, spa: 100, spd: 40, spe: 60 },
+    moveId: 1041, artworkUrl: artwork(114),
+  },
+  115: {
+    id: 115, name: 'Kangaskhan', nameZh: '袋獸', types: ['normal'],
+    baseStats: { hp: 105, atk: 95, def: 80, spa: 40, spd: 80, spe: 90 },
+    moveId: 1002, artworkUrl: artwork(115),
+  },
+  116: {
+    id: 116, name: 'Horsea', nameZh: '墨海馬', types: ['water'],
+    baseStats: { hp: 30, atk: 40, def: 70, spa: 70, spd: 25, spe: 60 },
+    moveId: 1020, artworkUrl: artwork(116),
+  },
+  117: {
+    id: 117, name: 'Seadra', nameZh: '海刺龍', types: ['water'],
+    baseStats: { hp: 55, atk: 65, def: 95, spa: 95, spd: 45, spe: 85 },
+    moveId: 1021, artworkUrl: artwork(117),
+  },
+  118: {
+    id: 118, name: 'Goldeen', nameZh: '角金魚', types: ['water'],
+    baseStats: { hp: 45, atk: 67, def: 60, spa: 35, spd: 50, spe: 63 },
+    moveId: 1020, artworkUrl: artwork(118),
+  },
+  119: {
+    id: 119, name: 'Seaking', nameZh: '金魚王', types: ['water'],
+    baseStats: { hp: 80, atk: 92, def: 65, spa: 65, spd: 80, spe: 68 },
+    moveId: 1021, artworkUrl: artwork(119),
+  },
+  120: {
+    id: 120, name: 'Staryu', nameZh: '海星星', types: ['water'],
+    baseStats: { hp: 30, atk: 45, def: 55, spa: 70, spd: 55, spe: 85 },
+    moveId: 1020, artworkUrl: artwork(120),
+  },
+  121: {
+    id: 121, name: 'Starmie', nameZh: '寶石海星', types: ['water', 'psychic'],
+    baseStats: { hp: 60, atk: 75, def: 85, spa: 100, spd: 85, spe: 115 },
+    moveId: 1022, artworkUrl: artwork(121),
+  },
+  122: {
+    id: 122, name: 'Mr Mime', nameZh: '魔牆人偶', types: ['psychic', 'fairy'],
+    baseStats: { hp: 40, atk: 45, def: 65, spa: 100, spd: 120, spe: 90 },
+    moveId: 1101, artworkUrl: artwork(122),
+  },
+  123: {
+    id: 123, name: 'Scyther', nameZh: '飛天螳螂', types: ['bug', 'flying'],
+    baseStats: { hp: 70, atk: 110, def: 80, spa: 55, spd: 80, spe: 105 },
+    moveId: 1112, artworkUrl: artwork(123),
+  },
+  124: {
+    id: 124, name: 'Jynx', nameZh: '迷唇姐', types: ['ice', 'psychic'],
+    baseStats: { hp: 65, atk: 50, def: 35, spa: 115, spd: 95, spe: 95 },
+    moveId: 1051, artworkUrl: artwork(124),
+  },
+  125: {
+    id: 125, name: 'Electabuzz', nameZh: '電擊獸', types: ['electric'],
+    baseStats: { hp: 65, atk: 83, def: 57, spa: 95, spd: 85, spe: 105 },
+    moveId: 1032, artworkUrl: artwork(125),
+  },
+  126: {
+    id: 126, name: 'Magmar', nameZh: '鴨嘴火獸', types: ['fire'],
+    baseStats: { hp: 65, atk: 95, def: 57, spa: 100, spd: 85, spe: 93 },
+    moveId: 1012, artworkUrl: artwork(126),
+  },
+  127: {
+    id: 127, name: 'Pinsir', nameZh: '凱羅斯', types: ['bug'],
+    baseStats: { hp: 65, atk: 125, def: 100, spa: 55, spd: 70, spe: 85 },
+    moveId: 1112, artworkUrl: artwork(127),
+  },
+  128: {
+    id: 128, name: 'Tauros', nameZh: '肯泰羅', types: ['normal'],
+    baseStats: { hp: 75, atk: 100, def: 95, spa: 40, spd: 70, spe: 110 },
+    moveId: 1002, artworkUrl: artwork(128),
+  },
+  129: {
+    id: 129, name: 'Magikarp', nameZh: '鯉魚王', types: ['water'],
+    baseStats: { hp: 20, atk: 10, def: 55, spa: 15, spd: 20, spe: 80 },
+    moveId: 1020, artworkUrl: artwork(129),
+  },
+  130: {
+    id: 130, name: 'Gyarados', nameZh: '暴鯉龍', types: ['water', 'flying'],
+    baseStats: { hp: 95, atk: 125, def: 79, spa: 60, spd: 100, spe: 81 },
+    moveId: 1022, artworkUrl: artwork(130),
+  },
+  131: {
+    id: 131, name: 'Lapras', nameZh: '拉普拉斯', types: ['water', 'ice'],
+    baseStats: { hp: 130, atk: 85, def: 80, spa: 85, spd: 95, spe: 60 },
+    moveId: 1022, artworkUrl: artwork(131),
+  },
+  132: {
+    id: 132, name: 'Ditto', nameZh: '百變怪', types: ['normal'],
+    baseStats: { hp: 48, atk: 48, def: 48, spa: 48, spd: 48, spe: 48 },
+    moveId: 1000, artworkUrl: artwork(132),
+  },
+  133: {
+    id: 133, name: 'Eevee', nameZh: '伊布', types: ['normal'],
+    baseStats: { hp: 55, atk: 55, def: 50, spa: 45, spd: 65, spe: 55 },
+    moveId: 1000, artworkUrl: artwork(133),
+  },
+  134: {
+    id: 134, name: 'Vaporeon', nameZh: '水伊布', types: ['water'],
+    baseStats: { hp: 130, atk: 65, def: 60, spa: 110, spd: 95, spe: 65 },
+    moveId: 1022, artworkUrl: artwork(134),
+  },
+  135: {
+    id: 135, name: 'Jolteon', nameZh: '雷伊布', types: ['electric'],
+    baseStats: { hp: 65, atk: 65, def: 60, spa: 110, spd: 95, spe: 130 },
+    moveId: 1032, artworkUrl: artwork(135),
+  },
+  136: {
+    id: 136, name: 'Flareon', nameZh: '火伊布', types: ['fire'],
+    baseStats: { hp: 65, atk: 130, def: 60, spa: 95, spd: 110, spe: 65 },
+    moveId: 1012, artworkUrl: artwork(136),
+  },
+  137: {
+    id: 137, name: 'Porygon', nameZh: '多邊獸', types: ['normal'],
+    baseStats: { hp: 65, atk: 60, def: 70, spa: 85, spd: 75, spe: 40 },
+    moveId: 1001, artworkUrl: artwork(137),
+  },
+  138: {
+    id: 138, name: 'Omanyte', nameZh: '菊石獸', types: ['rock', 'water'],
+    baseStats: { hp: 35, atk: 40, def: 100, spa: 90, spd: 55, spe: 35 },
+    moveId: 1120, artworkUrl: artwork(138),
+  },
+  139: {
+    id: 139, name: 'Omastar', nameZh: '多刺菊石獸', types: ['rock', 'water'],
+    baseStats: { hp: 70, atk: 60, def: 125, spa: 115, spd: 70, spe: 55 },
+    moveId: 1122, artworkUrl: artwork(139),
+  },
+  140: {
+    id: 140, name: 'Kabuto', nameZh: '化石盔', types: ['rock', 'water'],
+    baseStats: { hp: 30, atk: 80, def: 90, spa: 55, spd: 45, spe: 55 },
+    moveId: 1120, artworkUrl: artwork(140),
+  },
+  141: {
+    id: 141, name: 'Kabutops', nameZh: '鐮刀盔', types: ['rock', 'water'],
+    baseStats: { hp: 60, atk: 115, def: 105, spa: 65, spd: 70, spe: 80 },
+    moveId: 1122, artworkUrl: artwork(141),
+  },
+  142: {
+    id: 142, name: 'Aerodactyl', nameZh: '化石翼龍', types: ['rock', 'flying'],
+    baseStats: { hp: 80, atk: 105, def: 65, spa: 60, spd: 75, spe: 130 },
+    moveId: 1122, artworkUrl: artwork(142),
+  },
+  143: {
+    id: 143, name: 'Snorlax', nameZh: '卡比獸', types: ['normal'],
+    baseStats: { hp: 160, atk: 110, def: 65, spa: 65, spd: 110, spe: 30 },
+    moveId: 1002, artworkUrl: artwork(143),
+  },
+  144: {
+    id: 144, name: 'Articuno', nameZh: '急凍鳥', types: ['ice', 'flying'],
+    baseStats: { hp: 90, atk: 85, def: 100, spa: 95, spd: 125, spe: 85 },
+    moveId: 1052, artworkUrl: artwork(144),
+  },
+  145: {
+    id: 145, name: 'Zapdos', nameZh: '閃電鳥', types: ['electric', 'flying'],
+    baseStats: { hp: 90, atk: 90, def: 85, spa: 125, spd: 90, spe: 100 },
+    moveId: 1032, artworkUrl: artwork(145),
+  },
+  146: {
+    id: 146, name: 'Moltres', nameZh: '火焰鳥', types: ['fire', 'flying'],
+    baseStats: { hp: 90, atk: 100, def: 90, spa: 125, spd: 85, spe: 90 },
+    moveId: 1012, artworkUrl: artwork(146),
+  },
+  147: {
+    id: 147, name: 'Dratini', nameZh: '迷你龍', types: ['dragon'],
+    baseStats: { hp: 41, atk: 64, def: 45, spa: 50, spd: 50, spe: 50 },
+    moveId: 1140, artworkUrl: artwork(147),
+  },
+  148: {
+    id: 148, name: 'Dragonair', nameZh: '哈克龍', types: ['dragon'],
+    baseStats: { hp: 61, atk: 84, def: 65, spa: 70, spd: 70, spe: 70 },
+    moveId: 1141, artworkUrl: artwork(148),
+  },
+  149: {
+    id: 149, name: 'Dragonite', nameZh: '快龍', types: ['dragon', 'flying'],
+    baseStats: { hp: 91, atk: 134, def: 95, spa: 100, spd: 100, spe: 80 },
+    moveId: 1142, artworkUrl: artwork(149),
+  },
+  150: {
+    id: 150, name: 'Mewtwo', nameZh: '超夢', types: ['psychic'],
+    baseStats: { hp: 106, atk: 110, def: 90, spa: 154, spd: 90, spe: 130 },
+    moveId: 1102, artworkUrl: artwork(150),
+  },
+  151: {
+    id: 151, name: 'Mew', nameZh: '夢幻', types: ['psychic'],
+    baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
+    moveId: 1102, artworkUrl: artwork(151),
+  },
+  152: {
+    id: 152, name: 'Chikorita', nameZh: '菊草葉', types: ['grass'],
+    baseStats: { hp: 45, atk: 49, def: 65, spa: 49, spd: 65, spe: 45 },
+    moveId: 1040, artworkUrl: artwork(152),
+  },
+  153: {
+    id: 153, name: 'Bayleef', nameZh: '月桂葉', types: ['grass'],
+    baseStats: { hp: 60, atk: 62, def: 80, spa: 63, spd: 80, spe: 60 },
+    moveId: 1041, artworkUrl: artwork(153),
+  },
+  154: {
+    id: 154, name: 'Meganium', nameZh: '大竺葵', types: ['grass'],
+    baseStats: { hp: 80, atk: 82, def: 100, spa: 83, spd: 100, spe: 80 },
+    moveId: 1042, artworkUrl: artwork(154),
+  },
+  155: {
+    id: 155, name: 'Cyndaquil', nameZh: '火球鼠', types: ['fire'],
+    baseStats: { hp: 39, atk: 52, def: 43, spa: 60, spd: 50, spe: 65 },
+    moveId: 1010, artworkUrl: artwork(155),
+  },
+  156: {
+    id: 156, name: 'Quilava', nameZh: '火岩鼠', types: ['fire'],
+    baseStats: { hp: 58, atk: 64, def: 58, spa: 80, spd: 65, spe: 80 },
+    moveId: 1011, artworkUrl: artwork(156),
+  },
+  157: {
+    id: 157, name: 'Typhlosion', nameZh: '火爆獸', types: ['fire'],
+    baseStats: { hp: 78, atk: 84, def: 78, spa: 109, spd: 85, spe: 100 },
+    moveId: 1012, artworkUrl: artwork(157),
+  },
+  158: {
+    id: 158, name: 'Totodile', nameZh: '小鋸鱷', types: ['water'],
+    baseStats: { hp: 50, atk: 65, def: 64, spa: 44, spd: 48, spe: 43 },
+    moveId: 1020, artworkUrl: artwork(158),
+  },
+  159: {
+    id: 159, name: 'Croconaw', nameZh: '藍鱷', types: ['water'],
+    baseStats: { hp: 65, atk: 80, def: 80, spa: 59, spd: 63, spe: 58 },
+    moveId: 1021, artworkUrl: artwork(159),
+  },
+  160: {
+    id: 160, name: 'Feraligatr', nameZh: '大力鱷', types: ['water'],
+    baseStats: { hp: 85, atk: 105, def: 100, spa: 79, spd: 83, spe: 78 },
+    moveId: 1022, artworkUrl: artwork(160),
+  },
+  161: {
+    id: 161, name: 'Sentret', nameZh: '尾立', types: ['normal'],
+    baseStats: { hp: 35, atk: 46, def: 34, spa: 35, spd: 45, spe: 20 },
+    moveId: 1000, artworkUrl: artwork(161),
+  },
+  162: {
+    id: 162, name: 'Furret', nameZh: '大尾立', types: ['normal'],
+    baseStats: { hp: 85, atk: 76, def: 64, spa: 45, spd: 55, spe: 90 },
+    moveId: 1001, artworkUrl: artwork(162),
+  },
+  163: {
+    id: 163, name: 'Hoothoot', nameZh: '咕咕', types: ['normal', 'flying'],
+    baseStats: { hp: 60, atk: 30, def: 30, spa: 36, spd: 56, spe: 50 },
+    moveId: 1000, artworkUrl: artwork(163),
+  },
+  164: {
+    id: 164, name: 'Noctowl', nameZh: '貓頭夜鷹', types: ['normal', 'flying'],
+    baseStats: { hp: 100, atk: 50, def: 50, spa: 86, spd: 96, spe: 70 },
+    moveId: 1001, artworkUrl: artwork(164),
+  },
+  165: {
+    id: 165, name: 'Ledyba', nameZh: '芭瓢蟲', types: ['bug', 'flying'],
+    baseStats: { hp: 40, atk: 20, def: 30, spa: 40, spd: 80, spe: 55 },
+    moveId: 1110, artworkUrl: artwork(165),
+  },
+  166: {
+    id: 166, name: 'Ledian', nameZh: '安瓢蟲', types: ['bug', 'flying'],
+    baseStats: { hp: 55, atk: 35, def: 50, spa: 55, spd: 110, spe: 85 },
+    moveId: 1111, artworkUrl: artwork(166),
+  },
+  167: {
+    id: 167, name: 'Spinarak', nameZh: '圓絲蛛', types: ['bug', 'poison'],
+    baseStats: { hp: 40, atk: 60, def: 40, spa: 40, spd: 40, spe: 30 },
+    moveId: 1110, artworkUrl: artwork(167),
+  },
+  168: {
+    id: 168, name: 'Ariados', nameZh: '阿利多斯', types: ['bug', 'poison'],
+    baseStats: { hp: 70, atk: 90, def: 70, spa: 60, spd: 70, spe: 40 },
+    moveId: 1111, artworkUrl: artwork(168),
+  },
+  169: {
+    id: 169, name: 'Crobat', nameZh: '叉字蝠', types: ['poison', 'flying'],
+    baseStats: { hp: 85, atk: 90, def: 80, spa: 70, spd: 80, spe: 130 },
+    moveId: 1072, artworkUrl: artwork(169),
+  },
+  170: {
+    id: 170, name: 'Chinchou', nameZh: '燈籠魚', types: ['water', 'electric'],
+    baseStats: { hp: 75, atk: 38, def: 38, spa: 56, spd: 56, spe: 67 },
+    moveId: 1020, artworkUrl: artwork(170),
+  },
+  171: {
+    id: 171, name: 'Lanturn', nameZh: '電燈怪', types: ['water', 'electric'],
+    baseStats: { hp: 125, atk: 58, def: 58, spa: 76, spd: 76, spe: 67 },
+    moveId: 1021, artworkUrl: artwork(171),
+  },
+  172: {
+    id: 172, name: 'Pichu', nameZh: '皮丘', types: ['electric'],
+    baseStats: { hp: 20, atk: 40, def: 15, spa: 35, spd: 35, spe: 60 },
+    moveId: 1030, artworkUrl: artwork(172),
+  },
+  173: {
+    id: 173, name: 'Cleffa', nameZh: '皮寶寶', types: ['fairy'],
+    baseStats: { hp: 50, atk: 25, def: 28, spa: 45, spd: 55, spe: 15 },
+    moveId: 1170, artworkUrl: artwork(173),
+  },
+  174: {
+    id: 174, name: 'Igglybuff', nameZh: '寶寶丁', types: ['normal', 'fairy'],
+    baseStats: { hp: 90, atk: 30, def: 15, spa: 40, spd: 20, spe: 15 },
+    moveId: 1000, artworkUrl: artwork(174),
+  },
+  175: {
+    id: 175, name: 'Togepi', nameZh: '波克比', types: ['fairy'],
+    baseStats: { hp: 35, atk: 20, def: 65, spa: 40, spd: 65, spe: 20 },
+    moveId: 1170, artworkUrl: artwork(175),
+  },
+  176: {
+    id: 176, name: 'Togetic', nameZh: '波克基古', types: ['fairy', 'flying'],
+    baseStats: { hp: 55, atk: 40, def: 85, spa: 80, spd: 105, spe: 40 },
+    moveId: 1171, artworkUrl: artwork(176),
+  },
+  177: {
+    id: 177, name: 'Natu', nameZh: '天然雀', types: ['psychic', 'flying'],
+    baseStats: { hp: 40, atk: 50, def: 45, spa: 70, spd: 45, spe: 70 },
+    moveId: 1100, artworkUrl: artwork(177),
+  },
+  178: {
+    id: 178, name: 'Xatu', nameZh: '天然鳥', types: ['psychic', 'flying'],
+    baseStats: { hp: 65, atk: 75, def: 70, spa: 95, spd: 70, spe: 95 },
+    moveId: 1101, artworkUrl: artwork(178),
+  },
+  179: {
+    id: 179, name: 'Mareep', nameZh: '咩利羊', types: ['electric'],
+    baseStats: { hp: 55, atk: 40, def: 40, spa: 65, spd: 45, spe: 35 },
+    moveId: 1030, artworkUrl: artwork(179),
+  },
+  180: {
+    id: 180, name: 'Flaaffy', nameZh: '茸茸羊', types: ['electric'],
+    baseStats: { hp: 70, atk: 55, def: 55, spa: 80, spd: 60, spe: 45 },
+    moveId: 1030, artworkUrl: artwork(180),
+  },
+  181: {
+    id: 181, name: 'Ampharos', nameZh: '電龍', types: ['electric'],
+    baseStats: { hp: 90, atk: 75, def: 85, spa: 115, spd: 90, spe: 55 },
+    moveId: 1032, artworkUrl: artwork(181),
+  },
+  182: {
+    id: 182, name: 'Bellossom', nameZh: '美麗花', types: ['grass'],
+    baseStats: { hp: 75, atk: 80, def: 95, spa: 90, spd: 100, spe: 50 },
+    moveId: 1042, artworkUrl: artwork(182),
+  },
+  183: {
+    id: 183, name: 'Marill', nameZh: '瑪力露', types: ['water', 'fairy'],
+    baseStats: { hp: 70, atk: 20, def: 50, spa: 20, spd: 50, spe: 40 },
+    moveId: 1020, artworkUrl: artwork(183),
+  },
+  184: {
+    id: 184, name: 'Azumarill', nameZh: '瑪力露麗', types: ['water', 'fairy'],
+    baseStats: { hp: 100, atk: 50, def: 80, spa: 60, spd: 80, spe: 50 },
+    moveId: 1021, artworkUrl: artwork(184),
+  },
+  185: {
+    id: 185, name: 'Sudowoodo', nameZh: '樹才怪', types: ['rock'],
+    baseStats: { hp: 70, atk: 100, def: 115, spa: 30, spd: 65, spe: 30 },
+    moveId: 1121, artworkUrl: artwork(185),
+  },
+  186: {
+    id: 186, name: 'Politoed', nameZh: '蚊香蛙皇', types: ['water'],
+    baseStats: { hp: 90, atk: 75, def: 75, spa: 90, spd: 100, spe: 70 },
+    moveId: 1022, artworkUrl: artwork(186),
+  },
+  187: {
+    id: 187, name: 'Hoppip', nameZh: '毽子草', types: ['grass', 'flying'],
+    baseStats: { hp: 35, atk: 35, def: 40, spa: 35, spd: 55, spe: 50 },
+    moveId: 1040, artworkUrl: artwork(187),
+  },
+  188: {
+    id: 188, name: 'Skiploom', nameZh: '毽子花', types: ['grass', 'flying'],
+    baseStats: { hp: 55, atk: 45, def: 50, spa: 45, spd: 65, spe: 80 },
+    moveId: 1040, artworkUrl: artwork(188),
+  },
+  189: {
+    id: 189, name: 'Jumpluff', nameZh: '毽子棉', types: ['grass', 'flying'],
+    baseStats: { hp: 75, atk: 55, def: 70, spa: 55, spd: 95, spe: 110 },
+    moveId: 1041, artworkUrl: artwork(189),
+  },
+  190: {
+    id: 190, name: 'Aipom', nameZh: '長尾怪手', types: ['normal'],
+    baseStats: { hp: 55, atk: 70, def: 55, spa: 40, spd: 55, spe: 85 },
+    moveId: 1000, artworkUrl: artwork(190),
+  },
+  191: {
+    id: 191, name: 'Sunkern', nameZh: '向日種子', types: ['grass'],
+    baseStats: { hp: 30, atk: 30, def: 30, spa: 30, spd: 30, spe: 30 },
+    moveId: 1040, artworkUrl: artwork(191),
+  },
+  192: {
+    id: 192, name: 'Sunflora', nameZh: '向日花怪', types: ['grass'],
+    baseStats: { hp: 75, atk: 75, def: 55, spa: 105, spd: 85, spe: 30 },
+    moveId: 1041, artworkUrl: artwork(192),
+  },
+  193: {
+    id: 193, name: 'Yanma', nameZh: '蜻蜻蜓', types: ['bug', 'flying'],
+    baseStats: { hp: 65, atk: 65, def: 45, spa: 75, spd: 45, spe: 95 },
+    moveId: 1111, artworkUrl: artwork(193),
+  },
+  194: {
+    id: 194, name: 'Wooper', nameZh: '烏波', types: ['water', 'ground'],
+    baseStats: { hp: 55, atk: 45, def: 45, spa: 25, spd: 25, spe: 15 },
+    moveId: 1020, artworkUrl: artwork(194),
+  },
+  195: {
+    id: 195, name: 'Quagsire', nameZh: '沼王', types: ['water', 'ground'],
+    baseStats: { hp: 95, atk: 85, def: 85, spa: 65, spd: 65, spe: 35 },
+    moveId: 1021, artworkUrl: artwork(195),
+  },
+  196: {
+    id: 196, name: 'Espeon', nameZh: '太陽伊布', types: ['psychic'],
+    baseStats: { hp: 65, atk: 65, def: 60, spa: 130, spd: 95, spe: 110 },
+    moveId: 1102, artworkUrl: artwork(196),
+  },
+  197: {
+    id: 197, name: 'Umbreon', nameZh: '月亮伊布', types: ['dark'],
+    baseStats: { hp: 95, atk: 65, def: 110, spa: 60, spd: 130, spe: 65 },
+    moveId: 1152, artworkUrl: artwork(197),
+  },
+  198: {
+    id: 198, name: 'Murkrow', nameZh: '黑暗鴉', types: ['dark', 'flying'],
+    baseStats: { hp: 60, atk: 85, def: 42, spa: 85, spd: 42, spe: 91 },
+    moveId: 1151, artworkUrl: artwork(198),
+  },
+  199: {
+    id: 199, name: 'Slowking', nameZh: '呆呆王', types: ['water', 'psychic'],
+    baseStats: { hp: 95, atk: 75, def: 80, spa: 100, spd: 110, spe: 30 },
+    moveId: 1022, artworkUrl: artwork(199),
+  },
+  200: {
+    id: 200, name: 'Misdreavus', nameZh: '夢妖', types: ['ghost'],
+    baseStats: { hp: 60, atk: 60, def: 60, spa: 85, spd: 85, spe: 85 },
+    moveId: 1131, artworkUrl: artwork(200),
+  },
+  201: {
+    id: 201, name: 'Unown', nameZh: '未知圖騰', types: ['psychic'],
+    baseStats: { hp: 48, atk: 72, def: 48, spa: 72, spd: 48, spe: 48 },
+    moveId: 1100, artworkUrl: artwork(201),
+  },
+  202: {
+    id: 202, name: 'Wobbuffet', nameZh: '果然翁', types: ['psychic'],
+    baseStats: { hp: 190, atk: 33, def: 58, spa: 33, spd: 58, spe: 33 },
+    moveId: 1101, artworkUrl: artwork(202),
+  },
+  203: {
+    id: 203, name: 'Girafarig', nameZh: '麒麟奇', types: ['normal', 'psychic'],
+    baseStats: { hp: 70, atk: 80, def: 65, spa: 90, spd: 65, spe: 85 },
+    moveId: 1001, artworkUrl: artwork(203),
+  },
+  204: {
+    id: 204, name: 'Pineco', nameZh: '榛果球', types: ['bug'],
+    baseStats: { hp: 50, atk: 65, def: 90, spa: 35, spd: 35, spe: 15 },
+    moveId: 1110, artworkUrl: artwork(204),
+  },
+  205: {
+    id: 205, name: 'Forretress', nameZh: '佛烈托斯', types: ['bug', 'steel'],
+    baseStats: { hp: 75, atk: 90, def: 140, spa: 60, spd: 60, spe: 40 },
+    moveId: 1111, artworkUrl: artwork(205),
+  },
+  206: {
+    id: 206, name: 'Dunsparce', nameZh: '土龍弟弟', types: ['normal'],
+    baseStats: { hp: 100, atk: 70, def: 70, spa: 65, spd: 65, spe: 45 },
+    moveId: 1001, artworkUrl: artwork(206),
+  },
+  207: {
+    id: 207, name: 'Gligar', nameZh: '天蠍', types: ['ground', 'flying'],
+    baseStats: { hp: 65, atk: 75, def: 105, spa: 35, spd: 65, spe: 85 },
+    moveId: 1081, artworkUrl: artwork(207),
+  },
+  208: {
+    id: 208, name: 'Steelix', nameZh: '大鋼蛇', types: ['steel', 'ground'],
+    baseStats: { hp: 75, atk: 85, def: 200, spa: 55, spd: 65, spe: 30 },
+    moveId: 1162, artworkUrl: artwork(208),
+  },
+  209: {
+    id: 209, name: 'Snubbull', nameZh: '布魯', types: ['fairy'],
+    baseStats: { hp: 60, atk: 80, def: 50, spa: 40, spd: 40, spe: 30 },
+    moveId: 1170, artworkUrl: artwork(209),
+  },
+  210: {
+    id: 210, name: 'Granbull', nameZh: '布魯皇', types: ['fairy'],
+    baseStats: { hp: 90, atk: 120, def: 75, spa: 60, spd: 60, spe: 45 },
+    moveId: 1171, artworkUrl: artwork(210),
+  },
+  211: {
+    id: 211, name: 'Qwilfish', nameZh: '千針魚', types: ['water', 'poison'],
+    baseStats: { hp: 65, atk: 95, def: 85, spa: 55, spd: 55, spe: 85 },
+    moveId: 1021, artworkUrl: artwork(211),
+  },
+  212: {
+    id: 212, name: 'Scizor', nameZh: '巨鉗螳螂', types: ['bug', 'steel'],
+    baseStats: { hp: 70, atk: 130, def: 100, spa: 55, spd: 80, spe: 65 },
+    moveId: 1112, artworkUrl: artwork(212),
+  },
+  213: {
+    id: 213, name: 'Shuckle', nameZh: '壺壺', types: ['bug', 'rock'],
+    baseStats: { hp: 20, atk: 10, def: 230, spa: 10, spd: 230, spe: 5 },
+    moveId: 1112, artworkUrl: artwork(213),
+  },
+  214: {
+    id: 214, name: 'Heracross', nameZh: '赫拉克羅斯', types: ['bug', 'fighting'],
+    baseStats: { hp: 80, atk: 125, def: 75, spa: 40, spd: 95, spe: 85 },
+    moveId: 1112, artworkUrl: artwork(214),
+  },
+  215: {
+    id: 215, name: 'Sneasel', nameZh: '狃拉', types: ['dark', 'ice'],
+    baseStats: { hp: 55, atk: 95, def: 55, spa: 35, spd: 75, spe: 115 },
+    moveId: 1151, artworkUrl: artwork(215),
+  },
+  216: {
+    id: 216, name: 'Teddiursa', nameZh: '熊寶寶', types: ['normal'],
+    baseStats: { hp: 60, atk: 80, def: 50, spa: 50, spd: 50, spe: 40 },
+    moveId: 1000, artworkUrl: artwork(216),
+  },
+  217: {
+    id: 217, name: 'Ursaring', nameZh: '圈圈熊', types: ['normal'],
+    baseStats: { hp: 90, atk: 130, def: 75, spa: 75, spd: 75, spe: 55 },
+    moveId: 1002, artworkUrl: artwork(217),
+  },
+  218: {
+    id: 218, name: 'Slugma', nameZh: '熔岩蟲', types: ['fire'],
+    baseStats: { hp: 40, atk: 40, def: 40, spa: 70, spd: 40, spe: 20 },
+    moveId: 1010, artworkUrl: artwork(218),
+  },
+  219: {
+    id: 219, name: 'Magcargo', nameZh: '熔岩蝸牛', types: ['fire', 'rock'],
+    baseStats: { hp: 60, atk: 50, def: 120, spa: 90, spd: 80, spe: 30 },
+    moveId: 1011, artworkUrl: artwork(219),
+  },
+  220: {
+    id: 220, name: 'Swinub', nameZh: '小山豬', types: ['ice', 'ground'],
+    baseStats: { hp: 50, atk: 50, def: 40, spa: 30, spd: 30, spe: 50 },
+    moveId: 1050, artworkUrl: artwork(220),
+  },
+  221: {
+    id: 221, name: 'Piloswine', nameZh: '長毛豬', types: ['ice', 'ground'],
+    baseStats: { hp: 100, atk: 100, def: 80, spa: 60, spd: 60, spe: 50 },
+    moveId: 1051, artworkUrl: artwork(221),
+  },
+  222: {
+    id: 222, name: 'Corsola', nameZh: '太陽珊瑚', types: ['water', 'rock'],
+    baseStats: { hp: 65, atk: 55, def: 95, spa: 65, spd: 95, spe: 35 },
+    moveId: 1021, artworkUrl: artwork(222),
+  },
+  223: {
+    id: 223, name: 'Remoraid', nameZh: '鐵炮魚', types: ['water'],
+    baseStats: { hp: 35, atk: 65, def: 35, spa: 65, spd: 35, spe: 65 },
+    moveId: 1020, artworkUrl: artwork(223),
+  },
+  224: {
+    id: 224, name: 'Octillery', nameZh: '章魚桶', types: ['water'],
+    baseStats: { hp: 75, atk: 105, def: 75, spa: 105, spd: 75, spe: 45 },
+    moveId: 1022, artworkUrl: artwork(224),
+  },
+  225: {
+    id: 225, name: 'Delibird', nameZh: '信使鳥', types: ['ice', 'flying'],
+    baseStats: { hp: 45, atk: 55, def: 45, spa: 65, spd: 45, spe: 75 },
+    moveId: 1050, artworkUrl: artwork(225),
+  },
+  226: {
+    id: 226, name: 'Mantine', nameZh: '巨翅飛魚', types: ['water', 'flying'],
+    baseStats: { hp: 85, atk: 40, def: 70, spa: 80, spd: 140, spe: 70 },
+    moveId: 1022, artworkUrl: artwork(226),
+  },
+  227: {
+    id: 227, name: 'Skarmory', nameZh: '盔甲鳥', types: ['steel', 'flying'],
+    baseStats: { hp: 65, atk: 80, def: 140, spa: 40, spd: 70, spe: 70 },
+    moveId: 1161, artworkUrl: artwork(227),
+  },
+  228: {
+    id: 228, name: 'Houndour', nameZh: '戴魯比', types: ['dark', 'fire'],
+    baseStats: { hp: 45, atk: 60, def: 30, spa: 80, spd: 50, spe: 65 },
+    moveId: 1150, artworkUrl: artwork(228),
+  },
+  229: {
+    id: 229, name: 'Houndoom', nameZh: '黑魯加', types: ['dark', 'fire'],
+    baseStats: { hp: 75, atk: 90, def: 50, spa: 110, spd: 80, spe: 95 },
+    moveId: 1152, artworkUrl: artwork(229),
+  },
+  230: {
+    id: 230, name: 'Kingdra', nameZh: '刺龍王', types: ['water', 'dragon'],
+    baseStats: { hp: 75, atk: 95, def: 95, spa: 95, spd: 95, spe: 85 },
+    moveId: 1022, artworkUrl: artwork(230),
+  },
+  231: {
+    id: 231, name: 'Phanpy', nameZh: '小小象', types: ['ground'],
+    baseStats: { hp: 90, atk: 60, def: 60, spa: 40, spd: 40, spe: 40 },
+    moveId: 1080, artworkUrl: artwork(231),
+  },
+  232: {
+    id: 232, name: 'Donphan', nameZh: '頓甲', types: ['ground'],
+    baseStats: { hp: 90, atk: 120, def: 120, spa: 60, spd: 60, spe: 50 },
+    moveId: 1082, artworkUrl: artwork(232),
+  },
+  233: {
+    id: 233, name: 'Porygon2', nameZh: '多邊獸Ⅱ', types: ['normal'],
+    baseStats: { hp: 85, atk: 80, def: 90, spa: 105, spd: 95, spe: 60 },
+    moveId: 1002, artworkUrl: artwork(233),
+  },
+  234: {
+    id: 234, name: 'Stantler', nameZh: '驚角鹿', types: ['normal'],
+    baseStats: { hp: 73, atk: 95, def: 62, spa: 85, spd: 65, spe: 85 },
+    moveId: 1001, artworkUrl: artwork(234),
+  },
+  235: {
+    id: 235, name: 'Smeargle', nameZh: '圖圖犬', types: ['normal'],
+    baseStats: { hp: 55, atk: 20, def: 35, spa: 20, spd: 45, spe: 75 },
+    moveId: 1000, artworkUrl: artwork(235),
+  },
+  236: {
+    id: 236, name: 'Tyrogue', nameZh: '無畏小子', types: ['fighting'],
+    baseStats: { hp: 35, atk: 35, def: 35, spa: 35, spd: 35, spe: 35 },
+    moveId: 1060, artworkUrl: artwork(236),
+  },
+  237: {
+    id: 237, name: 'Hitmontop', nameZh: '戰舞郎', types: ['fighting'],
+    baseStats: { hp: 50, atk: 95, def: 95, spa: 35, spd: 110, spe: 70 },
+    moveId: 1061, artworkUrl: artwork(237),
+  },
+  238: {
+    id: 238, name: 'Smoochum', nameZh: '迷唇娃', types: ['ice', 'psychic'],
+    baseStats: { hp: 45, atk: 30, def: 15, spa: 85, spd: 65, spe: 65 },
+    moveId: 1050, artworkUrl: artwork(238),
+  },
+  239: {
+    id: 239, name: 'Elekid', nameZh: '電擊怪', types: ['electric'],
+    baseStats: { hp: 45, atk: 63, def: 37, spa: 65, spd: 55, spe: 95 },
+    moveId: 1030, artworkUrl: artwork(239),
+  },
+  240: {
+    id: 240, name: 'Magby', nameZh: '鴨嘴寶寶', types: ['fire'],
+    baseStats: { hp: 45, atk: 75, def: 37, spa: 70, spd: 55, spe: 83 },
+    moveId: 1010, artworkUrl: artwork(240),
+  },
+  241: {
+    id: 241, name: 'Miltank', nameZh: '大奶罐', types: ['normal'],
+    baseStats: { hp: 95, atk: 80, def: 105, spa: 40, spd: 70, spe: 100 },
+    moveId: 1002, artworkUrl: artwork(241),
+  },
+  242: {
+    id: 242, name: 'Blissey', nameZh: '幸福蛋', types: ['normal'],
+    baseStats: { hp: 255, atk: 10, def: 10, spa: 75, spd: 135, spe: 55 },
+    moveId: 1002, artworkUrl: artwork(242),
+  },
+  243: {
+    id: 243, name: 'Raikou', nameZh: '雷公', types: ['electric'],
+    baseStats: { hp: 90, atk: 85, def: 75, spa: 115, spd: 100, spe: 115 },
+    moveId: 1032, artworkUrl: artwork(243),
+  },
+  244: {
+    id: 244, name: 'Entei', nameZh: '炎帝', types: ['fire'],
+    baseStats: { hp: 115, atk: 115, def: 85, spa: 90, spd: 75, spe: 100 },
+    moveId: 1012, artworkUrl: artwork(244),
+  },
+  245: {
+    id: 245, name: 'Suicune', nameZh: '水君', types: ['water'],
+    baseStats: { hp: 100, atk: 75, def: 115, spa: 90, spd: 115, spe: 85 },
+    moveId: 1022, artworkUrl: artwork(245),
+  },
+  246: {
+    id: 246, name: 'Larvitar', nameZh: '幼基拉斯', types: ['rock', 'ground'],
+    baseStats: { hp: 50, atk: 64, def: 50, spa: 45, spd: 50, spe: 41 },
+    moveId: 1120, artworkUrl: artwork(246),
+  },
+  247: {
+    id: 247, name: 'Pupitar', nameZh: '沙基拉斯', types: ['rock', 'ground'],
+    baseStats: { hp: 70, atk: 84, def: 70, spa: 65, spd: 70, spe: 51 },
+    moveId: 1121, artworkUrl: artwork(247),
+  },
+  248: {
+    id: 248, name: 'Tyranitar', nameZh: '班基拉斯', types: ['rock', 'dark'],
+    baseStats: { hp: 100, atk: 134, def: 110, spa: 95, spd: 100, spe: 61 },
+    moveId: 1122, artworkUrl: artwork(248),
+  },
+  249: {
+    id: 249, name: 'Lugia', nameZh: '洛奇亞', types: ['psychic', 'flying'],
+    baseStats: { hp: 106, atk: 90, def: 130, spa: 90, spd: 154, spe: 110 },
+    moveId: 1102, artworkUrl: artwork(249),
+  },
+  250: {
+    id: 250, name: 'Ho Oh', nameZh: '鳳王', types: ['fire', 'flying'],
+    baseStats: { hp: 106, atk: 130, def: 90, spa: 110, spd: 154, spe: 90 },
+    moveId: 1012, artworkUrl: artwork(250),
+  },
+  251: {
+    id: 251, name: 'Celebi', nameZh: '時拉比', types: ['psychic', 'grass'],
+    baseStats: { hp: 100, atk: 100, def: 100, spa: 100, spd: 100, spe: 100 },
+    moveId: 1102, artworkUrl: artwork(251),
   },
 }
 

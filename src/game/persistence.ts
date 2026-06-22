@@ -9,7 +9,8 @@ export interface PersistenceAdapter {
   saveUnit(unit: OwnedUnit): Promise<void>
 }
 
-const KEY = 'mz.roster.v1'
+// v2：起始 roster 由 5 隻擴充為跨屬性 16 隻（dex 擴到 251、區域擴到 8）→ 換 key 讓既有存檔重新種子。
+const KEY = 'mz.roster.v2'
 
 /** localStorage 墊檔；只序列化 canonical OwnedUnit。 */
 export class LocalStorageAdapter implements PersistenceAdapter {

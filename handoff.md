@@ -7,6 +7,8 @@
 ## 1. 現況一句話
 **M1.x 全部完成並實機驗證**（M1 + M1.5 a–h）：3v3 戰鬥、主動換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制（支援/球輪盤+連打蓄力+RandomEvent）、星擊 Finisher。**M1.x 里程碑達成。** 下一步進入 **M2（QR 掃描 + 卡庫）**（見 `plan/04-milestone-M2.md` / CHECKLIST M2）。
 
+> **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）

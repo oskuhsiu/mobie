@@ -1,0 +1,257 @@
+// 一次性產生器：從 PokéAPI 抓 dex 1–251，產生 species/moves/regions/playerCards 四個資料檔。
+// Node 24（內建 fetch）。本地快取 /tmp/dexcache，並發 + 重試。不內建侵權資產：artwork 走官方 raw URL（runtime 載）。
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+
+// 用法：node scripts/gen_dex.mjs —— 從 PokéAPI 重新產生 src/game/data 的四個資料檔。
+const MAX_ID = 251
+const CACHE = '/tmp/dexcache' // 原始 JSON 快取（可刪；刪後重抓）
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'game', 'data')
+mkdirSync(CACHE, { recursive: true })
+
+const TYPE_ORDER = [
+  'normal', 'fire', 'water', 'electric', 'grass', 'ice', 'fighting', 'poison', 'ground',
+  'flying', 'psychic', 'bug', 'rock', 'ghost', 'dragon', 'dark', 'steel', 'fairy',
+]
+const typeIndex = (t) => TYPE_ORDER.indexOf(t)
+
+// 18 型 × 3 power tier 的招式（zh-Hant）。category 取該型常見強攻擊面向（我們是單一數值模型）。
+const MOVE_SPEC = {
+  normal:   { cat: 'physical', tiers: [['Tackle','撞擊',45], ['Take Down','猛撞',70], ['Giga Impact','終極衝鋒',95]] },
+  fire:     { cat: 'special',  tiers: [['Ember','火花',45], ['Flamethrower','噴射火焰',70], ['Fire Blast','大字爆炎',95]] },
+  water:    { cat: 'special',  tiers: [['Water Gun','水槍',45], ['Water Pulse','水之波動',70], ['Hydro Pump','水炮',95]] },
+  electric: { cat: 'special',  tiers: [['Thunder Shock','電擊',45], ['Thunderbolt','十萬伏特',70], ['Thunder','打雷',95]] },
+  grass:    { cat: 'special',  tiers: [['Absorb','吸取',45], ['Energy Ball','能量球',70], ['Solar Beam','日光束',95]] },
+  ice:      { cat: 'special',  tiers: [['Powder Snow','細雪',45], ['Ice Beam','冰凍光束',70], ['Blizzard','暴風雪',95]] },
+  fighting: { cat: 'physical', tiers: [['Karate Chop','空手劈',45], ['Jump Kick','飛踢',70], ['Close Combat','近身戰',95]] },
+  poison:   { cat: 'special',  tiers: [['Acid','毒液衝擊',45], ['Sludge','污泥攻擊',70], ['Sludge Bomb','污泥炸彈',95]] },
+  ground:   { cat: 'physical', tiers: [['Mud-Slap','玩泥巴',45], ['Dig','挖洞',70], ['Earthquake','地震',95]] },
+  flying:   { cat: 'physical', tiers: [['Peck','啄',45], ['Wing Attack','翅膀攻擊',70], ['Brave Bird','勇鳥猛攻',95]] },
+  psychic:  { cat: 'special',  tiers: [['Confusion','念力',45], ['Psybeam','精神強念',70], ['Psychic','精神力量',95]] },
+  bug:      { cat: 'physical', tiers: [['Bug Bite','蟲咬',45], ['Twineedle','雙針',70], ['Megahorn','巨角',95]] },
+  rock:     { cat: 'physical', tiers: [['Rock Throw','落石',45], ['Rock Tomb','岩石封鎖',70], ['Rock Slide','岩崩',95]] },
+  ghost:    { cat: 'special',  tiers: [['Shadow Sneak','暗影偷襲',45], ['Shadow Claw','暗影爪',70], ['Shadow Ball','暗影球',95]] },
+  dragon:   { cat: 'special',  tiers: [['Dragon Breath','龍息',45], ['Dragon Pulse','龍之波動',70], ['Draco Meteor','流星群',95]] },
+  dark:     { cat: 'physical', tiers: [['Bite','咬住',45], ['Knock Off','拍落',70], ['Crunch','咬碎',95]] },
+  steel:    { cat: 'physical', tiers: [['Metal Claw','金屬爪',45], ['Iron Head','鐵頭',70], ['Iron Tail','鐵尾',95]] },
+  fairy:    { cat: 'special',  tiers: [['Fairy Wind','妖精之風',45], ['Dazzling Gleam','魔法閃耀',70], ['Moonblast','月亮之力',95]] },
+}
+const moveId = (type, tier) => 1000 + typeIndex(type) * 10 + tier
+const bstTier = (bst) => (bst < 380 ? 0 : bst < 480 ? 1 : 2)
+
+// ── 抓取（快取 + 並發 + 重試） ──
+async function getJson(url, cacheFile) {
+  const path = `${CACHE}/${cacheFile}`
+  if (existsSync(path)) {
+    try { return JSON.parse(readFileSync(path, 'utf8')) } catch { /* re-fetch */ }
+  }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      writeFileSync(path, JSON.stringify(data))
+      return data
+    } catch (e) {
+      if (attempt === 3) throw new Error(`fetch ${url}: ${e.message}`)
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+    }
+  }
+}
+
+const STAT_KEY = { hp: 'hp', attack: 'atk', defense: 'def', 'special-attack': 'spa', 'special-defense': 'spd', speed: 'spe' }
+const cap = (s) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ')
+
+async function fetchOne(id) {
+  const pk = await getJson(`https://pokeapi.co/api/v2/pokemon/${id}`, `pk-${id}.json`)
+  const sp = await getJson(`https://pokeapi.co/api/v2/pokemon-species/${id}`, `sp-${id}.json`)
+  const baseStats = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 }
+  for (const s of pk.stats) { const k = STAT_KEY[s.stat.name]; if (k) baseStats[k] = s.base_stat }
+  const types = pk.types.slice().sort((a, b) => a.slot - b.slot).map((t) => t.type.name)
+  const zh = sp.names.find((n) => n.language.name === 'zh-hant')
+    || sp.names.find((n) => n.language.name === 'zh-hans')
+  const nameZh = zh ? zh.name : cap(pk.name)
+  return { id, name: cap(pk.name), nameZh, types, baseStats }
+}
+
+// 並發池
+async function pool(ids, worker, concurrency = 12) {
+  const out = new Array(ids.length)
+  let next = 0
+  let done = 0
+  await Promise.all(Array.from({ length: concurrency }, async () => {
+    while (true) {
+      const i = next++
+      if (i >= ids.length) return
+      out[i] = await worker(ids[i])
+      done++
+      if (done % 25 === 0 || done === ids.length) process.stdout.write(`  fetched ${done}/${ids.length}\n`)
+    }
+  }))
+  return out
+}
+
+console.log(`抓取 dex 1–${MAX_ID}…`)
+const ids = Array.from({ length: MAX_ID }, (_, i) => i + 1)
+const dex = await pool(ids, fetchOne)
+dex.sort((a, b) => a.id - b.id)
+console.log(`完成，共 ${dex.length} 隻。範例：`, JSON.stringify(dex[0]))
+
+// ── 產生 moves.ts ──
+const moveLines = []
+for (const type of TYPE_ORDER) {
+  const spec = MOVE_SPEC[type]
+  spec.tiers.forEach(([name, nameZh, power], tier) => {
+    const id = moveId(type, tier)
+    moveLines.push(`  ${id}: { id: ${id}, name: '${name}', nameZh: '${nameZh}', type: '${type}', power: ${power}, accuracy: 100, category: '${spec.cat}' },`)
+  })
+}
+const movesTs = `import type { Move } from '@/game/types'
+
+/** 型別主題招式池：18 型 × 3 power tier（弱45 / 中70 / 強95）。
+ *  每隻寶可夢依「主屬性 + 種族值總和 tier」對應到其中一招（單一專屬招式）。
+ *  本檔由 PokéAPI 產生器（scripts/gen_dex）寫出，請勿手改；要改招式請改產生器的 MOVE_SPEC。 */
+export const MOVES: Record<number, Move> = {
+${moveLines.join('\n')}
+}
+
+export function getMove(id: number): Move {
+  const m = MOVES[id]
+  if (!m) throw new Error(\`Unknown move id: \${id}\`)
+  return m
+}
+`
+writeFileSync(`${OUT}/moves.ts`, movesTs)
+console.log(`寫出 moves.ts（${moveLines.length} 招）`)
+
+// ── 產生 species.ts ──
+const bstOf = (b) => b.hp + b.atk + b.def + b.spa + b.spd + b.spe
+const specLines = dex.map((d) => {
+  const b = d.baseStats
+  const mid = moveId(d.types[0], bstTier(bstOf(b)))
+  const typesStr = d.types.map((t) => `'${t}'`).join(', ')
+  return `  ${d.id}: {\n` +
+    `    id: ${d.id}, name: '${d.name}', nameZh: '${d.nameZh}', types: [${typesStr}],\n` +
+    `    baseStats: { hp: ${b.hp}, atk: ${b.atk}, def: ${b.def}, spa: ${b.spa}, spd: ${b.spd}, spe: ${b.spe} },\n` +
+    `    moveId: ${mid}, artworkUrl: artwork(${d.id}),\n` +
+    `  },`
+}).join('\n')
+const speciesTs = `import type { Species } from '@/game/types'
+
+const artwork = (id: number) =>
+  \`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/\${id}.png\`
+
+/** 全國圖鑑 1–${MAX_ID}（第一、二世代），由 PokéAPI 產生器寫出。
+ *  屬性/種族值/中文名來自 PokéAPI（zh-Hant）；artwork 走官方 raw URL，runtime 載入、不內建。
+ *  moveId 依主屬性 + 種族值總和 tier 決定論指派（見 moves.ts）。請勿手改，改請改產生器。 */
+export const SPECIES: Record<number, Species> = {
+${specLines}
+}
+
+export function getSpecies(id: number): Species {
+  const s = SPECIES[id]
+  if (!s) throw new Error(\`Unknown species id: \${id}\`)
+  return s
+}
+`
+writeFileSync(`${OUT}/species.ts`, speciesTs)
+console.log(`寫出 species.ts（${dex.length} 隻）`)
+
+// ── 產生 regions.ts（8 個主題區域，覆蓋全 18 型） ──
+const byId = new Map(dex.map((d) => [d.id, d]))
+const REGION_THEMES = [
+  { id: 'verdant-forest', name: '常綠森林', gradient: ['#1f6e43', '#0c3a24'], icon: '🌳', blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。', types: ['grass', 'bug'], band: [6, 13] },
+  { id: 'ember-volcano', name: '灼熱火山', gradient: ['#b3361f', '#5c1208'], icon: '🌋', blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。', types: ['fire'], band: [12, 19] },
+  { id: 'crystal-shore', name: '澄澈水濱', gradient: ['#1b6fb3', '#0a2f5c'], icon: '🌊', blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。', types: ['water', 'ice'], band: [12, 19] },
+  { id: 'thunder-plateau', name: '雷鳴高原', gradient: ['#caa42a', '#5c4a06'], icon: '⚡', blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。', types: ['electric', 'flying'], band: [16, 23] },
+  { id: 'rocky-cavern', name: '岩窟洞穴', gradient: ['#7a5a3a', '#33231a'], icon: '🪨', blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。', types: ['rock', 'ground', 'fighting'], band: [16, 23] },
+  { id: 'haunted-tower', name: '幽魂古塔', gradient: ['#4b2d6e', '#1a0e2e'], icon: '👻', blurb: '陰森詭譎的廢棄高塔，幽靈、毒與惡系徘徊。', types: ['ghost', 'poison', 'dark'], band: [20, 27] },
+  { id: 'mystic-meadow', name: '神秘花圃', gradient: ['#c25b9e', '#5c2347'], icon: '🧚', blurb: '霧氣繚繞的夢幻花原，超能力與妖精系翩翩起舞。', types: ['psychic', 'fairy', 'normal'], band: [20, 27] },
+  { id: 'dragon-summit', name: '巨龍峰頂', gradient: ['#2c4a8a', '#10182e'], icon: '🐉', blurb: '雲端之上的險峻峰巔，龍、鋼系強敵盤踞的終局試煉。', types: ['dragon', 'steel', 'ice'], band: [26, 34] },
+]
+const weightOf = (bst) => (bst < 350 ? 4 : bst < 430 ? 3 : bst < 510 ? 2 : 1)
+const regionBlocks = REGION_THEMES.map((r) => {
+  const cands = dex
+    .filter((d) => d.types.some((t) => r.types.includes(t)))
+    .map((d) => ({ ...d, bst: bstOf(d.baseStats) }))
+    .sort((a, b) => a.bst - b.bst)
+  // 跨 BST 等距取樣最多 7 隻 + 最強者當 boss tail
+  const PICK = Math.min(7, cands.length)
+  const picks = []
+  for (let i = 0; i < PICK; i++) picks.push(cands[Math.round((i * (cands.length - 1)) / (PICK - 1))])
+  const seen = new Set()
+  const uniq = picks.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)))
+  const [lo, hi] = r.band
+  const enc = uniq.map((p, i) => {
+    const frac = uniq.length > 1 ? i / (uniq.length - 1) : 0
+    const min = Math.round(lo + (hi - lo) * frac * 0.85)
+    return { speciesId: p.id, weight: weightOf(p.bst), minLevel: min, maxLevel: Math.min(hi, min + 3) }
+  })
+  // boss tail：池中最強者（若未在列），權重 1、略高等級
+  const boss = cands[cands.length - 1]
+  if (boss && !seen.has(boss.id)) {
+    enc.push({ speciesId: boss.id, weight: 1, minLevel: hi, maxLevel: hi + 2 })
+  } else {
+    // 已含最強者：把它升成 boss 等級
+    const e = enc.find((x) => x.speciesId === boss.id)
+    if (e) { e.weight = 1; e.minLevel = hi; e.maxLevel = hi + 2 }
+  }
+  const encLines = enc.map((e) => {
+    const nm = byId.get(e.speciesId)?.nameZh ?? ''
+    return `      { speciesId: ${e.speciesId}, weight: ${e.weight}, minLevel: ${e.minLevel}, maxLevel: ${e.maxLevel} }, // ${nm}`
+  }).join('\n')
+  return `  {\n` +
+    `    id: '${r.id}',\n` +
+    `    name: '${r.name}',\n` +
+    `    gradient: ['${r.gradient[0]}', '${r.gradient[1]}'],\n` +
+    `    icon: '${r.icon}',\n` +
+    `    blurb: '${r.blurb}',\n` +
+    `    encounters: [\n${encLines}\n    ],\n` +
+    `  },`
+}).join('\n')
+const regionsTs = `import type { Region } from '@/game/types'
+
+/** 8 個主題化區域，等級帶遞增、覆蓋全 18 型；遭遇表由產生器從 dex 篩出（每區末項為高等 boss）。
+ *  請勿手改，改請改產生器的 REGION_THEMES。 */
+export const REGIONS: Region[] = [
+${regionBlocks}
+]
+
+export function getRegion(id: string): Region {
+  const r = REGIONS.find((x) => x.id === id)
+  if (!r) throw new Error(\`Unknown region id: \${id}\`)
+  return r
+}
+`
+writeFileSync(`${OUT}/regions.ts`, regionsTs)
+console.log(`寫出 regions.ts（${REGION_THEMES.length} 區）`)
+
+// ── 產生 playerCards.ts（跨屬性起始 roster，~15 隻） ──
+const STARTERS = [
+  [1, 16, false, null], [4, 16, false, null], [7, 16, false, null],
+  [25, 17, true, null], [133, 16, false, null], [66, 16, false, null],
+  [92, 16, false, null], [74, 16, false, null], [35, 16, false, null],
+  [63, 16, false, null], [81, 16, false, null], [123, 17, false, null],
+  [131, 18, false, null], [143, 18, false, null], [147, 18, false, null],
+  [198, 17, false, null],
+]
+const cardLines = STARTERS.filter(([id]) => byId.has(id)).map(([id, lv, shiny]) => {
+  const nm = byId.get(id).nameZh
+  const sh = shiny ? ', shiny: true' : ''
+  return `  { cardId: 'DEV-${id}', speciesId: ${id}, level: ${lv}${sh} }, // ${nm}`
+}).join('\n')
+const cardsTs = `import type { Card } from '@/game/types'
+
+/**
+ * 起始玩家 roster（手牌）。M2 會由掃描實體卡 QR 取代。
+ * 跨屬性挑選，讓玩家面對 8 個區域都有屬性相剋的策略選擇。
+ * IV/性格由 cardId 決定論 roll（見 individual.ts）。
+ */
+export const PLAYER_CARDS: Card[] = [
+${cardLines}
+]
+`
+writeFileSync(`${OUT}/playerCards.ts`, cardsTs)
+console.log(`寫出 playerCards.ts（${STARTERS.length} 張）`)
+console.log('完成。')
