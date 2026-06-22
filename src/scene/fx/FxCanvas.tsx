@@ -69,35 +69,43 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
       s.flash.a = Math.max(0, s.flash.a - 0.06)
     }
 
-    // 擴張環
-    s.rings = s.rings.filter((r) => r.life > 0)
-    for (const r of s.rings) {
+    // 擴張環（原地壓縮，閒置時不配置新陣列）
+    let rj = 0
+    for (let i = 0; i < s.rings.length; i++) {
+      const r = s.rings[i]
       r.life -= 0.045
+      if (r.life <= 0) continue
       r.r += (r.max - r.r) * 0.18
-      ctx.globalAlpha = Math.max(0, r.life) * 0.8
+      ctx.globalAlpha = r.life * 0.8
       ctx.strokeStyle = r.color
       ctx.lineWidth = 3
       ctx.beginPath()
       ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2)
       ctx.stroke()
+      s.rings[rj++] = r
     }
+    s.rings.length = rj
     ctx.globalAlpha = 1
 
-    // 粒子
-    s.particles = s.particles.filter((p) => p.life > 0)
-    for (const p of s.particles) {
+    // 粒子（原地壓縮）
+    let pj = 0
+    for (let i = 0; i < s.particles.length; i++) {
+      const p = s.particles[i]
       p.life -= 1
+      if (p.life <= 0) continue
       p.x += p.vx
       p.y += p.vy
       p.vy += p.g
       p.vx *= 0.98
-      const a = Math.max(0, p.life / p.max)
+      const a = p.life / p.max
       ctx.globalAlpha = a
       ctx.fillStyle = p.color
       ctx.beginPath()
       ctx.arc(p.x, p.y, p.size * (0.4 + a * 0.6), 0, Math.PI * 2)
       ctx.fill()
+      s.particles[pj++] = p
     }
+    s.particles.length = pj
     ctx.globalAlpha = 1
 
     if (s.particles.length || s.rings.length || s.flash.a > 0) {

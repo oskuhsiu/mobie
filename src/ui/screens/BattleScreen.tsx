@@ -24,6 +24,9 @@ const SUPPORT_LABEL: Record<SupportOutcome, string> = {
 // 星擊能量：QTE 表現累積（不綁隨機）；約 3 個好回合集滿（參數待玩測）
 const QUALITY_ENERGY: Record<QteQuality, number> = { perfect: 46, good: 34, normal: 26, weak: 16 }
 const energyGain = (q: QteQuality, mashCount: number) => QUALITY_ENERGY[q] + Math.min(24, mashCount) * 0.5
+// HP 比例 → 色階 class（>50% 健康無 class / >20% mid / 其餘 low）
+const hpToneClass = (frac: number, prefix: string) =>
+  frac > 0.5 ? '' : frac > 0.2 ? `${prefix}--mid` : `${prefix}--low`
 // FxCanvas 上的概略打點位置（對齊版面：敵方上、我方下）
 const FX_POS: Record<Side, { nx: number; ny: number }> = {
   foe: { nx: 0.72, ny: 0.22 },
@@ -108,7 +111,7 @@ function TeamTray({ members, activeIndex, align }: {
       {members.map((m, i) => {
         const frac = Math.max(0, m.currentHp) / m.maxHp
         const fainted = m.currentHp <= 0
-        const tone = frac > 0.5 ? '' : frac > 0.2 ? 'tray__fill--mid' : 'tray__fill--low'
+        const tone = hpToneClass(frac, 'tray__fill')
         return (
           <div
             key={i}
@@ -145,7 +148,7 @@ function SwitchPanel({ members, activeIndex, lockedIndex, onPick, onCancel }: {
           const locked = i === lockedIndex
           const disabled = fainted || isActive || locked
           const frac = Math.max(0, m.currentHp) / m.maxHp
-          const tone = frac > 0.5 ? '' : frac > 0.2 ? 'hpbar__fill--mid' : 'hpbar__fill--low'
+          const tone = hpToneClass(frac, 'hpbar__fill')
           const tag = isActive ? '出戰中' : fainted ? '倒下' : locked ? '剛換下' : null
           return (
             <button

@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest'
-import type { BattlePokemon, Move, TypeName } from '@/game/types'
 import {
   rollBall, getBall, captureChanceWithBall, BALLS,
   chargeTier, attackQteMultiplier, qteMultiplier,
@@ -8,21 +7,8 @@ import {
   createBattleState, resolveTurn, supportOutcome, SUPPORT_EVERY, STAR_STRIKE_MULT,
   type BattleEvent, type RandomEvent,
 } from './reducer'
+import { mon } from './testFixtures'
 
-function move(type: TypeName, power = 50, accuracy = 100): Move {
-  return { id: 1, name: 'T', nameZh: '測', type, power, accuracy, category: 'physical' }
-}
-function mon(over: Partial<BattlePokemon> = {}): BattlePokemon {
-  const merged: BattlePokemon = {
-    speciesId: 0, name: 'M', nameZh: '怪', types: ['normal'], level: 10,
-    maxHp: 200, currentHp: 200, atk: 50, def: 50, spa: 50, spd: 50, spe: 50,
-    artworkUrl: '', shiny: false, move: move('normal'),
-    ivs: { hp: 16, atk: 16, def: 16, spa: 16, spd: 16, spe: 16 }, nature: 0,
-    ...over,
-  }
-  if (over.currentHp === undefined) merged.currentHp = merged.maxHp
-  return merged
-}
 const randoms = (events: BattleEvent[]): RandomEvent[] =>
   events.flatMap((e) => (e.type === 'random' ? [e.event] : []))
 

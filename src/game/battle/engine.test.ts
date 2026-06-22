@@ -1,23 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import type { BattlePokemon, Move, TypeName } from '@/game/types'
 import {
   resolveAttack, qteMultiplier, captureChance, attemptCapture, playerActsFirst,
 } from './engine'
-
-function move(type: TypeName, power = 50, accuracy = 100): Move {
-  return { id: 1, name: 'Test', nameZh: '測試', type, power, accuracy, category: 'physical' }
-}
-
-function mon(over: Partial<BattlePokemon> = {}): BattlePokemon {
-  return {
-    speciesId: 0, name: 'Mon', nameZh: '怪', types: ['normal'], level: 10,
-    maxHp: 100, currentHp: 100, atk: 50, def: 50, spa: 50, spd: 50, spe: 50,
-    artworkUrl: '', shiny: false,
-    ivs: { hp: 16, atk: 16, def: 16, spa: 16, spd: 16, spe: 16 }, nature: 0,
-    ...over,
-    move: over.move ?? move('normal'),
-  }
-}
+import { move, mon } from './testFixtures'
 
 /** 固定序列 rng，供決定論測試。順序：①命中 ②變異 ③暴擊 */
 function seq(...vals: number[]): () => number {
