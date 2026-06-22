@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   createBattleState,
   resolveTurn,
+  MAX_TURNS,
   type BattleEvent,
   type Side,
 } from './reducer'
@@ -182,5 +183,35 @@ describe('resolveTurn — 純函數與終局守衛', () => {
     const r = resolveTurn(ended, { type: 'ATTACK' }, { rng: RNG })
     expect(r.events).toEqual([])
     expect(r.nextState).toBe(ended)
+  })
+})
+
+describe('resolveTurn — 回合上限（避免打不完）', () => {
+  // normal 招對 ghost 系完全無效 → 雙方互相 0 傷，自然永不結束
+  const ghost = (over = {}) => mon({ types: ['ghost'], move: move('normal', 90), ...over })
+
+  it('未到上限不會 timeout；達上限依剩餘血量判勝（player 血多 → player 勝）', () => {
+    let state = createBattleState([ghost()], [ghost({ currentHp: 40 })]) // 玩家 100/100、對手 40/100
+    let last: { events: BattleEvent[]; nextState: typeof state } | null = null
+    for (let i = 0; i < MAX_TURNS; i++) {
+      expect(state.winner).toBeNull() // 過程中始終未分勝負（0 傷停滯）
+      last = resolveTurn(state, { type: 'ATTACK' }, { rng: RNG })
+      state = last.nextState
+    }
+    const ended = last!.events.filter((e) => e.type === 'battleEnded')
+    expect(ended).toEqual([{ type: 'battleEnded', winner: 'player', reason: 'timeout' }])
+    expect(state.winner).toBe('player')
+    expect(state.turn).toBe(MAX_TURNS + 1)
+  })
+
+  it('對手血多時則對手勝', () => {
+    let state = createBattleState([ghost({ currentHp: 30 })], [ghost()])
+    let winner: Side | null = null
+    for (let i = 0; i < MAX_TURNS; i++) {
+      const r = resolveTurn(state, { type: 'ATTACK' }, { rng: RNG })
+      state = r.nextState
+      winner = state.winner
+    }
+    expect(winner).toBe('foe')
   })
 })

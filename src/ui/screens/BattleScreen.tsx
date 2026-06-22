@@ -364,9 +364,16 @@ export function BattleScreen() {
         await wait(800)
         store().setSupport(null)
         await wait(150)
+      } else if (e.type === 'battleEnded' && e.reason === 'timeout') {
+        // 回合上限：依剩餘血量判定，給玩家一個明確說明
+        store().setBanner('達回合上限！依剩餘血量判定勝負')
+        store().pushLog('回合數達上限，依雙方剩餘血量判定勝負')
+        await wait(1150)
+        store().setBanner(null)
+        await wait(150)
       }
       // 其餘 random（accuracy/crit）：UI 不另演，已併入 damageApplied
-      // battleEnded：迴圈結束後依 nextState.winner 設 phase
+      // battleEnded（自然勝負）：迴圈結束後依 nextState.winner 設 phase
     }
   }, [rootShake])
 

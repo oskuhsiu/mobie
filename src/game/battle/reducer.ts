@@ -38,6 +38,12 @@ export type BattleAction =
 export const STAR_STRIKE_MULT = 3
 
 /**
+ * 一場戰鬥最多解算的回合數。超過仍未分勝負 → 依雙方剩餘血量比例判勝，
+ * 避免屬性免疫/極低傷等情況造成「打不完」。
+ */
+export const MAX_TURNS = 30
+
+/**
  * Domain events——純結果語意，不含 UI/動畫字眼。
  * BattleScreen 把它們映射成動畫＋音效 queue 依序消費。
  */
@@ -60,7 +66,7 @@ export type BattleEvent =
   | { type: 'memberFainted'; side: Side; index: number }
   | { type: 'activeChanged'; side: Side; fromIndex: number; toIndex: number; forced: boolean }
   | { type: 'switchDefenseResolved'; side: Side; index: number; defenseQuality: QteQuality; damageMult: number }
-  | { type: 'battleEnded'; winner: Side }
+  | { type: 'battleEnded'; winner: Side; reason?: 'timeout' }
   | { type: 'random'; event: RandomEvent }
 
 /** 統一隨機事件（命中/會心/支援輪盤/球輪盤…）；reducer 隨機點全走它（plan/07） */
@@ -116,6 +122,17 @@ const activeOf = (state: BattleState, side: Side): BattlePokemon =>
   state[side].members[state[side].activeIndex]
 
 const unitId = (side: Side, index: number): string => `${side}:${index}`
+
+/** 一方剩餘血量比例（隊員 currentHp 加總 / maxHp 加總），0..1；回合上限判勝用 */
+function teamHpFraction(s: BattleSide): number {
+  let cur = 0
+  let max = 0
+  for (const m of s.members) {
+    cur += Math.max(0, m.currentHp)
+    max += m.maxHp
+  }
+  return max > 0 ? cur / max : 0
+}
 
 /** 該方下一隻可上場（HP>0 且非目前在場）的索引，依序找；沒有回 -1 */
 function nextLivingIndex(s: BattleSide): number {
@@ -293,5 +310,14 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
   }
 
   w.turn = state.turn + 1
+
+  // 回合上限：到頂仍未分勝負 → 依剩餘血量比例判定（平手判玩家勝，對自用遊戲友善）。
+  // 自然勝負已在上面 performAttack/applyForcedSwitch 設定 winner，這裡只接管「打不完」。
+  if (w.winner === null && w.turn > MAX_TURNS) {
+    const winner: Side = teamHpFraction(w.player) >= teamHpFraction(w.foe) ? 'player' : 'foe'
+    w.winner = winner
+    events.push({ type: 'battleEnded', winner, reason: 'timeout' })
+  }
+
   return { nextState: w, events }
 }
