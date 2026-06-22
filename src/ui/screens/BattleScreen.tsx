@@ -11,6 +11,7 @@ import { HpBar } from '@/ui/components/HpBar'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { TYPE_HEX } from '@/ui/typeMeta'
+import { audio } from '@/audio/audioEngine'
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
@@ -201,12 +202,20 @@ export function BattleScreen() {
   // 戰鬥結束 → 通知流程狀態機
   useEffect(() => {
     if (phase !== 'won' && phase !== 'lost') return
+    audio.play(phase === 'won' ? 'victory' : 'defeat')
     const t = setTimeout(
       () => send({ type: 'END_BATTLE', outcome: phase === 'won' ? 'win' : 'lose' }),
       1100,
     )
     return () => clearTimeout(t)
   }, [phase, send])
+
+  // 低血量緊張度 → BGM 濾波/警報（依我方在場 HP）
+  useEffect(() => {
+    if (!battle) return
+    const a = battle.player.members[battle.player.activeIndex]
+    if (a && a.maxHp > 0) audio.setIntensity(1 - Math.max(0, a.currentHp) / a.maxHp)
+  }, [battle])
 
   // 依序消費 reducer events：一次算完、畫面慢慢演
   const playEvents = useCallback(async (b0: BattleState, events: BattleEvent[]) => {
@@ -218,6 +227,7 @@ export function BattleScreen() {
         const atkPrefix = e.attackerSide === 'foe' ? '對手的 ' : ''
         store().setAttacking(e.attackerSide)
         store().setBanner(`${atkPrefix}${atk.nameZh} 使出 ${atk.move.nameZh}！`)
+        audio.play('attack')
         await wait(440)
 
         store().setMemberHp(e.targetSide, e.targetIndex, e.hpAfter)
@@ -240,6 +250,7 @@ export function BattleScreen() {
           }
           const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
           rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
+          audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit')
         }
         if (e.missed) {
           store().setBanner('攻擊沒有命中…')
@@ -263,6 +274,7 @@ export function BattleScreen() {
         const prefix = e.side === 'foe' ? '對手的 ' : ''
         store().setFainting(e.side) // 觸發倒下淡出
         fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
+        audio.play('faint')
         store().pushLog(`${prefix}${m.nameZh} 倒下了！`)
         await wait(620)
       } else if (e.type === 'activeChanged') {
@@ -272,6 +284,7 @@ export function BattleScreen() {
         // 放出開球閃光
         fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffffff' })
         if (e.side === 'player') fxRef.current?.flash('#ffffff', 0.3)
+        audio.play('switch')
         store().setBanner(e.side === 'player' ? `上吧，${m.nameZh}！` : `對手派出了 ${m.nameZh}！`)
         await wait(640)
         store().setBanner(null)
@@ -399,7 +412,7 @@ export function BattleScreen() {
             <motion.button
               className="btn" style={{ fontSize: 19, padding: '16px 36px' }}
               whileTap={{ scale: 0.96 }}
-              onClick={() => useBattleStore.getState().setPhase('qte')}
+              onClick={() => { audio.play('select'); useBattleStore.getState().setPhase('qte') }}
             >
               ⚔ 攻擊　<span style={{ fontSize: 14, opacity: 0.8 }}>{player.move.nameZh}</span>
             </motion.button>
@@ -407,7 +420,7 @@ export function BattleScreen() {
               className="btn btn--ghost" style={{ fontSize: 18, padding: '16px 26px' }}
               whileTap={switchable ? { scale: 0.96 } : undefined}
               disabled={!switchable}
-              onClick={() => useBattleStore.getState().setPhase('switchSelect')}
+              onClick={() => { audio.play('select'); useBattleStore.getState().setPhase('switchSelect') }}
             >
               🔄 換人
             </motion.button>

@@ -66,11 +66,12 @@
 - [x] framer-motion：角色 lunge 位移、螢幕 shake（rootShake 依會心/剋制加重）、受擊 brightness flash、倒下淡出（`fainting` 旗標 grayscale 淡出）
 - [x] 換人動畫：放出開球閃光（activeChanged → ring + white flash）；收回光束簡化為換上入場（remount entrance）
 - [x] BattleScreen display-state 依序消費 events、在對應節點觸發 FX（`fxRef.burst/ring/flash`）
-### M1.5d 音效 + BGM
-- [ ] audioEngine 介面：unlock()（iOS 首次觸控）/ play(sfxId) / setIntensity(level)
-- [ ] Tone.js 在 unlock 時動態 import（控 bundle）
-- [ ] 程序化 preset SFX：命中/倒下/選取/效果絕佳/低血量嗶；chiptune BGM loop
-- [ ] setIntensity：低血量警報 / BGM crossfade，不停 transport
+### M1.5d 音效 + BGM ✅ 完成（驗證動態載入+零錯）
+- [x] `audio/audioEngine` 介面：`unlock()`（START 首次觸控）/ `play(sfxId)` / `setIntensity(level)` / `startBgm`/`stopBgm`
+- [x] Tone.js 在 unlock 時**動態 import**（驗證：tone.js 獨立 chunk gzip 81KB，不進主 bundle 348KB）
+- [x] 程序化 preset SFX（零取樣）：select/attack/hit/super/crit/faint/switch/lowhp/victory/defeat/capture；chiptune BGM（melody+bass Sequence on Transport）
+- [x] `setIntensity`：依我方 HP 調低通濾波（緊張變悶）+ 低血量警報嗶，**不停 transport**
+- [x] 驗證：START→動態載 tone、全場戰鬥 SFX/BGM 零 console error
 
 ## M1.5 進階 — 意外機制 + 個體差異/成長（依 07-systems-design.md）
 ### M1.5e 個體差異

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
+import { audio } from '@/audio/audioEngine'
 
 export function TitleScreen() {
   const { send } = useGame()
@@ -40,7 +41,7 @@ export function TitleScreen() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        onClick={() => send({ type: 'START' })}
+        onClick={() => { void audio.unlock(); send({ type: 'START' }) }}
       >
         ▶ 開始遊戲
       </motion.button>

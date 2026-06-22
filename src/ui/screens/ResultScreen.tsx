@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
 import { attemptCapture } from '@/game/battle/engine'
+import { audio } from '@/audio/audioEngine'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 
 function Pokeball({ size = 64 }: { size?: number }) {
@@ -42,6 +43,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
     const t1 = setTimeout(() => setStage('wobble'), 650)
     const t2 = setTimeout(() => {
       setStage('result')
+      if (success.current) audio.play('capture')
       onCaptured(success.current)
     }, 2500)
     return () => { clearTimeout(t1); clearTimeout(t2) }

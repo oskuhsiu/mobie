@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-M1、**M1.5a（可玩 3v3）**、**M1.5b（主動換人＋防禦 QTE）**、**M1.5c（FxCanvas 粒子+shake+倒下淡出）**皆已完成並實機驗證。下一步 **M1.5d：音效（Tone.js audioEngine）**（見 §下一步）。目標：完成全部 M1.x（M1.5a–h）。
+M1 與 **M1.5 主線 a–d 全部完成並驗證**：a 可玩 3v3、b 主動換人＋防禦 QTE、c FxCanvas 粒子+shake+倒下淡出、d Tone.js 音效（動態載入、SFX+BGM+intensity）。下一步 **M1.5e：個體差異（IV/性格/異色）**。目標：完成全部 M1.x（剩 e、f、g、h）。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
 
@@ -55,9 +55,8 @@ M1、**M1.5a（可玩 3v3）**、**M1.5b（主動換人＋防禦 QTE）**、**M1
 - 防濫用在 **display 層**：換人＝整回合；`lockedIndex` 鎖住剛換下的那隻一回合（攻擊後解鎖）。reducer 維持純淨。
 - 驗證：換人面板→傑尼龜換上→對手剋制攻擊（效果絕佳/減傷 30%）正確。
 
-## 下一步：M1.5d → e → f → g → h（完成全部 M1.x）
-- **c 視覺特效** ✅：`scene/fx/FxCanvas`（imperative 粒子 burst/spark/puff/ring/flash）+ rootShake + 倒下淡出（`fainting`）。已實機驗證。
-- **d 音效**：`audio/audioEngine` 介面（`unlock()`/`play(sfxId)`/`setIntensity()`），Tone.js 在 unlock 時動態 import，全程序化 preset SFX + chiptune BGM。
+## 下一步：M1.5e → f → g → h（完成全部 M1.x）
+- **c 視覺特效** ✅、**d 音效** ✅（`audio/audioEngine`，Tone.js 動態 import，SFX+BGM+intensity，驗證零錯）。
 - **e 個體差異**：`individual.ts`（seed→ivs/nature/shiny 決定論）、`stats.ts` 補 nature 乘數、個體 UI（星級/紅藍色標/異色）+ 測試。
 - **f 成長**：`growth.ts`（n^3 曲線/gainExp/levelUp）、`OwnedUnit`(canonical) vs `BattleUnit`、`PersistenceAdapter`+`LocalStorageAdapter`（只存 canonical）+ 測試。
 - **g 意外**：統一 `RandomEvent`、支援輪盤（每 N 回合 攻擊UP/必定會心/支援補刀/摃龜）、捕獲球輪盤、連打蓄力 + 測試。

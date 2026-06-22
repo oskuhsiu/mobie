@@ -5,6 +5,7 @@ import { TEAM_SIZE } from '@/game/machine/gameMachine'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { buildBattlePokemon } from '@/game/stats'
 import { typeEffectiveness } from '@/game/data/typeChart'
+import { audio } from '@/audio/audioEngine'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 
@@ -24,6 +25,7 @@ export function CardSelectScreen() {
   const [picked, setPicked] = useState<string[]>([])
 
   const toggle = (cardId: string) => {
+    audio.play('select')
     setPicked((prev) => {
       if (prev.includes(cardId)) return prev.filter((id) => id !== cardId)
       if (prev.length >= TEAM_SIZE) return prev
