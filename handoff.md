@@ -21,6 +21,7 @@
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）
+- **系統架構/分層/資料流/不變式**：`ARCHITECTURE.md`（先讀這份）；硬性約束摘要：`CLAUDE.md`；跑法：`README.md`
 - 設計總覽與里程碑：`plan/README.md`
 - 架構/資料模型/狀態機/QR/戰鬥：`plan/01-architecture.md`
 - 各里程碑：`plan/02-milestone-M1.md` … `05-milestone-M4.md`
@@ -40,12 +41,12 @@
 - `3e7fb96` **M1.5a reducer 地基**：`engine.damageMult`/`defenseMultiplier`、`reducer.ts`（`resolveTurn` 純函數 + 5 domain events + `applyForcedSwitch`）、11 測試。
 - **（未 commit）M1.5a UI 接線**：見 §5、§1。
 
-## 4. 程式碼地圖（`src/`）
-- `game/types.ts` 型別；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards seed）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter` + `rollEncounterTeam` 3 隻）。
-- `game/battle/engine.ts`（`resolveAttack` + `qteMultiplier`/`defenseMultiplier`/`damageMult` + 測試）；**`game/battle/reducer.ts`（3v3 純 reducer + 測試）**；`game/machine/gameMachine.ts`（XState 流程，context 帶 `playerTeam`/`foeTeam`、`TEAM_SIZE`）。
-- `store/battleStore.ts`（Zustand，**已改 party**：持 `BattleState`(display) + `setMemberHp`/`setActiveIndex`/`setBattle`/`showHit`… 逐 event setter）。
-- `input/qte.ts`（`qualityFromPointer` 共用 seam，攻擊/防禦 QTE 共用）。
-- `ui/`：screens（Title/RegionSelect/Encounter[對手3隻縮圖]/CardSelect[多選3]/Battle[reducer 驅動+隊伍 tray]/Result[捕獲 boss]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar）、`styles/global.css`（加 `.tray`/`.poke-card--picked`）。
+> 完整分層/資料流見 `ARCHITECTURE.md`，此處只列接手常碰的點。
+- `game/types.ts` 型別；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts` 手動維護**、**`regionLookup.ts` 含練習場的 `lookupRegion`**）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（**選隊評分 vs 全隊 + 一鍵推薦，純函數+測試**）；`game/individual.ts`/`growth.ts`/`persistence.ts`（個體/成長/持久化）。
+- `game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球/捕獲倍率 + 測試）；**`game/battle/reducer.ts`（3v3 純 reducer + 測試；含 `MAX_TURNS` 回合上限依剩餘血量判勝）**；`game/machine/gameMachine.ts`（XState 流程，改用 `lookupRegion`）。
+- `store/battleStore.ts`（Zustand display：`BattleState` + 逐 event setter）；`store/rosterStore.ts`（持久 roster：`load`/`grantBattleExp(…, ratio)`/**`captureUnit(card)`**）。
+- `input/qte.ts`（`qualityFromPointer` seam）。
+- `ui/`：screens（Title/RegionSelect[**含練習入口**]/Encounter/CardSelect[**對手條+剋弱徽章+推薦**]/Battle[**HpPlate 貼角色同側**]/Result[**捕獲入隊+勝敗經驗**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo）、`styles/global.css`。
 
 ## 5. 已完成：M1.5a 完整（reducer 已 commit `3e7fb96`；UI 接線未 commit）
 **純 reducer**（`src/game/battle/reducer.ts`，無 UI/動畫字眼）：
