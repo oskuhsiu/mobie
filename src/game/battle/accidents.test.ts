@@ -5,7 +5,7 @@ import {
   chargeTier, attackQteMultiplier, qteMultiplier,
 } from './engine'
 import {
-  createBattleState, resolveTurn, supportOutcome, SUPPORT_EVERY,
+  createBattleState, resolveTurn, supportOutcome, SUPPORT_EVERY, STAR_STRIKE_MULT,
   type BattleEvent, type RandomEvent,
 } from './reducer'
 
@@ -110,5 +110,31 @@ describe('reducer 隨機點走統一 RandomEvent', () => {
     // 補刀(idx1) + 主攻(idx0)
     expect(playerHits.some((h) => h.attackerIndex === 1)).toBe(true)
     expect(playerHits.some((h) => h.attackerIndex === 0)).toBe(true)
+  })
+})
+
+describe('星擊 Finisher', () => {
+  const firstPlayerHit = (events: BattleEvent[]) =>
+    events.find(
+      (e): e is Extract<BattleEvent, { type: 'damageApplied' }> =>
+        e.type === 'damageApplied' && e.attackerSide === 'player',
+    )
+
+  it('星擊傷害遠高於普攻、且必定會心', () => {
+    const build = () => createBattleState([mon({ atk: 80, spe: 100 })], [mon({ maxHp: 9999, def: 40 })])
+    const normal = resolveTurn(build(), { type: 'ATTACK', quality: 'normal' }, { rng: () => 0.5 })
+    const star = resolveTurn(build(), { type: 'ATTACK', starStrike: true }, { rng: () => 0.5 })
+
+    const nHit = firstPlayerHit(normal.events)!
+    const sHit = firstPlayerHit(star.events)!
+    expect(sHit.crit).toBe(true)
+    // 星擊 ×STAR_STRIKE_MULT(3) × 會心(1.5) ≈ 遠大於普攻
+    expect(sHit.amount).toBeGreaterThan(nHit.amount * STAR_STRIKE_MULT)
+  })
+
+  it('星擊回合跳過支援輪盤', () => {
+    const atTurn3 = { ...createBattleState([mon(), mon()], [mon({ maxHp: 9999 })]), turn: SUPPORT_EVERY }
+    const { events } = resolveTurn(atTurn3, { type: 'ATTACK', starStrike: true }, { rng: () => 0.1 })
+    expect(randoms(events).some((r) => r.type === 'supportRoulette')).toBe(false)
   })
 })

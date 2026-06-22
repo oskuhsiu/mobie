@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-M1、**M1.5 a–g 全部完成並驗證**：a 3v3、b 換人＋防禦 QTE、c 粒子、d 音效、e 個體差異、f 成長、g 意外機制（支援輪盤+球輪盤+連打蓄力+統一 RandomEvent）。下一步 **M1.5h：星擊 Finisher（能量槽不綁隨機 + 大招演出）**——最後一項。
+**M1.x 全部完成並實機驗證**（M1 + M1.5 a–h）：3v3 戰鬥、主動換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制（支援/球輪盤+連打蓄力+RandomEvent）、星擊 Finisher。**M1.x 里程碑達成。** 下一步進入 **M2（QR 掃描 + 卡庫）**（見 `plan/04-milestone-M2.md` / CHECKLIST M2）。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（32）全綠。
 

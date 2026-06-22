@@ -33,6 +33,10 @@ interface BattleUiState {
   fainting: Side | null
   /** 支援輪盤結果 overlay（null=不顯示） */
   support: SupportOutcome | null
+  /** 星擊能量槽 0..100（只由 QTE 表現+連鎖累積，不綁隨機） */
+  energy: number
+  /** 連鎖：連續命中回合數 */
+  chain: number
 
   init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
@@ -47,6 +51,9 @@ interface BattleUiState {
   setAttacking: (s: Side | null) => void
   setFainting: (s: Side | null) => void
   setSupport: (o: SupportOutcome | null) => void
+  /** 累積能量（dealtDamage=該回合有命中→連鎖+1，否則歸零）；回傳是否剛集滿 */
+  addEnergy: (delta: number, dealtDamage: boolean) => void
+  resetEnergy: () => void
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
@@ -63,12 +70,15 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   captured: null,
   fainting: null,
   support: null,
+  energy: 0,
+  chain: 0,
 
   init: (playerMembers, foeMembers) =>
     set({
       battle: createBattleState(playerMembers, foeMembers),
       phase: 'intro', log: [], banner: null,
-      attacking: null, hitFx: null, fxCounter: 0, captured: null, fainting: null, support: null,
+      attacking: null, hitFx: null, fxCounter: 0, captured: null,
+      fainting: null, support: null, energy: 0, chain: 0,
     }),
 
   setBattle: (battle) => set({ battle }),
@@ -93,6 +103,13 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   setAttacking: (attacking) => set({ attacking }),
   setFainting: (fainting) => set({ fainting }),
   setSupport: (support) => set({ support }),
+  addEnergy: (delta, dealtDamage) =>
+    set((s) => {
+      const chain = dealtDamage ? s.chain + 1 : 0
+      const gain = delta + (dealtDamage ? chain * 4 : 0) // 連鎖加成
+      return { energy: Math.max(0, Math.min(100, s.energy + gain)), chain }
+    }),
+  resetEnergy: () => set({ energy: 0 }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null, attacking: null }),

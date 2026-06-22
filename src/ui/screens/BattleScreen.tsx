@@ -21,6 +21,9 @@ const SUPPORT_LABEL: Record<SupportOutcome, string> = {
   ally: '🤝 夥伴補刀！',
   dud: '… 可惜，摃龜',
 }
+// 星擊能量：QTE 表現累積（不綁隨機）；約 3 個好回合集滿（參數待玩測）
+const QUALITY_ENERGY: Record<QteQuality, number> = { perfect: 46, good: 34, normal: 26, weak: 16 }
+const energyGain = (q: QteQuality, mashCount: number) => QUALITY_ENERGY[q] + Math.min(24, mashCount) * 0.5
 // FxCanvas 上的概略打點位置（對齊版面：敵方上、我方下）
 const FX_POS: Record<Side, { nx: number; ny: number }> = {
   foe: { nx: 0.72, ny: 0.22 },
@@ -217,6 +220,7 @@ export function BattleScreen() {
   const hitFx = useBattleStore((s) => s.hitFx)
   const fainting = useBattleStore((s) => s.fainting)
   const support = useBattleStore((s) => s.support)
+  const energy = useBattleStore((s) => s.energy)
   const log = useBattleStore((s) => s.log)
 
   const fxRef = useRef<FxHandle>(null)
@@ -373,11 +377,41 @@ export function BattleScreen() {
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
+    // 星擊能量：依 QTE 表現 + 是否命中（連鎖）累積
+    const dealt = events.some((e) => e.type === 'damageApplied' && e.attackerSide === 'player' && !e.missed && e.amount > 0)
+    store().addEnergy(energyGain(quality, mashCount), dealt)
+
     setLockedIndex(null) // 攻擊一回合後解除換回鎖
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
   }, [playEvents])
+
+  // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出
+  const runStarStrike = useCallback(async () => {
+    const store = useBattleStore.getState
+    const b0 = store().battle
+    if (!b0) return
+    store().setPhase('busy')
+    store().resetEnergy()
+    store().setBanner('★ 星擊發動！')
+    audio.play('crit')
+    fxRef.current?.flash('#ffffff', 0.7)
+    fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
+    rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
+    await wait(620)
+    fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
+
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true })
+    await playEvents(b0, events)
+    store().setBattle(nextState)
+    store().setBanner(null)
+    store().addEnergy(0, false) // 連鎖歸零（星擊消耗）
+
+    if (nextState.winner === 'player') store().setPhase('won')
+    else if (nextState.winner === 'foe') store().setPhase('lost')
+    else store().setPhase('playerChoice')
+  }, [playEvents, rootShake])
 
   // 主動換人：收回換上 index → 對手打換上的 → 防禦 QTE 抵減
   const runSwitchTurn = useCallback(async (index: number, defenseQuality: QteQuality) => {
@@ -476,6 +510,15 @@ export function BattleScreen() {
 
       {/* 底部控制區 */}
       <div className="col center" style={{ gap: 12, marginTop: 14, minHeight: 120 }}>
+        {/* 星擊能量槽（極簡細條） */}
+        <div className={`star-gauge ${energy >= 100 ? 'star-gauge--full' : ''}`}>
+          <span className="star-gauge__icon">★</span>
+          <div className="star-gauge__track">
+            <div className="star-gauge__fill" style={{ width: `${energy}%` }} />
+          </div>
+          <span className="star-gauge__pct">{Math.floor(energy)}%</span>
+        </div>
+
         <div className="battle-log">
           {log.length === 0 ? (
             <span className="battle-log__line--dim">戰鬥開始！</span>
@@ -506,6 +549,17 @@ export function BattleScreen() {
             >
               🔄 換人
             </motion.button>
+            {energy >= 100 && (
+              <motion.button
+                className="btn btn--star" style={{ fontSize: 18, padding: '16px 24px' }}
+                initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
+                transition={{ duration: 1.1, repeat: Infinity }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => { audio.play('select'); void runStarStrike() }}
+              >
+                ★ 星擊
+              </motion.button>
+            )}
           </motion.div>
         )}
 

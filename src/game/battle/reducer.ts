@@ -31,8 +31,11 @@ export interface BattleState {
 
 /** 玩家本回合的行動 */
 export type BattleAction =
-  | { type: 'ATTACK'; quality?: QteQuality; mashCount?: number }
+  | { type: 'ATTACK'; quality?: QteQuality; mashCount?: number; starStrike?: boolean }
   | { type: 'SWITCH'; index: number; defenseQuality?: QteQuality }
+
+/** 星擊 Finisher 的傷害倍率（能量滿槽放，必定會心） */
+export const STAR_STRIKE_MULT = 3
 
 /**
  * Domain events——純結果語意，不含 UI/動畫字眼。
@@ -227,10 +230,12 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
   const events: BattleEvent[] = []
 
   if (action.type === 'ATTACK') {
+    // 星擊 Finisher：大倍率 + 必定會心；跳過支援輪盤
+    const starStrike = action.starStrike === true
     // 支援輪盤（每 SUPPORT_EVERY 回合）：攻擊UP / 必定會心 / 支援補刀 / 摃龜
-    let playerDamageMult = 1
-    let playerForceCrit = false
-    if (state.turn % SUPPORT_EVERY === 0) {
+    let playerDamageMult = starStrike ? STAR_STRIKE_MULT : 1
+    let playerForceCrit = starStrike
+    if (!starStrike && state.turn % SUPPORT_EVERY === 0) {
       const roll = rng()
       const outcome = supportOutcome(roll)
       events.push({

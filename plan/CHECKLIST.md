@@ -91,9 +91,10 @@
 - [x] 捕獲球輪盤：`rollBall`→精靈/超級/高級球，`captureChanceWithBall` 套係數封頂 0.98；結算顯示球種
 - [x] 攻擊 QTE 加「連打蓄力」：`chargeTier`(red→rainbow)、`attackQteMultiplier`=timing×色階；MashMeter（計數走 ref）
 - [x] vitest（+9）：球輪盤/連打/支援輪盤決定論、補刀 attackerIndex、共用 RandomEvent；實機驗證 mash/support/ball
-### M1.5h 星擊 Finisher（延後）
-- [ ] 能量槽：只由 QTE 表現+連鎖累積（不綁隨機），極簡細條 UI
-- [ ] 滿槽放自製大招「星擊」演出（FxCanvas+audio）
+### M1.5h 星擊 Finisher ✅ 完成（實機驗證 118 傷）
+- [x] 能量槽：只由 QTE 表現(quality)+連打+連鎖累積（**不綁隨機**）；極簡彩虹細條 UI + 滿槽高亮
+- [x] 滿槽放自製大招「星擊」（`starStrike` action：×3 倍率+必定會心+跳過支援輪盤）+ 演出（FxCanvas flash/ring/spark + shake + audio）
+- [x] vitest（+2）：星擊傷害遠高於普攻且必定會心、星擊跳過支援輪盤
 
 ## M2 — QR 掃描 + 卡庫
 - [ ] `parseCardCode()`：MZ1 解析 + CRC 校驗

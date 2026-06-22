@@ -275,6 +275,29 @@ body {
 .support-overlay__result { font-size: clamp(22px, 5vw, 34px); font-weight: 900; margin-top: 4px; }
 .support-overlay__result.is-dud { color: var(--text-dim); }
 
+/* ============ 星擊能量槽 ============ */
+.star-gauge {
+  width: 100%; max-width: 560px;
+  display: flex; align-items: center; gap: 8px;
+}
+.star-gauge__icon { font-size: 14px; color: var(--text-dim); transition: color 0.2s; }
+.star-gauge__track {
+  flex: 1; height: 6px; border-radius: 999px;
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.12); overflow: hidden;
+}
+.star-gauge__fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #5060e1, #9141cb, #ff7ae0);
+  transition: width 0.4s ease;
+}
+.star-gauge__pct { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; }
+.star-gauge--full .star-gauge__icon { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
+.star-gauge--full .star-gauge__track { border-color: var(--accent); box-shadow: 0 0 12px rgba(255,210,63,0.5); }
+.btn--star {
+  background: linear-gradient(180deg, #ff9af0, #9141cb); color: #fff;
+  box-shadow: 0 0 20px rgba(255,122,224,0.6);
+}
+
 /* ============ Battle log ============ */
 .battle-log {
   width: 100%; max-width: 620px; min-height: 64px;
