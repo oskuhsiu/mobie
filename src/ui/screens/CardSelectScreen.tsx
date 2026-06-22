@@ -5,7 +5,7 @@ import { TEAM_SIZE } from '@/game/machine/gameMachine'
 import { useRoster } from '@/store/rosterStore'
 import { ownedToCard } from '@/game/growth'
 import { buildBattlePokemon } from '@/game/stats'
-import { typeEffectiveness } from '@/game/data/typeChart'
+import { scoreCardVsFoes, recommendTeamIds, type Matchup } from '@/game/recommend'
 import { audio } from '@/audio/audioEngine'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
@@ -13,10 +13,8 @@ import { IndividualInfo } from '@/ui/components/IndividualInfo'
 
 export function CardSelectScreen() {
   const { context, send } = useGame()
-  const foeLead = useMemo(
-    () => (context.foeTeam[0] ? buildBattlePokemon(context.foeTeam[0]) : null),
-    [context.foeTeam],
-  )
+  // 對手全隊（不只第一隻）：建議要考慮整隊相剋
+  const foes = useMemo(() => context.foeTeam.map(buildBattlePokemon), [context.foeTeam])
 
   const roster = useRoster((s) => s.roster)
   const cards = useMemo(
@@ -27,8 +25,27 @@ export function CardSelectScreen() {
     [roster],
   )
 
+  // 每張卡對「對手整隊」的攻防適配度（剋制數 / 弱勢數 / 評分）
+  const matchups = useMemo(() => {
+    const m: Record<string, Matchup> = {}
+    for (const c of cards) m[c.card.cardId] = scoreCardVsFoes(c.mon, foes)
+    return m
+  }, [cards, foes])
+  // 一鍵推薦的最佳 3 隻（依評分高→低）
+  const recommendedIds = useMemo(
+    () => recommendTeamIds(cards.map((c) => ({ id: c.card.cardId, mon: c.mon })), foes, TEAM_SIZE),
+    [cards, foes],
+  )
+  const recommendedSet = useMemo(() => new Set(recommendedIds), [recommendedIds])
+
   // 已選卡片 id（依點選順序，最多 TEAM_SIZE 隻）
   const [picked, setPicked] = useState<string[]>([])
+
+  // 一鍵填入推薦陣容（玩家可再自行調整後再出戰）
+  const pickRecommended = () => {
+    audio.play('select')
+    setPicked(recommendedIds)
+  }
 
   const toggle = (cardId: string) => {
     audio.play('select')
@@ -56,23 +73,48 @@ export function CardSelectScreen() {
         ← 返回
       </button>
 
-      <div className="col" style={{ gap: 4 }}>
-        <div className="eyebrow">Step 2 · 組你的隊伍</div>
-        <div className="h-title" style={{ fontSize: 30 }}>選擇出戰寶可夢</div>
-        <div className="h-sub">挑 {TEAM_SIZE} 隻組隊，屬性相剋更有優勢</div>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
+        <div className="col" style={{ gap: 4 }}>
+          <div className="eyebrow">Step 2 · 組你的隊伍</div>
+          <div className="h-title" style={{ fontSize: 28 }}>選擇出戰寶可夢</div>
+          <div className="h-sub">挑 {TEAM_SIZE} 隻組隊；不熟屬性？按「推薦出戰」幫你挑剋制陣容</div>
+        </div>
+        <motion.button
+          className="btn btn--ghost" style={{ padding: '12px 18px', whiteSpace: 'nowrap', fontSize: 15 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={pickRecommended}
+        >
+          ✨ 推薦出戰
+        </motion.button>
+      </div>
+
+      {/* 對手陣容（含屬性），讓玩家對照下方的剋/弱徽章 */}
+      <div className="foe-strip">
+        <span className="foe-strip__label">對手</span>
+        <div className="foe-strip__list scroll">
+          {foes.map((f, i) => (
+            <div
+              key={i}
+              className={`foe-strip__mon ${i === foes.length - 1 ? 'foe-strip__mon--boss' : ''}`}
+              title={`${f.nameZh} Lv.${f.level}`}
+            >
+              <img src={f.artworkUrl} alt={f.nameZh} />
+              <div className="foe-strip__types"><TypeBadges types={f.types} /></div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="hand scroll" style={{ paddingBottom: 8 }}>
         {cards.map(({ card, mon }, i) => {
-          const eff = foeLead ? typeEffectiveness(mon.move.type, foeLead.types) : 1
-          const advantage = eff >= 2 ? '剋制' : eff === 0 ? '無效' : eff < 1 ? '不利' : null
-          const advColor = eff >= 2 ? 'var(--good)' : 'var(--bad)'
+          const mu = matchups[card.cardId]
+          const isRec = recommendedSet.has(card.cardId)
           const order = picked.indexOf(card.cardId)
           const isPicked = order >= 0
           return (
             <motion.button
               key={card.cardId}
-              className={`poke-card ${isPicked ? 'poke-card--picked' : ''}`}
+              className={`poke-card ${isPicked ? 'poke-card--picked' : ''} ${isRec ? 'poke-card--rec' : ''}`}
               initial={{ opacity: 0, rotateY: 35, y: 20 }}
               animate={{ opacity: 1, rotateY: 0, y: 0 }}
               transition={{ delay: 0.05 * i, type: 'spring', stiffness: 150, damping: 16 }}
@@ -80,17 +122,15 @@ export function CardSelectScreen() {
               onClick={() => toggle(card.cardId)}
             >
               <span className="poke-card__lv">Lv.{mon.level}</span>
-              {advantage && (
-                <span
-                  style={{
-                    position: 'absolute', top: 10, right: 12, fontSize: 11, fontWeight: 900,
-                    color: advColor, border: `1px solid ${advColor}`, borderRadius: 999,
-                    padding: '2px 8px',
-                  }}
-                >
-                  {advantage}
-                </span>
-              )}
+              <div className="matchup-badges">
+                {mu && mu.counters > 0 && (
+                  <span className="matchup-badge matchup-badge--good">剋 {mu.counters}</span>
+                )}
+                {mu && mu.weakTo > 0 && (
+                  <span className="matchup-badge matchup-badge--bad">弱 {mu.weakTo}</span>
+                )}
+              </div>
+              {isRec && <span className="poke-card__rec">⭐ 推薦</span>}
               <AnimatePresence>
                 {isPicked && (
                   <motion.span

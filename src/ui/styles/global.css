@@ -364,6 +364,40 @@ body {
 .region-card__blurb { font-size: 13px; color: rgba(255,255,255,0.82); margin-top: 4px; }
 .region-card__glow { position: absolute; inset: 0; background: radial-gradient(circle at 80% 0%, rgba(255,255,255,0.18), transparent 55%); pointer-events: none; }
 
+/* ============ 對手陣容條（選隊時對照） ============ */
+.foe-strip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 14px;
+  background: rgba(0, 0, 0, 0.32); border: 1px solid var(--stroke);
+}
+.foe-strip__label { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; color: var(--text-dim); white-space: nowrap; }
+.foe-strip__list { display: flex; gap: 8px; overflow-x: auto; }
+.foe-strip__mon {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 4px; border-radius: 10px; min-width: 56px;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid var(--stroke);
+}
+.foe-strip__mon--boss { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.foe-strip__mon img { width: 40px; height: 40px; object-fit: contain; }
+.foe-strip__types { display: flex; gap: 3px; transform: scale(0.78); transform-origin: center; }
+
+/* ============ 選卡相剋徽章 / 推薦 ============ */
+.matchup-badges { position: absolute; top: 9px; right: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; z-index: 2; }
+.matchup-badge {
+  font-size: 11px; font-weight: 900; border-radius: 999px; padding: 2px 8px;
+  border: 1px solid currentColor;
+}
+.matchup-badge--good { color: var(--good); background: rgba(74, 222, 128, 0.12); }
+.matchup-badge--bad { color: var(--bad); background: rgba(255, 107, 107, 0.12); }
+.poke-card__rec {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); z-index: 2;
+  font-size: 11px; font-weight: 900; color: #1b2a14;
+  background: linear-gradient(180deg, #7ef0a0, var(--good));
+  border-radius: 999px; padding: 2px 10px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.poke-card--rec { border-color: var(--good); box-shadow: 0 0 0 1.5px var(--good), var(--shadow); padding-bottom: 32px; }
+
 /* ============ Hand cards (select) ============ */
 .hand { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .poke-card {
