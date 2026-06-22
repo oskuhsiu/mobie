@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
@@ -35,19 +35,20 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
     wild ? Math.random() < captureChanceWithBall(wild, ball.current.mult) : false,
   )
   const [stage, setStage] = useState<Stage>('throw')
-  const ranRef = useRef(false)
+  // onCaptured 走 ref：結算時 roster 更新會讓父層 re-render（onCaptured 重建），
+  // 計時器 effect 必須只跑一次、且不因依賴變動被 cleanup 清掉，否則會卡在 throw 階段。
+  const onCapturedRef = useRef(onCaptured)
+  onCapturedRef.current = onCaptured
 
   useEffect(() => {
-    if (ranRef.current) return
-    ranRef.current = true
     const t1 = setTimeout(() => setStage('wobble'), 650)
     const t2 = setTimeout(() => {
       setStage('result')
       if (success.current) audio.play('capture')
-      onCaptured(success.current)
+      onCapturedRef.current(success.current)
     }, 2500)
     return () => { clearTimeout(t1); clearTimeout(t2) }
-  }, [onCaptured])
+  }, [])
 
   if (!wild) return null
   const caught = success.current
@@ -154,6 +155,7 @@ export function ResultScreen() {
 
   // 勝利：給參戰隊伍加經驗、升級、存檔（只做一次）
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
+  const captureUnit = useRoster((s) => s.captureUnit)
   const lastResults = useRoster((s) => s.lastResults)
   const grantedRef = useRef(false)
   useEffect(() => {
@@ -165,10 +167,20 @@ export function ResultScreen() {
     )
   }, [isWin, context.playerTeam, context.foeTeam, grantBattleExp])
 
+  // 收服回呼：穩定參照（避免 WinView 計時器 effect 因父層 re-render churn）
+  const onCaptured = useCallback((ok: boolean) => {
+    if (ok) {
+      const boss = context.foeTeam[context.foeTeam.length - 1]
+      if (boss) void captureUnit(boss) // 真的把 boss 加入並存檔到隊伍
+    }
+    send({ type: 'SET_CAPTURED', captured: ok })
+    setCaptureDone(true)
+  }, [context.foeTeam, captureUnit, send])
+
   return (
     <div className="col" style={{ flex: 1 }}>
       {isWin
-        ? <WinView onCaptured={(ok) => { send({ type: 'SET_CAPTURED', captured: ok }); setCaptureDone(true) }} />
+        ? <WinView onCaptured={onCaptured} />
         : <LoseView />}
 
       {isWin && lastResults.length > 0 && (
