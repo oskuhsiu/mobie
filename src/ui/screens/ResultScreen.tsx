@@ -27,10 +27,11 @@ type Stage = 'throw' | 'wobble' | 'result'
 
 function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
   const { context } = useGame()
-  const wild = useMemo(
-    () => (context.wild ? buildBattlePokemon(context.wild) : null),
-    [context.wild],
-  )
+  // 捕獲對象＝對手隊伍末隻（boss）
+  const wild = useMemo(() => {
+    const boss = context.foeTeam[context.foeTeam.length - 1]
+    return boss ? buildBattlePokemon(boss) : null
+  }, [context.foeTeam])
   const success = useRef<boolean>(wild ? attemptCapture(wild) : false)
   const [stage, setStage] = useState<Stage>('throw')
   const ranRef = useRef(false)
@@ -125,8 +126,8 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
 function LoseView() {
   const { context } = useGame()
   const player = useMemo(
-    () => (context.playerCard ? buildBattlePokemon(context.playerCard) : null),
-    [context.playerCard],
+    () => (context.playerTeam[0] ? buildBattlePokemon(context.playerTeam[0]) : null),
+    [context.playerTeam],
   )
   return (
     <div className="center" style={{ flex: 1, gap: 16 }}>

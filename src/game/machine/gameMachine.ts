@@ -1,14 +1,19 @@
 import { setup, assign } from 'xstate'
 import type { Card } from '@/game/types'
 import { getRegion } from '@/game/data/regions'
-import { rollEncounter } from '@/game/encounter'
+import { rollEncounterTeam } from '@/game/encounter'
 
 export type Outcome = 'win' | 'lose'
 
+/** 一場 3v3 的隊伍大小 */
+export const TEAM_SIZE = 3
+
 export interface GameContext {
   regionId: string | null
-  wild: Card | null
-  playerCard: Card | null
+  /** 對手隊伍（3 隻，末隻為 boss＝勝利後的捕獲對象） */
+  foeTeam: Card[]
+  /** 玩家出戰隊伍（cardSelect 選滿 3 隻） */
+  playerTeam: Card[]
   outcome: Outcome | null
   captured: boolean
 }
@@ -18,7 +23,7 @@ export type GameEvent =
   | { type: 'SELECT_REGION'; regionId: string }
   | { type: 'ENGAGE' }
   | { type: 'BACK' }
-  | { type: 'SELECT_CARD'; card: Card }
+  | { type: 'SELECT_TEAM'; cards: Card[] }
   | { type: 'END_BATTLE'; outcome: Outcome }
   | { type: 'SET_CAPTURED'; captured: boolean }
   | { type: 'PLAY_AGAIN' }
@@ -26,15 +31,15 @@ export type GameEvent =
 
 const initialContext: GameContext = {
   regionId: null,
-  wild: null,
-  playerCard: null,
+  foeTeam: [],
+  playerTeam: [],
   outcome: null,
   captured: false,
 }
 
 /**
  * 遊戲高層流程狀態機。
- * 戰鬥內部的回合 / HP / QTE 由 battleStore 處理；本機只負責畫面流轉與帶資料。
+ * 戰鬥內部的回合 / HP / QTE / 換人由 battleStore + reducer 處理；本機只負責畫面流轉與帶資料。
  */
 export const gameMachine = setup({
   types: {
@@ -42,14 +47,14 @@ export const gameMachine = setup({
     events: {} as GameEvent,
   },
   actions: {
-    rollWild: assign(({ event }) => {
+    rollFoes: assign(({ event }) => {
       if (event.type !== 'SELECT_REGION') return {}
       const region = getRegion(event.regionId)
-      return { regionId: event.regionId, wild: rollEncounter(region) }
+      return { regionId: event.regionId, foeTeam: rollEncounterTeam(region, TEAM_SIZE) }
     }),
-    pickCard: assign(({ event }) => {
-      if (event.type !== 'SELECT_CARD') return {}
-      return { playerCard: event.card }
+    pickTeam: assign(({ event }) => {
+      if (event.type !== 'SELECT_TEAM') return {}
+      return { playerTeam: event.cards }
     }),
     recordOutcome: assign(({ event }) => {
       if (event.type !== 'END_BATTLE') return {}
@@ -60,12 +65,12 @@ export const gameMachine = setup({
       return { captured: event.captured }
     }),
     resetEncounter: assign(() => ({
-      wild: null, playerCard: null, outcome: null, captured: false,
+      foeTeam: [], playerTeam: [], outcome: null, captured: false,
     })),
-    rerollWild: assign(({ context }) => {
+    rerollFoes: assign(({ context }) => {
       if (!context.regionId) return {}
       const region = getRegion(context.regionId)
-      return { wild: rollEncounter(region), playerCard: null, outcome: null, captured: false }
+      return { foeTeam: rollEncounterTeam(region, TEAM_SIZE), playerTeam: [], outcome: null, captured: false }
     }),
   },
 }).createMachine({
@@ -79,7 +84,7 @@ export const gameMachine = setup({
     regionSelect: {
       entry: 'resetEncounter',
       on: {
-        SELECT_REGION: { target: 'encounter', actions: 'rollWild' },
+        SELECT_REGION: { target: 'encounter', actions: 'rollFoes' },
       },
     },
     encounter: {
@@ -90,7 +95,7 @@ export const gameMachine = setup({
     },
     cardSelect: {
       on: {
-        SELECT_CARD: { target: 'battle', actions: 'pickCard' },
+        SELECT_TEAM: { target: 'battle', actions: 'pickTeam' },
         BACK: 'encounter',
       },
     },
@@ -102,7 +107,7 @@ export const gameMachine = setup({
     result: {
       on: {
         SET_CAPTURED: { actions: 'setCaptured' },
-        PLAY_AGAIN: { target: 'encounter', actions: 'rerollWild' },
+        PLAY_AGAIN: { target: 'encounter', actions: 'rerollFoes' },
         TO_REGIONS: 'regionSelect',
       },
     },

@@ -194,6 +194,33 @@ body {
   text-shadow: 0 2px 8px rgba(0,0,0,0.6); pointer-events: none;
 }
 
+/* ============ Team tray (3v3 隊伍狀態) ============ */
+.tray { display: flex; gap: 7px; flex-wrap: wrap; }
+.tray__pip {
+  position: relative;
+  width: 34px; height: 9px; border-radius: 999px;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(255,255,255,0.14);
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.tray__pip--active {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 10px rgba(255,210,63,0.5);
+}
+.tray__pip--out { opacity: 0.4; filter: grayscale(1); }
+.tray__fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #34d399, #10b981);
+  transition: width 0.5s ease;
+}
+.tray__fill--mid { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.tray__fill--low { background: linear-gradient(90deg, #fb7185, #ef4444); }
+.tray__x {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 8px; font-weight: 900; color: var(--text-dim);
+}
+
 /* ============ Battle log ============ */
 .battle-log {
   width: 100%; max-width: 620px; min-height: 64px;
@@ -231,6 +258,19 @@ body {
 .poke-card__name { font-weight: 800; font-size: 16px; }
 .poke-card__types { display: flex; gap: 6px; }
 .poke-card__lv { position: absolute; top: 10px; left: 12px; font-size: 12px; font-weight: 800; color: var(--text-dim); }
+.poke-card--picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow);
+  background: linear-gradient(160deg, rgba(255,210,63,0.18), var(--panel));
+}
+.poke-card__pick {
+  position: absolute; top: 6px; left: 50%; z-index: 2;
+  min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--accent); color: #2a1d00;
+  font-size: 13px; font-weight: 900;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
 
 /* ============ Misc layout ============ */
 .row { display: flex; align-items: center; gap: 12px; }

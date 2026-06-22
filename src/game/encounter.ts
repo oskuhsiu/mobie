@@ -22,3 +22,14 @@ export function rollEncounter(region: Region, rng: () => number = Math.random): 
     ivs: { hp: 12, atk: 12, def: 12, spa: 12, spd: 12, spe: 12 },
   }
 }
+
+/**
+ * 抽一支對手隊伍（3v3 用）。各隻獨立抽取，cardId 補上 index 後綴避免重複（React key）。
+ * 末隻視為 boss（勝利後的捕獲對象）。
+ */
+export function rollEncounterTeam(region: Region, size = 3, rng: () => number = Math.random): Card[] {
+  return Array.from({ length: size }, (_, i) => {
+    const c = rollEncounter(region, rng)
+    return { ...c, cardId: `${c.cardId}-${i}` }
+  })
+}

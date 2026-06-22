@@ -7,10 +7,11 @@ import { TypeBadges } from '@/ui/components/TypeBadge'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
-  const wild = useMemo(
-    () => (context.wild ? buildBattlePokemon(context.wild) : null),
-    [context.wild],
+  const foes = useMemo(
+    () => context.foeTeam.map(buildBattlePokemon),
+    [context.foeTeam],
   )
+  const wild = foes[0] ?? null
   if (!wild) return null
 
   return (
@@ -35,11 +36,27 @@ export function EncounterScreen() {
           className="col center" style={{ gap: 8 }}
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
         >
-          <div className="eyebrow">野生的寶可夢出現了！</div>
+          <div className="eyebrow">對手帶著 {foes.length} 隻寶可夢出現了！</div>
           <div className="h-title" style={{ fontSize: 36 }}>
             {wild.nameZh} <span className="hpbar__lv">Lv.{wild.level}</span>
           </div>
           <TypeBadges types={wild.types} />
+          {/* 對手隊伍縮圖（最後一隻為 boss） */}
+          <div className="row" style={{ gap: 10, marginTop: 6 }}>
+            {foes.map((f, i) => (
+              <div
+                key={i}
+                style={{
+                  width: 46, height: 46, borderRadius: 12, padding: 3,
+                  border: `1px solid ${i === foes.length - 1 ? 'var(--accent)' : 'var(--stroke)'}`,
+                  background: 'rgba(0,0,0,0.3)',
+                }}
+                title={i === foes.length - 1 ? `${f.nameZh}（boss）` : f.nameZh}
+              >
+                <img src={f.artworkUrl} alt={f.nameZh} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              </div>
+            ))}
+          </div>
         </motion.div>
       </div>
 

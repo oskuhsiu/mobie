@@ -44,16 +44,18 @@
 - [x] dev server 跑通完整 loop（直式+橫式截圖：勝利捕獲 + 落敗兩條路徑）
 
 ## M1.5 — 完成戰鬥：3v3 + 主動換人 + 聲光（依 06-battle-reference.md）
-### M1.5a 隊伍模型 + 3v3 依序 + 純 reducer
-> 純邏輯地基（reducer + 測試）已完成；UI 接線（cardSelect 多選 + store/screen 改用 reducer 跑真正 3v3）併入下一步、與 M1.5b 隊伍 tray 一起做。
+### M1.5a 隊伍模型 + 3v3 依序 + 純 reducer ✅ 完成（含 UI 接線、實機驗證勝利+捕獲）
 - [x] party 模型型別（`reducer.ts`：`BattleSide` = members[3] + activeIndex、`BattleState`）
-- [x] `engine.ts` 加 `damageMult` option（防禦抵減/支援UP 用，不破壞既有 21 測試）
+- [x] `engine.ts` 加 `damageMult` option + `defenseMultiplier()`（不破壞既有 21 測試）
 - [x] `resolveTurn(state, action, {rng}) → { nextState, events[] }` 純函數
 - [x] domain events：damageApplied / memberFainted / activeChanged / switchDefenseResolved / battleEnded
 - [x] 倒下→自動送下一隻（`applyForcedSwitch` 依序）、全滅判定勝負
 - [x] vitest：先後手、3v3 依序 KO、強制換、換上即倒、防禦抵減、全滅雙向、純函數不變性（11 測試）
-- [ ] cardSelect 改多選 3 隻組隊（UI，下一步）
-- [ ] gameMachine context 改帶 3 隻隊伍 + store/BattleScreen 改用 reducer 跑真正 3v3（UI，下一步）
+- [x] cardSelect 改多選 3 隻組隊（序號徽章、n/3 計數、選滿才解鎖出戰）
+- [x] gameMachine context 改帶 `playerTeam`/`foeTeam`（3 隻）；`rollEncounterTeam`；末隻為 boss=捕獲對象
+- [x] battleStore 改持 `BattleState`(display) + 逐 event setter；BattleScreen 用 reducer 跑回合、依序消費 events 演出
+- [x] 底部隊伍 tray（雙方各 3 HP pip + 倒下灰階/✕ + active 高亮）
+- [x] 實機（Chrome headless+CDP）驗證：遭遇顯示對手 3 隻 → 選 3 隻 → 3v3 攻擊+自動換上 → 勝利捕獲 boss
 ### M1.5b 主動換人 + 防禦 QTE + 隊伍 UI
 - [ ] 換人行動：收回→放出→對手打換上的→防禦 QTE 抵減（90/60/30/0）
 - [ ] 防濫用：每回合一次、剛換上不能換回；換上即倒→立即強制換（測試）
