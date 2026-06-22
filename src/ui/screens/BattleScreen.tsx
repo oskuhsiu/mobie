@@ -7,7 +7,6 @@ import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } 
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattlePokemon } from '@/game/types'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
-import { HpBar } from '@/ui/components/HpBar'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { TYPE_HEX } from '@/ui/typeMeta'
@@ -123,6 +122,31 @@ function TeamTray({ members, activeIndex, align }: {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** 緊貼立繪的精簡 HP 牌：名稱 + Lv + 血條（自家顯示數字）。放在角色同側，避免看錯誰的血。 */
+function HpPlate({ mon, owner, label }: { mon: BattlePokemon; owner: boolean; label: string }) {
+  const ratio = Math.max(0, mon.currentHp / mon.maxHp)
+  const tone = hpToneClass(ratio, 'hpbar__fill')
+  return (
+    <div className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}>
+      <div className="hp-plate__top">
+        <span className="hp-plate__name">{label}</span>
+        <span className="hpbar__lv">Lv.{mon.level}</span>
+      </div>
+      <div className="hp-plate__track">
+        <motion.div
+          className={`hpbar__fill ${tone}`}
+          initial={false}
+          animate={{ width: `${ratio * 100}%` }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        />
+      </div>
+      {owner && (
+        <div className="hp-plate__num">{Math.ceil(Math.max(0, mon.currentHp))} / {mon.maxHp}</div>
+      )}
     </div>
   )
 }
@@ -458,17 +482,14 @@ export function BattleScreen() {
   return (
     <motion.div className="col" style={{ flex: 1, position: 'relative' }} animate={rootShake}>
       <FxCanvas ref={fxRef} />
-      {/* 敵方 */}
-      <div className="col" style={{ gap: 6 }}>
-        <div className="row" style={{ justifyContent: 'flex-start' }}>
-          <div style={{ width: '58%', maxWidth: 320 }}>
-            <HpBar name={`對手的 ${foe.nameZh}`} level={foe.level} currentHp={foe.currentHp} maxHp={foe.maxHp} />
-          </div>
-          <div className="spacer" />
+      {/* 敵方：HP 牌與隊伍狀態貼在立繪同側（右），緊貼角色不易看錯 */}
+      <div className="row" style={{ justifyContent: 'flex-end' }}>
+        <div className="combat-hud combat-hud--foe">
+          <HpPlate mon={foe} owner={false} label={`對手的 ${foe.nameZh}`} />
           <TeamTray members={battle.foe.members} activeIndex={battle.foe.activeIndex} align="end" />
         </div>
       </div>
-      <div className="row" style={{ justifyContent: 'flex-end', marginTop: -6 }}>
+      <div className="row" style={{ justifyContent: 'flex-end', marginTop: -4 }}>
         <Combatant key={`foe-${battle.foe.activeIndex}`} mon={foe} side="foe" attacking={attacking} hitFx={hitFx} fainting={fainting} />
       </div>
 
@@ -507,14 +528,14 @@ export function BattleScreen() {
         )}
       </AnimatePresence>
 
-      {/* 我方 */}
+      {/* 我方：立繪在左，HP 牌與隊伍狀態貼在同側（左）緊貼角色 */}
       <div className="row" style={{ justifyContent: 'flex-start', marginTop: 'auto' }}>
         <Combatant key={`player-${battle.player.activeIndex}`} mon={player} side="player" attacking={attacking} hitFx={hitFx} fainting={fainting} />
       </div>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <TeamTray members={battle.player.members} activeIndex={battle.player.activeIndex} align="start" />
-        <div style={{ width: '58%', maxWidth: 340 }}>
-          <HpBar name={player.nameZh} level={player.level} currentHp={player.currentHp} maxHp={player.maxHp} showNumbers />
+      <div className="row" style={{ justifyContent: 'flex-start', marginTop: -4 }}>
+        <div className="combat-hud combat-hud--player">
+          <HpPlate mon={player} owner label={player.nameZh} />
+          <TeamTray members={battle.player.members} activeIndex={battle.player.activeIndex} align="start" />
         </div>
       </div>
 

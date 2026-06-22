@@ -133,6 +133,31 @@ body {
 .hpbar__fill--low { background: linear-gradient(90deg, #fb7185, #ef4444); }
 .hpbar__num { font-size: 12px; color: var(--text-dim); margin-top: 4px; font-variant-numeric: tabular-nums; }
 
+/* ============ HP plate（緊貼立繪的精簡血量牌） ============ */
+.combat-hud { display: flex; flex-direction: column; gap: 6px; max-width: 78vw; }
+.combat-hud--foe { align-items: flex-end; }
+.combat-hud--player { align-items: flex-start; }
+.hp-plate {
+  width: min(66vw, 300px);
+  padding: 8px 13px; border-radius: 13px;
+  background: rgba(8, 10, 24, 0.62); border: 1px solid var(--stroke);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.hp-plate--foe { border-bottom-right-radius: 4px; }   /* 指向立繪方向的缺角 */
+.hp-plate--owner { border-bottom-left-radius: 4px; }
+.hp-plate__top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; margin-bottom: 5px;
+}
+.hp-plate__name { font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hp-plate__track {
+  height: 11px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.hp-plate__num { font-size: 11px; color: var(--text-dim); margin-top: 3px; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ============ Pokemon sprite ============ */
 .sprite { position: relative; display: grid; place-items: center; }
 .sprite__img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 16px 18px rgba(0,0,0,0.45)); }
