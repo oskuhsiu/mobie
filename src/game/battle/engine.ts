@@ -4,7 +4,7 @@ import { effectivenessLabel, typeEffectiveness } from '@/game/data/typeChart'
 /** Timing QTE 命中品質 */
 export type QteQuality = 'perfect' | 'good' | 'normal' | 'weak'
 
-/** QTE 品質 → 傷害倍率 */
+/** 攻擊 QTE 品質 → 傷害倍率 */
 export function qteMultiplier(q: QteQuality): number {
   switch (q) {
     case 'perfect': return 1.3
@@ -14,11 +14,26 @@ export function qteMultiplier(q: QteQuality): number {
   }
 }
 
+/**
+ * 防禦 QTE 品質 → 受擊傷害倍率（換人時抵減用，<1 代表減傷）。
+ * perfect=減傷 90% / good=60% / normal=30% / weak=0%（見 plan 第二場 conclusion）。
+ */
+export function defenseMultiplier(q: QteQuality): number {
+  switch (q) {
+    case 'perfect': return 0.1
+    case 'good': return 0.4
+    case 'normal': return 0.7
+    case 'weak': return 1.0
+  }
+}
+
 export interface AttackOptions {
-  /** 隨機來源，呼叫順序：①命中判定 ②傷害變異。預設 Math.random */
+  /** 隨機來源，呼叫順序：①命中判定 ②傷害變異 ③暴擊。預設 Math.random */
   rng?: () => number
-  /** QTE 傷害倍率，預設 1.0 */
+  /** 攻擊 QTE 傷害倍率，預設 1.0 */
   qteMult?: number
+  /** 額外傷害倍率（防禦抵減 <1 / 支援UP >1），預設 1.0 */
+  damageMult?: number
 }
 
 export interface AttackResult {
@@ -47,6 +62,7 @@ export function resolveAttack(
 ): AttackResult {
   const rng = options.rng ?? Math.random
   const qteMult = options.qteMult ?? 1
+  const damageMult = options.damageMult ?? 1
   const move = attacker.move
 
   const effectiveness = typeEffectiveness(move.type, defender.types)
@@ -84,7 +100,7 @@ export function resolveAttack(
   const crit = rng() < CRIT_RATE
   const critMult = crit ? CRIT_MULT : 1
 
-  let damage = Math.floor(base * stab * effectiveness * variance * critMult * qteMult)
+  let damage = Math.floor(base * stab * effectiveness * variance * critMult * qteMult * damageMult)
   damage = Math.max(1, damage) // 命中且有效，至少 1
 
   const defenderHpAfter = Math.max(0, defender.currentHp - damage)

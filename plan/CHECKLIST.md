@@ -45,12 +45,15 @@
 
 ## M1.5 — 完成戰鬥：3v3 + 主動換人 + 聲光（依 06-battle-reference.md）
 ### M1.5a 隊伍模型 + 3v3 依序 + 純 reducer
-- [ ] BattlePokemon party 模型（雙方各 3 隻 + activeIndex）
-- [ ] cardSelect 改多選 3 隻組隊
-- [ ] `resolveTurn(state, action) → { nextState, events[] }` 純函數
-- [ ] domain events：damageApplied / memberFainted / activeChanged / switchDefenseResolved / battleEnded
-- [ ] 倒下→自動送下一隻、全滅判定勝負
-- [ ] vitest：3v3 依序 KO、強制換、全滅勝負
+> 純邏輯地基（reducer + 測試）已完成；UI 接線（cardSelect 多選 + store/screen 改用 reducer 跑真正 3v3）併入下一步、與 M1.5b 隊伍 tray 一起做。
+- [x] party 模型型別（`reducer.ts`：`BattleSide` = members[3] + activeIndex、`BattleState`）
+- [x] `engine.ts` 加 `damageMult` option（防禦抵減/支援UP 用，不破壞既有 21 測試）
+- [x] `resolveTurn(state, action, {rng}) → { nextState, events[] }` 純函數
+- [x] domain events：damageApplied / memberFainted / activeChanged / switchDefenseResolved / battleEnded
+- [x] 倒下→自動送下一隻（`applyForcedSwitch` 依序）、全滅判定勝負
+- [x] vitest：先後手、3v3 依序 KO、強制換、換上即倒、防禦抵減、全滅雙向、純函數不變性（11 測試）
+- [ ] cardSelect 改多選 3 隻組隊（UI，下一步）
+- [ ] gameMachine context 改帶 3 隻隊伍 + store/BattleScreen 改用 reducer 跑真正 3v3（UI，下一步）
 ### M1.5b 主動換人 + 防禦 QTE + 隊伍 UI
 - [ ] 換人行動：收回→放出→對手打換上的→防禦 QTE 抵減（90/60/30/0）
 - [ ] 防濫用：每回合一次、剛換上不能換回；換上即倒→立即強制換（測試）
