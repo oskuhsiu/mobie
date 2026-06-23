@@ -139,16 +139,16 @@
 > **M6–M13 延伸里程碑**：依 `14-roadmap-m6-m13.md` 把原 M6.x/M7.x/M8.x 共 22 項依類型重歸成獨立里程碑、依賴排序。
 > 兩不變式不變：**純 reducer / 只存 canonical OwnedUnit**；可選掛載（預設全關、關掉零殘留）。各項括號標原子編號方便對照。
 
-## M6 — 共用地基（Foundation；全部前提，先做）
+## M6 — 共用地基（Foundation；全部前提，先做）✅ 完成（Chrome CDP 驗證）
 > 見 `09 §0`（掛載地基/相位契約）、`11 §2`（模式 contract）。
 ### 掛載地基 + 回合相位契約（原 M6.0）
-- [ ] `ExtensionModule` + 擴充縫（S1–S8）定義；`assembleExt(enabledModules)` 住 store 層
-- [ ] `resolveTurn(state, action, {rng, ext})` 第三參數加 `ext`（預設 `{}`，既有 69 測試不動）
-- [ ] settings save slice（`mz.settings.v1`，獨立命名空間，逐系統開關）
-- [ ] §0.4 回合相位契約落地：`starStrike` 收成 `ATTACK` mode、S4 在 timeout 判定前、攻擊型動作吃速度排序 + 對應測試
+- [x] `ExtensionModule` + 擴充縫（S1–S8）定義（`game/ext/seams.ts`）；`assembleExt(settings)` 住 store 層（`store/ext.ts`，註冊表 M7+ 填）
+- [x] `resolveTurn(state, action, {rng, ext})` 第三參數加 `ext`（預設空＝行為等同 M1.x，既有測試全綠）；S3 damageHook 穿 engine、S4 turnEndTrigger 在回合末
+- [x] settings save slice（`mz.settings.v1`，獨立命名空間，逐系統開關，預設全關）+ `store/settingsStore.ts` 組 ext，BattleScreen 端對端接上
+- [x] §0.4 回合相位契約：`starStrike` 已是 `ATTACK` mode、S4 在 timeout 判定「前」跑、攻擊型動作吃速度排序——皆有 vitest（ext.test 7 / settings.test 6）
 ### 模式 contract：競技場 vs 野外（原 M7.0）
-- [ ] `Region.mode: 'arena'|'wild'`；gating 集中 encounter/battle setup（mode==='wild' 才 roll terrain/意外/捕獲）
-- [ ] 捕獲改依 `mode==='wild'`；移除散落 `isPracticeRegion`；練習場→競技場 relabel（mode='arena'、中性地形、保留支援輪盤）
+- [x] `Region.mode: 'arena'|'wild'`（`types.ts`）；gen_dex 主題區 emit `mode:'wild'` 重產 regions.ts；gating 集中 result setup（依 mode 決定捕獲）
+- [x] 捕獲改依 `canCaptureIn(id)`（mode==='wild'）；移除未用的 `isPracticeRegion`；練習場→競技場 relabel（mode='arena'、中性地形、純得經驗、保留支援輪盤）+ ArenaWinView（+4 vitest）
 
 ## M7 — 戰鬥條件 hook 層（道具/特性/技能同一 S1–S8 引擎；見 `09`/`10`）
 ### 隊伍羈絆（原 M6.a，最乾淨先驗證地基）
