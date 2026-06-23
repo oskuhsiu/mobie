@@ -339,7 +339,8 @@ export function BattleScreen() {
         await wait(620)
       } else if (e.type === 'heal') {
         const m = monAt(b0, e.side, e.index)
-        const src = getItem(e.source)
+        // 回血來源可能是道具（剩飯）或日後的特性——兩邊查，誰有就用誰
+        const src = getItem(e.source) ?? getAbility(e.source)
         store().setMemberHp(e.side, e.index, e.hpAfter)
         fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 12, power: 1, kind: 'spark' })
         audio.play('select')

@@ -9,6 +9,7 @@
 
 import type { BattlePokemon, TypeName } from '@/game/types'
 import type { BuildUnitHook, DamageHook, ExtensionModule } from '@/game/ext/seams'
+import { applyStatMod, createLookup } from '@/game/ext/statPatch'
 
 export type AbilityKind = 'statMod' | 'pinch' | 'guard'
 
@@ -26,11 +27,6 @@ export interface AbilityDef {
   params: Record<string, number>
 }
 
-const STAT_KEYS = ['atk', 'def', 'spa', 'spd', 'spe'] as const
-type StatKey = (typeof STAT_KEYS)[number]
-const isStatKey = (k: string): k is StatKey => (STAT_KEYS as readonly string[]).includes(k)
-const scale = (v: number, mult: number) => Math.max(1, Math.round(v * mult))
-
 export const ABILITIES: AbilityDef[] = [
   { id: 'pinch_boost', name: '絕境爆發', icon: '🔥', kind: 'pinch', params: { threshold: 1 / 3, mult: 1.5 }, desc: 'HP 剩 1/3 以下時，攻擊傷害 +50%' },
   { id: 'power', name: '蠻力', icon: '💢', kind: 'statMod', params: { atk: 1.15 }, desc: '物理攻擊 +15%' },
@@ -39,8 +35,6 @@ export const ABILITIES: AbilityDef[] = [
   { id: 'mystic', name: '神秘體', icon: '🔮', kind: 'statMod', params: { spa: 1.15 }, desc: '特殊攻擊 +15%' },
   { id: 'guard', name: '厚實', icon: '🧱', kind: 'guard', params: { mult: 0.8 }, desc: '被效果絕佳的招式攻擊時，受到傷害 -20%' },
 ]
-
-const BY_ID = new Map(ABILITIES.map((d) => [d.id, d]))
 
 /** 屬性 → 特性 id（18 型全覆蓋；攻擊系給絕境爆發、其餘依屬性給能力/防禦/速度型）。 */
 const TYPE_ABILITY: Record<TypeName, string> = {
@@ -53,10 +47,8 @@ const TYPE_ABILITY: Record<TypeName, string> = {
   ice: 'guard', normal: 'guard',
 }
 
-/** 查特性定義（未知 id → undefined）。 */
-export function getAbility(id: string | undefined): AbilityDef | undefined {
-  return id ? BY_ID.get(id) : undefined
-}
+/** 查特性定義（未知 / 未給 id → undefined）。 */
+export const getAbility = createLookup(ABILITIES)
 
 /** 依主屬性決定論指派特性 id。 */
 export function abilityForType(primary: TypeName): string {
@@ -68,14 +60,9 @@ export function abilityForType(primary: TypeName): string {
 /** S1：寫入 abilityId（依主屬性）＋套 statMod 型特性的能力值倍率。兩方皆過此 hook。 */
 const abilityBuildUnit: BuildUnitHook = (unit: BattlePokemon) => {
   const id = abilityForType(unit.types[0])
-  const out: BattlePokemon = { ...unit, abilityId: id }
+  const withId: BattlePokemon = { ...unit, abilityId: id }
   const def = getAbility(id)
-  if (def?.kind === 'statMod') {
-    for (const [k, mult] of Object.entries(def.params)) {
-      if (isStatKey(k)) out[k] = scale(unit[k], mult)
-    }
-  }
-  return out
+  return def?.kind === 'statMod' ? applyStatMod(withId, def.params) : withId
 }
 
 /** S3：攻擊方絕境爆發（pinch）×、防守方厚實（guard）× —— 同一 hook 讀 ctx 雙方自行分流。 */

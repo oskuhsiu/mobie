@@ -6,9 +6,7 @@
 
 import type { BattlePokemon } from '@/game/types'
 import type { ExtensionModule, NamedModifier, PreBattleHook } from '@/game/ext/seams'
-
-/** 把能力值乘上倍率並四捨五入（保底 1）。 */
-const scale = (v: number, mult: number) => Math.max(1, Math.round(v * mult))
+import { scale } from '@/game/ext/statPatch'
 
 export interface SynergyRule {
   id: string

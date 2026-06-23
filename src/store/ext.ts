@@ -91,7 +91,7 @@ export function applyBattlePrep(
   let modifiers: NamedModifier[] = []
   if (withSynergy && prep.preBattleHooks.length > 0) {
     modifiers = prep.preBattleHooks.flatMap((h) => h(out))
-    out = out.map((u) => modifiers.reduce((acc, m) => (m.apply ? m.apply(acc) : acc), u))
+    out = out.map((u) => modifiers.reduce((acc, m) => m.apply?.(acc) ?? acc, u))
   }
   return { team: out, modifiers }
 }

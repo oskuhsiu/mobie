@@ -18,6 +18,7 @@ import type {
   TurnEndTrigger,
 } from '@/game/ext/seams'
 import type { BattleEvent } from '@/game/battle/reducer'
+import { applyStatMod, createLookup } from '@/game/ext/statPatch'
 
 export type ItemKind = 'statMod' | 'damageHook' | 'turnEnd'
 
@@ -36,12 +37,6 @@ export interface ItemDef {
   params: Record<string, number>
 }
 
-/** 套能力值倍率的鍵（statMod 只動這五項；不動 HP，避免 maxHp/currentHp 不同步） */
-const STAT_KEYS = ['atk', 'def', 'spa', 'spd', 'spe'] as const
-type StatKey = (typeof STAT_KEYS)[number]
-const isStatKey = (k: string): k is StatKey => (STAT_KEYS as readonly string[]).includes(k)
-const scale = (v: number, mult: number) => Math.max(1, Math.round(v * mult))
-
 export const ITEMS: ItemDef[] = [
   { id: 'headband', name: '力量頭帶', icon: '💪', kind: 'statMod', params: { atk: 1.3 }, desc: '物理攻擊 +30%' },
   { id: 'glasses', name: '博士眼鏡', icon: '👓', kind: 'statMod', params: { spa: 1.3 }, desc: '特殊攻擊 +30%' },
@@ -52,12 +47,8 @@ export const ITEMS: ItemDef[] = [
   { id: 'leftovers', name: '吃剩的東西', icon: '🍎', kind: 'turnEnd', params: { healFraction: 1 / 16 }, desc: '每回合末回復最大 HP 的 1/16' },
 ]
 
-const BY_ID = new Map(ITEMS.map((d) => [d.id, d]))
-
-/** 查道具定義（未知 id → undefined）。 */
-export function getItem(id: string | undefined): ItemDef | undefined {
-  return id ? BY_ID.get(id) : undefined
-}
+/** 查道具定義（未知 / 未給 id → undefined）。 */
+export const getItem = createLookup(ITEMS)
 
 // ── 縫實作（讀 BattlePokemon 上的暫態 heldItemId 自行分流；無道具＝中性）──────────
 
@@ -65,11 +56,7 @@ export function getItem(id: string | undefined): ItemDef | undefined {
 const itemBuildUnit: BuildUnitHook = (unit: BattlePokemon) => {
   const def = getItem(unit.heldItemId)
   if (!def || def.kind !== 'statMod') return unit
-  const out = { ...unit }
-  for (const [k, mult] of Object.entries(def.params)) {
-    if (isStatKey(k)) out[k] = scale(unit[k], mult)
-  }
-  return out
+  return applyStatMod(unit, def.params)
 }
 
 /** S3：傷害結算中段，依攻擊方道具回乘上的純倍率（命玉 ×1.3、達人帶對剋制 ×1.2）。 */

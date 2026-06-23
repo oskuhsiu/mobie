@@ -19,6 +19,8 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const itemsOn = useSettings((s) => s.settings.modules.heldItems)
   const abilitiesOn = useSettings((s) => s.settings.modules.abilities)
   const [openId, setOpenId] = useState<string | null>(null)
+  // 哪些相關模組未開（提示去設定開啟）
+  const offModules = [!itemsOn && '持有道具', !abilitiesOn && '特性'].filter(Boolean) as string[]
 
   const choose = async (unitId: string, itemId: string | null) => {
     const ok = await equip(unitId, itemId)
@@ -43,10 +45,9 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
 
-        {(!itemsOn || !abilitiesOn) && (
+        {offModules.length > 0 && (
           <div className="lib-msg" style={{ marginBottom: 8 }}>
-            ⚠️ {!itemsOn && '持有道具'}{!itemsOn && !abilitiesOn && ' / '}{!abilitiesOn && '特性'}
-            模組目前關閉——需到「⚙️ 設定」開啟才會在戰鬥生效。
+            ⚠️ {offModules.join(' / ')}模組目前關閉——需到「⚙️ 設定」開啟才會在戰鬥生效。
           </div>
         )}
 
