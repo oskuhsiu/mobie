@@ -1,7 +1,17 @@
 import { motion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
+import type { Region } from '@/game/types'
 import { REGIONS } from '@/game/data/regions'
 import { PRACTICE_REGION } from '@/game/data/practiceRegion'
+import { terrainDefsOf } from '@/game/data/terrains'
+
+/** 區域地形提示文案（M8）：隨機地形區標「隨機」，否則列出固定/混合地形 icon+名。 */
+function terrainHint(r: Region): string | null {
+  if (r.randomTerrain) return '🌀 隨機地形'
+  const defs = terrainDefsOf(r.terrains ?? [])
+  if (defs.length === 0) return null
+  return defs.map((d) => `${d.icon} ${d.name}`).join(' + ')
+}
 
 export function RegionSelectScreen() {
   const { send } = useGame()
@@ -46,6 +56,7 @@ export function RegionSelectScreen() {
             <div>
               <div className="region-card__name">{r.name}</div>
               <div className="region-card__blurb">{r.blurb}</div>
+              {terrainHint(r) && <div className="region-card__terrain">{terrainHint(r)}</div>}
             </div>
           </motion.button>
         ))}
