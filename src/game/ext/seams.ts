@@ -24,8 +24,12 @@ export type SeamId =
   | 'gameMode' // S7：XState 平行子狀態（流程層）
   | 'saveSlice' // S8：persistence 獨立命名空間（序列化）
 
-/** 五個延伸系統模組 id（plan/09 §0.3）。設定持久化逐一開關，預設全關。 */
-export type ModuleId = 'heldItems' | 'synergy' | 'chain' | 'evolution' | 'tower'
+/**
+ * 延伸系統模組 id。設定持久化逐一開關，預設全關。
+ * wave-1（plan/09 §0.3）：heldItems / synergy / chain / evolution / tower。
+ * wave-2（plan/10）：abilities（特性）——M7 與道具共用 S1/S3 引擎。
+ */
+export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'tower'
 
 // ── 各縫的純能力簽章 ────────────────────────────────────────────
 

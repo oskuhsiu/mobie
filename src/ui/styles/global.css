@@ -571,3 +571,66 @@ body {
 .qr-card__img--loading { display: grid; place-items: center; color: #888; }
 .qr-card__code { font-family: ui-monospace, monospace; font-size: 12px; color: #444; word-break: break-all; text-align: center; }
 .qr-card__hint { font-size: 12px; color: #666; text-align: center; }
+
+/* ============ 延伸系統設定（SettingsModal） ============ */
+.mod-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--stroke);
+  cursor: pointer; transition: border-color 0.18s, background 0.18s;
+}
+.mod-row--on { border-color: var(--accent); background: rgba(255,210,63,0.08); }
+.mod-row--soon { cursor: not-allowed; opacity: 0.6; }
+.mod-row__icon { font-size: 26px; flex: 0 0 auto; }
+.mod-row__text { flex: 1; min-width: 0; }
+.mod-row__label { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.mod-row__soon {
+  font-size: 11px; font-weight: 700; color: var(--text-dim);
+  background: rgba(255,255,255,0.08); border: 1px solid var(--stroke); border-radius: 999px; padding: 2px 8px;
+}
+.mod-row__desc { font-size: 12px; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
+.switch {
+  flex: 0 0 auto; width: 46px; height: 27px; border-radius: 999px; padding: 3px;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--stroke); transition: background 0.2s;
+}
+.switch--on { background: var(--accent); }
+.switch--off { opacity: 0.5; }
+.switch__knob {
+  display: block; width: 21px; height: 21px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: transform 0.2s;
+}
+.switch--on .switch__knob { transform: translateX(19px); }
+
+/* ============ 隊伍 / 道具 · 特性（TeamModal） ============ */
+.team-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--stroke);
+}
+.team-row__art { width: 48px; height: 48px; flex: 0 0 auto; }
+.team-row__art img { width: 100%; height: 100%; object-fit: contain; }
+.team-row__info { flex: 1; min-width: 0; }
+.team-row__name { font-weight: 800; font-size: 14px; }
+.team-row__sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; display: flex; flex-wrap: wrap; gap: 8px; }
+.team-row__ability { color: var(--accent); }
+.team-row__item-btn {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 8px 10px; font-size: 13px;
+  border-radius: var(--radius-sm); background: var(--panel-strong); border: 1px solid var(--stroke); color: var(--text); cursor: pointer;
+}
+.team-row__item-btn:active { transform: scale(0.97); }
+.item-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.item-chip {
+  display: flex; align-items: center; gap: 6px; padding: 7px 11px; font-size: 13px;
+  border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); color: var(--text); cursor: pointer;
+}
+.item-chip--on { border-color: var(--accent); background: rgba(255,210,63,0.12); }
+.item-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.item-chip__count { font-size: 11px; color: var(--text-dim); }
+.synergy-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.synergy-tag {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; font-size: 12px; font-weight: 700;
+  border-radius: 999px; background: rgba(74,222,128,0.14); border: 1px solid rgba(74,222,128,0.4); color: #b9f6cf;
+}
+.battle-badges { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; }
+.battle-badge {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700;
+  padding: 1px 6px; border-radius: 999px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke); color: var(--text-dim);
+}

@@ -12,7 +12,7 @@ import type { ModuleId } from '@/game/ext/seams'
 export const SETTINGS_SCHEMA_VERSION = 1
 
 /** 全部延伸模組 id（設定頁逐一列出；新增模組時補這裡） */
-export const MODULE_IDS: ModuleId[] = ['heldItems', 'synergy', 'chain', 'evolution', 'tower']
+export const MODULE_IDS: ModuleId[] = ['synergy', 'heldItems', 'abilities', 'chain', 'evolution', 'tower']
 
 export interface GameSettings {
   schemaVersion: number

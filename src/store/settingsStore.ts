@@ -11,12 +11,14 @@ import {
 } from '@/game/settings'
 import type { ModuleId } from '@/game/ext/seams'
 import type { ExtBundle } from '@/game/ext/seams'
-import { assembleExt } from '@/store/ext'
+import { assembleExt, assembleBattlePrep, type BattlePrep } from '@/store/ext'
 
 interface SettingsStore {
   settings: GameSettings
-  /** 由 settings 組好的注入能力包（模組關閉時為 EMPTY_EXT） */
+  /** 由 settings 組好的戰中注入能力包（S3/S4/S5；模組關閉時為 EMPTY_EXT） */
   ext: ExtBundle
+  /** 由 settings 組好的戰前注入包（S1/S2；模組關閉時為 EMPTY_PREP） */
+  prep: BattlePrep
   setModuleEnabled: (id: ModuleId, on: boolean) => void
 }
 
@@ -25,10 +27,11 @@ export const useSettings = create<SettingsStore>((set, get) => {
   return {
     settings,
     ext: assembleExt(settings),
+    prep: assembleBattlePrep(settings),
     setModuleEnabled: (id, on) => {
       const next = setModuleEnabledIn(get().settings, id, on)
       saveSettings(next)
-      set({ settings: next, ext: assembleExt(next) })
+      set({ settings: next, ext: assembleExt(next), prep: assembleBattlePrep(next) })
     },
   }
 })
