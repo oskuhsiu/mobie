@@ -7,6 +7,7 @@ import type { OwnedUnit, Stats } from '@/game/types'
 import { SPECIES } from '@/game/data/species'
 import { MAX_LEVEL, expForLevel, levelFromExp } from '@/game/growth'
 import { IV_MAX, NATURES } from '@/game/individual'
+import { getItem } from '@/game/ext/items'
 
 const MAX_EXP = expForLevel(MAX_LEVEL)
 
@@ -45,6 +46,8 @@ export function sanitizeRoster(units: readonly OwnedUnit[]): OwnedUnit[] {
     const exp = clampInt(u.exp, 0, MAX_EXP, 0)
     const level = Math.max(clampInt(u.level, 1, MAX_LEVEL, 1), levelFromExp(exp))
     const seed = typeof u.seed === 'string' && u.seed ? u.seed : id
+    // 持有道具：只保留已知道具 id（防壞檔 / 刪過的道具），未知一律丟棄欄位
+    const heldItemId = typeof u.heldItemId === 'string' && getItem(u.heldItemId) ? u.heldItemId : undefined
     clean.push({
       id,
       speciesId,
@@ -54,6 +57,7 @@ export function sanitizeRoster(units: readonly OwnedUnit[]): OwnedUnit[] {
       nature: clampInt(u.nature, 0, NATURES.length - 1, 0),
       seed,
       shiny: u.shiny === true,
+      ...(heldItemId ? { heldItemId } : {}),
     })
   }
   return clean

@@ -9,8 +9,9 @@ const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').t
 const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
 const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
 const SettingsModal = lazy(() => import('@/ui/components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
+const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ default: m.TeamModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings'
+type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team'
 
 export function TitleScreen() {
   const { send } = useGame()
@@ -64,6 +65,7 @@ export function TitleScreen() {
       >
         <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('team')}>🎒 隊伍</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
@@ -76,6 +78,7 @@ export function TitleScreen() {
           {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
           {overlay === 'save' && <SaveManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'settings' && <SettingsModal onClose={() => setOverlay('none')} />}
+          {overlay === 'team' && <TeamModal onClose={() => setOverlay('none')} />}
         </AnimatePresence>
       </Suspense>
     </div>

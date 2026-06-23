@@ -93,5 +93,6 @@ export function ownedToCard(u: OwnedUnit): Card {
     ivs: u.ivs,
     nature: u.nature,
     shiny: u.shiny,
+    heldItemId: u.heldItemId,
   }
 }

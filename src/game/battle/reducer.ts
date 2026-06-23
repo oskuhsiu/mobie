@@ -65,6 +65,17 @@ export type BattleEvent =
       maxHp: number
     }
   | { type: 'memberFainted'; side: Side; index: number }
+  // 回合末回血（M7 S4 道具/特性 turnEndTrigger 用，如剩飯）；source = 來源 id（道具/特性）
+  | {
+      type: 'heal'
+      side: Side
+      index: number
+      amount: number
+      hpBefore: number
+      hpAfter: number
+      maxHp: number
+      source: string
+    }
   | { type: 'activeChanged'; side: Side; fromIndex: number; toIndex: number; forced: boolean }
   | { type: 'switchDefenseResolved'; side: Side; index: number; defenseQuality: QteQuality; damageMult: number }
   | { type: 'battleEnded'; winner: Side; reason?: 'timeout' }

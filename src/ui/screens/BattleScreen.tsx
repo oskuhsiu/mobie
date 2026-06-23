@@ -12,6 +12,7 @@ import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
 import { TYPE_HEX } from '@/ui/typeMeta'
+import { getItem } from '@/game/ext/items'
 import { audio } from '@/audio/audioEngine'
 
 // 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
@@ -93,11 +94,13 @@ function TeamTray({ members, activeIndex, align }: {
 function HpPlate({ mon, owner, label }: { mon: BattlePokemon; owner: boolean; label: string }) {
   const ratio = Math.max(0, mon.currentHp) / mon.maxHp
   const tone = hpToneClass(ratio, 'hpbar__fill')
+  const item = getItem(mon.heldItemId)
   return (
     <div className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}>
       <div className="hp-plate__top">
         <span className="hp-plate__name">{label}</span>
         <span className="hpbar__lv">Lv.{mon.level}</span>
+        {item && <span className="battle-badge" title={item.name}>{item.icon}</span>}
       </div>
       <div className="hp-plate__track">
         <motion.div
@@ -331,6 +334,18 @@ export function BattleScreen() {
         audio.play('faint')
         store().pushLog(`${prefix}${m.nameZh} 倒下了！`)
         await wait(620)
+      } else if (e.type === 'heal') {
+        const m = monAt(b0, e.side, e.index)
+        const src = getItem(e.source)
+        store().setMemberHp(e.side, e.index, e.hpAfter)
+        fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 12, power: 1, kind: 'spark' })
+        audio.play('select')
+        const prefix = e.side === 'foe' ? '對手的 ' : ''
+        store().setBanner(`${src?.icon ?? '✨'} ${prefix}${m.nameZh} 回復了 ${e.amount} HP`)
+        store().pushLog(`${prefix}${m.nameZh} 回復 ${e.amount} HP（${src?.name ?? e.source}）`)
+        await wait(720)
+        store().setBanner(null)
+        await wait(120)
       } else if (e.type === 'activeChanged') {
         store().setActiveIndex(e.side, e.toIndex)
         stageRef.current?.enter(e.side) // 3D：新一隻落場入場（並清除倒下狀態）

@@ -28,6 +28,8 @@ interface RosterState {
   grantBattleExp: (unitIds: string[], foeLevels: number[], ratio?: number) => Promise<ExpResult[]>
   /** 收服一隻（由捕獲卡建 canonical OwnedUnit，加入並存檔；個體與戰鬥畫面一致） */
   captureUnit: (card: Card) => Promise<OwnedUnit | null>
+  /** 裝備/卸下持有道具（itemId=undefined 卸下），回傳原本裝備的 itemId（給背包對帳）；存檔。 */
+  setHeldItem: (unitId: string, itemId: string | undefined) => Promise<string | undefined>
   /** 匯入存檔：整批取代 roster（已 sanitize），存檔。meta 由匯入流程的 adoptMeta 設定，故此處不 bump。 */
   replaceAll: (units: OwnedUnit[]) => Promise<void>
   clearResults: () => void
@@ -85,6 +87,21 @@ export const useRoster = create<RosterState>((set, get) => ({
     await adapter.saveRoster(roster)
     bumpSaveMeta(Date.now()) // 收服 → 存檔變新
     return unit
+  },
+
+  setHeldItem: async (unitId, itemId) => {
+    let prev: string | undefined
+    const roster = get().roster.map((u) => {
+      if (u.id !== unitId) return u
+      prev = u.heldItemId
+      if (itemId) return { ...u, heldItemId: itemId }
+      const { heldItemId: _drop, ...rest } = u // 卸下：移除欄位（保持 canonical 乾淨）
+      return rest
+    })
+    set({ roster })
+    await adapter.saveRoster(roster)
+    bumpSaveMeta(Date.now())
+    return prev
   },
 
   replaceAll: async (units) => {

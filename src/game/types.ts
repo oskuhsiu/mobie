@@ -50,6 +50,8 @@ export interface Card {
   /** 性格 id；未提供則由 cardId 決定論 roll */
   nature?: NatureId
   shiny?: boolean
+  /** 持有道具 id（M7，從 OwnedUnit 帶進戰鬥；未裝備則無） */
+  heldItemId?: string
 }
 
 /**
@@ -65,6 +67,8 @@ export interface OwnedUnit {
   nature: NatureId
   seed: string
   shiny: boolean
+  /** 持有道具 id（M7，canonical；未裝備則無） */
+  heldItemId?: string
 }
 
 /** 進入戰鬥的實例：最終數值已由 buildBattlePokemon 算好 */
@@ -88,6 +92,10 @@ export interface BattlePokemon {
   ivs: Stats
   /** 性格 id（0–24） */
   nature: NatureId
+  /** 持有道具 id（M7 戰鬥暫態，由 Card 帶入；hook 自行依此分流，不持久化） */
+  heldItemId?: string
+  /** 特性 id（M7 戰鬥暫態，由 species 主屬性決定論指派；不持久化） */
+  abilityId?: string
 }
 
 export interface Region {

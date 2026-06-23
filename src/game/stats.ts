@@ -51,5 +51,7 @@ export function buildBattlePokemon(card: Card): BattlePokemon {
     shiny: card.shiny ?? ind.shiny,
     ivs,
     nature,
+    // M7 戰鬥暫態：道具由卡帶入；hook 自行依此分流（道具縫關閉＝無作用）。特性 abilityId 在 Stage 4 補。
+    heldItemId: card.heldItemId,
   }
 }
