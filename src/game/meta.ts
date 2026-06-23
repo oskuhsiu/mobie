@@ -42,12 +42,10 @@ export function defaultMeta(): MetaState {
 
 const sortedUnique = (arr: number[]): number[] => [...new Set(arr)].sort((a, b) => a - b)
 
-/** 加入「歷史已捕」（單調）；無新增則回原 meta。 */
+/** 加入「歷史已捕」（單調）；無新增則回原 meta（registered 本就 sorted-unique → 等長即無新增）。 */
 export function addRegistered(meta: MetaState, ids: number[]): MetaState {
-  const set = new Set(meta.registered)
-  let changed = false
-  for (const id of ids) if (!set.has(id)) { set.add(id); changed = true }
-  return changed ? { ...meta, registered: sortedUnique([...set]) } : meta
+  const merged = sortedUnique([...meta.registered, ...ids])
+  return merged.length === meta.registered.length ? meta : { ...meta, registered: merged }
 }
 
 /** 加入「看過」（未登錄者才記；已 registered 不必再記 seen）；無新增則回原 meta。 */

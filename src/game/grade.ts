@@ -48,3 +48,6 @@ export const GRADE_LABEL: Record<Grade, string> = {
 
 /** Grade ≥5 為「閃耀級」，UI 給專屬光效。 */
 export const isShiningGrade = (g: Grade): boolean => g >= 5
+
+/** 短徽章字（6=SS / 5=S / 其餘數字），徽章與圖鑑格共用。 */
+export const gradeShort = (g: Grade): string => (g === 6 ? 'SS' : g === 5 ? 'S' : String(g))

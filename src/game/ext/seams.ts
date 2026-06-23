@@ -6,7 +6,7 @@
 //
 // 本檔只放「定義」（型別 + 空包）。各縫的實際 wiring 隨其模組所屬里程碑落地：
 //   S3/S4/S5 由 reducer/engine 消費（resolveTurn 吃 ExtBundle）——M6 已接（預設空＝零行為改變）。
-//   S1/S2/S6 由 buildBattlePokemon / 戰鬥初始化 / growth.applyExp 各自呼叫點消費——M7/M10 接。
+//   S1/S2/S6 由 buildBattlePokemon / 戰鬥初始化 / rosterStore.grantBattleExp（applyExp 之後）各自呼叫點消費——M7/M10 接。
 //   S7 gameMode 走 XState 流程層、S8 saveSlice 走 persistence 命名空間——M11 接。
 
 import type { BattlePokemon, OwnedUnit } from '@/game/types'
@@ -20,7 +20,7 @@ export type SeamId =
   | 'damageHook' // S3：engine.resolveAttack 傷害結算中段（純倍率）
   | 'turnEndTrigger' // S4：reducer 回合末同步段（純 state→state，timeout 前）
   | 'chainResolve' // S5：reducer SUBMIT_CHAIN_RESULT（純 state→state+events）
-  | 'postGrowth' // S6：growth.applyExp 升級後（純 unit→unit）
+  | 'postGrowth' // S6：grantBattleExp 升級後（applyExp 之後，純 unit→unit；進化改 speciesId）
   | 'gameMode' // S7：XState 平行子狀態（流程層）
   | 'saveSlice' // S8：persistence 獨立命名空間（序列化）
 

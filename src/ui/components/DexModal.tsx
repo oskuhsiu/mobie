@@ -4,8 +4,8 @@ import { motion } from 'framer-motion'
 import { useMeta } from '@/store/metaStore'
 import { useRoster } from '@/store/rosterStore'
 import { SPECIES_SORTED } from '@/game/data/speciesQuery'
-import { currentlyOwnedSpecies, dexStateOf, type DexState } from '@/game/meta'
-import { computeGrade, isShiningGrade, type Grade } from '@/game/grade'
+import { currentlyOwnedSpecies, type DexState } from '@/game/meta'
+import { computeGrade, isShiningGrade, gradeShort, type Grade } from '@/game/grade'
 import { getSpecies } from '@/game/data/species'
 
 type Filter = 'all' | 'registered' | 'owned' | 'shining'
@@ -37,13 +37,21 @@ export function DexModal({ onClose }: { onClose: () => void }) {
   const ownedCount = owned.size
   const total = SPECIES_SORTED.length
 
-  const visible = useMemo(() => SPECIES_SORTED.filter((sp) => {
-    const st = dexStateOf(sp.id, meta, owned)
+  // Set 化 registered/seen 後一次算出各格三態（251 格 → O(1)/格，避免每格 .includes 線性掃）
+  const cells = useMemo(() => {
+    const reg = new Set(meta.registered)
+    const seen = new Set(meta.seen)
+    const stateOf = (id: number): DexState =>
+      owned.has(id) ? 'owned' : reg.has(id) ? 'registered' : seen.has(id) ? 'seen' : 'unseen'
+    return SPECIES_SORTED.map((sp) => ({ sp, st: stateOf(sp.id), grade: gradeBySpecies.get(sp.id) }))
+  }, [meta.registered, meta.seen, owned, gradeBySpecies])
+
+  const visible = useMemo(() => cells.filter(({ sp, st }) => {
     if (filter === 'registered') return st === 'registered' || st === 'owned'
     if (filter === 'owned') return st === 'owned'
-    if (filter === 'shining') return owned.has(sp.id) && isShiningGrade(gradeBySpecies.get(sp.id) ?? 1)
+    if (filter === 'shining') return st === 'owned' && isShiningGrade(gradeBySpecies.get(sp.id) ?? 1)
     return true
-  }), [filter, meta, owned, gradeBySpecies])
+  }), [filter, cells, gradeBySpecies])
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -69,10 +77,8 @@ export function DexModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="scroll dex-grid">
-          {visible.map((sp) => {
-            const st: DexState = dexStateOf(sp.id, meta, owned)
+          {visible.map(({ sp, st, grade }) => {
             const known = st === 'registered' || st === 'owned'
-            const grade = gradeBySpecies.get(sp.id)
             return (
               <div key={sp.id} className={`dex-cell dex-cell--${st}`} title={known || st === 'seen' ? sp.nameZh : '未發現'}>
                 <span className="dex-cell__no">{String(sp.id).padStart(3, '0')}</span>
@@ -85,7 +91,7 @@ export function DexModal({ onClose }: { onClose: () => void }) {
                 <span className="dex-cell__name">{known ? sp.nameZh : st === 'seen' ? '？？？' : '—'}</span>
                 {st === 'owned' && grade && (
                   <span className={`dex-cell__grade ${isShiningGrade(grade) ? 'dex-cell__grade--shine' : ''}`}>
-                    {grade === 6 ? 'SS' : grade === 5 ? 'S' : grade}
+                    {gradeShort(grade)}
                   </span>
                 )}
               </div>

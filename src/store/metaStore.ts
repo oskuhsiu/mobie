@@ -33,54 +33,46 @@ interface MetaStore {
   claimAchievement: (id: string) => AchievementReward | null
 }
 
-export const useMeta = create<MetaStore>((set, get) => ({
-  meta: defaultMeta(),
-  loaded: false,
-
-  load: (roster) => {
-    const owned = [...currentlyOwnedSpecies(roster)]
-    const meta = addRegistered(loadMeta(), owned)
-    saveMetaState(meta)
-    set({ meta, loaded: true })
-  },
-
-  recordSeen: (speciesIds) => {
-    const meta = addSeen(get().meta, speciesIds)
-    if (meta === get().meta) return // 無新增不寫檔
+export const useMeta = create<MetaStore>((set, get) => {
+  // 共用提交：meta 無變動（同參照）則略過存檔（純更新函數無新增時回原物件）
+  const commit = (meta: MetaState) => {
+    if (meta === get().meta) return
     saveMetaState(meta)
     set({ meta })
-  },
+  }
+  return {
+    meta: defaultMeta(),
+    loaded: false,
 
-  recordCapture: (speciesId, shiny) => {
-    let meta = addRegistered(get().meta, [speciesId])
-    meta = bumpStat(meta, 'captures')
-    if (shiny) meta = bumpStat(meta, 'shinies')
-    saveMetaState(meta)
-    set({ meta })
-  },
+    load: (roster) => {
+      const meta = addRegistered(loadMeta(), [...currentlyOwnedSpecies(roster)])
+      saveMetaState(meta)
+      set({ meta, loaded: true })
+    },
 
-  recordWin: (mode) => {
-    const meta = bumpStat(get().meta, mode === 'arena' ? 'arenaWins' : 'wins')
-    saveMetaState(meta)
-    set({ meta })
-  },
+    recordSeen: (speciesIds) => commit(addSeen(get().meta, speciesIds)),
 
-  recordEvolutions: (events) => {
-    if (events.length === 0) return
-    let meta = addRegistered(get().meta, events.map((e) => e.toSpecies))
-    meta = bumpStat(meta, 'evolutions', events.length)
-    saveMetaState(meta)
-    set({ meta })
-  },
+    recordCapture: (speciesId, shiny) => {
+      let meta = bumpStat(addRegistered(get().meta, [speciesId]), 'captures')
+      if (shiny) meta = bumpStat(meta, 'shinies')
+      commit(meta)
+    },
 
-  claimAchievement: (id) => {
-    const def = getAchievement(id)
-    if (!def) return null
-    const view = computeAchievements(get().meta).find((a) => a.def.id === id)
-    if (!view || !view.unlocked || view.claimed) return null // 防重領 / 未解鎖
-    const meta = markClaimed(get().meta, id, Date.now())
-    saveMetaState(meta)
-    set({ meta })
-    return def.reward
-  },
-}))
+    recordWin: (mode) => commit(bumpStat(get().meta, mode === 'arena' ? 'arenaWins' : 'wins')),
+
+    recordEvolutions: (events) => {
+      if (events.length === 0) return
+      const meta = bumpStat(addRegistered(get().meta, events.map((e) => e.toSpecies)), 'evolutions', events.length)
+      commit(meta)
+    },
+
+    claimAchievement: (id) => {
+      const def = getAchievement(id)
+      if (!def) return null
+      const view = computeAchievements(get().meta).find((a) => a.def.id === id)
+      if (!view || !view.unlocked || view.claimed) return null // 防重領 / 未解鎖
+      commit(markClaimed(get().meta, id, Date.now()))
+      return def.reward
+    },
+  }
+})

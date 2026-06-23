@@ -5,7 +5,6 @@
 // **不在圖鑑讀取時自動寫入**，副作用可測、可防重領。本檔只定義「成就 + 進度 + 獎勵描述」純資料/純函數；
 // 實際把 egg 寫入 incubator 由 metaStore.claimAchievement 接 incubatorStore 完成。
 
-import type { OwnedUnit } from '@/game/types'
 import type { MetaState } from '@/game/meta'
 
 /** 成就獎勵：一顆蛋（incubator 來源 'achievement'）。speciesPool＝可孵出的物種池。 */
@@ -53,7 +52,7 @@ export interface AchievementView {
 }
 
 /** 純函數：產每個成就的進度展示（unlocked＝progress≥target；claimed＝meta 有 claimedAt）。 */
-export function computeAchievements(meta: MetaState, _roster: OwnedUnit[] = []): AchievementView[] {
+export function computeAchievements(meta: MetaState): AchievementView[] {
   return ACHIEVEMENTS.map((def) => {
     const progress = Math.min(def.progress(meta), def.target)
     return {
