@@ -7,7 +7,9 @@ does not repeat it.
 
 > Source-of-truth map: high-level design `plan/README.md`; architecture/data-model/state-machine
 > `plan/01-architecture.md`; battle reference (damage/type/crit/speed) `plan/06-battle-reference.md`;
-> accidents + individuality/growth `plan/07-systems-design.md`; live onboarding `handoff.md`.
+> accidents + individuality/growth `plan/07-systems-design.md`; extension systems + seam design
+> `plan/09-extension-systems.md` (§0) and `plan/10-extension-systems-wave2.md`; milestone re-numbering
+> `plan/14-roadmap-m6-m13.md`; live onboarding `handoff.md`.
 
 ## 1. Tech stack
 
@@ -28,10 +30,13 @@ app/        App shell + GameProvider (XState machine context via React context)
 game/       Pure domain logic (no React). The testable core.
   data/     Seed/generated data + type chart + region lookup
   battle/   Pure battle engine + reducer + fixtures + tests
+  ext/      Extension seams (S1–S8) + optional modules: synergy/items/abilities + shared statPatch (M6/M7)
   machine/  XState gameMachine (screen flow)
   save/     Portable save file (M5): envelope meta, zip pack/unpack, export/import I/O, backup slot
+  settings.ts  Per-system module toggle slice (mz.settings.v1, M6)
   cardCode/cardsImport/cardLibrary   QR card-code parse + import + IndexedDB card store (M2)
-store/      Zustand stores (battleStore display-state, rosterStore persistence)
+store/      Zustand: battleStore (display), rosterStore (persistence), settingsStore + ext (assemble
+            extension hooks), bagStore (item bag mz.itembag.v1, M7)
 ui/         React screens + components + global.css + type metadata
 audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
@@ -40,8 +45,10 @@ scene/models/  User drop-in GLB store (IndexedDB) + normalize (M3)
 input/      QTE seam (qualityFromPointer / zones)
 ```
 
-**Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Keeping domain
-logic pure is what makes the battle system testable (122 tests) and the animation layer swappable.
+**Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Extension modules
+(`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
+which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
+pure is what makes the battle system testable (194 tests) and the animation layer swappable.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
@@ -54,9 +61,13 @@ title → regionSelect → encounter → cardSelect → battle → result
 - The machine only carries `regionId`, `foeTeam` (3 Cards, last = boss/capture target),
   `playerTeam` (3 Cards), `outcome`, `captured`. **It does not run the battle** — turn/HP/QTE/switch
   are handled by `battleStore` + the pure reducer.
-- `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. Region id `'practice'` resolves
-  through `data/regionLookup.lookupRegion` to the hand-authored `data/practiceRegion.ts` (low-level,
-  no legendary boss) — so the practice mode reuses the entire normal flow with no special-casing.
+- `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. The arena (id `'practice'`) resolves
+  through `data/regionLookup.lookupRegion` to the hand-authored `data/practiceRegion.ts` — so it reuses
+  the entire normal flow with no special-casing.
+- **Mode contract (M6):** `Region.mode` is `'arena' | 'wild'` (not a UI label). Capture eligibility is
+  centralized in `data/regionLookup.canCaptureIn(id)` (`mode === 'wild'`). The arena is neutral-terrain,
+  no-capture, EXP-only (→ `ArenaWinView`); wild regions allow capturing the boss (→ `WinView`). The
+  result screen branches on `canCaptureIn`, so no battle-temporary capture flags leak onto `OwnedUnit`.
 
 ## 4. Data model (`game/types.ts`)
 
@@ -64,8 +75,11 @@ title → regionSelect → encounter → cardSelect → battle → result
 - **`Card`** — a battle entry (speciesId + level, optional ivs/nature/shiny). Sourced from local
   `playerCards`, scanned QR codes (M2), or imported save files (M5).
 - **`OwnedUnit`** — the **only persisted, canonical** shape (id, speciesId, level, exp, ivs, nature,
-  seed, shiny). Derived battle numbers are never persisted.
+  seed, shiny, optional `heldItemId` [M7]). Derived battle numbers are never persisted.
 - **`BattlePokemon`** — fully-resolved battle instance, computed by `stats.buildBattlePokemon(card)`.
+  Carries battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the
+  abilities module's S1 hook); these are never persisted and are absent when a module is off.
+- **`Region.mode`** — `'arena' | 'wild'` (M6 mode contract, see §3).
 
 **Determinism:** `game/individual.rollIndividual(seed)` derives ivs/nature/shiny from a seeded RNG
 (FNV-1a hash → mulberry32). The seed is the `cardId`, so the same card always yields the same
@@ -76,11 +90,13 @@ individual — wild encounters, captures, and re-renders stay consistent without
 Two halves, deliberately separated:
 
 1. **Pure reducer — `game/battle/reducer.ts`** (no UI/animation vocabulary).
-   `resolveTurn(state, action, { rng }) → { nextState, events }` resolves a *whole turn at once*
+   `resolveTurn(state, action, { rng, ext }) → { nextState, events }` resolves a *whole turn at once*
    (player action + foe response, speed order, forced switches on faint, win/lose) and emits ordered
-   **domain events** (`damageApplied`, `memberFainted`, `activeChanged`, `switchDefenseResolved`,
+   **domain events** (`damageApplied`, `memberFainted`, `heal`, `activeChanged`, `switchDefenseResolved`,
    `battleEnded`, `random`). `engine.ts` holds the formulas (`resolveAttack`, QTE/defense multipliers,
    crit/accuracy, ball/capture, charge tier, `playerActsFirst`).
+   - `ext` is an injected **pure capability bundle** (like `rng`) — the reducer never imports modules
+     and never knows the words "item"/"ability". Default `EMPTY_EXT` ⇒ behavior identical to M1.x. See §6.
    - **Turn cap:** `MAX_TURNS = 30`. If a turn resolves with no natural winner past the cap, the winner
      is decided by remaining team-HP fraction (ties favor the player) and a `battleEnded{reason:'timeout'}`
      event is emitted — guards against type-immunity stalemates.
@@ -93,7 +109,51 @@ Two halves, deliberately separated:
 **Performance red-line:** high-frequency values (QTE pointer position, future MediaPipe coords) go
 through refs/rAF/DOM or Zustand — **never** React top-level state. See `TimingBar`, `MashMeter`, `FxCanvas`.
 
-## 6. Persistence & progression
+## 6. Extension system (optional modules via seams — M6 / M7)
+
+Optional gameplay systems (held items, team synergy, abilities, and future chain/evolution/tower) are
+**not** if/else'd into the core. The core defines fixed **seams (S1–S8)**; a module registers only the
+seams it uses. **Disabled = not registered = zero residue** (the core loop is byte-for-byte M1.x).
+Design source: `plan/09-extension-systems.md` §0; the seam definitions live in `game/ext/seams.ts`.
+
+| Seam | Where it runs | Purity | Used by |
+|---|---|---|---|
+| **S1 `buildUnit`** | after `buildBattlePokemon` (battle init) | `unit → unit` | items (statMod), abilities (statMod + writes `abilityId`) |
+| **S2 `preBattleModifiers`** | battle init / team change (once) | `team → NamedModifier[]` | synergy |
+| **S3 `damageHook`** | mid-`resolveAttack` | `ctx → multiplier` | items (life orb / expert belt), abilities (pinch / guard) |
+| **S4 `turnEndTrigger`** | end-of-turn sync phase (before MAX_TURNS judging) | `state → events` | items (leftovers heal → `heal` event) |
+| S5 `chainResolve` / S6 `postGrowth` / S7 `gameMode` / S8 `saveSlice` | — | — | reserved for M9–M11 |
+
+**Two injection paths** (assembled in `store/ext.ts`, the only layer that reads `settings`):
+
+- **`ExtBundle`** (S3/S4/S5) is passed to `resolveTurn(…, { rng, ext })`. Built by `assembleExt(settings)`.
+  Hooks read battle-transient `heldItemId`/`abilityId` off the `BattlePokemon` and self-filter — one
+  static hook per module, no per-unit closures.
+- **`BattlePrep`** (S1/S2) is applied at battle init by `applyBattlePrep(team, prep, withSynergy)`
+  (built by `assembleBattlePrep(settings)`). `BattleScreen` applies it to the player team (synergy on)
+  and the foe team (synergy off; abilities still apply since they're species-based).
+
+**Modules** (`game/ext/`, hand-authored data — no PokéAPI, emoji icons, zero IP):
+- `synergy.ts` — `computeSynergy(team)` pure function + rules (diverse / kinship / generation); each
+  modifier carries `label/source/icon` (no hidden buffs). Player team only.
+- `items.ts` — `ItemDef` table, three effect kinds: `statMod` (S1) / `damageHook` (S3) / `turnEnd`
+  (S4 leftovers). Bag inventory is the separate `mz.itembag.v1` slice (`store/bagStore.ts`,
+  exactly-once equip accounting); `OwnedUnit.heldItemId` is the canonical equip.
+- `abilities.ts` — `AbilityDef` + **deterministic assignment by primary type** (`abilityForType`, no
+  generated-file edit, no network); kinds `statMod`/`pinch`/`guard`. Applies to both sides.
+- `statPatch.ts` — shared `scale`/`applyStatMod`/`createLookup` used by the three modules.
+
+The reducer/engine were **not** modified for M7 beyond an additive `heal` `BattleEvent` variant.
+Settings live in `mz.settings.v1` (`game/settings.ts`, default all-off, separate namespace — does not
+violate "persist only canonical roster"). `MODULE_REGISTRY` (`store/ext.ts`) lists registered modules.
+**Deferred** (would touch engine/reducer): focus-sash style lethal-intercept `onceTrigger` (needs a
+post-damage seam) and Intimidate-style `onSwitchIn` (needs a switch-resolution seam).
+
+UI: `SettingsModal` (Title "⚙️ 設定", per-system toggles) and `TeamModal` (Title "🎒 隊伍", equip items /
+view abilities); battle plate shows ability + item badges; synergy tags show in card-select and a battle
+opening banner.
+
+## 7. Persistence & progression
 
 - **`game/persistence.ts`** — `PersistenceAdapter` interface; `LocalStorageAdapter` (key `mz.roster.v2`)
   serializes only canonical `OwnedUnit[]`. `MemoryAdapter` for tests.
@@ -105,12 +165,14 @@ through refs/rAF/DOM or Zustand — **never** React top-level state. See `Timing
   effectiveness minus defensive risk + level/stat tiebreak); powers the card-select badges and
   one-tap "recommend team".
 
-**Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster) ·
-`mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models` (IndexedDB GLB
-blobs, M3) · `mz.savemeta.v1` (localStorage save envelope meta, M5) · `mz-save-backup` (IndexedDB
-single-slot pre-import backup, M5).
+**Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
+`heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models`
+(IndexedDB GLB blobs, M3) · `mz.savemeta.v1` (localStorage save envelope meta, M5) · `mz-save-backup`
+(IndexedDB single-slot pre-import backup, M5) · `mz.settings.v1` (localStorage module toggles, M6) ·
+`mz.itembag.v1` (localStorage item bag, M7). The portable save bundles the roster (so `heldItemId`
+travels with it); the item-bag slice is not yet included in the `.save` (a known follow-up).
 
-### 6.1 Portable save files (M5 — `game/save/`)
+### 7.1 Portable save files (M5 — `game/save/`)
 
 User-owned, **file-based export/import** — *not* cloud sync with a backend (the "cloud" is the user's
 own Drive/Files via the OS share sheet). The original backend design in `plan/08-cloud-sync.md` was
@@ -135,20 +197,20 @@ requires explicit consent; no field-level merge (whole-save replace + backup). C
 cross-validated by an independent **5-agent blind interop test** (both pack and unpack directions,
 byte-level fidelity incl. binary models) — see the M5 commits.
 
-## 7. Content generation (do not hand-edit generated files)
+## 8. Content generation (do not hand-edit generated files)
 
 `scripts/gen_dex.mjs` pulls from **PokéAPI** (zh-Hant names, types, base stats; cached, concurrent,
 retrying) and regenerates `game/data/{species,moves,regions,playerCards}.ts`. Run `node scripts/gen_dex.mjs`
 to rebuild. **These four files are generated — change the generator, not the output.**
 `game/data/practiceRegion.ts` is the exception: hand-authored, not produced by the generator.
 
-## 8. Asset / IP policy (hard constraint)
+## 9. Asset / IP policy (hard constraint)
 
 The repo **does not bundle, fetch, or distribute infringing assets**. Artwork uses official PokéAPI
 raw URLs loaded at runtime (with skeleton fallback). Audio is fully procedural (Tone.js). 3D models are
 user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the responsibility framing.
 
-## 9. Known gotchas
+## 10. Known gotchas
 
 - `vite.config.ts` is intentionally **excluded from `tsconfig.json` `include`** (avoids node:url /
   vitest `test`-field type errors; it is esbuild-transpiled at runtime).
@@ -157,13 +219,20 @@ user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the 
 - The app is `localhost`-bound in dev. For real iPad testing run `vite --host` and open the Mac's LAN
   IP from iPad Safari, or build static files and install as a PWA.
 
-## 10. Testing & verification
+## 11. Testing & verification
 
-- `npm test` (Vitest) — domain logic: type chart, individuality, growth, engine, reducer (incl. turn
-  cap), accidents, recommend, card-code/import, roster sanitize, **save meta `compareSaves` + bundle
-  pack/unpack round-trip & corruption classification**. **122 tests.**
+- `npm test` (Vitest) — **194 tests.** Domain logic (type chart, individuality, growth, engine,
+  reducer incl. turn cap, accidents, recommend, card-code/import, roster sanitize, save meta
+  `compareSaves` + bundle round-trip & corruption classification) plus the M6/M7 extension suites
+  (ext/settings, synergy, items, abilities, held-item persistence) and the project-wide verification
+  pass: **`data/dataIntegrity.test.ts`** (all 251 species/moves/regions/cards/type-chart swept) and
+  **`battle/simulation.test.ts`** (hundreds of full seeded battles asserting HP bounds / no-NaN /
+  always-terminates / determinism, modules off vs all-on).
 - `npm run typecheck` / `npm run build` must stay green.
 - No Playwright/chromium-cli installed. Visual/E2E verification uses local Google Chrome via
   `--headless=new --remote-debugging-port=9222` + a Node CDP script (buttons via `el.click()`, QTE via
   dispatched `PointerEvent('pointerdown')`; file inputs via `DOM.setFileInputFiles`, downloads via
-  `Browser.setDownloadBehavior`). Screenshots land in `/tmp/mz_shots/` (volatile).
+  `Browser.setDownloadBehavior`). **Battle screens need software WebGL** — add `--use-gl=angle
+  --use-angle=swiftshader --enable-unsafe-swiftshader` (Chrome 149+ dropped the automatic SwiftShader
+  fallback, so R3F's `BattleStage` fails to get a GL context without these). Screenshots land in
+  `/tmp/mz_shots/` (volatile).

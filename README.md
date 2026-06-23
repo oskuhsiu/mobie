@@ -27,7 +27,15 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Portable saves** (M5): export your roster/cards (+ optional 3D models) as a `username.save` (zip)
   to your own Google Drive/Files via the iOS share sheet; re-import with old/new detection, consented
   overwrite, and an automatic pre-import backup. **No backend** — your cloud, your file.
-- Content: national dex 1–251, 8 themed regions (+ practice), 16 cross-type starter cards.
+- **Arena vs wild modes** (M6): the arena is neutral, EXP-only, no-capture; wild regions let you capture
+  the boss. Mode is a data contract on the region, not a special case in the flow.
+- **Optional extension systems** (M7), all off by default and toggled in the in-app **Settings** panel —
+  each is a swappable module hooked onto fixed engine seams, so turning it off leaves zero residue:
+  - **Team synergy** — visible team-building bonuses (diverse types / shared type / same generation).
+  - **Held items** — equip one passive item per Pokémon (stat boost / damage boost / end-of-turn heal),
+    managed in the **Team** screen with its own item bag.
+  - **Abilities** — a per-type passive (pinch boost / brawn / speed / mystic / guard) on both sides.
+- Content: national dex 1–251, 8 themed regions (+ arena), 16 cross-type starter cards.
 
 ## Getting started
 
@@ -56,9 +64,11 @@ open the Mac's LAN IP (e.g. `http://192.168.x.x:5173/`) in iPad Safari, or build
 src/
   app/        React shell + XState game-machine provider
   game/       Pure domain logic (battle reducer/engine, data, growth, individuality, recommend)
+    ext/      Extension seams (S1–S8) + modules: synergy / items / abilities + statPatch (M6/M7)
     save/     Portable save file: envelope meta, zip pack/unpack, export/import I/O, backup (M5)
-  store/      Zustand stores (battle display state, persistent roster)
-  ui/         Screens, components (incl. card scanner/library, model & save manager modals), global.css
+    settings.ts   Per-system module toggle slice (M6)
+  store/      Zustand: battle display, persistent roster, settings+ext assembly, item bag (M7)
+  ui/         Screens, components (card scanner/library, model/save/settings/team modals), global.css
   scene/r3f/  scene/models/   3D battle stage + user GLB store (M3)
   audio/  scene/fx/  input/   Audio, particle FX, QTE seam
 scripts/gen_dex.mjs   PokéAPI data generator
@@ -81,12 +91,19 @@ is the only hand-authored data file.
 
 ## Status
 
-**M1 + M1.5 (a–h), M2 (QR scan + card library), M3 (R3F 3D stage + GLB drop-in), and M5 (portable
-save files) are complete** and device/CDP-verified — 122 Vitest tests, typecheck, and build all green.
-Content: national dex 1–251, 8 regions (+ practice), 16 starters. M5 save export/import correctness was
-additionally cross-validated by an independent **5-agent blind interop test** (both directions,
-byte-level fidelity incl. binary 3D models).
+**M1 + M1.5 (a–h), M2 (QR scan + card library), M3 (R3F 3D stage + GLB drop-in), M5 (portable save
+files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), and M7 (battle-condition
+hook layer: team synergy / held items / abilities + settings UI) are complete** and CDP-verified —
+**194 Vitest tests**, typecheck, and build all green. Content: national dex 1–251, 8 regions (+ arena),
+16 starters.
 
-**Next:** M4 (MediaPipe motion-control QTE — currently skipped by the owner) or the M6+ extension
-milestones; the terrain / mode-split system (formerly M7) is being developed in parallel. See
-`plan/CHECKLIST.md` for the milestone breakdown and `handoff.md` for the live working state.
+The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
+251 species / moves / regions / cards / type-chart entries swept), a **battle-simulation** stress suite
+(hundreds of full seeded battles asserting HP bounds, no-NaN, guaranteed termination, and determinism —
+modules off vs all-on), held-item persistence round-trips, and CDP real-play (arena EXP-only win, wild
+win → capture → roster growth, M7 modules taking effect in battle, all Title modals) with zero console
+errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
+
+**Next:** M8 (field / terrain — introduces a `fieldState` container; terrain multiplies attack power
+after type effectiveness, clamped per type). M4 (MediaPipe motion-control QTE) remains skipped by the
+owner. See `plan/CHECKLIST.md` for the milestone breakdown and `handoff.md` for the live working state.
