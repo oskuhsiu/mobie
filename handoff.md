@@ -5,7 +5,13 @@
 ---
 
 ## 1. 現況一句話
-**M1.x 全部完成並實機驗證**（M1 + M1.5 a–h）：3v3 戰鬥、主動換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制（支援/球輪盤+連打蓄力+RandomEvent）、星擊 Finisher。**M1.x 里程碑達成。** 下一步進入 **M2（QR 掃描 + 卡庫）**（見 `plan/04-milestone-M2.md` / CHECKLIST M2）。
+**M1.x + M3 + M2 全部完成並 Chrome CDP 驗證**（100 測試 / typecheck / build 全綠）。
+- **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
+- **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
+- **M2（QR 掃描 + 卡庫）**：`game/cardCode.ts`（MZ1+CRC16 解析，純函數+測試）、`game/cardsImport.ts`（JSON/CSV，純函數+測試）、`game/cardLibrary.ts`（IndexedDB cards 表，PLAYER_CARDS 種子）、`CardScannerModal`（jsQR 相機掃 + 手動輸入後備 + 明確錯誤 UI，掃到→`captureUnit` 入隊去重）、`CardLibraryModal`（檢視/匯入/新增自製卡/可列印 QR 產生器，qrcode）。Title 加「📷 掃卡 / 🗂 卡庫 / 🧩 3D 模型」入口。
+- 兩里程碑畫面都經 **三方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M4（MediaPipe 體感）或 M5（雲端同步）。**
+
+> M3/M2 新增依賴：`three`/`@react-three/fiber@8`/`@react-three/drei@9`、`jsqr`、`qrcode`。重的 overlay（BattleStage/CaptureStage/掃卡/卡庫/模型）全 lazy，主 bundle ~406KB。**新增 IndexedDB：`mz-models`(GLB blob)、`mz-cards`(cards 表)；roster 仍 `mz.roster.v2`(localStorage)。** `createOwnedUnit` 現吃 card 顯式 ivs/nature/shiny 覆寫 seed roll。已知 follow-up：`cardLibrary`/`modelStore` 的 IndexedDB plumbing 可抽共用 factory（本輪未動已出貨碼）。BarcodeDetector 在 iPad Safari 不可靠 → 掃碼改 jsQR（getUserMedia+canvas），plan 原寫 zxing fallback 不需。
 
 > **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
 
