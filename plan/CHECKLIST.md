@@ -168,13 +168,17 @@
 > **CDP 驗證**：開三模組 + 裝道具 → 選卡顯羈絆 tag（多樣陣容/世代羈絆）→ 戰鬥雙方顯特性徽章（絕境爆發）+ 道具 icon（生命寶珠）
 > + 完整打一回合（注入 S3 damageHooks）零 console error。共 +30 vitest（synergy 8 / items 11 / abilities 11）= 169 全綠。
 
-## M8 — 場域 / 地形（見 `11`；**導入 `fieldState` 容器**）
+## M8 — 場域 / 地形（見 `11`；**導入 `fieldState` 容器**）✅ 完成（Chrome CDP 驗證）
+> 守鐵律：純 reducer（地形倍率如 rng 般注入，reducer 不認識地形語意）、engine 收純倍率不 import 地形資料、
+> 只存 canonical OwnedUnit（field 是戰鬥暫態，不持久化）、生成檔只動 regions.ts（改 gen_dex 重產）。
 ### 地形效果（原 M7.a，影響攻擊 power）
-- [ ] `data/terrains.ts`：`TerrainDef{mods}` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → **每屬性夾 [0.5,1.5]**）
-- [ ] engine `resolveAttack` 在 type 相剋後乘 `terrainMult`（預設 1，既有測試不動）；地形放 **`fieldState.terrainEffects`**（非一次性 currentTerrains），分 initial/current（暫態）
-- [ ] 開場地形 UI 揭示；vitest（clamp/混合相乘/中性=1）
+- [x] `data/terrains.ts`（手寫非產生檔）：12 種 `TerrainDef{mods}` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → **每屬性夾 [0.5,1.5]**）+ `resolveTerrainMult`（id→倍率注入）/ `rollRandomTerrain`（決定論抽）/ `resolveBattleTerrains`（依 region 解析）/ `terrainDefsOf`（UI 共用）
+- [x] engine `resolveAttack` 在 type 相剋後乘 `terrainMult`（預設 1，既有測試不動）；地形放 **`BattleState.field.terrainEffects`**（`{initial,current}`，暫態不持久化）；`TurnOptions.terrainMultiplier` 如 rng 般注入，reducer 把 `current` 交給 resolver
+- [x] 開場地形 UI 揭示（intro banner + log）+ 常駐 `TerrainChip` 徽章 + RegionSelect 區域卡地形提示；vitest（clamp/混合相乘/中性=1/未知 id/決定論抽，terrains 19 + terrain 注入 7）
 ### 更多 / 混合 / 隨機地形（原 M7.b）
-- [ ] gen_dex `REGION_THEMES` 各區加 `mode`/`terrains`；新增 1–2 混合地形 wild 區 + 1 隨機地形 wild 區（決定論抽）；重產 regions.ts
+- [x] gen_dex `REGION_THEMES` 8 主題區各加 `terrains`；新增混合地形 wild 區 ×2（海濱濕地 coastal+grassland / 火山岩窟 volcanic+cavern）+ 隨機地形 wild 區 ×1（幻象之境，6 地形池決定論抽）；重產 regions.ts（11 區，只動 regions.ts）；practiceRegion `terrains:['neutral']`
+> **CDP 驗證（SwiftShader）**：11 區地形提示正確（8 單一/2 混合/1 隨機）；常綠森林戰鬥顯 TerrainChip「🌿 草原」+ 開場揭示 log；模擬壓力測試（11 區×18 seed×模組關/開）地形納入 HP 邊界/終局/決定論；零 console error。共 +33 vitest = 223 全綠。
+> **M7 收尾 follow-up（氣勢披帶 post-damage 縫 / 威嚇 onSwitchIn 縫）本輪未碰 engine/reducer 換人段，續留 M9+。**
 
 ## M9 — 連鎖攻擊（Combo 基底；見 `09`）
 ### 連鎖攻擊（原 M6.d）

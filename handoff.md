@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-**M1.x + M3 + M2 + M5 + M6 + M7 全部完成並 Chrome CDP 驗證**（194 測試 / typecheck / build 全綠）。
+**M1.x + M3 + M2 + M5 + M6 + M7 + M8 全部完成並 Chrome CDP 驗證**（223 測試 / typecheck / build 全綠）。
 > **全專案實際案例驗證（2026-06-23）**：①**資料完整性**（全 251 物種/招式/8 區+競技場/起始卡/相剋表逐筆掃過，14 測試）②**模擬戰鬥壓力**（324 場完整對戰＝9 區×18 seed×模組關/開，每步驗 HP 邊界/無 NaN/必定終局/決定論，5 測試）③**道具持久化全鏈路**（ownedToCard→build→sanitize→.save 往返，6 測試）④**CDP 真機**（競技場勝→純經驗不捕獲、野外勝→收服 boss roster 16→17、M7 三模組戰鬥生效、4 個 Title modal 開啟皆零 console error）。結論：M1–M7 功能與資料正確、可正常遊玩。
 - **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
 - **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
@@ -13,7 +13,8 @@
 - **M5（可攜存檔檔案）**：見下方 2026-06-23 註記。**設計重定位為「使用者自有雲端」而非後端同步**。
 - **M6（共用地基）**：見下方 2026-06-23 M6 註記。延伸系統的掛載地基 + 模式 contract 已落地。
 - **M7（戰鬥條件 hook 層）**：見下方 2026-06-23 M7 註記。羈絆（S2）/ 持有道具（S1/S3/S4）/ 特性（S1/S3）+ 設定 UI，全複用 M6 引擎、reducer/engine 不動。
-- 兩里程碑畫面都經 **三方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M8 場域/地形（導入 `fieldState` 容器，地形影響攻擊 power、混合/隨機地形），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST / `11-terrain-modes-accidents.md` / `14-roadmap-m6-m13.md`。**
+- **M8（場域/地形）**：見下方 2026-06-23 M8 註記。地形只影響攻擊 power（engine 屬性相剋後乘注入倍率）、`fieldState` 容器、混合/隨機地形區、開場揭示 UI；全複用 M6 注入機制、reducer/engine 不認識地形語意。
+- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M9 連鎖攻擊（Combo 基底，建 `chainOpportunity`/`SUBMIT_CHAIN_RESULT`，為 M12 合體技鋪底），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M9 / `09-extension-systems.md` / `14-roadmap-m6-m13.md`。**
 
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
@@ -42,6 +43,15 @@
 > **持久化**：新增 `mz.itembag.v1`(localStorage)；`OwnedUnit` 加 canonical `heldItemId`（隨 roster 序列化，含 .save 匯出匯入）。**新增依賴：無。** +30 vitest（synergy 8 / items 11 / abilities 11）= 169 全綠。
 > **CDP 驗證（SwiftShader）**：開三模組+裝道具→選卡顯羈絆 tag→戰鬥雙方顯特性徽章（絕境爆發）+ 道具 icon（生命寶珠）+ 打一回合（注入 S3）零 console error。
 > **已知 follow-up**：氣勢披帶（post-damage 縫）/ 威嚇（onSwitchIn 縫）待補；背包 `mz.itembag.v1` 尚未進 .save 匯出（heldItemId 在 roster 內已含）。
+>
+> **M8 場域 / 地形（2026-06-23，已完成 Chrome CDP 驗證）**：地形系統，**reducer/engine 仍不認識地形語意**——倍率如 rng 般注入。
+> **① 核心模型**（`game/data/terrains.ts`，手寫非產生檔）：12 種 `TerrainDef{mods: 屬性→power 倍率}`；`terrainMultiplier(moveType, defs)` 混合**逐屬性相乘**再**夾 [0.5,1.5]**（單一/混合同界）；`resolveTerrainMult(moveType, ids)`（id→def→倍率，供注入）、`rollRandomTerrain(pool, seed)`（沿用 `individual.hashSeed` 決定論抽）、`resolveBattleTerrains(region, seed)`（arena→空 / 固定→terrains / 隨機→抽 1）、`terrainDefsOf`（UI 過濾未知+中性，BattleScreen 與 RegionSelect/TerrainChip 共用）；`lookupTerrain` 用共用 `createLookup`。
+> **② 落點**：`engine.resolveAttack` 加 `terrainMult`（**屬性相剋後乘**，預設 1＝既有測試不動，miss/免疫早返不套）；`BattleState.field: FieldState`（`terrainEffects.{initial,current}`，**戰鬥暫態不持久化**、不回寫 Region/OwnedUnit；M12 fieldState 再補 teamStatuses/enemyStatuses/comboCastEffects）；`createBattleState(p, f, terrains?)`；`TurnOptions.terrainMultiplier` 注入，reducer 內建 `terrainResolve` 閉包綁 `w.field.terrainEffects.current`（M11 地形突變改 current 即時反映）、串三攻擊點。`TerrainId` 型別住 `types.ts`（避免型別↔資料循環）。
+> **③ 資料 / UI**：`gen_dex` `REGION_THEMES` 8 主題區各加固定地形 + emitter 輸出 `terrains`/`randomTerrain`；新增**混合地形區 ×2**（海濱濕地 coastal+grassland / 火山岩窟 volcanic+cavern）+ **隨機地形區 ×1**（幻象之境，6 地形池決定論抽）；重產 `regions.ts`（**11 區，只動 regions.ts**，species/moves/playerCards 確定性不變）；`practiceRegion` 加 `terrains:['neutral']`。UI：BattleScreen 依 region 解析地形（隨機以 foe cardId 串接當 seed）、注入 resolver、開場 banner+log 揭示 + 常駐 `TerrainChip`；RegionSelect 區域卡顯地形提示膠囊。
+> **持久化**：無新增（field 全暫態）。**新增依賴：無。** +33 vitest（terrains 19 / terrain 注入 7 / regionLookup +3 / simulation 地形納入壓力）= 223 全綠。
+> **CDP 驗證（SwiftShader）**：11 區地形提示正確（8 單一 / 2 混合 / 1 隨機）；常綠森林戰鬥顯 TerrainChip「🌿 草原」+ 開場揭示 log；模擬壓力測試 11 區×18 seed×模組關/開把地形納入 HP 邊界/終局/決定論；正確性審查（7 關注點逐一查核）無 bug；零 console error。
+> **守住約束**：純 reducer（地形如 rng 注入）、engine 收純倍率不 import 地形資料、只存 canonical OwnedUnit（field 暫態）、單招街機（地形不引新攻擊招）、生成檔只動 regions.ts。
+> **已知 follow-up（不阻塞）**：M11 地形突變（terrainShift 改 field.current，野外意外）/ M12 fieldState 補三子欄；live 的 current 突變路徑目前只單測覆蓋（M11 落地補整合）。
 >
 > **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
 
@@ -115,20 +125,18 @@
 
 ## 3. 程式地圖（里程碑歷史見 `git log`）
 完整里程碑歷史在 `git log`（M1 → M1.5a–h → M2 → M3 → M5 → M6，每小階段一 commit、訊息為 Conventional 中文）。本節只列接手常碰的點；完整分層/資料流見 `ARCHITECTURE.md`。
-- `game/types.ts` 型別（含 `Region.mode:'arena'|'wild'`）；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts`（競技場，手動維護）**、`regionLookup.ts`＝`lookupRegion`/`canCaptureIn`）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（選隊評分+推薦）；`game/individual.ts`/`growth.ts`/`persistence.ts`/**`settings.ts`**（個體/成長/roster 持久化/設定 slice）。
-- **`game/ext/seams.ts`（M6 擴充縫 S1–S8 + ExtBundle + ExtensionModule）**；**M7 模組：`game/ext/synergy.ts`（S2 羈絆 computeSynergy）/`items.ts`（S1/S3/S4 道具 ItemDef）/`abilities.ts`（S1/S3 特性 + abilityForType）/`statPatch.ts`（共用 scale/applyStatMod/createLookup）**；`game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球倍率 + **S3 damageHook**）；**`game/battle/reducer.ts`（3v3 純 reducer，`resolveTurn(state, action, {rng, ext})` + **S4 turnEndTrigger** + `heal` event + `MAX_TURNS`）**；`game/machine/gameMachine.ts`（XState 流程，`lookupRegion`）。
+- `game/types.ts` 型別（含 `Region.mode:'arena'|'wild'`、**`Region.terrains?`/`randomTerrain?`、`TerrainId` 型別 M8**）；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts`（競技場，手動維護）**、**`terrains.ts`（M8 地形表+`terrainMultiplier`/`resolveTerrainMult`/`rollRandomTerrain`/`resolveBattleTerrains`/`terrainDefsOf`，手動維護）**、`regionLookup.ts`＝`lookupRegion`/`canCaptureIn`）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（選隊評分+推薦）；`game/individual.ts`（含匯出 `hashSeed`）/`growth.ts`/`persistence.ts`/**`settings.ts`**（個體/成長/roster 持久化/設定 slice）。
+- **`game/ext/seams.ts`（M6 擴充縫 S1–S8 + ExtBundle + ExtensionModule）**；**M7 模組：`game/ext/synergy.ts`（S2 羈絆 computeSynergy）/`items.ts`（S1/S3/S4 道具 ItemDef）/`abilities.ts`（S1/S3 特性 + abilityForType）/`statPatch.ts`（共用 scale/applyStatMod/createLookup）**；`game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球倍率 + **S3 damageHook** + **M8 terrainMult**）；**`game/battle/reducer.ts`（3v3 純 reducer，`resolveTurn(state, action, {rng, ext, terrainMultiplier})` + **S4 turnEndTrigger** + `heal` event + `MAX_TURNS` + **M8 `BattleState.field`（FieldState.terrainEffects）**）**；`game/machine/gameMachine.ts`（XState 流程，`lookupRegion`）。
 - `store/battleStore.ts`（Zustand display）；`store/rosterStore.ts`（持久 roster：`grantBattleExp`/`captureUnit`/**`setHeldItem`**）；**`store/bagStore.ts`（`mz.itembag.v1` 背包 + equip 對帳）**；**`store/ext.ts`（`assembleExt`/`assembleBattlePrep`/`applyBattlePrep` + `MODULE_REGISTRY`）/`store/settingsStore.ts`（組 ext+prep，BattleScreen 消費）**。
 - `ui/components/`：**`SettingsModal`（逐系統開關）/`TeamModal`（裝備道具 + 顯特性）** 等 Title overlay（皆 lazy）。
 - `input/qte.ts`（`qualityFromPointer` seam）。
-- `ui/`：screens（Title[**含 ⚙️設定/🎒隊伍 入口**]/RegionSelect[**含競技場入口**]/Encounter/CardSelect[對手條+剋弱徽章+推薦+**羈絆 tag**]/Battle[**resolveTurn 傳 ext、applyBattlePrep 套 prep、特性/道具徽章、heal 演出**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗，依 `canCaptureIn` 分流**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo/**SettingsModal/TeamModal**）、`styles/global.css`。
+- `ui/`：screens（Title[**含 ⚙️設定/🎒隊伍 入口**]/RegionSelect[**含競技場入口 + M8 地形提示膠囊**]/Encounter/CardSelect[對手條+剋弱徽章+推薦+**羈絆 tag**]/Battle[**resolveTurn 傳 ext+terrainMultiplier、applyBattlePrep 套 prep、特性/道具徽章、heal 演出、M8 開場地形揭示 + 常駐 TerrainChip**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗，依 `canCaptureIn` 分流**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo/**SettingsModal/TeamModal**）、`styles/global.css`。
 
-## 5. 下一步（建議 M8：場域 / 地形，導入 `fieldState`）
-M6/M7 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext})`、`assembleExt`/`assembleBattlePrep`、`MODULE_REGISTRY` 已有三模組、模式 contract）。
-**M8 同樣複用引擎、reducer/engine 盡量不動**——地形影響攻擊 power（`engine.resolveAttack` 在屬性相剋後乘注入的 terrainMult，每屬性夾 [0.5,1.5]），導入 `fieldState` 容器（terrainEffects/…）。規格真相見 `plan/11`（地形/模式/野外意外）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M8 區。
-- **地形效果**：`data/terrains.ts` `TerrainDef` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → 夾 [0.5,1.5]）；地形放 `fieldState.terrainEffects`（暫態、分 initial/current）；開場地形 UI 揭示。
-- **更多/混合/隨機地形**：`gen_dex.mjs` `REGION_THEMES` 各區加 `mode`/`terrains`（重產 regions.ts）+ 混合地形 wild 區 + 隨機地形 wild 區（決定論抽）。
-- **M7 收尾留的 follow-up**：氣勢披帶需 post-damage 縫（改 engine）、威嚇需 onSwitchIn 縫（改 reducer 換人段）——若 M8 要碰 engine/reducer 可順手把這兩縫補上。
-- 守地基不變式：純 reducer（ext 是注入純能力包）、只存 canonical roster（itemBag/settings 是另一命名空間）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性/地形不引新攻擊招）。
+## 5. 下一步（建議 M9：連鎖攻擊 Combo 基底）
+M6/M7/M8 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext, terrainMultiplier})`、`assembleExt`/`assembleBattlePrep`、`MODULE_REGISTRY` 已有三模組、模式 contract、`fieldState` 容器與地形注入）。
+**M9 連鎖攻擊**＝Combo 基底（M12 合體技的升級變體先在此建底）：連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event；`SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告，reducer 重驗存活/目標、吃速度、倒下截斷）；連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX。規格真相見 `plan/09`（§連鎖）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M9 區。
+- **守地基不變式**：純 reducer（ext/terrain 是注入純能力包，不寫死語意）、只存 canonical roster（itemBag/settings 另命名空間、field 是戰鬥暫態）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性/地形/連鎖不引新攻擊招）、高頻值只走 ref/rAF/Zustand。
+- **M7/M8 收尾 follow-up（不阻塞、可順手）**：氣勢披帶需 post-damage 縫（改 engine）、威嚇需 onSwitchIn 縫（改 reducer 換人段）；M11 地形突變（terrainShift 改 `field.terrainEffects.current`）會用到 M8 已備的 current/initial 分流。
 
 ## 6. 硬性約束 / 偏好（務必遵守）
 - **平台 Web/PWA**（使用者已拍板，非原生 iOS；原生留作日後效能逃生路線）。
