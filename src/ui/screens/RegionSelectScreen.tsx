@@ -7,7 +7,7 @@ export function RegionSelectScreen() {
   const { send } = useGame()
 
   return (
-    <div className="col" style={{ flex: 1, gap: 18 }}>
+    <div className="col" style={{ flex: 1, gap: 18, minHeight: 0 }}>
       <div className="col" style={{ gap: 4 }}>
         <div className="eyebrow">Step 1</div>
         <div className="h-title">選擇區域</div>
@@ -29,7 +29,7 @@ export function RegionSelectScreen() {
         <span className="practice-cta__go">開始 →</span>
       </motion.button>
 
-      <div className="region-grid scroll" style={{ paddingBottom: 8 }}>
+      <div className="region-grid scroll-y" style={{ paddingBottom: 8 }}>
         {REGIONS.map((r, i) => (
           <motion.button
             key={r.id}

@@ -457,6 +457,13 @@ body {
 .center { display: grid; place-items: center; text-align: center; }
 .stack-lg { display: flex; flex-direction: column; gap: 20px; }
 .scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* flex 直向佈局中要「填滿剩餘高度並內部捲動」的列表：必須 min-height:0，
+   否則 flex item 預設 min-height:auto 會撐到內容全高、溢出被 .app{overflow:hidden}
+   裁切 → 手機上捲不動、底部按鈕（如「出戰」）被切掉。配合畫面根容器也需 min-height:0。 */
+.scroll-y {
+  flex: 1 1 0; min-height: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
 
 /* ============ Model manager modal ============ */
 .modal-backdrop {

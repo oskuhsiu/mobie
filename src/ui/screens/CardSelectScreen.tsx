@@ -76,7 +76,7 @@ export function CardSelectScreen() {
   const ready = picked.length === TEAM_SIZE
 
   return (
-    <div className="col" style={{ flex: 1, gap: 16 }}>
+    <div className="col" style={{ flex: 1, gap: 16, minHeight: 0 }}>
       <button className="btn btn--ghost" style={{ alignSelf: 'flex-start', padding: '10px 18px' }}
         onClick={() => send({ type: 'BACK' })}>
         ← 返回
@@ -114,7 +114,7 @@ export function CardSelectScreen() {
         </div>
       </div>
 
-      <div className="hand scroll" style={{ paddingBottom: 8 }}>
+      <div className="hand scroll-y" style={{ paddingBottom: 8 }}>
         {cards.map(({ card, mon }, i) => {
           const mu = matchups[card.cardId]
           const isRec = recommendedSet.has(card.cardId)
