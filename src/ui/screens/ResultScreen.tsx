@@ -145,7 +145,7 @@ function LoseView() {
         </motion.div>
       )}
       <div className="h-title" style={{ fontSize: 30 }}>你被擊敗了…</div>
-      <div className="h-sub">雖敗猶榮，仍獲得了一些經驗。換隻屬性相剋的，或先去練習場練等再來！</div>
+      <div className="h-sub">雖敗猶榮，仍獲得了一些經驗。換隻屬性相剋的，或先去競技場練等再來！</div>
     </div>
   )
 }
