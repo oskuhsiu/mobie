@@ -5,7 +5,8 @@
 ---
 
 ## 1. 現況一句話
-**M1.x + M3 + M2 + M5 + M6 + M7 全部完成並 Chrome CDP 驗證**（169 測試 / typecheck / build 全綠）。
+**M1.x + M3 + M2 + M5 + M6 + M7 全部完成並 Chrome CDP 驗證**（194 測試 / typecheck / build 全綠）。
+> **全專案實際案例驗證（2026-06-23）**：①**資料完整性**（全 251 物種/招式/8 區+競技場/起始卡/相剋表逐筆掃過，14 測試）②**模擬戰鬥壓力**（324 場完整對戰＝9 區×18 seed×模組關/開，每步驗 HP 邊界/無 NaN/必定終局/決定論，5 測試）③**道具持久化全鏈路**（ownedToCard→build→sanitize→.save 往返，6 測試）④**CDP 真機**（競技場勝→純經驗不捕獲、野外勝→收服 boss roster 16→17、M7 三模組戰鬥生效、4 個 Title modal 開啟皆零 console error）。結論：M1–M7 功能與資料正確、可正常遊玩。
 - **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
 - **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
 - **M2（QR 掃描 + 卡庫）**：`game/cardCode.ts`（MZ1+CRC16 解析，純函數+測試）、`game/cardsImport.ts`（JSON/CSV，純函數+測試）、`game/cardLibrary.ts`（IndexedDB cards 表，PLAYER_CARDS 種子）、`CardScannerModal`（jsQR 相機掃 + 手動輸入後備 + 明確錯誤 UI，掃到→`captureUnit` 入隊去重）、`CardLibraryModal`（檢視/匯入/新增自製卡/可列印 QR 產生器，qrcode）。Title 加「📷 掃卡 / 🗂 卡庫 / 🧩 3D 模型」入口。
