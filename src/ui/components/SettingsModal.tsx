@@ -31,7 +31,12 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
     desc: '依屬性的種族被動（絕境爆發 / 蠻力 / 疾風 / 神秘體 / 厚實），對戰雙方皆生效。',
     available: true,
   },
-  chain: { icon: '🔗', label: '連鎖攻擊', desc: '六角連鎖槽集滿，最多 3 隻連續出擊。', available: false },
+  chain: {
+    icon: '🔗',
+    label: '連鎖攻擊',
+    desc: '普攻命中累積連鎖槽，集滿可發動連鎖：最多 3 隻隊友依序連續出擊（吃速度、目標倒下即截斷）。',
+    available: true,
+  },
   evolution: { icon: '🧬', label: '進化', desc: '到達等級觸發進化、重算能力值。', available: false },
   tower: { icon: '🗼', label: '連勝塔', desc: '連續戰鬥不回血的長線遠征模式。', available: false },
 }

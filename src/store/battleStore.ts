@@ -7,6 +7,7 @@ export type { Side }
 export type BattlePhase =
   | 'intro' | 'playerChoice' | 'qte' | 'mash'
   | 'switchSelect' | 'defenseQte'
+  | 'chainQte' // M9 連鎖：對 eligible 隊友依序跑連續 QTE
   | 'busy' | 'won' | 'lost'
 
 /** 一次受擊的視覺效果（低頻：每次攻擊一次，走 React state 沒問題） */
@@ -34,6 +35,8 @@ interface BattleUiState {
   energy: number
   /** 連鎖：連續命中回合數 */
   chain: number
+  /** M9 連鎖連段數 overlay（null=不顯示；連鎖中各段 chainHit 設定） */
+  combo: number | null
 
   init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[], terrains?: TerrainId[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
@@ -49,6 +52,8 @@ interface BattleUiState {
   /** 累積能量（dealtDamage=該回合有命中→連鎖+1，否則歸零）；回傳是否剛集滿 */
   addEnergy: (delta: number, dealtDamage: boolean) => void
   resetEnergy: () => void
+  /** M9 連鎖連段 overlay（null 清除） */
+  setCombo: (n: number | null) => void
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
@@ -65,13 +70,14 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   support: null,
   energy: 0,
   chain: 0,
+  combo: null,
 
   init: (playerMembers, foeMembers, terrains) =>
     set({
       battle: createBattleState(playerMembers, foeMembers, terrains),
       phase: 'intro', log: [], banner: null,
       hitFx: null, fxCounter: 0, captured: null,
-      support: null, energy: 0, chain: 0,
+      support: null, energy: 0, chain: 0, combo: null,
     }),
 
   setBattle: (battle) => set({ battle }),
@@ -101,6 +107,7 @@ export const useBattleStore = create<BattleUiState>((set) => ({
       return { energy: Math.max(0, Math.min(100, s.energy + gain)), chain }
     }),
   resetEnergy: () => set({ energy: 0 }),
+  setCombo: (combo) => set({ combo }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null }),

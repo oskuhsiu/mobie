@@ -45,12 +45,25 @@ export interface BattleState {
   winner: Side | null
   /** 場域狀態（M8）；無地形時 terrainEffects 為空陣列＝行為等同 M1.x */
   field: FieldState
+  /**
+   * 連鎖槽（M9，plan/09 §3）：玩家普攻命中累積、達 ext.chain.gaugeFull → emit chainOpportunity。
+   * 戰鬥內暫態（隨 BattleState，不持久化）。連鎖模組關閉（ext.chain undefined）＝恆 0、不累積＝零殘留。
+   */
+  chainGauge: number
+}
+
+/** 一次連鎖出擊的「玩家宣告」：哪隻、QTE 品質（非權威傷害；reducer 重驗存活/目標後才結算）。 */
+export interface ChainHit {
+  attackerIndex: number
+  quality: QteQuality
 }
 
 /** 玩家本回合的行動 */
 export type BattleAction =
   | { type: 'ATTACK'; quality?: QteQuality; mashCount?: number; starStrike?: boolean }
   | { type: 'SWITCH'; index: number; defenseQuality?: QteQuality }
+  // M9 連鎖攻擊：單一 action 回提最多 maxHits 隻的 QTE 宣告；reducer 同步重驗+結算（plan/09 §3.2）。
+  | { type: 'SUBMIT_CHAIN_RESULT'; hits: ChainHit[] }
 
 /** 星擊 Finisher 的傷害倍率（能量滿槽放，必定會心） */
 export const STAR_STRIKE_MULT = 3
@@ -97,6 +110,10 @@ export type BattleEvent =
   | { type: 'switchDefenseResolved'; side: Side; index: number; defenseQuality: QteQuality; damageMult: number }
   | { type: 'battleEnded'; winner: Side; reason?: 'timeout' }
   | { type: 'random'; event: RandomEvent }
+  // M9 連鎖：連鎖槽集滿、可發動連鎖（display 接此 → 對 eligible 隊友依序跑連續 QTE）。
+  | { type: 'chainOpportunity'; maxHits: number; eligibleIndices: number[] }
+  // M9 連鎖：連鎖中第 comboCount 段命中前 emit（display 演連段 FX / 連擊數字）；其傷害仍走 damageApplied。
+  | { type: 'chainHit'; comboCount: number; attackerIndex: number }
 
 /** 統一隨機事件（命中/會心/支援輪盤/球輪盤…）；reducer 隨機點全走它（plan/07） */
 export interface RandomEvent {
@@ -158,6 +175,7 @@ export function createBattleState(
     turn: 1,
     winner: null,
     field: { terrainEffects: { initial: [...terrains], current: [...terrains] } },
+    chainGauge: 0,
   }
 }
 
@@ -199,6 +217,7 @@ function cloneState(state: BattleState): BattleState {
         current: [...state.field.terrainEffects.current],
       },
     },
+    chainGauge: state.chainGauge,
   }
 }
 
@@ -287,6 +306,55 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
   }
 }
 
+// ── 連鎖攻擊（M9，plan/09 §3）────────────────────────────────────
+
+/** 一次玩家普攻命中 → 累積的連鎖槽量，依 QTE 品質加權（不綁隨機）。 */
+const CHAIN_GAIN_BY_QUALITY: Record<QteQuality, number> = { perfect: 1.5, good: 1.2, normal: 1, weak: 0.6 }
+
+/**
+ * 連鎖可參與者：當前 active 在前（連鎖領銜），其後依序接未倒下隊友，最多 maxHits 隻。
+ * 倒下隊友不可連鎖（守 plan/09 §3.3）。display 層亦複用此函數鋪設連續 QTE 序列。
+ */
+export function chainEligible(s: BattleSide, maxHits: number): number[] {
+  const out: number[] = []
+  if (s.members[s.activeIndex]?.currentHp > 0) out.push(s.activeIndex)
+  for (let i = 0; i < s.members.length; i++) {
+    if (i !== s.activeIndex && s.members[i].currentHp > 0) out.push(i)
+  }
+  return out.slice(0, maxHits)
+}
+
+/**
+ * 結算玩家連鎖：依序對「連鎖開始時的 active 敵」出擊。嚴守 §0.4：
+ *  - 每段命中前重驗：①該攻擊者仍存活（否則跳過、不計入連段）②目標仍為同一 active 敵（敵已倒/換 → 截斷剩餘）。
+ *  - 不轉移目標、不追擊新上場的敵；連鎖中敵 active 倒下即停（applyForcedSwitch 已在 performAttack 內處理）。
+ * 每隻用自己的單一專屬招（不引新招）。回報 chainHit（連段數）+ 各段 damageApplied。
+ */
+function resolvePlayerChain(
+  w: BattleState,
+  hits: ChainHit[],
+  base: AttackParams,
+  maxHits: number,
+  events: BattleEvent[],
+): void {
+  const foeStartActive = w.foe.activeIndex
+  let combo = 0
+  for (const hit of hits.slice(0, maxHits)) {
+    if (w.winner !== null) break
+    if (w.foe.activeIndex !== foeStartActive) break // 目標已倒/換 → 截斷剩餘 hits
+    const attacker = w.player.members[hit.attackerIndex]
+    if (!attacker || attacker.currentHp <= 0) continue // 重驗：死亡/非法攻擊者跳過、不計連段
+    combo += 1
+    events.push({ type: 'chainHit', comboCount: combo, attackerIndex: hit.attackerIndex })
+    performAttack(
+      w,
+      'player',
+      { ...base, attackerIndex: hit.attackerIndex, qteMult: attackQteMultiplier(hit.quality), source: `chain-${combo}` },
+      events,
+    )
+  }
+}
+
 // ── 公開 API ───────────────────────────────────────────────────
 
 /**
@@ -352,7 +420,19 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       if (w[atkSide].activeIndex !== startActive[atkSide]) continue // 原攻擊者已倒並換人
       performAttack(w, atkSide, atkSide === 'player' ? playerOpts : foeOpts, events)
     }
-  } else {
+
+    // 連鎖槽（M9）：連鎖模組開啟時，玩家普攻命中依 QTE 品質累積（不綁隨機）。星擊不續槽（已是 finisher）。
+    if (options.ext?.chain && !starStrike) {
+      const playerLanded = events.some(
+        (e) => e.type === 'damageApplied' && e.attackerSide === 'player' && !e.missed && e.amount > 0,
+      )
+      if (playerLanded) {
+        const q = action.quality ?? 'normal'
+        const gain = options.ext.chain.gainBase * CHAIN_GAIN_BY_QUALITY[q]
+        w.chainGauge = Math.min(options.ext.chain.gaugeFull, w.chainGauge + gain)
+      }
+    }
+  } else if (action.type === 'SWITCH') {
     // SWITCH —— 只有玩家可主動換人（對手 AI 主動換留待後續）
     const side: Side = 'player'
     const fromIndex = w.player.activeIndex
@@ -371,6 +451,29 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
 
     // 對手對「換上的」攻擊一次（玩家本回合不攻擊）
     performAttack(w, 'foe', { rng, damageMult, damageHooks, terrainResolve }, events)
+  } else {
+    // SUBMIT_CHAIN_RESULT（M9 連鎖）—— 連鎖佔玩家「攻擊型」相位的一格，吃速度、不為連鎖特例化（§0.4 B）。
+    // reducer 重驗（防幽靈傷害）：payload 只是玩家宣告，存活/目標一律由 reducer 重查（plan/09 §3.3）。
+    const maxHits = options.ext?.chain?.maxHits ?? action.hits.length
+    const opts: AttackParams = { rng, damageHooks, terrainResolve } // 連鎖各段 + 敵反擊共用（attackerIndex/qte 逐段補）
+
+    const playerFirst = playerActsFirst(activeOf(w, 'player'), activeOf(w, 'foe'), rng)
+    const order: Side[] = playerFirst ? ['player', 'foe'] : ['foe', 'player']
+    const startActive: Record<Side, number> = { player: w.player.activeIndex, foe: w.foe.activeIndex }
+
+    for (const side of order) {
+      if (w.winner !== null) break
+      if (side === 'foe') {
+        if (w.foe.activeIndex !== startActive.foe) continue // 原 active 已被連鎖打倒換人 → 略過反擊（同普攻規則）
+        performAttack(w, 'foe', opts, events)
+      } else {
+        // 玩家較慢且 active 領銜者已被敵先手 KO → 連鎖發不出（§0.4 B，不開特例）
+        if (w.player.activeIndex !== startActive.player) continue
+        resolvePlayerChain(w, action.hits, opts, maxHits, events)
+      }
+    }
+
+    w.chainGauge = 0 // 連鎖消耗連鎖槽（無論是否完整發出，皆耗本次機會）
   }
 
   w.turn = state.turn + 1
@@ -390,6 +493,15 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
     const winner: Side = teamHpFraction(w.player) >= teamHpFraction(w.foe) ? 'player' : 'foe'
     w.winner = winner
     events.push({ type: 'battleEnded', winner, reason: 'timeout' })
+  }
+
+  // 連鎖資格（M9，plan/09 §3.2）：連鎖模組開啟、連鎖槽集滿、戰鬥續行且有可參與隊友 → emit chainOpportunity。
+  // display 接此 → 下個 playerChoice 亮起連鎖鈕。停用（ext.chain undefined）＝連鎖槽恆 0＝永不 emit＝零殘留。
+  if (w.winner === null && options.ext?.chain && w.chainGauge >= options.ext.chain.gaugeFull) {
+    const eligibleIndices = chainEligible(w.player, options.ext.chain.maxHits)
+    if (eligibleIndices.length > 0) {
+      events.push({ type: 'chainOpportunity', maxHits: options.ext.chain.maxHits, eligibleIndices })
+    }
   }
 
   return { nextState: w, events }

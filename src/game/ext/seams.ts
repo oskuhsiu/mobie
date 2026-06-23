@@ -70,10 +70,14 @@ export interface TurnEndContext {
  */
 export type TurnEndTrigger = (ctx: TurnEndContext) => BattleEvent[]
 
-/** S5：連鎖規則（M9 由 SUBMIT_CHAIN_RESULT 消費；此里程碑僅宣告，reducer 尚未接）。 */
+/** S5：連鎖規則（M9 由 SUBMIT_CHAIN_RESULT 消費；連鎖模組開啟時注入 ext.chain）。 */
 export interface ChainRules {
   /** 連鎖最多隻數（暫 3，貼 Mezastar） */
   maxHits: number
+  /** 連鎖槽集滿閾值（0..gaugeFull）；達標 reducer emit chainOpportunity */
+  gaugeFull: number
+  /** 每次「玩家普攻命中」累積的連鎖槽量（依 QTE 表現再加權，不綁隨機）。 */
+  gainBase: number
 }
 
 /** S6：升級後的 canonical patch（進化改 speciesId、個體欄位全保留）。 */

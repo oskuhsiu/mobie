@@ -5,7 +5,14 @@ import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
 import { useSettings } from '@/store/settingsStore'
 import { applyBattlePrep } from '@/store/ext'
 import { buildBattlePokemon } from '@/game/stats'
-import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } from '@/game/battle/reducer'
+import {
+  resolveTurn,
+  chainEligible,
+  type BattleEvent,
+  type BattleState,
+  type ChainHit,
+  type SupportOutcome,
+} from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattlePokemon, TerrainId } from '@/game/types'
 import { lookupRegion } from '@/game/data/regionLookup'
@@ -230,6 +237,7 @@ export function BattleScreen() {
   const hitFx = useBattleStore((s) => s.hitFx)
   const support = useBattleStore((s) => s.support)
   const energy = useBattleStore((s) => s.energy)
+  const combo = useBattleStore((s) => s.combo)
   const log = useBattleStore((s) => s.log)
   // 已啟用模組組成的注入能力包（plan/09 §0）：ext=戰中縫（S3/S4/S5）、prep=戰前縫（S1/S2）。
   // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
@@ -246,6 +254,8 @@ export function BattleScreen() {
   const pendingQualityRef = useRef<QteQuality>('normal')
   // 防濫用：剛換下的那隻，下一個換人不能立刻換回（一回合後解鎖）
   const [lockedIndex, setLockedIndex] = useState<number | null>(null)
+  // M9 連鎖：連續 QTE 序列（participants=參與隊友索引、step=目前第幾段、hits=已收集宣告）
+  const [chainSeq, setChainSeq] = useState<{ participants: number[]; step: number; hits: ChainHit[] } | null>(null)
 
   // 初始化：建出雙方 3 隻隊伍，進場
   useEffect(() => {
@@ -420,6 +430,21 @@ export function BattleScreen() {
         await wait(1150)
         store().setBanner(null)
         await wait(150)
+      } else if (e.type === 'chainOpportunity') {
+        // M9：連鎖槽集滿、可發動連鎖（下個 playerChoice 亮起連鎖鈕）
+        store().setBanner('🔗 連鎖就緒！')
+        store().pushLog('連鎖槽集滿！可發動連鎖攻擊')
+        audio.play('super')
+        fxRef.current?.flash('#7ae0ff', 0.3)
+        await wait(680)
+        store().setBanner(null)
+        await wait(120)
+      } else if (e.type === 'chainHit') {
+        // M9：連鎖第 comboCount 段——亮連段數字 + spark；緊接的 damageApplied 演出實際傷害
+        store().setCombo(e.comboCount)
+        fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 12, power: 1.2, kind: 'spark' })
+        audio.play('select')
+        await wait(180)
       }
       // 其餘 random（accuracy/crit）：UI 不另演，已併入 damageApplied
       // battleEnded（自然勝負）：迴圈結束後依 nextState.winner 設 phase
@@ -491,6 +516,55 @@ export function BattleScreen() {
     else store().setPhase('playerChoice')
   }, [playEvents, ext])
 
+  // M9 連鎖：提交收集到的 hits → reducer 同步重驗 + 結算（吃速度/截斷在 reducer）
+  const runChain = useCallback(async (hits: ChainHit[]) => {
+    const store = useBattleStore.getState
+    const b0 = store().battle
+    if (!b0) return
+    store().setPhase('busy')
+    store().setBanner('🔗 連鎖攻擊！')
+    audio.play('crit')
+    fxRef.current?.flash('#7ae0ff', 0.4)
+    await wait(420)
+
+    const { nextState, events } = resolveTurn(b0, { type: 'SUBMIT_CHAIN_RESULT', hits }, { ext, terrainMultiplier: resolveTerrainMult })
+    await playEvents(b0, events)
+    store().setBattle(nextState)
+    await wait(180)
+    store().setCombo(null) // 連段 overlay 收尾
+
+    setLockedIndex(null)
+    if (nextState.winner === 'player') store().setPhase('won')
+    else if (nextState.winner === 'foe') store().setPhase('lost')
+    else store().setPhase('playerChoice')
+  }, [playEvents, ext])
+
+  // M9 連鎖：發動 → 依當前戰況算出參與隊友、開始連續 QTE 序列
+  const startChain = useCallback(() => {
+    const b = useBattleStore.getState().battle
+    if (!b) return
+    const maxHits = ext.chain?.maxHits ?? 3
+    const participants = chainEligible(b.player, maxHits)
+    if (participants.length === 0) return
+    audio.play('select')
+    setChainSeq({ participants, step: 0, hits: [] })
+    useBattleStore.getState().setPhase('chainQte')
+  }, [ext])
+
+  // M9 連鎖：一段 QTE 結束 → 記錄宣告、推進到下一隻；全部跑完才提交
+  const onChainQteResult = useCallback((q: QteQuality) => {
+    setChainSeq((prev) => {
+      if (!prev) return null
+      const hits = [...prev.hits, { attackerIndex: prev.participants[prev.step], quality: q }]
+      const nextStep = prev.step + 1
+      if (nextStep >= prev.participants.length) {
+        void runChain(hits)
+        return null
+      }
+      return { ...prev, step: nextStep, hits }
+    })
+  }, [runChain])
+
   // 連打蓄力結束 → 帶 timing 品質 + 連打次數解算攻擊回合
   const onMashDone = useCallback((count: number) => {
     void runPlayerTurn(pendingQualityRef.current, count)
@@ -503,6 +577,11 @@ export function BattleScreen() {
   const switchable = battle.player.members.some(
     (m, i) => i !== battle.player.activeIndex && m.currentHp > 0 && i !== lockedIndex,
   )
+  // M9 連鎖：模組開啟才顯示連鎖槽；集滿可發動。連鎖槽住 reducer 的 battle.chainGauge（暫態）。
+  const chainOn = !!ext.chain
+  const chainMax = ext.chain?.gaugeFull ?? 100
+  const chainPct = chainOn ? Math.min(100, (battle.chainGauge / chainMax) * 100) : 0
+  const chainReady = chainOn && battle.chainGauge >= chainMax
 
   return (
     <motion.div className="col" style={{ flex: 1, position: 'relative' }} animate={rootShake}>
@@ -560,6 +639,23 @@ export function BattleScreen() {
         )}
       </AnimatePresence>
 
+      {/* M9 連鎖連段數 overlay（連鎖中各段命中時彈出） */}
+      <AnimatePresence>
+        {combo !== null && (
+          <motion.div
+            key={`combo-${combo}`}
+            className="combo-overlay"
+            initial={{ opacity: 0, scale: 0.5, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 1.3 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 16 }}
+          >
+            <span className="combo-overlay__num">{combo}</span>
+            <span className="combo-overlay__label">CHAIN</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 我方：HP 牌與隊伍狀態（畫面下方左側），marginTop:auto 把後段推到底部 */}
       <div className="row" style={{ justifyContent: 'flex-start', marginTop: 'auto' }}>
         <div className="combat-hud combat-hud--player">
@@ -578,6 +674,17 @@ export function BattleScreen() {
           </div>
           <span className="star-gauge__pct">{Math.floor(energy)}%</span>
         </div>
+
+        {/* M9 連鎖槽（模組開啟才顯示；集滿亮起可發動連鎖） */}
+        {chainOn && (
+          <div className={`star-gauge chain-gauge ${chainReady ? 'star-gauge--full chain-gauge--full' : ''}`}>
+            <span className="star-gauge__icon">🔗</span>
+            <div className="star-gauge__track">
+              <div className="star-gauge__fill chain-gauge__fill" style={{ width: `${chainPct}%` }} />
+            </div>
+            <span className="star-gauge__pct">{Math.floor(chainPct)}%</span>
+          </div>
+        )}
 
         <div className="battle-log">
           {log.length === 0 ? (
@@ -620,6 +727,17 @@ export function BattleScreen() {
                 ★ 星擊
               </motion.button>
             )}
+            {chainReady && (
+              <motion.button
+                className="btn btn--chain" style={{ fontSize: 18, padding: '16px 24px' }}
+                initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
+                transition={{ duration: 1.1, repeat: Infinity }}
+                whileTap={{ scale: 0.95 }}
+                onClick={startChain}
+              >
+                🔗 連鎖
+              </motion.button>
+            )}
           </motion.div>
         )}
 
@@ -643,6 +761,14 @@ export function BattleScreen() {
           <TimingBar
             hint="換人中！點擊停在正中可大幅減傷！"
             onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }}
+          />
+        )}
+
+        {phase === 'chainQte' && chainSeq && (
+          <TimingBar
+            key={`chain-${chainSeq.step}`} /* 每段重掛 → 指針動畫重置 */
+            hint={`🔗 連鎖 ${chainSeq.step + 1}/${chainSeq.participants.length}　${battle.player.members[chainSeq.participants[chainSeq.step]].nameZh}！抓準時機連續出擊`}
+            onResult={onChainQteResult}
           />
         )}
 
