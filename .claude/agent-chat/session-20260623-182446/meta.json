@@ -1,0 +1,22 @@
+{
+  "topic": "Mezastar 風格 Web 遊戲戰鬥畫面在真實 Android Chrome 完全不正常、但 headless Chrome 各手機尺寸都正常重現不到：診斷真機特有失效模式（100dvh/WebGL/多canvas疊層/佈局溢出）排序 + 不依賴真機的穩健修法 + 該向使用者要哪一項最小資訊一槍命中",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex",
+    "mistral"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex",
+    "mistral"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T18:24:46+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-182446",
+  "models": {}
+}

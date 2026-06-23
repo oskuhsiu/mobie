@@ -1,9 +1,30 @@
-import { useRef } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows } from '@react-three/drei'
-import { Group } from 'three'
+import { Group, Vector3, PerspectiveCamera } from 'three'
 import { StageLights, Pedestal, BlobShadow } from './sceneParts'
 import { PokemonVisual } from './PokemonVisual'
+
+// 依寬高比自動拉遠相機，確保單體寶可夢在手機直向（aspect 很小）也完整入鏡、兩側不被切。
+const CAP_LOOK_AT = new Vector3(0, 1.0, 0)
+const CAP_VIEW_DIR = new Vector3(0, 1.7, 4.4).sub(CAP_LOOK_AT).normalize()
+const CAP_WANT_HALF_W = 1.4
+const CAP_WANT_HALF_H = 1.5
+const CAP_MIN_DIST = 4.46
+
+function CaptureCameraRig() {
+  const { camera, size } = useThree()
+  useEffect(() => {
+    const cam = camera as PerspectiveCamera
+    const aspect = size.width / Math.max(1, size.height)
+    const tanHalf = Math.tan((cam.fov * Math.PI) / 180 / 2)
+    const dist = Math.max(CAP_MIN_DIST, CAP_WANT_HALF_H / tanHalf, CAP_WANT_HALF_W / (tanHalf * aspect))
+    cam.position.copy(CAP_LOOK_AT).addScaledVector(CAP_VIEW_DIR, dist)
+    cam.lookAt(CAP_LOOK_AT)
+    cam.updateProjectionMatrix()
+  }, [camera, size.width, size.height])
+  return null
+}
 
 interface CaptureStageProps {
   speciesId: number
@@ -22,6 +43,7 @@ export default function CaptureStage({ speciesId, artworkUrl, shiny, vanish }: C
       camera={{ position: [0, 1.7, 4.4], fov: 42 }}
       style={{ position: 'absolute', inset: 0 }}
     >
+      <CaptureCameraRig />
       <StageLights />
       <Pedestal position={[0, 0, 0]} color="#9b7aff" />
       <BlobShadow />
