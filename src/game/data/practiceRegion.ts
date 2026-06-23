@@ -10,6 +10,8 @@ export const PRACTICE_REGION: Region = {
   id: 'practice',
   name: '競技場',
   mode: 'arena',
+  // 中性地形（M8）：resolveBattleTerrains 對 arena 一律回空地形，此處明示語意。
+  terrains: ['neutral'],
   gradient: ['#3a4a72', '#191f33'],
   icon: '🏟️',
   blurb: '中性地形的純競技對戰：安心刷經驗、不可捕獲，仍保留支援輪盤手感。',

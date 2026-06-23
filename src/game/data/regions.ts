@@ -1,12 +1,14 @@
 import type { Region } from '@/game/types'
 
-/** 8 個主題化區域，等級帶遞增、覆蓋全 18 型；遭遇表由產生器從 dex 篩出（每區末項為高等 boss）。
+/** 11 個主題化區域（含混合/隨機地形區），等級帶遞增、覆蓋全 18 型；
+ *  遭遇表由產生器從 dex 篩出（每區末項為高等 boss）；地形＝M8 場域系統。
  *  請勿手改，改請改產生器的 REGION_THEMES。 */
 export const REGIONS: Region[] = [
   {
     id: 'verdant-forest',
     name: '常綠森林',
     mode: 'wild',
+    terrains: ['grassland'],
     gradient: ['#1f6e43', '#0c3a24'],
     icon: '🌳',
     blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。',
@@ -24,6 +26,7 @@ export const REGIONS: Region[] = [
     id: 'ember-volcano',
     name: '灼熱火山',
     mode: 'wild',
+    terrains: ['volcanic'],
     gradient: ['#b3361f', '#5c1208'],
     icon: '🌋',
     blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。',
@@ -41,6 +44,7 @@ export const REGIONS: Region[] = [
     id: 'crystal-shore',
     name: '澄澈水濱',
     mode: 'wild',
+    terrains: ['coastal'],
     gradient: ['#1b6fb3', '#0a2f5c'],
     icon: '🌊',
     blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。',
@@ -58,6 +62,7 @@ export const REGIONS: Region[] = [
     id: 'thunder-plateau',
     name: '雷鳴高原',
     mode: 'wild',
+    terrains: ['stormfield'],
     gradient: ['#caa42a', '#5c4a06'],
     icon: '⚡',
     blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。',
@@ -75,6 +80,7 @@ export const REGIONS: Region[] = [
     id: 'rocky-cavern',
     name: '岩窟洞穴',
     mode: 'wild',
+    terrains: ['cavern'],
     gradient: ['#7a5a3a', '#33231a'],
     icon: '🪨',
     blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。',
@@ -92,6 +98,7 @@ export const REGIONS: Region[] = [
     id: 'haunted-tower',
     name: '幽魂古塔',
     mode: 'wild',
+    terrains: ['haunt'],
     gradient: ['#4b2d6e', '#1a0e2e'],
     icon: '👻',
     blurb: '陰森詭譎的廢棄高塔，幽靈、毒與惡系徘徊。',
@@ -109,6 +116,7 @@ export const REGIONS: Region[] = [
     id: 'mystic-meadow',
     name: '神秘花圃',
     mode: 'wild',
+    terrains: ['mystic'],
     gradient: ['#c25b9e', '#5c2347'],
     icon: '🧚',
     blurb: '霧氣繚繞的夢幻花原，超能力與妖精系翩翩起舞。',
@@ -126,6 +134,7 @@ export const REGIONS: Region[] = [
     id: 'dragon-summit',
     name: '巨龍峰頂',
     mode: 'wild',
+    terrains: ['dragons-peak'],
     gradient: ['#2c4a8a', '#10182e'],
     icon: '🐉',
     blurb: '雲端之上的險峻峰巔，龍、鋼系強敵盤踞的終局試煉。',
@@ -137,6 +146,61 @@ export const REGIONS: Region[] = [
       { speciesId: 212, weight: 2, minLevel: 31, maxLevel: 34 }, // 巨鉗螳螂
       { speciesId: 131, weight: 1, minLevel: 32, maxLevel: 34 }, // 拉普拉斯
       { speciesId: 149, weight: 1, minLevel: 34, maxLevel: 36 }, // 快龍
+    ],
+  },
+  {
+    id: 'coastal-marsh',
+    name: '海濱濕地',
+    mode: 'wild',
+    terrains: ['coastal', 'grassland'],
+    gradient: ['#2f7d8a', '#0c2e33'],
+    icon: '🪷',
+    blurb: '潮間帶與沼澤交錯的濕地，水、草與毒系混居其間。',
+    encounters: [
+      { speciesId: 191, weight: 4, minLevel: 14, maxLevel: 17 }, // 向日種子
+      { speciesId: 223, weight: 4, minLevel: 15, maxLevel: 18 }, // 鐵炮魚
+      { speciesId: 72, weight: 4, minLevel: 16, maxLevel: 19 }, // 瑪瑙水母
+      { speciesId: 93, weight: 3, minLevel: 17, maxLevel: 20 }, // 鬼斯通
+      { speciesId: 87, weight: 2, minLevel: 19, maxLevel: 22 }, // 白海獅
+      { speciesId: 34, weight: 2, minLevel: 20, maxLevel: 22 }, // 尼多王
+      { speciesId: 251, weight: 1, minLevel: 22, maxLevel: 24 }, // 時拉比
+    ],
+  },
+  {
+    id: 'volcanic-cavern',
+    name: '火山岩窟',
+    mode: 'wild',
+    terrains: ['volcanic', 'cavern'],
+    gradient: ['#8a3a1f', '#2e1208'],
+    icon: '⛰️',
+    blurb: '岩漿滲入地底坑道的灼熱洞窟，火、岩與地面系盤踞。',
+    encounters: [
+      { speciesId: 194, weight: 4, minLevel: 18, maxLevel: 21 }, // 烏波
+      { speciesId: 155, weight: 4, minLevel: 19, maxLevel: 22 }, // 火球鼠
+      { speciesId: 95, weight: 3, minLevel: 20, maxLevel: 23 }, // 大岩蛇
+      { speciesId: 105, weight: 3, minLevel: 21, maxLevel: 24 }, // 嘎啦嘎啦
+      { speciesId: 139, weight: 2, minLevel: 23, maxLevel: 26 }, // 多刺菊石獸
+      { speciesId: 208, weight: 1, minLevel: 24, maxLevel: 26 }, // 大鋼蛇
+      { speciesId: 250, weight: 1, minLevel: 26, maxLevel: 28 }, // 鳳王
+    ],
+  },
+  {
+    id: 'mirage-realm',
+    name: '幻象之境',
+    mode: 'wild',
+    terrains: ['mystic', 'haunt', 'dragons-peak', 'sandstorm', 'snowfield', 'flowerfield'],
+    randomTerrain: true,
+    gradient: ['#5b3a8a', '#1a1030'],
+    icon: '🌀',
+    blurb: '地形變幻莫測的幻象結界，每次踏入都是未知的場域。',
+    encounters: [
+      { speciesId: 174, weight: 4, minLevel: 24, maxLevel: 27 }, // 寶寶丁
+      { speciesId: 238, weight: 4, minLevel: 25, maxLevel: 28 }, // 迷唇娃
+      { speciesId: 96, weight: 4, minLevel: 26, maxLevel: 29 }, // 催眠貘
+      { speciesId: 40, weight: 2, minLevel: 27, maxLevel: 30 }, // 胖可丁
+      { speciesId: 36, weight: 2, minLevel: 29, maxLevel: 32 }, // 皮可西
+      { speciesId: 196, weight: 1, minLevel: 30, maxLevel: 32 }, // 太陽伊布
+      { speciesId: 249, weight: 1, minLevel: 32, maxLevel: 34 }, // 洛奇亞
     ],
   },
 ]

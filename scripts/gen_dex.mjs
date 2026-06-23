@@ -160,15 +160,22 @@ console.log(`寫出 species.ts（${dex.length} 隻）`)
 
 // ── 產生 regions.ts（8 個主題區域，覆蓋全 18 型） ──
 const byId = new Map(dex.map((d) => [d.id, d]))
+// M8 模式 contract：主題區皆 wild（可捕獲）。terrains＝固定地形（單一或混合）。
+// randomTerrain:true 的區，terrains 改當「地形池」，開場由 encounter seed 決定論抽 1 個。
 const REGION_THEMES = [
-  { id: 'verdant-forest', name: '常綠森林', gradient: ['#1f6e43', '#0c3a24'], icon: '🌳', blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。', types: ['grass', 'bug'], band: [6, 13] },
-  { id: 'ember-volcano', name: '灼熱火山', gradient: ['#b3361f', '#5c1208'], icon: '🌋', blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。', types: ['fire'], band: [12, 19] },
-  { id: 'crystal-shore', name: '澄澈水濱', gradient: ['#1b6fb3', '#0a2f5c'], icon: '🌊', blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。', types: ['water', 'ice'], band: [12, 19] },
-  { id: 'thunder-plateau', name: '雷鳴高原', gradient: ['#caa42a', '#5c4a06'], icon: '⚡', blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。', types: ['electric', 'flying'], band: [16, 23] },
-  { id: 'rocky-cavern', name: '岩窟洞穴', gradient: ['#7a5a3a', '#33231a'], icon: '🪨', blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。', types: ['rock', 'ground', 'fighting'], band: [16, 23] },
-  { id: 'haunted-tower', name: '幽魂古塔', gradient: ['#4b2d6e', '#1a0e2e'], icon: '👻', blurb: '陰森詭譎的廢棄高塔，幽靈、毒與惡系徘徊。', types: ['ghost', 'poison', 'dark'], band: [20, 27] },
-  { id: 'mystic-meadow', name: '神秘花圃', gradient: ['#c25b9e', '#5c2347'], icon: '🧚', blurb: '霧氣繚繞的夢幻花原，超能力與妖精系翩翩起舞。', types: ['psychic', 'fairy', 'normal'], band: [20, 27] },
-  { id: 'dragon-summit', name: '巨龍峰頂', gradient: ['#2c4a8a', '#10182e'], icon: '🐉', blurb: '雲端之上的險峻峰巔，龍、鋼系強敵盤踞的終局試煉。', types: ['dragon', 'steel', 'ice'], band: [26, 34] },
+  { id: 'verdant-forest', name: '常綠森林', gradient: ['#1f6e43', '#0c3a24'], icon: '🌳', blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。', types: ['grass', 'bug'], band: [6, 13], terrains: ['grassland'] },
+  { id: 'ember-volcano', name: '灼熱火山', gradient: ['#b3361f', '#5c1208'], icon: '🌋', blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。', types: ['fire'], band: [12, 19], terrains: ['volcanic'] },
+  { id: 'crystal-shore', name: '澄澈水濱', gradient: ['#1b6fb3', '#0a2f5c'], icon: '🌊', blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。', types: ['water', 'ice'], band: [12, 19], terrains: ['coastal'] },
+  { id: 'thunder-plateau', name: '雷鳴高原', gradient: ['#caa42a', '#5c4a06'], icon: '⚡', blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。', types: ['electric', 'flying'], band: [16, 23], terrains: ['stormfield'] },
+  { id: 'rocky-cavern', name: '岩窟洞穴', gradient: ['#7a5a3a', '#33231a'], icon: '🪨', blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。', types: ['rock', 'ground', 'fighting'], band: [16, 23], terrains: ['cavern'] },
+  { id: 'haunted-tower', name: '幽魂古塔', gradient: ['#4b2d6e', '#1a0e2e'], icon: '👻', blurb: '陰森詭譎的廢棄高塔，幽靈、毒與惡系徘徊。', types: ['ghost', 'poison', 'dark'], band: [20, 27], terrains: ['haunt'] },
+  { id: 'mystic-meadow', name: '神秘花圃', gradient: ['#c25b9e', '#5c2347'], icon: '🧚', blurb: '霧氣繚繞的夢幻花原，超能力與妖精系翩翩起舞。', types: ['psychic', 'fairy', 'normal'], band: [20, 27], terrains: ['mystic'] },
+  { id: 'dragon-summit', name: '巨龍峰頂', gradient: ['#2c4a8a', '#10182e'], icon: '🐉', blurb: '雲端之上的險峻峰巔，龍、鋼系強敵盤踞的終局試煉。', types: ['dragon', 'steel', 'ice'], band: [26, 34], terrains: ['dragons-peak'] },
+  // 混合地形區（M8.b）：兩個 TerrainDef 逐屬性相乘（夾 [0.5,1.5]）
+  { id: 'coastal-marsh', name: '海濱濕地', gradient: ['#2f7d8a', '#0c2e33'], icon: '🪷', blurb: '潮間帶與沼澤交錯的濕地，水、草與毒系混居其間。', types: ['water', 'grass', 'poison'], band: [14, 22], terrains: ['coastal', 'grassland'] },
+  { id: 'volcanic-cavern', name: '火山岩窟', gradient: ['#8a3a1f', '#2e1208'], icon: '⛰️', blurb: '岩漿滲入地底坑道的灼熱洞窟，火、岩與地面系盤踞。', types: ['fire', 'rock', 'ground'], band: [18, 26], terrains: ['volcanic', 'cavern'] },
+  // 隨機地形區（M8.b）：開場從地形池決定論抽 1 個
+  { id: 'mirage-realm', name: '幻象之境', gradient: ['#5b3a8a', '#1a1030'], icon: '🌀', blurb: '地形變幻莫測的幻象結界，每次踏入都是未知的場域。', types: ['psychic', 'ghost', 'dragon', 'fairy'], band: [24, 32], randomTerrain: true, terrains: ['mystic', 'haunt', 'dragons-peak', 'sandstorm', 'snowfield', 'flowerfield'] },
 ]
 const weightOf = (bst) => (bst < 350 ? 4 : bst < 430 ? 3 : bst < 510 ? 2 : 1)
 const regionBlocks = REGION_THEMES.map((r) => {
@@ -201,10 +208,14 @@ const regionBlocks = REGION_THEMES.map((r) => {
     const nm = byId.get(e.speciesId)?.nameZh ?? ''
     return `      { speciesId: ${e.speciesId}, weight: ${e.weight}, minLevel: ${e.minLevel}, maxLevel: ${e.maxLevel} }, // ${nm}`
   }).join('\n')
+  const terrainLine = r.terrains ? `    terrains: [${r.terrains.map((t) => `'${t}'`).join(', ')}],\n` : ''
+  const randomLine = r.randomTerrain ? `    randomTerrain: true,\n` : ''
   return `  {\n` +
     `    id: '${r.id}',\n` +
     `    name: '${r.name}',\n` +
-    `    mode: 'wild',\n` + // M6 模式 contract：主題區皆為野外（可捕獲；地形/意外於 M8/M11 掛載）
+    `    mode: 'wild',\n` + // M6 模式 contract：主題區皆為野外（可捕獲）
+    terrainLine + // M8 場域地形（固定/混合；randomTerrain 時為地形池）
+    randomLine +
     `    gradient: ['${r.gradient[0]}', '${r.gradient[1]}'],\n` +
     `    icon: '${r.icon}',\n` +
     `    blurb: '${r.blurb}',\n` +
@@ -213,7 +224,8 @@ const regionBlocks = REGION_THEMES.map((r) => {
 }).join('\n')
 const regionsTs = `import type { Region } from '@/game/types'
 
-/** 8 個主題化區域，等級帶遞增、覆蓋全 18 型；遭遇表由產生器從 dex 篩出（每區末項為高等 boss）。
+/** ${REGION_THEMES.length} 個主題化區域（含混合/隨機地形區），等級帶遞增、覆蓋全 18 型；
+ *  遭遇表由產生器從 dex 篩出（每區末項為高等 boss）；地形＝M8 場域系統。
  *  請勿手改，改請改產生器的 REGION_THEMES。 */
 export const REGIONS: Region[] = [
 ${regionBlocks}

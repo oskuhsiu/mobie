@@ -2,11 +2,12 @@
 // 每一步驗證戰鬥不變式（HP 邊界 / 無 NaN / activeIndex 合法 / 必定終局），
 // 並交叉驗證「模組全關（純 M1.x）」與「M7 三模組全開」皆不會炸、結果決定論。
 import { describe, it, expect } from 'vitest'
-import type { BattlePokemon, Card } from '@/game/types'
+import type { BattlePokemon, Card, Region } from '@/game/types'
 import { buildBattlePokemon } from '@/game/stats'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { REGIONS } from '@/game/data/regions'
 import { PRACTICE_REGION } from '@/game/data/practiceRegion'
+import { resolveBattleTerrains, resolveTerrainMult } from '@/game/data/terrains'
 import { rollEncounterTeam } from '@/game/encounter'
 import {
   resolveTurn,
@@ -83,7 +84,8 @@ interface SimResult {
 }
 
 // 跑完一整場：玩家以 seeded rng 隨機行動（多數攻擊、偶爾換人/星擊），直到分出勝負。
-function playBattle(seedStr: string, foeCards: Card[], playerCards: Card[], withExt: boolean): SimResult {
+// region 提供時連同地形（M8）一起注入，讓地形倍率也納入不變式/終局性壓力驗證。
+function playBattle(seedStr: string, foeCards: Card[], playerCards: Card[], withExt: boolean, region?: Region): SimResult {
   const rng = makeRng(seedStr)
   const settings = withExt ? allOnSettings() : defaultSettings()
   const prep = assembleBattlePrep(settings)
@@ -92,7 +94,8 @@ function playBattle(seedStr: string, foeCards: Card[], playerCards: Card[], with
   const { team: players } = applyBattlePrep(playerCards.map(buildBattlePokemon), prep, true)
   const { team: foes } = applyBattlePrep(foeCards.map(buildBattlePokemon), prep, false)
 
-  let state = createBattleState(players, foes)
+  const terrains = region ? resolveBattleTerrains(region, seedStr) : []
+  let state = createBattleState(players, foes, terrains)
   let totalDamage = 0
   let switches = 0
   let starStrikes = 0
@@ -116,7 +119,7 @@ function playBattle(seedStr: string, foeCards: Card[], playerCards: Card[], with
       action = { type: 'ATTACK', quality: QUALITIES[Math.floor(rng() * 4)], mashCount: Math.floor(rng() * 25) }
     }
 
-    const { nextState, events } = resolveTurn(state, action, { rng, ext })
+    const { nextState, events } = resolveTurn(state, action, { rng, ext, terrainMultiplier: resolveTerrainMult })
     checkInvariants(nextState, events)
     for (const e of events) if (e.type === 'damageApplied') totalDamage += e.amount
     state = nextState
@@ -145,11 +148,11 @@ describe('模擬戰鬥壓力測試（大量完整對戰）', () => {
         const seed = `${region.id}#${s}`
         const foeCards = rollEncounterTeam(region, 3, makeRng('foe-' + seed))
         const players = pickPlayers(ri + s)
-        // 模組全關（純 M1.x）
-        const off = playBattle(seed, foeCards, players, false)
+        // 模組全關（純 M1.x）+ 地形（M8）
+        const off = playBattle(seed, foeCards, players, false, region)
         expect(off.turns).toBeLessThanOrEqual(MAX_TURNS + 1)
-        // 模組全開（M7：羈絆/道具/特性/…）
-        const on = playBattle(seed, foeCards, players, true)
+        // 模組全開（M7：羈絆/道具/特性/…）+ 地形（M8）
+        const on = playBattle(seed, foeCards, players, true, region)
         expect(on.turns).toBeLessThanOrEqual(MAX_TURNS + 1)
         if (on.winner === 'player') extWins++
         battles += 2
@@ -160,12 +163,12 @@ describe('模擬戰鬥壓力測試（大量完整對戰）', () => {
     expect(extWins).toBeGreaterThan(0)
   })
 
-  it('決定論：同 seed 同輸入 → 同結果（reducer 純函數）', () => {
-    const region = REGIONS[0]
+  it('決定論：同 seed 同輸入 → 同結果（reducer 純函數，含隨機地形區）', () => {
+    const region = REGIONS.find((r) => r.randomTerrain) ?? REGIONS[0] // 隨機地形也須決定論
     const foeCards = rollEncounterTeam(region, 3, makeRng('det-foe'))
     const players = pickPlayers(2)
-    const a = playBattle('det#1', foeCards, players, true)
-    const b = playBattle('det#1', foeCards, players, true)
+    const a = playBattle('det#1', foeCards, players, true, region)
+    const b = playBattle('det#1', foeCards, players, true, region)
     expect(a).toEqual(b)
   })
 
