@@ -500,6 +500,70 @@ body {
   50% { box-shadow: 0 0 16px rgba(255,200,80,0.85); }
 }
 
+/* ============ M10 圖鑑 / 成就 / 孵化 ============ */
+.title-dot {
+  display: inline-grid; place-items: center; min-width: 16px; height: 16px; margin-left: 5px;
+  padding: 0 4px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 10px; font-weight: 900;
+}
+.chip {
+  padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--stroke); color: var(--text-dim);
+}
+.chip--on { background: var(--accent); border-color: var(--accent); color: #1b160a; }
+.dex-filters { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0 10px; }
+
+.dex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; align-content: start; }
+.dex-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 4px 5px; border-radius: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke);
+}
+.dex-cell--unseen { opacity: 0.55; }
+.dex-cell--owned { border-color: var(--good); background: rgba(74,222,128,0.08); }
+.dex-cell--registered { border-color: rgba(126,200,255,0.5); }
+.dex-cell__no { font-size: 10px; color: var(--text-dim); font-variant-numeric: tabular-nums; align-self: flex-start; }
+.dex-cell__art { width: 100%; aspect-ratio: 1; display: grid; place-items: center; }
+.dex-cell__q { font-size: 28px; color: var(--text-dim); font-weight: 900; }
+.dex-cell__name { font-size: 11px; text-align: center; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dex-cell__grade {
+  position: absolute; top: 4px; right: 4px; font-size: 9px; font-weight: 900;
+  padding: 0 5px; border-radius: 999px; background: rgba(0,0,0,0.5); color: #cdd3f0;
+}
+.dex-cell__grade--shine { background: linear-gradient(110deg, #ffe27a, #ff7ae0); color: #1b160a; }
+
+.ach-row, .egg-row {
+  display: flex; gap: 12px; align-items: center; padding: 12px 14px;
+  border-radius: 14px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke);
+}
+.ach-row--done { border-color: rgba(255,210,63,0.5); background: rgba(255,210,63,0.06); }
+.ach-row__icon, .egg-row__icon { font-size: 26px; }
+.ach-row__body, .egg-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ach-row__top, .egg-row__top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.ach-row__name, .egg-row__label { font-weight: 800; }
+.ach-row__count, .egg-row__src, .egg-row__prog { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.ach-row__desc { font-size: 12px; color: var(--text-dim); }
+.ach-row__reward { color: var(--accent); }
+.ach-row__track, .egg-row__track { height: 7px; border-radius: 999px; background: rgba(0,0,0,0.4); overflow: hidden; }
+.ach-row__fill { height: 100%; background: linear-gradient(90deg, #f0b429, #ffd23f); }
+.egg-row__fill { height: 100%; background: linear-gradient(90deg, #4dd0c0, #7ae0ff); }
+.ach-row__claim { white-space: nowrap; }
+.ach-row__claimed { color: var(--good); font-weight: 800; font-size: 13px; white-space: nowrap; }
+.ach-row__lock { color: var(--text-dim); font-size: 13px; white-space: nowrap; }
+.egg-row--ready { border-color: var(--good); box-shadow: 0 0 12px rgba(74,222,128,0.25); }
+
+.hatch-reveal {
+  position: absolute; inset: 0; z-index: 5; border-radius: 22px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(circle at 50% 42%, rgba(40,60,80,0.95), rgba(6,6,14,0.98));
+}
+.hatch-reveal__mon { width: min(46vw, 200px); height: min(46vw, 200px); }
+.hatch-reveal__caption { font-size: clamp(18px, 4.5vw, 26px); font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.hatch-reveal__caption b { color: var(--accent); }
+
+.dup-note {
+  align-self: center; margin-top: 8px; padding: 8px 16px; border-radius: 999px;
+  background: rgba(122,224,255,0.12); border: 1px solid rgba(122,224,255,0.4); color: #cdf6ff; font-size: 14px; font-weight: 700;
+}
+
 /* ============ EXP 結算 ============ */
 .exp-summary {
   display: flex; flex-direction: column; gap: 6px;

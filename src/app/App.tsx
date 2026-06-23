@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { GameProvider, useGame } from '@/app/GameProvider'
 import { useRoster } from '@/store/rosterStore'
+import { useMeta } from '@/store/metaStore'
+import { useIncubator } from '@/store/incubatorStore'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { TitleScreen } from '@/ui/screens/TitleScreen'
 import { RegionSelectScreen } from '@/ui/screens/RegionSelectScreen'
@@ -45,8 +47,11 @@ function Stage() {
 }
 
 export function App() {
-  // 開場載入持久化 roster（localStorage；空則 seed 預設並存檔）
-  useEffect(() => { void useRoster.getState().load() }, [])
+  // 開場載入持久化 roster（localStorage；空則 seed 預設並存檔），再用 roster 回填圖鑑 meta + 載入孵化所
+  useEffect(() => {
+    void useRoster.getState().load().then(() => useMeta.getState().load(useRoster.getState().roster))
+    useIncubator.getState().load()
+  }, [])
   return (
     <GameProvider>
       <Stage />

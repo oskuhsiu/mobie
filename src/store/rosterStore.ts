@@ -40,6 +40,8 @@ interface RosterState {
   grantBattleExp: (unitIds: string[], foeLevels: number[], ratio?: number, postGrowth?: PostGrowthHook[]) => Promise<ExpResult[]>
   /** 收服一隻（由捕獲卡建 canonical OwnedUnit，加入並存檔；個體與戰鬥畫面一致） */
   captureUnit: (card: Card) => Promise<OwnedUnit | null>
+  /** 直接加入一隻已建好的 canonical OwnedUnit（孵化用，id 去重）並存檔。 */
+  addUnit: (unit: OwnedUnit) => Promise<OwnedUnit | null>
   /** 裝備/卸下持有道具（itemId=undefined 卸下），回傳原本裝備的 itemId（給背包對帳）；存檔。 */
   setHeldItem: (unitId: string, itemId: string | undefined) => Promise<string | undefined>
   /** 匯入存檔：整批取代 roster（已 sanitize），存檔。meta 由匯入流程的 adoptMeta 設定，故此處不 bump。 */
@@ -106,6 +108,15 @@ export const useRoster = create<RosterState>((set, get) => ({
     set({ roster, lastCaptured: unit })
     await adapter.saveRoster(roster)
     bumpSaveMeta(Date.now()) // 收服 → 存檔變新
+    return unit
+  },
+
+  addUnit: async (unit) => {
+    if (get().roster.some((u) => u.id === unit.id)) return null // id 去重（同一顆蛋不重複孵）
+    const roster = [...get().roster, unit]
+    set({ roster })
+    await adapter.saveRoster(roster)
+    bumpSaveMeta(Date.now())
     return unit
   },
 

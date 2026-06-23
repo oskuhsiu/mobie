@@ -2,6 +2,10 @@ import { lazy, Suspense, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { audio } from '@/audio/audioEngine'
+import { useMeta } from '@/store/metaStore'
+import { useIncubator } from '@/store/incubatorStore'
+import { claimableCount } from '@/game/achievements'
+import { isHatchable } from '@/game/incubator'
 
 // Title 工具 overlay 較重（jsqr/qrcode/three），lazy 載入避免拖慢開場
 const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
@@ -10,13 +14,18 @@ const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').t
 const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
 const SettingsModal = lazy(() => import('@/ui/components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
 const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ default: m.TeamModal })))
+const DexModal = lazy(() => import('@/ui/components/DexModal').then((m) => ({ default: m.DexModal })))
+const AchievementsModal = lazy(() => import('@/ui/components/AchievementsModal').then((m) => ({ default: m.AchievementsModal })))
+const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then((m) => ({ default: m.IncubatorModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team'
+type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'dex' | 'achievements' | 'incubator'
 
 export function TitleScreen() {
   const { send } = useGame()
   const [overlay, setOverlay] = useState<Overlay>('none')
   const open = (o: Overlay) => { void audio.unlock(); setOverlay(o) }
+  const claimable = useMeta((s) => claimableCount(s.meta))
+  const hatchable = useIncubator((s) => s.state.eggs.some(isHatchable))
 
   return (
     <div className="center" style={{ flex: 1, gap: 28 }}>
@@ -66,6 +75,13 @@ export function TitleScreen() {
         <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('team')}>🎒 隊伍</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📖 圖鑑</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
+          🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
+        </button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('incubator')}>
+          🥚 孵化所{hatchable && <span className="title-dot">!</span>}
+        </button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
@@ -79,6 +95,9 @@ export function TitleScreen() {
           {overlay === 'save' && <SaveManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'settings' && <SettingsModal onClose={() => setOverlay('none')} />}
           {overlay === 'team' && <TeamModal onClose={() => setOverlay('none')} />}
+          {overlay === 'dex' && <DexModal onClose={() => setOverlay('none')} />}
+          {overlay === 'achievements' && <AchievementsModal onClose={() => setOverlay('none')} />}
+          {overlay === 'incubator' && <IncubatorModal onClose={() => setOverlay('none')} />}
         </AnimatePresence>
       </Suspense>
     </div>

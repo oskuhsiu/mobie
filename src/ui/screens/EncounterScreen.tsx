@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
+import { useMeta } from '@/store/metaStore'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
@@ -12,6 +13,10 @@ export function EncounterScreen() {
     () => context.foeTeam.map(buildBattlePokemon),
     [context.foeTeam],
   )
+  // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）
+  useEffect(() => {
+    if (context.foeTeam.length > 0) useMeta.getState().recordSeen(context.foeTeam.map((c) => c.speciesId))
+  }, [context.foeTeam])
   const wild = foes[0] ?? null
   if (!wild) return null
 

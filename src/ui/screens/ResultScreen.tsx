@@ -6,6 +6,8 @@ import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
+import { useMeta } from '@/store/metaStore'
+import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
 import { canCaptureIn } from '@/game/data/regionLookup'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
@@ -195,23 +197,44 @@ export function ResultScreen() {
   useEffect(() => {
     if (!context.outcome || grantedRef.current) return
     grantedRef.current = true
+    // 圖鑑/成就：勝利依 mode 計數；進化在 grant 完成（lastEvolutions 寫入）後登錄
+    if (isWin) useMeta.getState().recordWin(canCaptureIn(context.regionId) ? 'wild' : 'arena')
+    // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
+    useIncubator.getState().advance(isWin ? 2 : 1)
     void grantBattleExp(
       context.playerTeam.map((c) => c.cardId),
       context.foeTeam.map((c) => c.level),
       isWin ? 1 : LOSS_EXP_RATIO,
       postGrowth,
-    )
-  }, [isWin, context.outcome, context.playerTeam, context.foeTeam, grantBattleExp, postGrowth])
+    ).then(() => {
+      const evos = useRoster.getState().lastEvolutions
+      if (evos.length > 0) useMeta.getState().recordEvolutions(evos)
+    })
+  }, [isWin, context.outcome, context.regionId, context.playerTeam, context.foeTeam, grantBattleExp, postGrowth])
 
   // 進化演出：等捕獲流程結束（或本來就不捕獲）後才播，避免兩段演出疊在一起
   const [evoDone, setEvoDone] = useState(false)
   const showEvo = captureDone && !evoDone && lastEvolutions.length > 0
+  // 重複捕獲轉化提示（plan/10 §5.3.1 overflow policy：已擁有則轉成孵化蛋，絕不刪既有個體）
+  const [dupConverted, setDupConverted] = useState(false)
 
   // 收服回呼：穩定參照（避免 WinView 計時器 effect 因父層 re-render churn）
   const onCaptured = useCallback((ok: boolean) => {
     if (ok) {
       const boss = context.foeTeam[context.foeTeam.length - 1]
-      if (boss) void captureUnit(boss) // 真的把 boss 加入並存檔到隊伍
+      if (boss) {
+        const bp = buildBattlePokemon(boss)
+        // 圖鑑一律登錄（registered + captures，異色另計）——不論保留或轉蛋
+        useMeta.getState().recordCapture(boss.speciesId, bp.shiny)
+        const already = useRoster.getState().roster.some((u) => u.speciesId === boss.speciesId)
+        if (already) {
+          // 已擁有 → 轉成孵化蛋（不重複塞同種，絕不刪既有個體）
+          useIncubator.getState().addDuplicateEgg(boss.speciesId, `${bp.nameZh} 蛋`)
+          setDupConverted(true)
+        } else {
+          void captureUnit(boss) // 新種：加入並存檔到隊伍
+        }
+      }
     }
     send({ type: 'SET_CAPTURED', captured: ok })
     setCaptureDone(true)
@@ -224,6 +247,12 @@ export function ResultScreen() {
         : isWin
           ? <ArenaWinView />
           : <LoseView />}
+
+      {dupConverted && (
+        <motion.div className="dup-note" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+          🥚 已擁有此寶可夢 → 自動轉化為孵化蛋（前往 🥚 孵化所查看）
+        </motion.div>
+      )}
 
       {lastResults.length > 0 && (
         <motion.div className="exp-summary" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
