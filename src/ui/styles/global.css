@@ -549,6 +549,16 @@ body {
   background: rgba(0,0,0,0.3); border: 1px solid var(--stroke); color: var(--text); font-size: 13px; font-family: ui-monospace, monospace;
 }
 .lib-msg { font-size: 13px; color: var(--accent); }
+.save-compare { display: flex; flex-direction: column; gap: 8px; }
+.save-compare__dir { font-size: 14px; }
+.save-compare__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.save-compare__table th, .save-compare__table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--stroke); }
+.save-compare__table th { color: var(--text-dim); font-weight: 700; font-size: 12px; }
+.save-compare__table td:first-child { color: var(--text-dim); }
+.save-compare__warn {
+  font-size: 13px; color: #ffb4b4; background: rgba(255,80,80,0.12);
+  border: 1px solid rgba(255,80,80,0.4); border-radius: var(--radius-sm); padding: 8px 10px;
+}
 .qr-card {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 22px; border-radius: var(--radius); background: #fff; color: #11131a;

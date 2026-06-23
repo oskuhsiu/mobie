@@ -97,6 +97,16 @@ export async function deleteModel(speciesId: number): Promise<void> {
   emit()
 }
 
+/** 清空所有自訂模型（匯入「含模型的完整備份」時，先清再套用）。 */
+export async function clearAllModels(): Promise<void> {
+  if (!hasIDB()) return
+  await tx('readwrite', (s) => s.clear())
+  for (const url of urlCache.values()) URL.revokeObjectURL(url)
+  urlCache.clear()
+  bumpSaveMeta(Date.now()) // 視為一次存檔變動；匯入流程後續 adoptMeta 會覆蓋
+  emit()
+}
+
 /** 列出已匯入自訂模型的 speciesId。 */
 export async function listModelIds(): Promise<number[]> {
   if (!hasIDB()) return []

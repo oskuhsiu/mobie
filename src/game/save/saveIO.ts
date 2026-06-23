@@ -3,10 +3,12 @@
 // 純邏輯都在 bundle.ts / saveMeta.ts。匯入套用（apply）在 M5-4 補上。
 
 import type { OwnedUnit } from '@/game/types'
-import { packSave, type SaveModel } from './bundle'
-import { loadMeta, type SaveMeta } from './saveMeta'
-import { listCards } from '@/game/cardLibrary'
-import { listModelIds, getModelBlob } from '@/scene/models/modelStore'
+import { packSave, unpackSave, type SaveModel, type UnpackResult, type UnpackOk } from './bundle'
+import { loadMeta, adoptMeta, type SaveMeta } from './saveMeta'
+import { listCards, replaceAllCards } from '@/game/cardLibrary'
+import { listModelIds, getModelBlob, clearAllModels, putModel } from '@/scene/models/modelStore'
+import { saveBackup, loadBackupBytes } from './backupStore'
+import { useRoster } from '@/store/rosterStore'
 
 async function gatherModels(): Promise<SaveModel[]> {
   const ids = await listModelIds()
@@ -72,4 +74,50 @@ export async function deliverSaveFile(built: BuiltSave): Promise<DeliverResult> 
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 4000)
   return 'downloaded'
+}
+
+// ── 匯入 ──────────────────────────────────────────────────────────────────
+
+/** 讀 .save 檔並解析（純解析在 bundle.unpackSave；這裡只負責讀檔位元組）。 */
+export async function readSaveFile(file: File): Promise<UnpackResult> {
+  const buf = await file.arrayBuffer()
+  return unpackSave(new Uint8Array(buf))
+}
+
+/**
+ * 覆蓋「之前」備份目前狀態（安全紅線：永遠可救回）。
+ * 備份內容 = 當前 roster + cards 打包（不含模型；模型可重新 drop-in，進度才不可逆）。
+ */
+export async function backupCurrentSave(now: number): Promise<void> {
+  const meta = loadMeta()
+  const roster = useRoster.getState().roster
+  const cards = await listCards()
+  const bytes = packSave({ meta, roster, cards })
+  await saveBackup(bytes, meta, now)
+}
+
+/**
+ * 套用一份已解析的存檔（整包取代）：
+ *  roster → cards 整批取代 → （若含模型）清空模型再套用 → 最後 adoptMeta 鎖定新舊血統。
+ * adoptMeta 必須最後呼叫，蓋掉過程中 putCards/putModel 的 bump。
+ */
+export async function applyImportedSave(parsed: UnpackOk): Promise<void> {
+  await useRoster.getState().replaceAll(parsed.roster)
+  await replaceAllCards(parsed.cards)
+  if (parsed.includesModels) {
+    await clearAllModels()
+    for (const m of parsed.models) {
+      await putModel(m.speciesId, new Blob([m.bytes as BlobPart], { type: 'model/gltf-binary' }))
+    }
+  }
+  adoptMeta(parsed.meta)
+}
+
+/** 還原最近一次「匯入前備份」。無備份回 null；有則解析並套用（不再建立新備份）。 */
+export async function restoreBackup(): Promise<UnpackResult | null> {
+  const bytes = await loadBackupBytes()
+  if (!bytes) return null
+  const parsed = unpackSave(bytes)
+  if (parsed.ok) await applyImportedSave(parsed)
+  return parsed
 }

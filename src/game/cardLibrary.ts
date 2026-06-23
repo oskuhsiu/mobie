@@ -80,6 +80,16 @@ export async function putCards(cards: Card[]): Promise<void> {
   emit()
 }
 
+/** 匯入存檔：整批取代卡庫（清空後寫入 incoming）。meta 由匯入流程 adoptMeta 設定。 */
+export async function replaceAllCards(cards: Card[]): Promise<void> {
+  if (!hasIDB()) throw new Error('此瀏覽器不支援 IndexedDB，無法保存卡庫')
+  await writeAll((s) => {
+    s.clear()
+    cards.forEach((c) => s.put(c))
+  })
+  emit()
+}
+
 /** 反查一張卡（掃卡用）。無 IndexedDB 時退回 PLAYER_CARDS。 */
 export async function getCard(cardId: string): Promise<Card | null> {
   if (!hasIDB()) return PLAYER_CARDS.find((c) => c.cardId === cardId) ?? null

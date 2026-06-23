@@ -28,6 +28,8 @@ interface RosterState {
   grantBattleExp: (unitIds: string[], foeLevels: number[], ratio?: number) => Promise<ExpResult[]>
   /** 收服一隻（由捕獲卡建 canonical OwnedUnit，加入並存檔；個體與戰鬥畫面一致） */
   captureUnit: (card: Card) => Promise<OwnedUnit | null>
+  /** 匯入存檔：整批取代 roster（已 sanitize），存檔。meta 由匯入流程的 adoptMeta 設定，故此處不 bump。 */
+  replaceAll: (units: OwnedUnit[]) => Promise<void>
   clearResults: () => void
 }
 
@@ -83,6 +85,12 @@ export const useRoster = create<RosterState>((set, get) => ({
     await adapter.saveRoster(roster)
     bumpSaveMeta(Date.now()) // 收服 → 存檔變新
     return unit
+  },
+
+  replaceAll: async (units) => {
+    const clean = sanitizeRoster(units)
+    set({ roster: clean, lastResults: [], lastCaptured: null })
+    await adapter.saveRoster(clean)
   },
 
   clearResults: () => set({ lastResults: [], lastCaptured: null }),
