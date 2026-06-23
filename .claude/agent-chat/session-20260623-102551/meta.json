@@ -1,0 +1,20 @@
+{
+  "topic": "審查 pokemon-mezastar M2（QR 掃卡 + 卡庫 + 產卡）畫面設計：掃卡 modal（相機/手動輸入/成功/錯誤）、卡庫清單、可列印 QR、新增自製卡。PNG 在 /tmp/mz_review/m2_01..06。針對 iPad 直式自用體感給具體可行建議。",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 3,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T10:25:51+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-102551",
+  "models": {}
+}
