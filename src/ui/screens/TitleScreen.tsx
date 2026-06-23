@@ -3,10 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { audio } from '@/audio/audioEngine'
 import { ModelManagerModal } from '@/ui/components/ModelManagerModal'
+import { CardScannerModal } from '@/ui/components/CardScannerModal'
+import { CardLibraryModal } from '@/ui/components/CardLibraryModal'
+
+type Overlay = 'none' | 'models' | 'scan' | 'library'
 
 export function TitleScreen() {
   const { send } = useGame()
-  const [showModels, setShowModels] = useState(false)
+  const [overlay, setOverlay] = useState<Overlay>('none')
+  const open = (o: Overlay) => { void audio.unlock(); setOverlay(o) }
 
   return (
     <div className="center" style={{ flex: 1, gap: 28 }}>
@@ -49,19 +54,19 @@ export function TitleScreen() {
         ▶ 開始遊戲
       </motion.button>
 
-      <motion.button
-        className="btn btn--ghost btn--sm"
-        whileTap={{ scale: 0.96 }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.35 }}
-        onClick={() => { void audio.unlock(); setShowModels(true) }}
+      <motion.div
+        className="row" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
       >
-        🧩 3D 模型
-      </motion.button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
+      </motion.div>
 
       <AnimatePresence>
-        {showModels && <ModelManagerModal onClose={() => setShowModels(false)} />}
+        {overlay === 'models' && <ModelManagerModal onClose={() => setOverlay('none')} />}
+        {overlay === 'scan' && <CardScannerModal onClose={() => setOverlay('none')} />}
+        {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
       </AnimatePresence>
     </div>
   )
