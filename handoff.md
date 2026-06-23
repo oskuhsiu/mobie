@@ -89,7 +89,13 @@
 > 設計細節仍在 09–13（內容未變，只是里程碑歸屬重編）；CHECKLIST 已改成 M6–M13、每項標原子編號對照；plan/14 §3 有「舊 Mx.y → 新里程碑」完整對應表（22 項全數歸位無漏）。
 > 4 個跨里程碑合併點：道具/特性/技能=同一 S1–S8 hook 引擎、連鎖/合體技=同一 Combo 系統、地形/合體灌注/buff=共用 fieldState、進化↔技能槽/孵化↔技能繼承。
 
-> **收尾改名 M14（所有里程碑完成後才做）**：把專案/app 改名 `pokemon-mezastar` → **`mobie`（小怪物）**——repo 目錄/git remote、`package.json` name、`index.html` title、PWA manifest、app 品牌字串、docs 全域。**關鍵：別弄壞既有存檔**——`mz.*`/`mz-*` persistence key 建議保留（或寫遷移）；`<profileName>.save` 不受影響；PokéAPI/物種資料來源照舊。見 CHECKLIST M14。
+> **戰鬥回放系統 = M14（plan/15-battle-replay.md，2026-06-23，尚未實作）**：四方圓桌（Claude/gemini/codex/mistral）收斂，結論 `.claude/agent-chat/session-20260623-164122/conclusion.md`。需求：把一場戰鬥**完全文字化**成可保存紀錄、並能**用文字記錄完整回放**（使用者已接受「戰鬥改動都動到回放」耦合）。
+> **定案 canonical = 結構化 JSON log（事件流 + header 含 seed/輸入）+ 唯讀戰報投影 `eventToReportLine`**——**否決雙向文字 parser**（隨戰鬥系統長新機制＝指數維護債）、**否決純 seed 重模擬當 canonical**（引擎一改舊紀錄重看結果就變、版本脆弱）。
+> 複用既有兩半架構：reducer **完全不動**（只消費它既有吐的有序 domain events）、回放＝把 events 從 live 改成 from-log 餵回 BattleScreen 既有消費器。**前置必做**：把 `resolveTurn` 的 rng 從預設 `Math.random` 接成 seeded（抽 `game/rng.ts` 複用 individual.ts 的 `mulberry32`/`hashSeed`），否則無法重模擬。
+> 分層：純 codec `game/replay/`（比照 save/bundle.ts，formatVersion + 嚴格 decoder + unknown-event fail-fast + 分類錯誤 + crc）；獨立持久化 slice **IndexedDB `mz-replays`**（battleId 去重 + FIFO 上限，**只存 .json、不存 derived .txt**）；播放器複用 BattleScreen 消費器。**降規格裁定**：不做 i18n 多語抽象層（YAGNI）、golden-master 重模擬比對 UI 延到 M8（M14 只放單測骨架）。切分 M14.0–M14.f 見 CHECKLIST。
+> **編號**：原 M14（改名 mobie）順延 **M15**。回放排在戰鬥機制 M8–M13 大多落地之後、改名之前（屆時 event 詞彙已完整，codec/handler 一次到位）。**待使用者確認編號**。
+
+> **收尾改名 M15（所有里程碑完成後才做；原 M14 順延）**：把專案/app 改名 `pokemon-mezastar` → **`mobie`（小怪物）**——repo 目錄/git remote、`package.json` name、`index.html` title、PWA manifest、app 品牌字串、docs 全域。**關鍵：別弄壞既有存檔**——`mz.*`/`mz-*` persistence key 建議保留（或寫遷移）；`<profileName>.save` 不受影響；PokéAPI/物種資料來源照舊。見 CHECKLIST M15。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 

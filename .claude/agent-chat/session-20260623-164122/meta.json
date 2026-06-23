@@ -1,0 +1,22 @@
+{
+  "topic": "M14 戰鬥回放系統設計：把一場戰鬥「完全文字化」成可保存的紀錄，並能用該文字紀錄完整回放（含聲光演出）。請收斂出可落地的架構決策。\n\n【專案現況（必讀脈絡，多數 partner agent 不會讀 repo）】\n- pokemon-mezastar：iPad-first Web/PWA（React18+Vite+TS strict / XState 螢幕流 / Zustand 顯示＋持久化 / framer-motion+Tone.js 演出）。已完成 M1–M7（194 測試全綠）。\n- 戰鬥架構刻意兩半（硬約束）：\n  (A) 純 reducer `game/battle/reducer.ts`：`resolveTurn(state, action, {rng, ext}) → {nextState, events}`，**一次算完整回合**，不含任何 UI/動畫字眼，只吐有序 domain events：damageApplied / memberFainted / heal / activeChanged / switchDefenseResolved / battleEnded / random(accuracy|crit|supportRoulette|ballRoulette)。\n  (B) 演出層 `ui/screens/BattleScreen.tsx`：呼叫 resolveTurn 後**逐一消費 event queue**，驅動 framer-motion + FxCanvas 粒子 + Tone.js 音效 + 寫顯示 HP/active。\n- 關鍵：BattleScreen 呼叫 resolveTurn **沒有傳 rng → 預設 Math.random（目前戰鬥非決定性）**。專案 individual.ts 已有 FNV-1a→mulberry32 seeded RNG 可複用。\n- 硬約束：純 reducer 不可加 UI 字眼；持久化只存 canonical OwnedUnit，**不存 derived/RNG 中間態**（回放紀錄是 derived → 必須像 settings/itembag/savemeta 一樣住獨立 slice/namespace，不可污染 roster）。已有成熟的「純 codec + 分類錯誤 + 校驗」前例：`game/save/bundle.ts`。\n- 使用者原話重點：「完全文字化」＋「能用這些文字記錄完整回放」＋「**戰鬥相關的修改都會動到回放**」（使用者已接受這個耦合）。\n- 未來戰鬥里程碑會持續加機制：M8 地形 fieldState、M9 連鎖、M12 技能/合體技 → 回放格式必須可擴充、不可讓舊紀錄靜默壞掉。\n\n【請聚焦辯論並收斂這幾個決策】\n1. 回放模型三選一或混合：\n   (a) 文字事件流（戰報）為 canonical——序列化 reducer 吐的 domain event queue 成可讀文字，回放＝解析文字→events→沿用 BattleScreen 既有 event 消費器演出。自足、版本獨立，但需另存初始隊伍快照才能渲染。\n   (b) seed+輸入重演——只記每回合玩家輸入(action/quality/mashCount/starStrike)＋一個 battle seed，回放＝把 RNG 改決定性後重跑 resolveTurn。檔案最小，但需先把 Math.random 換成 seeded（小重構），且引擎一改舊紀錄就發散（版本脆弱）。\n   (c) 混合——header 記 seed+輸入(可重模擬/驗證引擎決定論)＋body 記事件流(實際拿來視覺回放)；重模擬須重現事件流→天然變成「戰鬥改動 = golden-master 回歸測試」(呼應本專案做過 5-agent 盲測存檔的測試文化)。\n2. 到底要「文字化」哪些東西才能既人類可讀、又機器可完整回放：初始狀態快照(雙方隊伍/等級/ivs/道具/特性/地形)＋逐回合事件＋玩家輸入？schema 邊界畫在哪？\n3. 放哪：獨立持久化 slice + 純 codec(game/)＋回放播放器(UI 複用 BattleScreen 消費器) 的分層是否正確？\n4. 「戰鬥改動都動到回放」這個耦合怎麼用版本號＋單一序列化點＋測試管好，讓 M8/M9/M12 加機制時不會默默弄壞舊回放？\n5. M14 的 MVP 邊界 vs 完整版各畫在哪？(註：handoff 目前把 M14 排給「改名 mobie」收尾，編號可能要讓位，但本議題先談設計不糾結編號)\n\n我(Claude)的初始傾向：(c)混合——事件流當 canonical 視覺回放來源(因 reducer 已天然吐有序純事件、BattleScreen 已是消費器，幾乎零重構就能播)，但 header 同時記 seed+輸入，讓「重模擬須重現事件流」成為引擎決定論的回歸測試。前提是把 resolveTurn 的 rng 接成 seeded(複用 mulberry32)。請各位挑戰這個傾向、補我沒看到的坑。",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex",
+    "mistral"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex",
+    "mistral"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 5,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T16:41:22+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-164122",
+  "models": {}
+}

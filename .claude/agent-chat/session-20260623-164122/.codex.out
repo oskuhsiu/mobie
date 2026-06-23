@@ -1,0 +1,3 @@
+同意 (ii)：canonical 必須是結構化 JSON log，戰報文字只能是投影，不要反向 parse。唯一要補的防線是：JSON 也要「可讀且穩定」，所以 codec 應輸出 deterministic ordering/pretty text，並提供 `.json` replay 與 `.txt` report 匯出；播放器只吃 `.json`。`eventToReportLine` 我也認為進 MVP，因為它是使用者感知到的「完全文字化」。IndexedDB `mz-replays` + keep last N 正確，但要避免把「optional fieldState/fieldEvents」變成逃生艙：已知欄位可預留，新增 event variant 仍然必須 bump `formatVersion` 或 migration，unknown event fail-fast 不能放鬆。
+
+STATUS: AGREE

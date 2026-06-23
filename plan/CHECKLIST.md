@@ -240,7 +240,30 @@
 - [ ] 內容階段 3：G6–G9(650–1025) 補完 + 特殊型地形（花海/沼澤/蒸氣/聖域）+ 隨機地形區
 - [ ] 資料走 PokéAPI、圖走官方 artwork runtime URL（不內建侵權）；每階段重產 gen_dex
 
-## M14 — 收尾改名 mobie（🏁 所有里程碑完成後才做；依賴 M1–M13 全綠）
+## M14 — 戰鬥回放系統（見 `15`；排在戰鬥機制 M8–M13 之後、改名之前）
+> 把一場戰鬥**完全文字化**成可保存 JSON log（事件流 + seed/輸入 header），並用它**完整回放**（複用 BattleScreen 演出）。
+> 圓桌結論 `.claude/agent-chat/session-20260623-164122/conclusion.md`。canonical=結構化 log + 唯讀戰報投影（**非雙向 parser**）。
+### M14.0 — seeded RNG 地基（必做前置）
+- [ ] 抽 `game/rng.ts`（`hashSeed`/`mulberry32`/`makeRng`），individual.ts 改 import（零行為變動）
+- [ ] store 層 `resolveTurn` 改傳 seeded rng + 開戰生成 battleSeed（runtime，不回寫 OwnedUnit）+ 決定論 vitest 骨架
+### M14.a — schema + 純 codec
+- [ ] `replay/types.ts`（ReplayLog/Header/DisplayUnitSnapshot/ReplayInput/ReplayTurn；引擎內部 ivs/nature/derived 不進）
+- [ ] `replay/codec.ts`（encode 穩定鍵序 / decode 嚴格 + 分類錯誤 + crc 校驗 / migrate；整檔單一 formatVersion + unknown-event fail-fast）+ vitest round-trip & 壞檔分類
+### M14.b — 戰報投影器（「完全文字化」交付物）
+- [ ] `replay/report.ts` `eventToReportLine`（一 variant 一 handler、依 type 分派、直吐中文、未知 variant 回退 `[type]`）+ `logToReport` + 每 handler vitest
+### M14.c — Recorder + 持久化 slice
+- [ ] `store/replayRecorder.ts` 單點錄製（seed+輸入+事件流同時，非事後補）
+- [ ] `store/replayStore.ts` + IndexedDB `mz-replays`（battleId=FNV-1a(seed+snapshot) 去重 + FIFO 上限；**只存 .json、不存 derived .txt**）+ BattleScreen 接 recordTurn/finishRecording
+### M14.d — 播放器
+- [ ] 抽 BattleScreen event 消費器為可切換來源（live vs replay）+ 回放模式（禁玩家輸入 + 播放/暫停/單步/倍速）+ 文字戰報側欄同步高亮
+### M14.e — 回放清單 + 匯出
+- [ ] Title「🎬 回放」入口 + 清單畫面（region/outcome/時間/雙方）+ `.txt` 戰報匯出（即時投影）+ 壞檔分類 UI
+### M14.f — 驗收
+- [ ] Chrome CDP：打一場 → 回放清單出現 → 播放與當場一致 → 匯出戰報；typecheck/build/test 全綠
+> **耦合治理**：M8/M9/M12 等動戰鬥的里程碑，checklist 須含「延伸回放」子項（新 event variant → 加 handler + bump formatVersion + migrate；golden-master 重模擬回歸於 M8 起正式啟用）。
+> **降規格**：不做 i18n 多語抽象層（YAGNI、自用單語）；golden-master 比對 UI 延到 M8（M14 只放單測骨架）。
+
+## M15 — 收尾改名 mobie（🏁 所有里程碑完成後才做；依賴 M1–M14 全綠）
 > **mobie＝「小怪物」之意**。把專案 / app 識別正式改名（repo、套件、app 品牌）並定名。
 > **守則：不破壞既有存檔**——persistence key（`mz.*` localStorage / `mz-*` IndexedDB）若改名會孤立既有存檔，
 > 自用單人**建議保留現有 key 前綴**（只改顯示品牌），或寫一次性遷移；存檔檔案 `<profileName>.save` 不受影響。
