@@ -123,14 +123,18 @@
 - [ ] 主執行緒節流 PoC → Worker/OffscreenCanvas 升級
 - [ ] 效能紅線：連續座標只寫 Zustand
 
-## M5 — 雲端同步記錄（見 `08-cloud-sync.md`）
-- [ ] `SaveEnvelope` 信封（`schemaVersion`/`deviceId`/`updatedAt`/`revision`/`roster`）+ 本地遷移（裸陣列 → 信封）
-- [ ] `rosterStore` 存檔時 bump `updatedAt`/`revision`
-- [ ] `CloudSyncAdapter` 介面（`pull`/`push`/可選 `subscribe`）+ 後端供應商抉擇（vendor 中立、secret 不入庫）
-- [ ] `SyncCoordinator`：Pull→Merge→Push、觸發點（開啟/online/visibility/存檔 debounce）、非阻塞容錯
-- [ ] 比對新舊：LWW by `updatedAt`→`revision`→server time；divergence 偵測 + 舊檔本地備份
-- [ ] 同步狀態 UI：上次同步時間 / 已最新 / 同步中 / 離線 / 手動立即同步
-- [ ] 邊界：雲端空、本地空（新裝置）、schema 遷移、時鐘偏移
+## M5 — 可攜存檔檔案（使用者自有雲端，非後端同步）✅ 完成（Chrome CDP 驗證）
+> **設計重定位（2026-06-23）**：使用者要求不要後端伺服器，改用「打包成 `<profileName>.save`(zip) →
+> 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋」。故砍掉 `08-cloud-sync.md`
+> 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（零後端/零 secret/零 vendor），只留信封中繼。
+- [x] `saveMeta`（`mz.savemeta.v1`：schemaVersion/profileName/updatedAt/revision）取代 `SaveEnvelope`；本地不改 roster shape（檔案層 manifest 即信封），純函數 `compareSaves`/`migrateMeta`/`sanitizeProfileName`（+12 vitest）
+- [x] roster 成長/收服、卡庫匯入/刪、模型匯入/刪 等使用者進度寫入點 `bumpSaveMeta`
+- [x] `SaveBundle` 打包/解包（`bundle.ts`，fflate zip：manifest+roster+cards+可選 models/<id>.glb）+ crc32 payload 校驗 + 分類錯誤（not-zip/no-manifest/bad-manifest/schema-too-new/bad-payload/checksum-mismatch）（+10 vitest）
+- [x] 匯出 UI（`SaveManagerModal`，lazy）：存檔名稱、含模型開關（預設關）、`navigator.share` 優先（iPad 分享面板送 Drive/Files，零雲端 API）、`<a download>` 退路；`modelStore.getModelBlob`
+- [x] 比對新舊：匯入時顯示「本地 vs 匯入」對照表 + `compareSaves` 方向標；較舊→紅色警告 + 必須勾選同意（匯入鈕同意前 disabled）
+- [x] 安全紅線：覆蓋前 `backupCurrentSave` 自動備份（IDB `mz-save-backup` 單槽）+ 一鍵還原；整包取代 `applyImportedSave`（roster→cards→含模型才 clear+put→最後 `adoptMeta`）
+- [x] 邊界：本地空（新裝置匯入）、schema 太新拒絕、壞檔/截斷（crc32）、含/不含模型；Chrome CDP 走完匯出 + 較新/較舊(需同意)/還原備份全路徑
+- [~] 時鐘偏移：採「半自動」——一律顯示對照由使用者拍板，故偏移不會自動毀資料（單一使用者自有裝置間足夠；未做跨裝置真分歧 3-way merge，刻意不做）
 
 > **M6–M13 延伸里程碑**：依 `14-roadmap-m6-m13.md` 把原 M6.x/M7.x/M8.x 共 22 項依類型重歸成獨立里程碑、依賴排序。
 > 兩不變式不變：**純 reducer / 只存 canonical OwnedUnit**；可選掛載（預設全關、關掉零殘留）。各項括號標原子編號方便對照。
