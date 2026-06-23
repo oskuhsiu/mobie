@@ -149,6 +149,8 @@
 - 型別/建置：`npm run typecheck`、`npm run build`。
 - 測試：`npm test`（vitest）。
 - 視覺驗證（無 playwright/chromium-cli）：本機有 Google Chrome，可用 `--headless=new --remote-debugging-port=9222` + Node 24 內建 WebSocket 寫 CDP 腳本截圖（按鈕用 `el.click()`，QTE 區需 dispatch `PointerEvent('pointerdown')`）。前次截圖在 `/tmp/mz_shots/`（會隨重開機清掉）。
+>   - **戰鬥畫面 CDP 必帶軟體 WebGL**（M6 踩過）：R3F `BattleStage` 要 GL context，headless 加 `--disable-gpu` 會讓 three 報 `Could not create a WebGL context` → 戰鬥畫面掛掉。改用 `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`（Chrome 149 起 SwiftShader 自動 fallback 已移除，需顯式旗標）。非戰鬥畫面（title/region/卡庫）不需。
+>   - 完整戰鬥 loop CDP 驅動：`攻擊`→等 ~330ms→在 `.qte` dispatch `pointerdown`(停指針)→對 `.qte__bar`/`body` 連續 dispatch ~15 次(連打蓄力)→等 ~2.6s(回合演出+對手回擊)，迴圈到出現「再戰一場/回到區域」。`推薦出戰` 含「出戰」字會被 `includes('出戰')` 誤點，精準鈕用 `includes('3/3')`。
 - **存檔匯出/匯入的 CDP 驗證**（M5 用過）：`npm run preview`(4173) 服務 dist；CDP 用 `Browser.setDownloadBehavior`(收匯出檔)、`DOM.setFileInputFiles`(餵匯入檔)、`Storage.clearDataForOrigin`(模擬新裝置)、`Emulation.setDeviceMetricsOverride`(高視窗)。**踩過的坑**：手寫 IDB helper `indexedDB.open` 一定要帶與 app 一致的 `onupgradeneeded`(建 `glb`/`cards` store)，否則把 DB 建成無 store 污染 app；讀狀態要等 UI 成功訊息出現再讀(避免在 IDB commit 前的競態)。**跨實作盲測**：可派獨立 agent 各寫 codec、與 app 互通交叉驗證(M5 用 5-agent 雙向驗過)。
 
 ## 8. 已知坑
