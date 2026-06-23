@@ -234,3 +234,14 @@
 - [ ] 內容階段 2：G4–G5(387–649) + 場地型地形（草地/電氣/精神/薄霧）+ 混合地形區
 - [ ] 內容階段 3：G6–G9(650–1025) 補完 + 特殊型地形（花海/沼澤/蒸氣/聖域）+ 隨機地形區
 - [ ] 資料走 PokéAPI、圖走官方 artwork runtime URL（不內建侵權）；每階段重產 gen_dex
+
+## M14 — 收尾改名 mobie（🏁 所有里程碑完成後才做；依賴 M1–M13 全綠）
+> **mobie＝「小怪物」之意**。把專案 / app 識別正式改名（repo、套件、app 品牌）並定名。
+> **守則：不破壞既有存檔**——persistence key（`mz.*` localStorage / `mz-*` IndexedDB）若改名會孤立既有存檔，
+> 自用單人**建議保留現有 key 前綴**（只改顯示品牌），或寫一次性遷移；存檔檔案 `<profileName>.save` 不受影響。
+- [ ] repo 目錄改名 `pokemon-mezastar` → `mobie`（本機資料夾 + git remote 名稱，使用者執行）
+- [ ] `package.json` `name` → `mobie`；`index.html` `<title>` + `manifest.webmanifest` `name`/`short_name` → mobie / 小怪物
+- [ ] app 內品牌字串（Title 畫面標題等使用者可見文字）改 mobie；**PokéAPI 等技術引用與 Pokémon 物種資料來源照舊不動**
+- [ ] docs 全域更新「pokemon-mezastar」專案名 → mobie：`CLAUDE.md`/`ARCHITECTURE.md`/`README.md`/`handoff.md`/`plan/*`（路徑/標題/敘述）
+- [ ] persistence key 決策：**保留 `mz.*`/`mz-*`（不破壞既有存檔）** 或寫遷移；二選一明文記錄
+- [ ] 驗證：typecheck/build/test 全綠、Chrome CDP 跑通、PWA 重裝顯示新名、**既有存檔仍可載入**

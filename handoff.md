@@ -65,6 +65,8 @@
 > 設計細節仍在 09–13（內容未變，只是里程碑歸屬重編）；CHECKLIST 已改成 M6–M13、每項標原子編號對照；plan/14 §3 有「舊 Mx.y → 新里程碑」完整對應表（22 項全數歸位無漏）。
 > 4 個跨里程碑合併點：道具/特性/技能=同一 S1–S8 hook 引擎、連鎖/合體技=同一 Combo 系統、地形/合體灌注/buff=共用 fieldState、進化↔技能槽/孵化↔技能繼承。
 
+> **收尾改名 M14（所有里程碑完成後才做）**：把專案/app 改名 `pokemon-mezastar` → **`mobie`（小怪物）**——repo 目錄/git remote、`package.json` name、`index.html` title、PWA manifest、app 品牌字串、docs 全域。**關鍵：別弄壞既有存檔**——`mz.*`/`mz-*` persistence key 建議保留（或寫遷移）；`<profileName>.save` 不受影響；PokéAPI/物種資料來源照舊。見 CHECKLIST M14。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）
