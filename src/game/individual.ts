@@ -52,7 +52,8 @@ export function natureMultiplier(id: NatureId, stat: keyof Stats): number {
 }
 
 // ── 決定論 seeded RNG ──────────────────────────────────────────
-function hashSeed(str: string): number {
+// （M14.0 規劃抽出 game/rng.ts 共用；此處先匯出供 M8 地形/隨機抽沿用同一 hash。）
+export function hashSeed(str: string): number {
   let h = 2166136261 >>> 0
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i)

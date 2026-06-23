@@ -35,6 +35,11 @@ export interface AttackOptions {
   qteMult?: number
   /** 額外傷害倍率（防禦抵減 <1 / 支援UP >1），預設 1.0 */
   damageMult?: number
+  /**
+   * 地形倍率（M8，plan/11 §1）：在屬性相剋「之後」乘的純倍率（與 qte/damageMult 同位階）。
+   * 預設 1＝無地形，既有測試不動。實際倍率由 reducer 注入（reducer 依招式屬性查 currentTerrains），engine 只乘。
+   */
+  terrainMult?: number
   /** 強制會心（支援輪盤「必定會心」用）；仍會消耗 crit 亂數以保持順序 */
   forceCrit?: boolean
   /** S3 傷害鉤（plan/09 §0）：傷害結算中段的純倍率（道具 damageHook…）；預設無＝×1。各 hook 自行用 ctx 判定是否生效。 */
@@ -72,6 +77,7 @@ export function resolveAttack(
   const rng = options.rng ?? Math.random
   const qteMult = options.qteMult ?? 1
   const damageMult = options.damageMult ?? 1
+  const terrainMult = options.terrainMult ?? 1
   const move = attacker.move
 
   const effectiveness = typeEffectiveness(move.type, defender.types)
@@ -119,7 +125,8 @@ export function resolveAttack(
     for (const hook of options.damageHooks) hookMult *= hook({ attacker, defender, effectiveness })
   }
 
-  let damage = Math.floor(base * stab * effectiveness * variance * critMult * qteMult * damageMult * hookMult)
+  // 地形倍率在屬性相剋之後乘（plan/11 §1.1）；乘法可交換，列於 effectiveness 後以示語意。
+  let damage = Math.floor(base * stab * effectiveness * terrainMult * variance * critMult * qteMult * damageMult * hookMult)
   damage = Math.max(1, damage) // 命中且有效，至少 1
 
   const defenderHpAfter = Math.max(0, defender.currentHp - damage)

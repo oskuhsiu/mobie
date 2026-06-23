@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BattlePokemon } from '@/game/types'
+import type { BattlePokemon, TerrainId } from '@/game/types'
 import { createBattleState, type BattleState, type Side, type SupportOutcome } from '@/game/battle/reducer'
 
 export type { Side }
@@ -35,7 +35,7 @@ interface BattleUiState {
   /** 連鎖：連續命中回合數 */
   chain: number
 
-  init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[]) => void
+  init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[], terrains?: TerrainId[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
   setBattle: (battle: BattleState) => void
   /** 單隻 HP（觸發血條 tween） */
@@ -66,9 +66,9 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   energy: 0,
   chain: 0,
 
-  init: (playerMembers, foeMembers) =>
+  init: (playerMembers, foeMembers, terrains) =>
     set({
-      battle: createBattleState(playerMembers, foeMembers),
+      battle: createBattleState(playerMembers, foeMembers, terrains),
       phase: 'intro', log: [], banner: null,
       hitFx: null, fxCounter: 0, captured: null,
       support: null, energy: 0, chain: 0,

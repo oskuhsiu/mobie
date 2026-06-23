@@ -641,3 +641,16 @@ body {
   display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700;
   padding: 1px 6px; border-radius: 999px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke); color: var(--text-dim);
 }
+
+/* ============ 場域地形徽章（M8）============ */
+.terrain-chip {
+  position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
+  z-index: 11; display: inline-flex; gap: 6px; pointer-events: none;
+}
+.terrain-chip__item {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 800; letter-spacing: 0.02em;
+  padding: 3px 11px; border-radius: 999px;
+  background: rgba(0,0,0,0.5); border: 1px solid var(--stroke);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}

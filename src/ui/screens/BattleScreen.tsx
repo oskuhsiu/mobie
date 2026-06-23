@@ -7,7 +7,9 @@ import { applyBattlePrep } from '@/store/ext'
 import { buildBattlePokemon } from '@/game/stats'
 import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
-import type { BattlePokemon } from '@/game/types'
+import type { BattlePokemon, TerrainId } from '@/game/types'
+import { lookupRegion } from '@/game/data/regionLookup'
+import { resolveBattleTerrains, resolveTerrainMult, lookupTerrain } from '@/game/data/terrains'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
@@ -63,6 +65,19 @@ function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
         </motion.div>
       )}
     </AnimatePresence>
+  )
+}
+
+/** 場域地形小徽章（常駐 HUD）：顯示目前生效地形 icon + 名稱；中性/無地形不顯示。 */
+function TerrainChip({ terrainIds }: { terrainIds: TerrainId[] }) {
+  const defs = terrainIds.map(lookupTerrain).filter((d): d is NonNullable<typeof d> => !!d && d.id !== 'neutral')
+  if (defs.length === 0) return null
+  return (
+    <div className="terrain-chip" title="場域地形：影響該屬性招式的威力">
+      {defs.map((d) => (
+        <span key={d.id} className="terrain-chip__item">{d.icon} {d.name}</span>
+      ))}
+    </div>
   )
 }
 
@@ -239,13 +254,28 @@ export function BattleScreen() {
     // 戰前縫：S1 道具/特性 statMod（兩方）+ S2 羈絆（只玩家隊）。全關＝原封不動。
     const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattlePokemon), prep, true)
     const { team: foes } = applyBattlePrep(context.foeTeam.map(buildBattlePokemon), prep, false)
+    // 場域地形（M8）：依 region.mode/terrains/randomTerrain 解析；隨機地形以 foe 隊伍 cardId 當 seed
+    // 決定論抽（同一場遭遇穩定、不隨 re-render 變動）。arena/無地形＝空＝中性。
+    const region = context.regionId ? lookupRegion(context.regionId) : null
+    const terrainSeed = context.foeTeam.map((c) => c.cardId).join('|')
+    const terrains = region ? resolveBattleTerrains(region, terrainSeed) : []
+    const terrainDefs = terrains.map(lookupTerrain).filter((d): d is NonNullable<typeof d> => !!d && d.id !== 'neutral')
     const s = useBattleStore.getState()
-    s.init(players, foes)
+    s.init(players, foes, terrains)
     ;(async () => {
       await wait(700)
       s.pushLog(`對手派出了 ${foes[0].nameZh}！`)
       await wait(280)
       s.pushLog(`上吧，${players[0].nameZh}！`)
+      // 開場地形揭示（plan/11 §1.3）：有地形才演 banner
+      if (terrainDefs.length > 0) {
+        await wait(220)
+        s.setBanner(`${terrainDefs.map((d) => d.icon).join('')} 場域地形：${terrainDefs.map((d) => d.name).join(' + ')}`)
+        s.pushLog(`場域地形：${terrainDefs.map((d) => `${d.icon}${d.name}`).join(' + ')}（影響對應屬性招式威力）`)
+        await wait(1100)
+        s.setBanner(null)
+        await wait(140)
+      }
       if (modifiers.length > 0) {
         await wait(220)
         s.setBanner(`✦ 羈絆發動！ ${modifiers.map((m) => m.icon).join(' ')}`)
@@ -402,7 +432,7 @@ export function BattleScreen() {
     if (!b0) return
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount }, { ext })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount }, { ext, terrainMultiplier: resolveTerrainMult })
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -431,7 +461,7 @@ export function BattleScreen() {
     await wait(620)
     fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { ext })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { ext, terrainMultiplier: resolveTerrainMult })
     await playEvents(b0, events)
     store().setBattle(nextState)
     store().setBanner(null)
@@ -451,7 +481,7 @@ export function BattleScreen() {
     setPendingSwitch(null)
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { ext })
+    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { ext, terrainMultiplier: resolveTerrainMult })
     await playEvents(b0, events)
     store().setBattle(nextState)
 
@@ -485,6 +515,8 @@ export function BattleScreen() {
 
       {/* 前景 HUD（疊在 3D 之上） */}
       <div className="col battle-fg" style={{ flex: 1, position: 'relative', zIndex: 10 }}>
+      {/* 場域地形徽章（頂部置中常駐；中性/無地形不顯示） */}
+      <TerrainChip terrainIds={battle.field.terrainEffects.current} />
       {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <div className="combat-hud combat-hud--foe">

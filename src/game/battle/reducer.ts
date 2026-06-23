@@ -2,7 +2,7 @@
 // 不含任何 UI / 動畫字眼，只吐 domain events，方便單測與「一次算完、畫面慢慢演」。
 // 設計真相：plan/01-architecture、plan/06-battle-reference、第二場 conclusion。
 
-import type { BattlePokemon } from '@/game/types'
+import type { BattlePokemon, TypeName, TerrainId } from '@/game/types'
 import {
   resolveAttack,
   attackQteMultiplier,
@@ -20,6 +20,21 @@ export interface BattleSide {
   activeIndex: number
 }
 
+/**
+ * 場域狀態（M8，plan/11 §1 / plan/12 統一稱 fieldState）——戰鬥內暫態，不持久化、不回寫 Region/OwnedUnit。
+ * M8 先有地形（terrainEffects）；M12 再補 teamStatuses/enemyStatuses/comboCastEffects。
+ */
+export interface FieldState {
+  /**
+   * 地形效果：分初始（開場決定/隨機抽，不變，供 UI 對照）vs 目前（攻擊結算讀此；
+   * M11「地形突變」野外意外會改 current）。只存 id，倍率由注入的 resolver 解析（reducer 不認識地形語意）。
+   */
+  terrainEffects: {
+    initial: TerrainId[]
+    current: TerrainId[]
+  }
+}
+
 /** 完整戰鬥狀態（canonical 戰鬥態；派生顯示態由 BattleScreen 自己維護） */
 export interface BattleState {
   player: BattleSide
@@ -28,6 +43,8 @@ export interface BattleState {
   turn: number
   /** 勝方；null = 進行中 */
   winner: Side | null
+  /** 場域狀態（M8）；無地形時 terrainEffects 為空陣列＝行為等同 M1.x */
+  field: FieldState
 }
 
 /** 玩家本回合的行動 */
@@ -111,6 +128,12 @@ export interface TurnOptions {
    * 預設不傳＝行為與 M1.x 完全一致。reducer 不認識「道具/羈絆」，只認識 hook（damageHooks/turnEndTriggers/chain）。
    */
   ext?: ExtBundle
+  /**
+   * 地形倍率解析器（M8，plan/11 §5）：依招式屬性 + 一組地形 id 回 power 倍率，如 rng 般注入。
+   * reducer 自己帶入「目前地形」（field.terrainEffects.current），故 resolver 只認 (moveType, terrainIds)。
+   * 預設不傳＝無地形＝×1（既有測試不動）。
+   */
+  terrainMultiplier?: (moveType: TypeName, terrainIds: TerrainId[]) => number
 }
 
 export interface TurnResult {
@@ -120,16 +143,21 @@ export interface TurnResult {
 
 // ── 建構 / 選取 ────────────────────────────────────────────────
 
-/** 由雙方隊伍建出初始戰鬥狀態（active=0、turn=1、未分勝負） */
+/**
+ * 由雙方隊伍建出初始戰鬥狀態（active=0、turn=1、未分勝負）。
+ * `terrains`＝開場地形 id（M8，由 setup 依 region 解析；省略＝中性無地形＝行為等同 M1.x）。
+ */
 export function createBattleState(
   playerMembers: BattlePokemon[],
   foeMembers: BattlePokemon[],
+  terrains: TerrainId[] = [],
 ): BattleState {
   return {
     player: { members: playerMembers, activeIndex: 0 },
     foe: { members: foeMembers, activeIndex: 0 },
     turn: 1,
     winner: null,
+    field: { terrainEffects: { initial: [...terrains], current: [...terrains] } },
   }
 }
 
@@ -165,6 +193,12 @@ function cloneState(state: BattleState): BattleState {
     foe: { members: state.foe.members.map((m) => ({ ...m })), activeIndex: state.foe.activeIndex },
     turn: state.turn,
     winner: state.winner,
+    field: {
+      terrainEffects: {
+        initial: [...state.field.terrainEffects.initial],
+        current: [...state.field.terrainEffects.current],
+      },
+    },
   }
 }
 
@@ -181,6 +215,8 @@ interface AttackParams {
   source?: string
   /** S3 傷害鉤（注入；hook 自行用 attacker 判定是否生效） */
   damageHooks?: DamageHook[]
+  /** 地形倍率解析器（M8，注入）：依攻擊招式屬性回 power 倍率（讀 currentTerrains）；無＝×1 */
+  terrainResolve?: (moveType: TypeName) => number
 }
 
 /** 某方當前 active 倒下後的強制換人：依序送下一隻；無人可換則該方落敗、戰鬥結束。 */
@@ -210,6 +246,7 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
     rng: params.rng,
     qteMult: params.qteMult ?? 1,
     damageMult: params.damageMult ?? 1,
+    terrainMult: params.terrainResolve?.(attacker.move.type) ?? 1,
     forceCrit: params.forceCrit ?? false,
     damageHooks: params.damageHooks,
   })
@@ -267,6 +304,12 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
   const w = cloneState(state)
   const events: BattleEvent[] = []
 
+  // 地形倍率解析器：綁定「目前地形」（讀 w.field 故 M11 地形突變改 current 後也即時反映），
+  // 攻擊時依招式屬性算倍率。未注入 terrainMultiplier＝無地形＝undefined＝performAttack 內 ×1。
+  const terrainResolve = options.terrainMultiplier
+    ? (moveType: TypeName) => options.terrainMultiplier!(moveType, w.field.terrainEffects.current)
+    : undefined
+
   if (action.type === 'ATTACK') {
     // 星擊 Finisher：大倍率 + 必定會心；跳過支援輪盤
     const starStrike = action.starStrike === true
@@ -288,13 +331,13 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       else if (outcome === 'crit') playerForceCrit = true
       else if (outcome === 'ally') {
         const allyIdx = nextLivingIndex(w.player) // 待命的存活隊友補一刀
-        if (allyIdx >= 0) performAttack(w, 'player', { rng, attackerIndex: allyIdx, source: 'support-ally', damageHooks }, events)
+        if (allyIdx >= 0) performAttack(w, 'player', { rng, attackerIndex: allyIdx, source: 'support-ally', damageHooks, terrainResolve }, events)
       }
     }
 
     const playerQte = action.quality ? attackQteMultiplier(action.quality, action.mashCount ?? 0) : 1
-    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks }
-    const foeOpts: AttackParams = { rng, damageHooks }
+    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks, terrainResolve }
+    const foeOpts: AttackParams = { rng, damageHooks, terrainResolve }
 
     const playerFirst = playerActsFirst(activeOf(w, 'player'), activeOf(w, 'foe'), rng)
     const order: Side[] = playerFirst ? ['player', 'foe'] : ['foe', 'player']
@@ -327,7 +370,7 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
     events.push({ type: 'switchDefenseResolved', side, index: toIndex, defenseQuality, damageMult })
 
     // 對手對「換上的」攻擊一次（玩家本回合不攻擊）
-    performAttack(w, 'foe', { rng, damageMult, damageHooks }, events)
+    performAttack(w, 'foe', { rng, damageMult, damageHooks, terrainResolve }, events)
   }
 
   w.turn = state.turn + 1

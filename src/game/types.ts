@@ -7,6 +7,15 @@ export type TypeName =
 
 export type MoveCategory = 'physical' | 'special'
 
+/**
+ * 地形 id（M8 場域系統，plan/11 §1）——型別住此（共用型別家），
+ * 地形數值（mods/名稱/圖示）資料住 `data/terrains.ts`（手寫非產生檔），避免型別↔資料循環依賴。
+ */
+export type TerrainId =
+  | 'grassland' | 'volcanic' | 'coastal' | 'stormfield' | 'cavern'
+  | 'haunt' | 'mystic' | 'dragons-peak' | 'sandstorm' | 'snowfield'
+  | 'flowerfield' | 'neutral'
+
 /** 性格 id（0–24），對應 individual.ts 的 NATURES 表 */
 export type NatureId = number
 
@@ -108,6 +117,15 @@ export interface Region {
    * gating 集中於 encounter/battle/result setup（依 mode 決定 roll 什麼、能不能捕獲）。
    */
   mode: 'arena' | 'wild'
+  /**
+   * 場域地形（M8，plan/11 §1）——只影響攻擊 power、不持久化進 OwnedUnit：
+   * - 固定地形：列出 1–2 個 TerrainId（混合＝逐屬性相乘後夾 [0.5,1.5]）。
+   * - `randomTerrain:true`：此處改當「地形池」，開場由 encounter seed 決定論抽 1 個。
+   * 省略＝中性（無倍率，等同 arena）。
+   */
+  terrains?: TerrainId[]
+  /** 隨機地形區：開場從 `terrains`（地形池）決定論抽 1 個（plan/11 §1.3） */
+  randomTerrain?: boolean
   /** 主題色（漸層起訖），用於畫面背景 */
   gradient: [string, string]
   /** emoji / 圖示 */
