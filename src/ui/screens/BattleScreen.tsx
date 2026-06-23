@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
+import { useSettings } from '@/store/settingsStore'
 import { buildBattlePokemon } from '@/game/stats'
 import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
@@ -208,6 +209,8 @@ export function BattleScreen() {
   const support = useBattleStore((s) => s.support)
   const energy = useBattleStore((s) => s.energy)
   const log = useBattleStore((s) => s.log)
+  // 已啟用模組組成的注入能力包（plan/09 §0）；M6 註冊表為空＝EMPTY_EXT＝零行為改變。
+  const ext = useSettings((s) => s.ext)
 
   const fxRef = useRef<FxHandle>(null)
   const stageRef = useRef<StageHandle>(null)
@@ -368,7 +371,7 @@ export function BattleScreen() {
     if (!b0) return
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount }, { ext })
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -380,7 +383,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents])
+  }, [playEvents, ext])
 
   // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出
   const runStarStrike = useCallback(async () => {
@@ -397,7 +400,7 @@ export function BattleScreen() {
     await wait(620)
     fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { ext })
     await playEvents(b0, events)
     store().setBattle(nextState)
     store().setBanner(null)
@@ -406,7 +409,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents, rootShake])
+  }, [playEvents, rootShake, ext])
 
   // 主動換人：收回換上 index → 對手打換上的 → 防禦 QTE 抵減
   const runSwitchTurn = useCallback(async (index: number, defenseQuality: QteQuality) => {
@@ -417,7 +420,7 @@ export function BattleScreen() {
     setPendingSwitch(null)
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality })
+    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { ext })
     await playEvents(b0, events)
     store().setBattle(nextState)
 
@@ -425,7 +428,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents])
+  }, [playEvents, ext])
 
   // 連打蓄力結束 → 帶 timing 品質 + 連打次數解算攻擊回合
   const onMashDone = useCallback((count: number) => {

@@ -1,5 +1,6 @@
 import type { BattlePokemon } from '@/game/types'
 import { effectivenessLabel, typeEffectiveness } from '@/game/data/typeChart'
+import type { DamageHook } from '@/game/ext/seams'
 
 /** Timing QTE 命中品質 */
 export type QteQuality = 'perfect' | 'good' | 'normal' | 'weak'
@@ -36,6 +37,8 @@ export interface AttackOptions {
   damageMult?: number
   /** 強制會心（支援輪盤「必定會心」用）；仍會消耗 crit 亂數以保持順序 */
   forceCrit?: boolean
+  /** S3 傷害鉤（plan/09 §0）：傷害結算中段的純倍率（道具 damageHook…）；預設無＝×1。各 hook 自行用 ctx 判定是否生效。 */
+  damageHooks?: DamageHook[]
 }
 
 export interface AttackResult {
@@ -110,7 +113,13 @@ export function resolveAttack(
   const crit = options.forceCrit === true || critRoll < CRIT_RATE
   const critMult = crit ? CRIT_MULT : 1
 
-  let damage = Math.floor(base * stab * effectiveness * variance * critMult * qteMult * damageMult)
+  // S3 傷害鉤：與 qte/damageMult 同位階的純倍率，逐 hook 相乘（預設無＝1）。
+  let hookMult = 1
+  if (options.damageHooks) {
+    for (const hook of options.damageHooks) hookMult *= hook({ attacker, defender, effectiveness })
+  }
+
+  let damage = Math.floor(base * stab * effectiveness * variance * critMult * qteMult * damageMult * hookMult)
   damage = Math.max(1, damage) // 命中且有效，至少 1
 
   const defenderHpAfter = Math.max(0, defender.currentHp - damage)

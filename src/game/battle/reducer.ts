@@ -10,6 +10,7 @@ import {
   playerActsFirst,
   type QteQuality,
 } from '@/game/battle/engine'
+import type { ExtBundle, DamageHook } from '@/game/ext/seams'
 
 export type Side = 'player' | 'foe'
 
@@ -94,6 +95,11 @@ export function supportOutcome(roll: number): SupportOutcome {
 export interface TurnOptions {
   /** 隨機來源（命中/變異/暴擊/速度同值決勝），預設 Math.random */
   rng?: () => number
+  /**
+   * 注入的純能力包（plan/09 §0）：已啟用模組由 store 層 assembleExt 組好再傳入。
+   * 預設不傳＝行為與 M1.x 完全一致。reducer 不認識「道具/羈絆」，只認識 hook（damageHooks/turnEndTriggers/chain）。
+   */
+  ext?: ExtBundle
 }
 
 export interface TurnResult {
@@ -162,6 +168,8 @@ interface AttackParams {
   attackerIndex?: number
   /** RandomEvent 來源標記 */
   source?: string
+  /** S3 傷害鉤（注入；hook 自行用 attacker 判定是否生效） */
+  damageHooks?: DamageHook[]
 }
 
 /** 某方當前 active 倒下後的強制換人：依序送下一隻；無人可換則該方落敗、戰鬥結束。 */
@@ -192,6 +200,7 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
     qteMult: params.qteMult ?? 1,
     damageMult: params.damageMult ?? 1,
     forceCrit: params.forceCrit ?? false,
+    damageHooks: params.damageHooks,
   })
 
   // 統一 RandomEvent：命中、會心
@@ -243,6 +252,7 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
   if (state.winner !== null) return { nextState: state, events: [] }
 
   const rng = options.rng ?? Math.random
+  const damageHooks = options.ext?.damageHooks // S3：注入兩方攻擊，hook 自行依 attacker 判定
   const w = cloneState(state)
   const events: BattleEvent[] = []
 
@@ -267,13 +277,13 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       else if (outcome === 'crit') playerForceCrit = true
       else if (outcome === 'ally') {
         const allyIdx = nextLivingIndex(w.player) // 待命的存活隊友補一刀
-        if (allyIdx >= 0) performAttack(w, 'player', { rng, attackerIndex: allyIdx, source: 'support-ally' }, events)
+        if (allyIdx >= 0) performAttack(w, 'player', { rng, attackerIndex: allyIdx, source: 'support-ally', damageHooks }, events)
       }
     }
 
     const playerQte = action.quality ? attackQteMultiplier(action.quality, action.mashCount ?? 0) : 1
-    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit }
-    const foeOpts: AttackParams = { rng }
+    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks }
+    const foeOpts: AttackParams = { rng, damageHooks }
 
     const playerFirst = playerActsFirst(activeOf(w, 'player'), activeOf(w, 'foe'), rng)
     const order: Side[] = playerFirst ? ['player', 'foe'] : ['foe', 'player']
@@ -306,10 +316,19 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
     events.push({ type: 'switchDefenseResolved', side, index: toIndex, defenseQuality, damageMult })
 
     // 對手對「換上的」攻擊一次（玩家本回合不攻擊）
-    performAttack(w, 'foe', { rng, damageMult }, events)
+    performAttack(w, 'foe', { rng, damageMult, damageHooks }, events)
   }
 
   w.turn = state.turn + 1
+
+  // S4 回合末同步觸發器（剩飯回血、氣勢披帶持續型…）。contract D（plan/09 §0.4）：
+  // 必須在下面的 timeout 判定「之前」跑，HP 變動才會納入 timeout 的剩餘血量比例。只有未分勝負時才跑。
+  if (w.winner === null && options.ext?.turnEndTriggers) {
+    for (const trigger of options.ext.turnEndTriggers) {
+      events.push(...trigger({ state: w, rng }))
+      if (w.winner !== null) break
+    }
+  }
 
   // 回合上限：到頂仍未分勝負 → 依剩餘血量比例判定（平手判玩家勝，對自用遊戲友善）。
   // 自然勝負已在上面 performAttack/applyForcedSwitch 設定 winner，這裡只接管「打不完」。
