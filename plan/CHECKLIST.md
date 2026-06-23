@@ -180,12 +180,17 @@
 > **CDP 驗證（SwiftShader）**：11 區地形提示正確（8 單一/2 混合/1 隨機）；常綠森林戰鬥顯 TerrainChip「🌿 草原」+ 開場揭示 log；模擬壓力測試（11 區×18 seed×模組關/開）地形納入 HP 邊界/終局/決定論；零 console error。共 +33 vitest = 223 全綠。
 > **M7 收尾 follow-up（氣勢披帶 post-damage 縫 / 威嚇 onSwitchIn 縫）本輪未碰 engine/reducer 換人段，續留 M9+。**
 
-## M9 — 連鎖攻擊（Combo 基底；見 `09`）
+## M9 — 連鎖攻擊（Combo 基底；見 `09`）✅ 完成（Chrome CDP 驗證）
+> 守鐵律：純 reducer（連鎖規則 `ext.chain` 如 rng 般注入，reducer 不認識「連鎖槽 UI」）、
+> 連鎖槽戰鬥暫態（`BattleState.chainGauge`，不持久化）、單招街機（各段用自己專屬招、不引新招）、
+> 可選掛載（`CHAIN_MODULE` 只掛 S5；停用＝連鎖槽恆 0、不 emit、回單體攻擊＝零殘留）。
 ### 連鎖攻擊（原 M6.d）
-- [ ] 連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event
-- [ ] `SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告）；reducer 重驗存活/目標、吃速度、倒下截斷
-- [ ] 連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX
-- [ ] → 合體技（M12）是其升級變體，此處建好基底
+- [x] 連鎖槽（玩家普攻命中依 QTE 品質累積，不綁隨機）+ `chainOpportunity` event（含 maxHits/eligibleIndices）；`game/ext/chain.ts`（S5 ChainRules）push `MODULE_REGISTRY`
+- [x] `SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告）；reducer 重驗存活/目標（防幽靈傷害）、吃速度（§0.4 B 不開特例）、目標倒下即截斷剩餘 hits、領銜者被 KO 連鎖發不出；各段複用 `performAttack`
+- [x] 連續 QTE overlay（複用 `TimingBar` ref/rAF，逐段 remount）+ 連段 combo overlay/FX；連鎖槽 bar（鏡像 star-gauge）+ 🔗連鎖鈕；`chainEligible` reducer/display 共用
+- [x] → 合體技（M12）是其升級變體，此處建好基底
+> **CDP 驗證（SwiftShader）**：開 chain 模組 → 普攻填滿連鎖槽（gauge 0→100%）→ 🔗連鎖鈕亮起 → 發動連鎖 → 逐段 foe tray 確認皆命中同一 active 敵、目標倒下即截斷剩餘 hits、零 console error。
+> +14 vitest（資格/累積/截斷/重驗死亡攻擊者/領銜者 KO/決定論/純函數）= 237 全綠；typecheck/build 綠。simplify 清理（合併重複 opts、去除無效 Omit 標註）。
 
 ## M10 — 養成 · 收集 · 孵化（見 `09`/`10`）
 ### 進化（原 M6.c；**預留技能槽解鎖接點**給 M12）

@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-**M1.x + M3 + M2 + M5 + M6 + M7 + M8 全部完成並 Chrome CDP 驗證**（223 測試 / typecheck / build 全綠）。
+**M1.x + M3 + M2 + M5 + M6 + M7 + M8 + M9 全部完成並 Chrome CDP 驗證**（237 測試 / typecheck / build 全綠）。
 > **全專案實際案例驗證（2026-06-23）**：①**資料完整性**（全 251 物種/招式/8 區+競技場/起始卡/相剋表逐筆掃過，14 測試）②**模擬戰鬥壓力**（324 場完整對戰＝9 區×18 seed×模組關/開，每步驗 HP 邊界/無 NaN/必定終局/決定論，5 測試）③**道具持久化全鏈路**（ownedToCard→build→sanitize→.save 往返，6 測試）④**CDP 真機**（競技場勝→純經驗不捕獲、野外勝→收服 boss roster 16→17、M7 三模組戰鬥生效、4 個 Title modal 開啟皆零 console error）。結論：M1–M7 功能與資料正確、可正常遊玩。
 - **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
 - **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
@@ -14,7 +14,8 @@
 - **M6（共用地基）**：見下方 2026-06-23 M6 註記。延伸系統的掛載地基 + 模式 contract 已落地。
 - **M7（戰鬥條件 hook 層）**：見下方 2026-06-23 M7 註記。羈絆（S2）/ 持有道具（S1/S3/S4）/ 特性（S1/S3）+ 設定 UI，全複用 M6 引擎、reducer/engine 不動。
 - **M8（場域/地形）**：見下方 2026-06-23 M8 註記。地形只影響攻擊 power（engine 屬性相剋後乘注入倍率）、`fieldState` 容器、混合/隨機地形區、開場揭示 UI；全複用 M6 注入機制、reducer/engine 不認識地形語意。
-- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M9 連鎖攻擊（Combo 基底，建 `chainOpportunity`/`SUBMIT_CHAIN_RESULT`，為 M12 合體技鋪底），或 M16 Mobie 資訊卡（純 UI、無相依，直接修「戰鬥中看不到自己夥伴」痛點），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M9 / M16 / `09-extension-systems.md` / `14-roadmap-m6-m13.md` / `16-mobie-card-partner-rename.md`。**
+- **M9（連鎖攻擊 Combo 基底）**：見下方 2026-06-24 M9 註記。連鎖槽（`BattleState.chainGauge` 暫態）滿 → `chainOpportunity` → `SUBMIT_CHAIN_RESULT` 單一 action（reducer 重驗存活/目標、吃速度、倒下截斷）；複用 M6 S5 注入 + `performAttack`，純 reducer/單招不變式不破。
+- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M10 養成·收集·孵化（進化 S6 postGrowth / 星級 Grade / 圖鑑成就 `mz.meta.v1` / 抽蛋孵化 `mz.incubator.v1`），或 M16 Mobie 資訊卡（純 UI、無相依，直接修「戰鬥中看不到自己夥伴」痛點），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M10 / M16 / `09-extension-systems.md` / `10-extension-systems-wave2.md` / `14-roadmap-m6-m13.md`。**
 
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
@@ -52,6 +53,14 @@
 > **CDP 驗證（SwiftShader）**：11 區地形提示正確（8 單一 / 2 混合 / 1 隨機）；常綠森林戰鬥顯 TerrainChip「🌿 草原」+ 開場揭示 log；模擬壓力測試 11 區×18 seed×模組關/開把地形納入 HP 邊界/終局/決定論；正確性審查（7 關注點逐一查核）無 bug；零 console error。
 > **守住約束**：純 reducer（地形如 rng 注入）、engine 收純倍率不 import 地形資料、只存 canonical OwnedUnit（field 暫態）、單招街機（地形不引新攻擊招）、生成檔只動 regions.ts。
 > **已知 follow-up（不阻塞）**：M11 地形突變（terrainShift 改 field.current，野外意外）/ M12 fieldState 補三子欄；live 的 current 突變路徑目前只單測覆蓋（M11 落地補整合）。
+>
+> **M9 連鎖攻擊（2026-06-24，已完成 Chrome CDP 驗證）**：Mezastar 招牌連鎖，**複用 M6 S1–S8 注入地基，reducer 純函數/單招不變式不破**。
+> **① 模組**（`game/ext/chain.ts`）：`CHAIN_RULES{maxHits:3, gaugeFull:100, gainBase:30}`；`CHAIN_MODULE` 只掛 **S5 chainResolve**（= 規則），push `MODULE_REGISTRY`。停用＝`ext.chain` undefined＝連鎖槽恆 0、不 emit、回單體攻擊（零殘留）。
+> **② reducer**（`battle/reducer.ts`）：`BattleState.chainGauge`（戰鬥暫態，`createBattleState`/`cloneState` 帶上）——玩家普攻**命中**依 QTE 品質（`CHAIN_GAIN_BY_QUALITY`，星擊不續槽）累積；滿則回合末 emit `chainOpportunity{maxHits, eligibleIndices}`（`chainEligible`＝active 在前+存活隊友，cap maxHits；**reducer/display 共用** export）。`SUBMIT_CHAIN_RESULT{hits}` 單一 action：佔玩家攻擊型相位一格、**吃速度**（`playerActsFirst`，§0.4 B 不開特例）；`resolvePlayerChain` 逐段**重驗**（死亡攻擊者跳過不計連段 / 目標非同一 active 即截斷 / 領銜者被敵先手 KO 連鎖發不出），各段複用 `performAttack`（單招、不引新招）+ emit `chainHit{comboCount}`；提交即把 chainGauge 歸零（消耗）。
+> **③ display**（`BattleScreen`/`battleStore`）：連鎖槽 bar（**鏡像 star-gauge** class）讀 `battle.chainGauge`；`chainReady` 亮 🔗連鎖鈕 → `startChain` 算 participants → `chainQte` 相位逐段跑 `TimingBar`（key 重掛重置指針，ref/rAF 守效能紅線）收集 `ChainHit[]` → `runChain` 派 `SUBMIT_CHAIN_RESULT`；`chainHit` 演連段 combo overlay（`store.combo`）+ spark FX。`SettingsModal` chain 標 available。
+> **持久化**：無新增（chainGauge 暫態）。**新增依賴：無。** +14 vitest = 237 全綠。**simplify**：合併 chain/foe `opts`、去除無效 `Omit<AttackParams>` 標註（欄位本就 optional）。
+> **CDP 驗證（SwiftShader）**：開 chain 模組 → 普攻填滿連鎖槽（0→100%）→ 🔗連鎖鈕 → 發動 → 逐段 foe tray 證**皆命中同一 active 敵、目標倒下即截斷剩餘 hits**（熔岩蟲 28→61→倒下，第 3 段截斷、不追擊新上場敵）、零 console error。
+> **已知 follow-up（不阻塞）**：合體技（M12）＝連鎖升級變體（`ComboDef` + `SUBMIT_CHAIN_RESULT` 升級判定 + `comboCastEffects` 灌注 fieldState），此處基底已備。
 >
 > **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
 
