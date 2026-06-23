@@ -1,0 +1,20 @@
+{
+  "topic": "審查 pokemon-mezastar M3 R3F 3D 戰鬥場景的畫面設計：billboard 立繪站在發光 3D 地台（2.5D）、攻擊撲擊/受擊 FX 環、3D 模型管理 modal、收服 3D 舞台。畫面 PNG 在 /tmp/mz_review/01..06。針對 iPad 直式自用體感給具體可行建議：哪些 OK、哪些該改、優先序。",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 3,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T09:27:08+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-092708",
+  "models": {}
+}
