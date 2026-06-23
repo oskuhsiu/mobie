@@ -7,8 +7,9 @@ import { audio } from '@/audio/audioEngine'
 const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
 const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
 const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
+const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library'
+type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save'
 
 export function TitleScreen() {
   const { send } = useGame()
@@ -63,6 +64,7 @@ export function TitleScreen() {
         <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
       </motion.div>
 
       <Suspense fallback={null}>
@@ -70,6 +72,7 @@ export function TitleScreen() {
           {overlay === 'models' && <ModelManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'scan' && <CardScannerModal onClose={() => setOverlay('none')} />}
           {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
+          {overlay === 'save' && <SaveManagerModal onClose={() => setOverlay('none')} />}
         </AnimatePresence>
       </Suspense>
     </div>

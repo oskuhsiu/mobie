@@ -77,6 +77,13 @@ export async function getModelUrl(speciesId: number): Promise<string | null> {
   return url
 }
 
+/** 取某 speciesId 的原始 GLB Blob（匯出存檔用；無則 null）。 */
+export async function getModelBlob(speciesId: number): Promise<Blob | null> {
+  if (!hasIDB()) return null
+  const blob = await tx<Blob | undefined>('readonly', (s) => s.get(speciesId) as IDBRequest<Blob | undefined>)
+  return blob ?? null
+}
+
 /** 刪除某 speciesId 的自訂模型（回到 billboard fallback）。 */
 export async function deleteModel(speciesId: number): Promise<void> {
   if (!hasIDB()) return
