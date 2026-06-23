@@ -15,6 +15,7 @@
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
 > **新增依賴 `fflate@0.8.3`**（~8KB 零依賴 zip）。**新增持久化：`mz.savemeta.v1`(localStorage)、`mz-save-backup`(IDB)**。新增 store/lib 方法：`rosterStore.replaceAll`、`cardLibrary.replaceAllCards`、`modelStore.getModelBlob`/`clearAllModels`。匯出預設**不含模型**（可選開關，因 GLB 大）。新舊判斷半自動（一律顯示對照由使用者拍板，不做跨裝置 3-way merge）。+22 vitest（saveMeta 12 / bundle 10）。
+> **正確性驗證（三層，皆通過）**：①22 vitest（純邏輯/壞檔分類）②Chrome CDP 真實 app round-trip（自訂狀態→app 匯出→清成新裝置→匯入→**逐欄含模型二進位深度比對**，過程修掉兩個*測試腳本*的競態/IDB-schema bug，產品本身無誤）③**5-agent 盲測雙向交叉驗證**——3 個獨立 packer（各自手寫 codec、禁用專案 `packSave`）打包→app 匯入逐欄一致；2 個獨立 unpacker 解 app 匯出檔→獨立重算 crc32 通過、逐欄一致。5 個 agent 只憑讀 `bundle.ts` 就各自得出相同 crc32 標準與 payload 順序＝格式無歧義。**結論：匯出/匯入正確、無待修產品碼。** 驗證腳本在 /tmp（ephemeral，未入庫，符合專案 CDP 慣例）。
 >
 > M3/M2 新增依賴：`three`/`@react-three/fiber@8`/`@react-three/drei@9`、`jsqr`、`qrcode`。重的 overlay（BattleStage/CaptureStage/掃卡/卡庫/模型）全 lazy，主 bundle ~406KB。**新增 IndexedDB：`mz-models`(GLB blob)、`mz-cards`(cards 表)；roster 仍 `mz.roster.v2`(localStorage)。** `createOwnedUnit` 現吃 card 顯式 ivs/nature/shiny 覆寫 seed roll。已知 follow-up：`cardLibrary`/`modelStore` 的 IndexedDB plumbing 可抽共用 factory（本輪未動已出貨碼）。BarcodeDetector 在 iPad Safari 不可靠 → 掃碼改 jsQR（getUserMedia+canvas），plan 原寫 zxing fallback 不需。
 
@@ -134,6 +135,7 @@
 - 型別/建置：`npm run typecheck`、`npm run build`。
 - 測試：`npm test`（vitest）。
 - 視覺驗證（無 playwright/chromium-cli）：本機有 Google Chrome，可用 `--headless=new --remote-debugging-port=9222` + Node 24 內建 WebSocket 寫 CDP 腳本截圖（按鈕用 `el.click()`，QTE 區需 dispatch `PointerEvent('pointerdown')`）。前次截圖在 `/tmp/mz_shots/`（會隨重開機清掉）。
+- **存檔匯出/匯入的 CDP 驗證**（M5 用過）：`npm run preview`(4173) 服務 dist；CDP 用 `Browser.setDownloadBehavior`(收匯出檔)、`DOM.setFileInputFiles`(餵匯入檔)、`Storage.clearDataForOrigin`(模擬新裝置)、`Emulation.setDeviceMetricsOverride`(高視窗)。**踩過的坑**：手寫 IDB helper `indexedDB.open` 一定要帶與 app 一致的 `onupgradeneeded`(建 `glb`/`cards` store)，否則把 DB 建成無 store 污染 app；讀狀態要等 UI 成功訊息出現再讀(避免在 IDB commit 前的競態)。**跨實作盲測**：可派獨立 agent 各寫 codec、與 app 互通交叉驗證(M5 用 5-agent 雙向驗過)。
 
 ## 8. 已知坑
 - `vite.config.ts` 故意**不在 `tsconfig.json` 的 include**（避免 node:url / vitest `test` 欄位的型別錯誤；它由 esbuild 轉譯、runtime 才跑）。
@@ -144,5 +146,6 @@
 - **`/agent-chat`** — 遇到開放式設計抉擇時（這專案前三個大決策都用它三方收斂）。先上網查證再開，效果最好。
 - **`/run`** — 啟動 app 並截圖驗證「精美度」與完整 loop（本專案是 browser-driven，用 Chrome headless + CDP）。
 - **`/karpathy-guidelines`** — 寫/改碼時保持 surgical、簡潔、可驗證（本專案已沿用）。
-- **`/code-review`** 或 **`/simplify`** — 實作完一個 M1.5 子步後做品質把關。
+- **`/code-review`** 或 **`/simplify`** — 實作完一個里程碑子步、綠燈 commit 前做品質把關。
+- 跨實作互通正確性（如存檔格式）可派**獨立 agent 盲測**（各寫 codec、與 app 雙向交叉驗證），比自寫自測更能抓盲點。
 - 安裝前說明、Web/PWA、精美不略過等偏好已存在 memory（`pokemon-mezastar-project`、`explain-before-install`），新 session 會自動帶入。

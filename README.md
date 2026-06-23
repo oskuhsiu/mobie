@@ -20,6 +20,13 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Team-select helper**: per-card "counters N / weak to N" badges vs the whole foe team, plus a
   one-tap "recommend team".
 - **Turn cap** to prevent unwinnable stalemates.
+- **QR cards & library** (M2): scan a card QR (or hand-enter the code) to add Pokémon; browse, import
+  (JSON/CSV), make custom cards, and print QR codes from the in-app library.
+- **3D battle stage** (M3): React-three-fiber stage with user drop-in GLB models (IndexedDB), falling
+  back to PokéAPI billboard sprites.
+- **Portable saves** (M5): export your roster/cards (+ optional 3D models) as a `username.save` (zip)
+  to your own Google Drive/Files via the iOS share sheet; re-import with old/new detection, consented
+  overwrite, and an automatic pre-import backup. **No backend** — your cloud, your file.
 - Content: national dex 1–251, 8 themed regions (+ practice), 16 cross-type starter cards.
 
 ## Getting started
@@ -49,8 +56,10 @@ open the Mac's LAN IP (e.g. `http://192.168.x.x:5173/`) in iPad Safari, or build
 src/
   app/        React shell + XState game-machine provider
   game/       Pure domain logic (battle reducer/engine, data, growth, individuality, recommend)
+    save/     Portable save file: envelope meta, zip pack/unpack, export/import I/O, backup (M5)
   store/      Zustand stores (battle display state, persistent roster)
-  ui/         Screens, components, global.css
+  ui/         Screens, components (incl. card scanner/library, model & save manager modals), global.css
+  scene/r3f/  scene/models/   3D battle stage + user GLB store (M3)
   audio/  scene/fx/  input/   Audio, particle FX, QTE seam
 scripts/gen_dex.mjs   PokéAPI data generator
 plan/                 Design docs & milestones (source of truth)
@@ -72,6 +81,12 @@ is the only hand-authored data file.
 
 ## Status
 
-M1 + M1.5 (a–h) complete and device-verified; content expanded to dex 1–251 / 8 regions / 16 starters.
-Latest round added capture-to-roster, loss EXP, practice mode, turn cap, near-character HP plates, and
-team-select recommendations. **Next: M2 — QR scan + card library** (see `plan/03-milestone-M2.md`).
+**M1 + M1.5 (a–h), M2 (QR scan + card library), M3 (R3F 3D stage + GLB drop-in), and M5 (portable
+save files) are complete** and device/CDP-verified — 122 Vitest tests, typecheck, and build all green.
+Content: national dex 1–251, 8 regions (+ practice), 16 starters. M5 save export/import correctness was
+additionally cross-validated by an independent **5-agent blind interop test** (both directions,
+byte-level fidelity incl. binary 3D models).
+
+**Next:** M4 (MediaPipe motion-control QTE — currently skipped by the owner) or the M6+ extension
+milestones; the terrain / mode-split system (formerly M7) is being developed in parallel. See
+`plan/CHECKLIST.md` for the milestone breakdown and `handoff.md` for the live working state.
