@@ -1,0 +1,3 @@
+E1 我同意獨立 M8，而且支持 gemini 的修正：M8 先用小樣本一次打穿 8.0–8.e，驗證 schema、hook、訓練、繼承、合體技、對手 profile 的端到端平衡，再把內容按世代/地形分批鋪開；否則半套技能資料會讓後續平衡失真。E3 地雷我補兩個護欄：`fieldState` 可以統一，但要分清 `terrainEffects`、`teamStatuses`、`enemyStatuses`、`comboCastEffects` 的來源與 expiry，避免同容器變成雜物桶；對手 profile 只能宣告「反射 hook」，不能新增 AI action 或技能選擇分支。另合體技每場一次的記錄應放 BattleState runtime，例如 `usedComboKeys`，不能寫回 OwnedUnit。整體已收斂，我支持寫 plan 12 / M8。
+
+STATUS: AGREE

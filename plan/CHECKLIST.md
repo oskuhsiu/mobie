@@ -196,3 +196,30 @@
 - [ ] 亂入野生（一次性傷害、不新增第 4 隻 unit）／地形突變（改 currentTerrains）
 - [ ] 天降補給（**開場前/戰後**三選一，絕不戰鬥中途）／稀有閃光 boss（encounter flag→異色/高 Grade）／幸運加碼（reward modifier）
 - [ ] backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制
+
+## M8 — 戰鬥技能大模組（見 `12-battle-skill-module.md`）
+> 守單招（技能不直接傷害、進化只解鎖技能槽非新攻擊招）、純 reducer（deterministic hook）、只存 canonical skill id、不動 §0.4。
+> **圓桌定：先用小樣本（如初代御三家）縱向打穿 M8.0–e 全套地基並驗收平衡，再橫向鋪內容（見 `13`）。**
+### M8.0 schema / catalog / persistence（純資料）
+- [ ] `SkillDef`/`ComboDef`/`EncounterSkillProfile`/`FieldState` 型別 + 手寫 catalog（小樣本）+ `resolveSkillHooks` 純函數 + vitest
+- [ ] OwnedUnit 加 canonical `learnedSkillIds/equippedSkillIds/inheritedSkillIds`（不存派生倍率/cooldown）
+### M8.a 技能 hook 觸發（玩家 loadout）
+- [ ] S1–S8 掛載技能 deterministic hook（canonical 輸入→effect commands，機率走 reducer RNG）+ 戰前 loadout 套用
+- [ ] 護欄測試：技能無直接傷害（只 statMod/debuff/terrain/heal/conditionRewrite）；個體面板技能區（與特性分區）
+### M8.b 訓練 / 解鎖
+- [ ] SP 取得（boss/塔層/里程碑，不刷技能 EXP）+ 技能訓練所 UI（學/裝）+ 進化/節點解鎖第 2 槽
+### M8.c 孵化繼承
+- [ ] incubator egg 帶 `inheritedSkillId`（plan/10）+ hatch 落到 `inheritedSkillIds`（種族可學才生效）
+### M8.d 合體技（chain variant + 施放效果）
+- [ ] `ComboDef` + SUBMIT_CHAIN_RESULT 升級判定（屬性配對/種族/羈絆）+ `usedComboKeys` 每組合每場一次（不回寫 OwnedUnit）
+- [ ] 三類施放效果（灌注地形/全隊增益/敵方弱化）寫 `fieldState` + 演出（FxCanvas/framer/audio）+ vitest
+### M8.e 對手技能多樣性（Encounter Skill Profile）
+- [ ] 生成附 0–2 技能標籤（純反射 hook，AI 仍只提交 ATTACK）+ boss/雙人組宣告合體技
+### 場域狀態統一
+- [ ] `fieldState` 容器（terrainEffects/teamStatuses/enemyStatuses/comboCastEffects，各帶 source/expiry）；地形（plan/11）併入
+
+## 內容補完路線圖（見 `13-content-roadmap.md`；引擎驗收後橫向鋪）
+- [ ] 內容階段 1：寶可夢 G3(252–386) + 天氣型地形（晴/雨/沙暴/雪/霧/強風）
+- [ ] 內容階段 2：G4–G5(387–649) + 場地型地形（草地/電氣/精神/薄霧）+ 混合地形區
+- [ ] 內容階段 3：G6–G9(650–1025) 補完 + 特殊型地形（花海/沼澤/蒸氣/聖域）+ 隨機地形區
+- [ ] 資料走 PokéAPI、圖走官方 artwork runtime URL（不內建侵權）；每階段重產 gen_dex

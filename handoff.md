@@ -45,6 +45,15 @@
 > 升級了延伸 backlog #3 場地效果為核心。Backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制。圓桌結論：`session-20260623-102647`。
 > 連帶要改：`types.ts`(Region+mode/terrains)、`gen_dex.mjs` REGION_THEMES(重產 regions.ts)、新 `data/terrains.ts`、engine/reducer/BattleState、捕獲 gating。
 
+> **戰鬥技能大模組 = M8（2026-06-23，尚未實作）**：上維基查 weather/terrain/招式學習/合體技(Pledge) → 三方圓桌「好好討論」收斂。全文 `plan/12-battle-skill-module.md`（CHECKLIST 已加 M8.0–e）。
+> **守住單招硬約束**：選「技能 loadout(選項A)」——專屬 QTE 大招維持單一＝身分；**技能＝非傷害的主動戰術輔助層**（戰前 loadout 1–2 槽 + 戰中 deterministic 條件自動觸發，buff/debuff/地形/條件改寫，**不可直接大傷害**，直接傷害只留專屬招+合體技/星擊）。
+> 特性 vs 技能＝共 S1–S8 hook 引擎、分語義（種族被動 vs 可學主動）。訓練＝SP(boss/塔)買技能+進化解鎖技能槽(非新攻擊招，故 plan/09 §4 仍成立)；繼承＝孵化蛋帶技能(plan/10)。
+> **合體技＝連鎖 Combo 變體**（既有 SUBMIT_CHAIN_RESULT 提交 2 符合隊友→合成大招+施放效果三類「灌注地形/全隊增益/敵方弱化」；不吃能量、每組合每場一次 usedComboKeys、與星擊分流）。
+> **對手多樣性＝Encounter Skill Profile**（單招+0–2 技能標籤的純反射 hook，AI 仍只提交 ATTACK，守對手簡單）。場域狀態統一 `fieldState`(terrainEffects/teamStatuses/enemyStatuses/comboCastEffects)。
+> 持久化只加 canonical `learnedSkillIds/equippedSkillIds/inheritedSkillIds`。圓桌定**先小樣本縱向打穿 M8.0–e、再橫向鋪內容**。圓桌結論：`session-20260623-104127`。
+
+> **內容補完路線圖（plan/13-content-roadmap.md）**：寶可夢分階段補完 G3→G9（共 1025，現 1–251）、地形擴充（天氣/場地/特殊型，依本傳整理）；資料 PokéAPI、圖走**官方 artwork runtime URL（不內建侵權）**；每階段重產 `gen_dex.mjs`。引擎(M6/M7/M8)各自縱向做完後，內容按階段 1/2/3 橫向鋪。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）

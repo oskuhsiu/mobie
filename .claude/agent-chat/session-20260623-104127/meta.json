@@ -1,0 +1,20 @@
+{
+  "topic": "pokemon-mezastar：設計『戰鬥技能訓練/學習/繼承 + 合體技(含施放效果) + 對手技能多樣性』大模組，與現有計畫(單招約束/連鎖/星擊/孵化/特性)合併",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 5,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T10:41:27+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-104127",
+  "models": {}
+}

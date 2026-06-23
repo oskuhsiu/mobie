@@ -58,6 +58,7 @@ function terrainMultiplier(moveType: TypeName, terrains: TerrainDef[]): number {
 | neutral 中性 | ⬜ | （無 mods） | **arena 競技場** |
 
 - **更多地形 / 混合地形落地**：新增 1–2 個混合地形 wild 區（如「海濱濕地＝coastal+grassland」「火山岩窟＝volcanic+cavern」）+ 1 個隨機地形 wild 區（「幻象之境」每場抽）。
+- **擴充地形完整目錄（天氣型 / 場地型 / 特殊型）與分階段推出見 [`13-content-roadmap.md`](13-content-roadmap.md) §2**（依本傳 weather/terrain/環境整理）。合體技灌注的地形（plan/12 §4.2）亦取自該目錄。
 
 ---
 
