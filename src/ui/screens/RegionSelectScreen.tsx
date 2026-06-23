@@ -11,10 +11,10 @@ export function RegionSelectScreen() {
       <div className="col" style={{ gap: 4 }}>
         <div className="eyebrow">Step 1</div>
         <div className="h-title">選擇區域</div>
-        <div className="h-sub">前往不同地帶遭遇野生寶可夢；新手可先去練習場練等</div>
+        <div className="h-sub">前往不同地帶遭遇野生寶可夢；新手可先去競技場練等</div>
       </div>
 
-      {/* 練習場入口：低風險刷經驗，破解「要先贏才能變強」 */}
+      {/* 競技場入口：中性地形、純得經驗、不可捕獲，低風險刷經驗 */}
       <motion.button
         className="practice-cta"
         initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
@@ -23,7 +23,7 @@ export function RegionSelectScreen() {
       >
         <span className="practice-cta__icon">{PRACTICE_REGION.icon}</span>
         <div className="practice-cta__body">
-          <div className="practice-cta__title">練習對戰</div>
+          <div className="practice-cta__title">{PRACTICE_REGION.name}</div>
           <div className="practice-cta__sub">{PRACTICE_REGION.blurb}</div>
         </div>
         <span className="practice-cta__go">開始 →</span>

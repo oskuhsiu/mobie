@@ -6,6 +6,7 @@ import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { getSpecies } from '@/game/data/species'
+import { canCaptureIn } from '@/game/data/regionLookup'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
@@ -149,10 +150,37 @@ function LoseView() {
   )
 }
 
+/** 競技場（mode='arena'）勝利：不可捕獲，純得經驗的勝利畫面。 */
+function ArenaWinView() {
+  const { context } = useGame()
+  const lead = useMemo(
+    () => (context.playerTeam[0] ? buildBattlePokemon(context.playerTeam[0]) : null),
+    [context.playerTeam],
+  )
+  useEffect(() => { audio.play('victory') }, [])
+  return (
+    <div className="center" style={{ flex: 1, gap: 16 }}>
+      <motion.div className="eyebrow" style={{ color: 'var(--good)' }}
+        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>競技勝利！</motion.div>
+      {lead && (
+        <motion.div style={{ width: 'min(52vw,220px)', height: 'min(52vw,220px)' }}
+          initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 140, damping: 13 }}>
+          <PokemonSprite src={lead.artworkUrl} alt={lead.nameZh} />
+        </motion.div>
+      )}
+      <div className="h-title" style={{ fontSize: 28 }}>漂亮的一戰！</div>
+      <div className="h-sub">競技場切磋只得經驗、不可捕獲。想收服就去野外區域吧！</div>
+    </div>
+  )
+}
+
 export function ResultScreen() {
   const { context, send } = useGame()
   const isWin = context.outcome === 'win'
-  const [captureDone, setCaptureDone] = useState(!isWin)
+  // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場勝利不進捕獲流程。
+  const canCapture = isWin && canCaptureIn(context.regionId)
+  const [captureDone, setCaptureDone] = useState(!canCapture)
 
   // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
@@ -181,9 +209,11 @@ export function ResultScreen() {
 
   return (
     <div className="col" style={{ flex: 1 }}>
-      {isWin
+      {canCapture
         ? <WinView onCaptured={onCaptured} />
-        : <LoseView />}
+        : isWin
+          ? <ArenaWinView />
+          : <LoseView />}
 
       {lastResults.length > 0 && (
         <motion.div className="exp-summary" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>

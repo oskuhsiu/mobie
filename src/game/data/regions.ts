@@ -6,6 +6,7 @@ export const REGIONS: Region[] = [
   {
     id: 'verdant-forest',
     name: '常綠森林',
+    mode: 'wild',
     gradient: ['#1f6e43', '#0c3a24'],
     icon: '🌳',
     blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。',
@@ -22,6 +23,7 @@ export const REGIONS: Region[] = [
   {
     id: 'ember-volcano',
     name: '灼熱火山',
+    mode: 'wild',
     gradient: ['#b3361f', '#5c1208'],
     icon: '🌋',
     blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。',
@@ -38,6 +40,7 @@ export const REGIONS: Region[] = [
   {
     id: 'crystal-shore',
     name: '澄澈水濱',
+    mode: 'wild',
     gradient: ['#1b6fb3', '#0a2f5c'],
     icon: '🌊',
     blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。',
@@ -54,6 +57,7 @@ export const REGIONS: Region[] = [
   {
     id: 'thunder-plateau',
     name: '雷鳴高原',
+    mode: 'wild',
     gradient: ['#caa42a', '#5c4a06'],
     icon: '⚡',
     blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。',
@@ -70,6 +74,7 @@ export const REGIONS: Region[] = [
   {
     id: 'rocky-cavern',
     name: '岩窟洞穴',
+    mode: 'wild',
     gradient: ['#7a5a3a', '#33231a'],
     icon: '🪨',
     blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。',
@@ -86,6 +91,7 @@ export const REGIONS: Region[] = [
   {
     id: 'haunted-tower',
     name: '幽魂古塔',
+    mode: 'wild',
     gradient: ['#4b2d6e', '#1a0e2e'],
     icon: '👻',
     blurb: '陰森詭譎的廢棄高塔，幽靈、毒與惡系徘徊。',
@@ -102,6 +108,7 @@ export const REGIONS: Region[] = [
   {
     id: 'mystic-meadow',
     name: '神秘花圃',
+    mode: 'wild',
     gradient: ['#c25b9e', '#5c2347'],
     icon: '🧚',
     blurb: '霧氣繚繞的夢幻花原，超能力與妖精系翩翩起舞。',
@@ -118,6 +125,7 @@ export const REGIONS: Region[] = [
   {
     id: 'dragon-summit',
     name: '巨龍峰頂',
+    mode: 'wild',
     gradient: ['#2c4a8a', '#10182e'],
     icon: '🐉',
     blurb: '雲端之上的險峻峰巔，龍、鋼系強敵盤踞的終局試煉。',

@@ -204,6 +204,7 @@ const regionBlocks = REGION_THEMES.map((r) => {
   return `  {\n` +
     `    id: '${r.id}',\n` +
     `    name: '${r.name}',\n` +
+    `    mode: 'wild',\n` + // M6 模式 contract：主題區皆為野外（可捕獲；地形/意外於 M8/M11 掛載）
     `    gradient: ['${r.gradient[0]}', '${r.gradient[1]}'],\n` +
     `    icon: '${r.icon}',\n` +
     `    blurb: '${r.blurb}',\n` +

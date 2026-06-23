@@ -93,6 +93,13 @@ export interface BattlePokemon {
 export interface Region {
   id: string
   name: string
+  /**
+   * 玩法 contract（M6 模式分流，plan/11 §2）——不是 UI 分類：
+   * - 'arena' 競技場：中性地形、無野外意外、不可捕獲、純得經驗（仍保留支援輪盤手感）。
+   * - 'wild'  野外：可捕獲 boss，且未來掛載地形（M8）/ 野外意外（M11）。
+   * gating 集中於 encounter/battle/result setup（依 mode 決定 roll 什麼、能不能捕獲）。
+   */
+  mode: 'arena' | 'wild'
   /** 主題色（漸層起訖），用於畫面背景 */
   gradient: [string, string]
   /** emoji / 圖示 */
