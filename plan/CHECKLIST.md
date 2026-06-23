@@ -268,6 +268,8 @@
 > **降規格**：不做 i18n 多語抽象層（YAGNI、自用單語）；golden-master 比對 UI 延到 M8（M14 只放單測骨架）。
 
 ## M15 — 收尾改名 mobie（🏁 所有里程碑完成後才做；依賴 M1–M14 全綠）
+> **⚠️ 已併入 M18（取代並擴大）**：使用者要求改名擴大為「含檔名/內容/key 遷移/.save 相容」的精準全面改名，
+> 本輕量版（保留 mz.* key、只改品牌字）由 **M18** 取代。完整規格見 `plan/16` §M18，下列子項保留作對照。
 > **mobie＝「小怪物」之意**。把專案 / app 識別正式改名（repo、套件、app 品牌）並定名。
 > **守則：不破壞既有存檔**——persistence key（`mz.*` localStorage / `mz-*` IndexedDB）若改名會孤立既有存檔，
 > 自用單人**建議保留現有 key 前綴**（只改顯示品牌），或寫一次性遷移；存檔檔案 `<profileName>.save` 不受影響。
@@ -277,3 +279,50 @@
 - [ ] docs 全域更新「pokemon-mezastar」專案名 → mobie：`CLAUDE.md`/`ARCHITECTURE.md`/`README.md`/`handoff.md`/`plan/*`（路徑/標題/敘述）
 - [ ] persistence key 決策：**保留 `mz.*`/`mz-*`（不破壞既有存檔）** 或寫遷移；二選一明文記錄
 - [ ] 驗證：typecheck/build/test 全綠、Chrome CDP 跑通、PWA 重裝顯示新名、**既有存檔仍可載入**
+
+## M16 — Mobie 資訊卡（檢視自己＋對手；見 `16` §M16）
+> 修「戰鬥中看不到自己夥伴的型別/技能/數值」痛點。**純 UI／顯示層，不動 reducer/engine/持久化。**
+> 自己一律全顯；對手基本面（名稱/型別/Lv）顯示、深度（招式/數值/IV 星級）遮罩 → 留給 M17 看穿揭露。
+### M16.a — MobCard 元件
+- [ ] `ui/components/MobCard.tsx`（吃 `BattlePokemon`+`revealed`；複用 `.modal-backdrop`/`.modal-card`/`TypeBadges`/`IndividualInfo`/`PokemonSprite`/`getItem`/`getAbility`）
+- [ ] **新**：招式 row（名稱+型別+物理/特殊+威力+命中）＋ 六維 mini-bar CSS；先在 Encounter 接一個開啟點驗證
+### M16.b — 戰鬥中接線（核心修復）
+- [ ] 點自己 `HpPlate` → 自己全卡；點對手 `HpPlate`/`TeamTray` 成員 → 對手卡（遮罩占位「🔍 看穿後揭露」）
+- [ ] `battleStore` 加 `revealedFoes`（M17 用；M16 先放空 set，對手 `revealed` 恆 false）
+### M16.c — CardSelect / Encounter 接線
+- [ ] CardSelect 點自己 `poke-card` → 全卡、點 `foe-strip__mon` → 對手卡（保留既有點選出戰手感，開卡走 ⓘ/長按）
+- [ ] Chrome CDP：各畫面開卡零 console error；typecheck/test/build 全綠
+
+## M17 — Partner 技能系（提前並重定位 M12 核心；見 `16` §M17）
+> **與 M12 共 S1–S8 hook 引擎、提前實作**：技能 hook+loadout（原 M8.a）＋訓練/解鎖（原 M8.b）重定位為「夥伴技能」。
+> 守單招（技能不直接傷害）、純 reducer（自動技能走既有 hook、看穿走顯示層）、只存 canonical skill id、不動 §0.4。
+> M12 剩餘子項（合體技/對手 profile/孵化繼承）續留原里程碑，本里程碑預留接點（進化解槽/塔給 SP/蛋帶技能）。
+### M17.a — schema / catalog / persistence 純資料
+- [ ] `game/ext/partnerSkills.ts` `PartnerSkillDef` + 起始 catalog（看穿/鼓舞/守護/疾風，選配整地/回復）+ `resolveSkillHooks` 純函數
+- [ ] `OwnedUnit` 加 canonical `learnedSkillIds/equippedSkillIds`（不存派生倍率/cooldown）+ `sanitizeRoster` 只留已知 id + vitest（護欄：無 `damage` 效果）
+### M17.b — 自動技能掛載（複用 M7 引擎，零新機制）
+- [ ] push `MODULE_REGISTRY`；鼓舞=S3 pinch / 守護=S3 guard / 疾風=S1 statMod（選 回復=S4 turnEnd / 整地=寫 field.current）
+- [ ] `assembleExt`/`assembleBattlePrep` 帶 `equippedSkillIds` 進 `BattlePokemon` 暫態、hook 自行分流 + HpPlate 技能徽章 + vitest（觸發/分流/關閉零殘留）
+### M17.c — 看穿主動槽（1 個、每場一次、純顯示層）
+- [ ] 戰鬥行動列「✨ 夥伴技能 → 🔍 看穿」鈕 → 設 `revealedFoes.add(activeIndex)` + FxCanvas 揭露演出 + 扣每場一次預算（display state，不持久化）
+- [ ] 接 M16 `MobCard`/`HpPlate` 讀 `revealedFoes` 揭露對手深度資訊（**不進 reducer、不耗回合、對手不回擊**）
+### M17.d — SP 訓練經濟
+- [ ] SP 錢包 slice `mobie.skillpoints.v1`（帳號級）+ wild 區 boss 勝利給 SP（接 `rosterStore`，與 `grantBattleExp` 同處；塔 SP 預留 M11）
+- [ ] `PartnerSkillModal`（Title「✨ 夥伴技能」入口，複用 team-row/item-picker）：花 SP 學技能/調 loadout/第 2 槽解鎖（SP 或等級；進化解槽預留 M10）+ MobCard 技能列
+- [ ] `mobie.settings.v1` 加 `modules.partnerSkills` toggle（預設關，關掉零殘留）+ vitest + Chrome CDP
+
+## M18 — 全面改名 → Mobie（取代並擴大 M15；見 `16` §M18）
+> **分類精準改名，不是一鍵 find-replace。** 放 M16/M17 之後做（機械式大改動，避免衝突 merge）。
+> **⚠️ 絕不可改**：`artwork()` helper / gen_dex 的 `raw.githubusercontent.com/PokeAPI/.../pokemon/...` URL、外部服務名 `PokéAPI`、物種 zh-Hant 正典名。
+### M18.a — 程式識別符＋檔名
+- [ ] 型別/函式/元件/變數：`BattlePokemon`→`BattleMobie`、`buildBattlePokemon`→`buildBattleMobie`、`pokemon`→`mobie`（src 約 137 處/32 檔，扣除不可改 URL）
+- [ ] 改檔名 `PokemonSprite.tsx`→`MobieSprite.tsx`、`PokemonVisual.tsx`→`MobieVisual.tsx`（含所有 import 路徑）+ typecheck 綠
+### M18.b — UI 中文＋品牌字串
+- [ ] 「寶可夢」→「Mobie」（約 32 處/24 檔）+ `package.json` name + `index.html` title（Mezastar Clone→Mobie）+ `manifest.webmanifest` name/short_name
+### M18.c — 持久化 key 遷移＋.save 相容
+- [ ] 7 個 key `mz.*`/`mz-*` → `mobie.*`/`mobie-*` + 集中 `migrateKeys()`（先讀新、無則搬舊）；IDB 二選一（搬遷 or 保留舊名）明文記錄
+- [ ] `.save`：bundle/saveMeta manifest 加舊欄位/schemaVersion 識別、匯入舊檔對映舊→新、匯出新格式 + round-trip & 舊檔匯入 vitest
+### M18.d — docs 全域改名
+- [ ] handoff/README/CLAUDE/ARCHITECTURE/plan 的 `pokemon-mezastar`/「寶可夢」品牌字 → mobie/Mobie（PokéAPI 技術引用與物種資料來源照舊）
+### M18.e — repo 目錄改名（最後、單獨）
+- [ ] `pokemon-mezastar/` → `mobie/`（本機資料夾 + git remote，使用者執行）+ `npm run dev` 路徑確認 + 既有存檔載入驗證 + 立繪正常（artwork URL 未誤改）

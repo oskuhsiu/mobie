@@ -14,7 +14,7 @@
 - **M6（共用地基）**：見下方 2026-06-23 M6 註記。延伸系統的掛載地基 + 模式 contract 已落地。
 - **M7（戰鬥條件 hook 層）**：見下方 2026-06-23 M7 註記。羈絆（S2）/ 持有道具（S1/S3/S4）/ 特性（S1/S3）+ 設定 UI，全複用 M6 引擎、reducer/engine 不動。
 - **M8（場域/地形）**：見下方 2026-06-23 M8 註記。地形只影響攻擊 power（engine 屬性相剋後乘注入倍率）、`fieldState` 容器、混合/隨機地形區、開場揭示 UI；全複用 M6 注入機制、reducer/engine 不認識地形語意。
-- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M9 連鎖攻擊（Combo 基底，建 `chainOpportunity`/`SUBMIT_CHAIN_RESULT`，為 M12 合體技鋪底），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M9 / `09-extension-systems.md` / `14-roadmap-m6-m13.md`。**
+- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M9 連鎖攻擊（Combo 基底，建 `chainOpportunity`/`SUBMIT_CHAIN_RESULT`，為 M12 合體技鋪底），或 M16 Mobie 資訊卡（純 UI、無相依，直接修「戰鬥中看不到自己夥伴」痛點），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M9 / M16 / `09-extension-systems.md` / `14-roadmap-m6-m13.md` / `16-mobie-card-partner-rename.md`。**
 
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
@@ -105,7 +105,13 @@
 > 分層：純 codec `game/replay/`（比照 save/bundle.ts，formatVersion + 嚴格 decoder + unknown-event fail-fast + 分類錯誤 + crc）；獨立持久化 slice **IndexedDB `mz-replays`**（battleId 去重 + FIFO 上限，**只存 .json、不存 derived .txt**）；播放器複用 BattleScreen 消費器。**降規格裁定**：不做 i18n 多語抽象層（YAGNI）、golden-master 重模擬比對 UI 延到 M8（M14 只放單測骨架）。切分 M14.0–M14.f 見 CHECKLIST。
 > **編號**：原 M14（改名 mobie）順延 **M15**。回放排在戰鬥機制 M8–M13 大多落地之後、改名之前（屆時 event 詞彙已完整，codec/handler 一次到位）。**待使用者確認編號**。
 
-> **收尾改名 M15（所有里程碑完成後才做；原 M14 順延）**：把專案/app 改名 `pokemon-mezastar` → **`mobie`（小怪物）**——repo 目錄/git remote、`package.json` name、`index.html` title、PWA manifest、app 品牌字串、docs 全域。**關鍵：別弄壞既有存檔**——`mz.*`/`mz-*` persistence key 建議保留（或寫遷移）；`<profileName>.save` 不受影響；PokéAPI/物種資料來源照舊。見 CHECKLIST M15。
+> **收尾改名 M15（所有里程碑完成後才做；原 M14 順延）**：把專案/app 改名 `pokemon-mezastar` → **`mobie`（小怪物）**——repo 目錄/git remote、`package.json` name、`index.html` title、PWA manifest、app 品牌字串、docs 全域。**關鍵：別弄壞既有存檔**——`mz.*`/`mz-*` persistence key 建議保留（或寫遷移）；`<profileName>.save` 不受影響；PokéAPI/物種資料來源照舊。見 CHECKLIST M15。**⚠️ 已升級為 M18（見下，取代並擴大）。**
+
+> **Mobie 資訊卡 + Partner 技能系 + 全面改名 = M16–M18（2026-06-24，尚未實作）**：使用者實玩回饋（戰鬥中看不到自己夥伴的型別/技能/數值）+「玩家與 mob 是**夥伴而非從屬**」理念 + 把「pokemon」字眼全改 **mobie**。設計+決策全文 `plan/16-mobie-card-partner-rename.md`（CHECKLIST 已加 M16.a–M18.e）。共同身分軸線：「你的 mob 是夥伴，這個遊戲叫 Mobie」。
+> **M16 Mobie 資訊卡（純 UI，無相依，可先做）**：可複用 `MobCard`（複用既有 `.modal-backdrop`/`TypeBadges`/`IndividualInfo`/`PokemonSprite`），首度揭露 mob 的**招式細節 + 六維數值**；點 HpPlate/TeamTray/縮圖開卡。**自己一律全顯；對手基本面（名稱/型別/Lv）顯示、深度（招式/數值/IV 星級）遮罩** → 留給 M17 看穿揭露。不動 reducer/engine/持久化。
+> **M17 Partner 技能系（提前並重定位 M12 核心，複用 M7 S1–S8 引擎 + M8 fieldState，戰鬥機制零 reducer/engine 改動）**：①**自動技能**＝既有 hook 模組（鼓舞=S3 pinch / 守護=S3 guard / 疾風=S1 statMod，`partnerSkills.ts` push `MODULE_REGISTRY`、讀暫態 `equippedSkillIds` 自行分流，同道具/特性路）。②**主動槽**（1 個、每場一次、手動鈕）＝**純顯示層**的看穿（設 `revealedFoes` + 揭露演出，不進 reducer/不耗回合/對手不回擊），接 M16 的卡。③**完整 SP 訓練經濟**（`mobie.skillpoints.v1` 錢包、boss 勝利給 SP、`PartnerSkillModal` 訓練所學/裝、第 2 槽 SP/等級解鎖；塔 SP 預留 M11、進化解槽預留 M10）。`OwnedUnit` 只加 canonical `learnedSkillIds/equippedSkillIds`。**M12 剩餘子項（合體技/對手 profile/孵化繼承）續留原里程碑。**
+> **M18 全面改名 → Mobie（取代並擴大 M15）**：**分類精準改名非一鍵替換**。詞彙全用 `mobie`（`BattlePokemon`→`BattleMobie`、`PokemonSprite`→`MobieSprite`、UI「寶可夢」→「Mobie」）。範圍 src 約 137 處/32 檔 + 「寶可夢」32 處/24 檔 + 2 檔名 + 品牌字串 + docs + repo 目錄。**⚠️ 絕不可改**：`artwork()` helper / gen_dex 的 `raw.githubusercontent.com/PokeAPI/.../pokemon/...` URL、外部服務名 `PokéAPI`、物種 zh-Hant 正典名。存檔 key `mz.*`/`mz-*` → `mobie.*`/`mobie-*` + 一次性 `migrateKeys()`，`.save` 舊欄位向後相容匯入。**放 M16/M17 之後做**（機械式大改動避免衝突）。
+> **先後**：M16（純 UI 先修痛點）→ M17（看穿接上 M16）→ M18（最後改名）。本輪僅**登錄規劃文件**，未開工。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
@@ -135,6 +141,7 @@
 ## 5. 下一步（建議 M9：連鎖攻擊 Combo 基底）
 M6/M7/M8 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext, terrainMultiplier})`、`assembleExt`/`assembleBattlePrep`、`MODULE_REGISTRY` 已有三模組、模式 contract、`fieldState` 容器與地形注入）。
 **M9 連鎖攻擊**＝Combo 基底（M12 合體技的升級變體先在此建底）：連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event；`SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告，reducer 重驗存活/目標、吃速度、倒下截斷）；連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX。規格真相見 `plan/09`（§連鎖）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M9 區。
+- **新登錄 M16–M18（2026-06-24，使用者回饋；`plan/16`）**：M16 Mobie 資訊卡（純 UI 修「看不到自己夥伴資訊」痛點，**無相依、可優先於 M9 做**）→ M17 Partner 技能系（提前 M12 核心，複用 M7/M8 地基、戰鬥機制零 reducer 改動，看穿接 M16）→ M18 全面改名 → Mobie（取代 M15）。本輪只登錄規劃文件，未開工。
 - **守地基不變式**：純 reducer（ext/terrain 是注入純能力包，不寫死語意）、只存 canonical roster（itemBag/settings 另命名空間、field 是戰鬥暫態）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性/地形/連鎖不引新攻擊招）、高頻值只走 ref/rAF/Zustand。
 - **M7/M8 收尾 follow-up（不阻塞、可順手）**：氣勢披帶需 post-damage 縫（改 engine）、威嚇需 onSwitchIn 縫（改 reducer 換人段）；M11 地形突變（terrainShift 改 `field.terrainEffects.current`）會用到 M8 已備的 current/initial 分流。
 
