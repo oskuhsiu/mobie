@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
@@ -6,11 +6,14 @@ import { buildBattlePokemon } from '@/game/stats'
 import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattlePokemon } from '@/game/types'
-import { PokemonSprite } from '@/ui/components/PokemonSprite'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
+import type { StageHandle } from '@/scene/r3f/BattleStage'
 import { TYPE_HEX } from '@/ui/typeMeta'
 import { audio } from '@/audio/audioEngine'
+
+// 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
+const BattleStage = lazy(() => import('@/scene/r3f/BattleStage'))
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
@@ -32,72 +35,30 @@ const FX_POS: Record<Side, { nx: number; ny: number }> = {
   player: { nx: 0.3, ny: 0.62 },
 }
 
-function Combatant({
-  mon, side, attacking, hitFx, fainting,
-}: { mon: BattlePokemon; side: Side; attacking: Side | null; hitFx: HitFx | null; fainting: Side | null }) {
-  const lunge = useAnimationControls()
-  const shake = useAnimationControls()
-  const isFoe = side === 'foe'
-  const isFainting = fainting === side
-
-  useEffect(() => {
-    if (attacking === side) {
-      lunge.start({
-        x: isFoe ? [0, -52, 0] : [0, 52, 0],
-        y: isFoe ? [0, 44, 0] : [0, -44, 0],
-        transition: { duration: 0.42, times: [0, 0.4, 1] },
-      })
-    }
-  }, [attacking, side, isFoe, lunge])
-
-  useEffect(() => {
-    if (hitFx && hitFx.target === side && !hitFx.missed && hitFx.amount > 0) {
-      shake.start({
-        x: [0, -10, 9, -7, 5, 0],
-        filter: ['brightness(1)', 'brightness(2.4)', 'brightness(1)'],
-        transition: { duration: 0.42 },
-      })
-    }
-  }, [hitFx, side, shake])
-
-  const showDmg = hitFx && hitFx.target === side && !hitFx.missed && hitFx.amount > 0
-
+/** 浮傷數字：3D 場景之上的 DOM 疊層，依 FX_POS 對齊在受擊方上方。 */
+function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
+  const show = hitFx && !hitFx.missed && hitFx.amount > 0
   return (
-    <motion.div
-      animate={lunge}
-      style={{ position: 'relative', width: 'min(46vw, 230px)', height: 'min(46vw, 230px)' }}
-    >
-      {/* 換上場時整體入場（key 變動會重掛此節點觸發 initial→animate） */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.55, y: isFoe ? -20 : 20 }}
-        animate={isFainting
-          ? { opacity: 0.1, scale: 0.75, y: 12, filter: 'grayscale(1) brightness(0.6)' }
-          : { opacity: 1, scale: 1, y: 0, filter: 'grayscale(0)' }}
-        transition={isFainting ? { duration: 0.5, ease: 'easeIn' } : { type: 'spring', stiffness: 160, damping: 15 }}
-        style={{ width: '100%', height: '100%', position: 'relative' }}
-      >
-        <div className="platform" />
-        <motion.div animate={shake} style={{ width: '100%', height: '100%' }}>
-          <PokemonSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} flip={!isFoe} />
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          key={hitFx!.id}
+          className={`float-dmg ${hitFx!.crit ? 'float-dmg--crit' : ''}`}
+          style={{
+            position: 'absolute',
+            left: `${FX_POS[hitFx!.target].nx * 100}%`,
+            top: `${FX_POS[hitFx!.target].ny * 100}%`,
+            zIndex: 8,
+          }}
+          initial={{ y: 10, opacity: 0, scale: 0.6, x: '-50%' }}
+          animate={{ y: -54, opacity: 1, scale: 1, x: '-50%' }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          -{hitFx!.amount}
         </motion.div>
-      </motion.div>
-
-      <AnimatePresence>
-        {showDmg && (
-          <motion.div
-            key={hitFx!.id}
-            className={`float-dmg ${hitFx!.crit ? 'float-dmg--crit' : ''}`}
-            style={{ left: '50%', top: '20%' }}
-            initial={{ y: 10, opacity: 0, scale: 0.6, x: '-50%' }}
-            animate={{ y: -54, opacity: 1, scale: 1, x: '-50%' }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            -{hitFx!.amount}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -243,14 +204,13 @@ export function BattleScreen() {
   const battle = useBattleStore((s) => s.battle)
   const phase = useBattleStore((s) => s.phase)
   const banner = useBattleStore((s) => s.banner)
-  const attacking = useBattleStore((s) => s.attacking)
   const hitFx = useBattleStore((s) => s.hitFx)
-  const fainting = useBattleStore((s) => s.fainting)
   const support = useBattleStore((s) => s.support)
   const energy = useBattleStore((s) => s.energy)
   const log = useBattleStore((s) => s.log)
 
   const fxRef = useRef<FxHandle>(null)
+  const stageRef = useRef<StageHandle>(null)
   const rootShake = useAnimationControls()
   const initedRef = useRef(false)
   // 換人面板選中的隊友索引（等防禦 QTE）
@@ -304,6 +264,7 @@ export function BattleScreen() {
         const def = monAt(b0, e.targetSide, e.targetIndex)
         const atkPrefix = e.attackerSide === 'foe' ? '對手的 ' : ''
         store().setAttacking(e.attackerSide)
+        stageRef.current?.lunge(e.attackerSide) // 3D：出手方撲擊
         store().setBanner(`${atkPrefix}${atk.nameZh} 使出 ${atk.move.nameZh}！`)
         audio.play('attack')
         await wait(440)
@@ -328,6 +289,7 @@ export function BattleScreen() {
           }
           const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
           rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
+          stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1) // 3D：受擊抖動
           audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit')
         }
         if (e.missed) {
@@ -351,6 +313,7 @@ export function BattleScreen() {
         const m = monAt(b0, e.side, e.index)
         const prefix = e.side === 'foe' ? '對手的 ' : ''
         store().setFainting(e.side) // 觸發倒下淡出
+        stageRef.current?.faint(e.side) // 3D：傾倒淡沉
         fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
         audio.play('faint')
         store().pushLog(`${prefix}${m.nameZh} 倒下了！`)
@@ -358,6 +321,7 @@ export function BattleScreen() {
       } else if (e.type === 'activeChanged') {
         store().setFainting(null) // 換上新的一隻 → 清掉淡出
         store().setActiveIndex(e.side, e.toIndex)
+        stageRef.current?.enter(e.side) // 3D：新一隻落場入場（並清除倒下狀態）
         const m = monAt(b0, e.side, e.toIndex)
         // 放出開球閃光
         fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffffff' })
@@ -481,16 +445,21 @@ export function BattleScreen() {
 
   return (
     <motion.div className="col" style={{ flex: 1, position: 'relative' }} animate={rootShake}>
+      {/* 3D 戰鬥舞台（背景層）：兩隻在場寶可夢 + 地台/光照/相機 */}
+      <Suspense fallback={null}>
+        <BattleStage ref={stageRef} player={player} foe={foe} />
+      </Suspense>
       <FxCanvas ref={fxRef} />
-      {/* 敵方：HP 牌與隊伍狀態貼在立繪同側（右），緊貼角色不易看錯 */}
+      <FloatDamage hitFx={hitFx} />
+
+      {/* 前景 HUD（疊在 3D 之上） */}
+      <div className="col battle-fg" style={{ flex: 1, position: 'relative', zIndex: 10 }}>
+      {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <div className="combat-hud combat-hud--foe">
           <HpPlate mon={foe} owner={false} label={`對手的 ${foe.nameZh}`} />
           <TeamTray members={battle.foe.members} activeIndex={battle.foe.activeIndex} align="end" />
         </div>
-      </div>
-      <div className="row" style={{ justifyContent: 'flex-end', marginTop: -4 }}>
-        <Combatant key={`foe-${battle.foe.activeIndex}`} mon={foe} side="foe" attacking={attacking} hitFx={hitFx} fainting={fainting} />
       </div>
 
       {/* 中央播報 */}
@@ -528,11 +497,8 @@ export function BattleScreen() {
         )}
       </AnimatePresence>
 
-      {/* 我方：立繪在左，HP 牌與隊伍狀態貼在同側（左）緊貼角色 */}
+      {/* 我方：HP 牌與隊伍狀態（畫面下方左側），marginTop:auto 把後段推到底部 */}
       <div className="row" style={{ justifyContent: 'flex-start', marginTop: 'auto' }}>
-        <Combatant key={`player-${battle.player.activeIndex}`} mon={player} side="player" attacking={attacking} hitFx={hitFx} fainting={fainting} />
-      </div>
-      <div className="row" style={{ justifyContent: 'flex-start', marginTop: -4 }}>
         <div className="combat-hud combat-hud--player">
           <HpPlate mon={player} owner label={player.nameZh} />
           <TeamTray members={battle.player.members} activeIndex={battle.player.activeIndex} align="start" />
@@ -620,6 +586,7 @@ export function BattleScreen() {
         {(phase === 'busy' || phase === 'intro') && (
           <div className="hpbar__num" style={{ height: 46, display: 'grid', placeItems: 'center' }}>…</div>
         )}
+      </div>
       </div>
     </motion.div>
   )
