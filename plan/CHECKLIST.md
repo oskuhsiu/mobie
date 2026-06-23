@@ -105,14 +105,14 @@
 - [ ] 掃描失敗 UI 回饋
 - [ ] **持久化換 Dexie 時導入 `SaveEnvelope`（`updatedAt`/`revision`/`deviceId`/`schemaVersion`）** → 為 M5 雲端同步鋪路（見 `08-cloud-sync.md` C/H 段）
 
-## M3 — R3F 3D 場景 + 造型層
-- [ ] R3F 戰鬥舞台（台座、光照、運鏡）
-- [ ] `PokemonVisual` 抽象介面
-- [ ] GLB 檔案匯入 → IndexedDB → 正規化
-- [ ] billboard fallback（PokéAPI artwork）
-- [ ] 攻擊/受擊/捕獲演出移植 3D
-- [ ] Zustand subscribe / useFrame 橋接（效能紅線）
-- [ ] iPad ≥ 30fps 驗證
+## M3 — R3F 3D 場景 + 造型層 ✅ 完成（Chrome CDP 驗證）
+- [x] R3F 戰鬥舞台（台座、光照、運鏡）→ `scene/r3f/BattleStage`（ContactShadows + lazy 載入）
+- [x] `PokemonVisual` 抽象介面 → `scene/r3f/PokemonVisual`（GLB → billboard，含 ErrorBoundary）
+- [x] GLB 檔案匯入 → IndexedDB → 正規化 → `ModelManagerModal` + `scene/models/{modelStore,normalize}`（注入測試方塊 GLB 端對端驗證渲染）
+- [x] billboard fallback（PokéAPI artwork，永遠面向相機）
+- [x] 攻擊/受擊/捕獲演出移植 3D → `Combatant3D`（撲擊/受擊/倒下/入場）+ `CaptureStage`（收服縮沉）
+- [x] Zustand subscribe / useFrame 橋接（效能紅線）→ 動畫全走 useFrame/ref，imperative `StageHandle`，不過 React 頂層 state
+- [~] iPad ≥ 30fps 實機驗證 → 待實體 iPad；headless 渲染正常、幾何輕量、架構守紅線
 
 ## M4 — MediaPipe 體感 QTE
 - [ ] @mediapipe/tasks-vision 接入（Hand + Gesture）

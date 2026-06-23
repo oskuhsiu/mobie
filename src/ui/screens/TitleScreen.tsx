@@ -1,9 +1,12 @@
-import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { audio } from '@/audio/audioEngine'
+import { ModelManagerModal } from '@/ui/components/ModelManagerModal'
 
 export function TitleScreen() {
   const { send } = useGame()
+  const [showModels, setShowModels] = useState(false)
 
   return (
     <div className="center" style={{ flex: 1, gap: 28 }}>
@@ -45,6 +48,21 @@ export function TitleScreen() {
       >
         ▶ 開始遊戲
       </motion.button>
+
+      <motion.button
+        className="btn btn--ghost btn--sm"
+        whileTap={{ scale: 0.96 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.35 }}
+        onClick={() => { void audio.unlock(); setShowModels(true) }}
+      >
+        🧩 3D 模型
+      </motion.button>
+
+      <AnimatePresence>
+        {showModels && <ModelManagerModal onClose={() => setShowModels(false)} />}
+      </AnimatePresence>
     </div>
   )
 }

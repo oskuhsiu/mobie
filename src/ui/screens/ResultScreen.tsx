@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { buildBattlePokemon } from '@/game/stats'
@@ -7,6 +7,9 @@ import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { getSpecies } from '@/game/data/species'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
+
+// 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
+const CaptureStage = lazy(() => import('@/scene/r3f/CaptureStage'))
 
 /** 戰敗仍給的經驗比例（相對勝利全額）——讓每場都有累積，破解「要先贏才能變強」死結 */
 const LOSS_EXP_RATIO = 0.15
@@ -63,21 +66,16 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
         戰鬥勝利！　<span style={{ color: ball.current.color }}>🎯 {ball.current.nameZh}</span>
       </motion.div>
 
-      <div style={{ position: 'relative', width: 'min(60vw,260px)', height: 'min(60vw,260px)' }}>
-        <div className="platform" />
-        {/* 寶可夢：被收服時於 result 階段淡出 */}
-        <AnimatePresence>
-          {!(stage === 'result' && caught) && (
-            <motion.div
-              style={{ position: 'absolute', inset: 0 }}
-              animate={stage === 'throw' ? { opacity: 1 } : { opacity: 0.25, scale: 0.9 }}
-              exit={{ opacity: 0, scale: 0.4 }}
-              transition={{ duration: 0.3 }}
-            >
-              <PokemonSprite src={wild.artworkUrl} alt={wild.nameZh} shiny={wild.shiny} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div style={{ position: 'relative', width: 'min(64vw,300px)', height: 'min(64vw,300px)' }}>
+        {/* 野生寶可夢：3D 舞台（GLB/billboard），收服成功時縮沉「進球」 */}
+        <Suspense fallback={null}>
+          <CaptureStage
+            speciesId={wild.speciesId}
+            artworkUrl={wild.artworkUrl}
+            shiny={wild.shiny}
+            vanish={stage === 'result' && caught}
+          />
+        </Suspense>
 
         {/* 寶貝球 */}
         {stage !== 'result' || caught ? (
