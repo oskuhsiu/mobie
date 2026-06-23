@@ -13,6 +13,7 @@ import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
 import { TYPE_HEX } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
+import { getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
 
 // 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
@@ -95,11 +96,13 @@ function HpPlate({ mon, owner, label }: { mon: BattlePokemon; owner: boolean; la
   const ratio = Math.max(0, mon.currentHp) / mon.maxHp
   const tone = hpToneClass(ratio, 'hpbar__fill')
   const item = getItem(mon.heldItemId)
+  const ability = getAbility(mon.abilityId)
   return (
     <div className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}>
       <div className="hp-plate__top">
         <span className="hp-plate__name">{label}</span>
         <span className="hpbar__lv">Lv.{mon.level}</span>
+        {ability && <span className="battle-badge" title={ability.desc}>{ability.icon} {ability.name}</span>}
         {item && <span className="battle-badge" title={item.name}>{item.icon}</span>}
       </div>
       <div className="hp-plate__track">

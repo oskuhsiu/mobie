@@ -5,6 +5,7 @@ import { useBag } from '@/store/bagStore'
 import { useSettings } from '@/store/settingsStore'
 import { getSpecies } from '@/game/data/species'
 import { ITEMS, getItem } from '@/game/ext/items'
+import { abilityForType, getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
 
 /**
@@ -16,6 +17,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const bag = useBag((s) => s.bag)
   const equip = useBag((s) => s.equip)
   const itemsOn = useSettings((s) => s.settings.modules.heldItems)
+  const abilitiesOn = useSettings((s) => s.settings.modules.abilities)
   const [openId, setOpenId] = useState<string | null>(null)
 
   const choose = async (unitId: string, itemId: string | null) => {
@@ -41,9 +43,10 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
 
-        {!itemsOn && (
+        {(!itemsOn || !abilitiesOn) && (
           <div className="lib-msg" style={{ marginBottom: 8 }}>
-            ⚠️ 持有道具模組目前關閉——可先裝備，但需到「⚙️ 設定」開啟才會在戰鬥生效。
+            ⚠️ {!itemsOn && '持有道具'}{!itemsOn && !abilitiesOn && ' / '}{!abilitiesOn && '特性'}
+            模組目前關閉——需到「⚙️ 設定」開啟才會在戰鬥生效。
           </div>
         )}
 
@@ -51,6 +54,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
           {roster.map((u) => {
             const sp = getSpecies(u.speciesId)
             const held = getItem(u.heldItemId)
+            const ability = getAbility(abilityForType(sp.types[0]))
             const open = openId === u.id
             return (
               <div key={u.id} className="col" style={{ gap: 0 }}>
@@ -61,6 +65,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                   <div className="team-row__info">
                     <div className="team-row__name">{sp.nameZh} <span className="hpbar__lv">Lv.{u.level}</span></div>
                     <div className="team-row__sub">
+                      {ability && <span className="team-row__ability" title={ability.desc}>特性：{ability.icon} {ability.name}</span>}
                       <span>道具：{held ? `${held.icon} ${held.name}` : '未裝備'}</span>
                     </div>
                   </div>
