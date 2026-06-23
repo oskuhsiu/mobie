@@ -483,7 +483,7 @@ body {
 }
 .model-list { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
 .model-row {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 12px; text-align: left;
   padding: 8px 10px; border-radius: var(--radius-sm);
   background: var(--panel); border: 1px solid transparent;
 }
@@ -521,14 +521,26 @@ body {
 .scan-result__title--err { color: var(--bad); }
 .scan-result--success .scan-result__title { color: var(--good); }
 .scan-result__sub { color: var(--text-dim); font-size: 14px; max-width: 90%; }
+/* 相機不可用：不留大黑框，提示＋手動輸入收成同一焦點 */
+.scan-nocam {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 16px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.04); border: 1px dashed var(--stroke);
+}
+.scan-nocam__icon { font-size: 28px; }
+.scan-nocam__msg { color: var(--text-dim); text-align: center; font-size: 14px; line-height: 1.5; }
+.scan-result--inline { position: static; inset: auto; background: transparent; backdrop-filter: none; padding: 6px 0 0; }
 .scan-manual { display: flex; gap: 8px; align-items: center; }
 .scan-manual .model-search { flex: 1; }
+.scan-manual--primary .model-search { border-color: var(--accent); }
 
 /* ============ Card library extras ============ */
 .lib-panel { overflow: hidden; display: flex; flex-direction: column; gap: 10px; }
 .lib-level { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-dim); white-space: nowrap; }
 .lib-level input { width: 56px; padding: 7px; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke); color: var(--text); }
 .lib-shiny { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+.lib-hint { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+.lib-del { opacity: 0.7; }
 .lib-matches { display: flex; flex-wrap: wrap; gap: 8px; }
 .lib-match { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); font-size: 14px; }
 .lib-match img { width: 30px; height: 30px; object-fit: contain; }
@@ -540,8 +552,10 @@ body {
 .qr-card {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 22px; border-radius: var(--radius); background: #fff; color: #11131a;
-  box-shadow: var(--shadow); max-width: min(86vw, 340px);
+  box-shadow: 0 0 0 4px rgba(11,16,38,0.9), var(--shadow); max-width: min(86vw, 340px);
 }
+/* 白卡上的次要鈕：ghost 在白底不可見，改深色描邊可見 */
+.qr-card .btn--ghost { background: #eef0f7; color: #2a2f44; border-color: #c7cce0; box-shadow: none; }
 .qr-card__title { font-weight: 900; font-size: 18px; }
 .qr-card__img { width: 230px; height: 230px; }
 .qr-card__img--loading { display: grid; place-items: center; color: #888; }

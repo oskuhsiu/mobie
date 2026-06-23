@@ -61,7 +61,12 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
                   <div className="model-row__name">{sp.nameZh} <span className="model-row__id">Lv.{c.level}</span></div>
                   <div className="model-row__status">#{c.cardId}{c.shiny ? '　✦異色' : ''}</div>
                 </div>
-                <button className="btn btn--ghost btn--sm" onClick={() => void deleteCard(c.cardId)}>刪除</button>
+                <button
+                  className="btn btn--ghost btn--sm lib-del"
+                  onClick={() => { if (window.confirm(`刪除卡片 ${sp.nameZh}（#${c.cardId}）？`)) void deleteCard(c.cardId) }}
+                >
+                  刪除
+                </button>
                 <button className="btn btn--sm" onClick={() => setQrCard(c)}>QR</button>
               </div>
             )
@@ -104,12 +109,13 @@ function AddCardPanel({ existing, onDone }: { existing: Card[]; onDone: () => vo
 
   return (
     <motion.div className="lib-panel" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-        <input className="model-search" placeholder="搜尋寶可夢名稱/編號…" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+      <input className="model-search" placeholder="搜尋寶可夢名稱/編號…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="row" style={{ gap: 14, alignItems: 'center' }}>
         <label className="lib-level">Lv.
           <input type="number" min={1} max={100} value={level} onChange={(e) => setLevel(Number(e.target.value))} />
         </label>
         <label className="lib-shiny"><input type="checkbox" checked={shiny} onChange={(e) => setShiny(e.target.checked)} /> 異色</label>
+        <span className="lib-hint">點下方寶可夢即新增</span>
       </div>
       <div className="lib-matches">
         {matches.map((sp) => (

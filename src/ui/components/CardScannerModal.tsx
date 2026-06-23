@@ -122,6 +122,9 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
     void handleRaw(manual.trim())
   }
 
+  // 相機是否可能在運作（決定顯示大相機框或縮成提示＋手動輸入）
+  const camLive = status === 'starting' || status === 'scanning'
+
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
@@ -139,17 +142,14 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
 
-        {/* 相機預覽 / 狀態 */}
-        <div className="scan-view">
-          <video ref={videoRef} className="scan-view__video" playsInline muted />
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
-          {status === 'scanning' && !result && <div className="scan-view__reticle" />}
-          {status === 'starting' && <div className="scan-view__msg">啟動相機中…</div>}
-          {status === 'denied' && <div className="scan-view__msg">相機無法使用（權限被拒或無相機）。<br />可用下方手動輸入卡碼。</div>}
-          {status === 'unsupported' && <div className="scan-view__msg">此瀏覽器不支援相機。<br />可用下方手動輸入卡碼。</div>}
-
-          {result && (
-            <motion.div className={`scan-result scan-result--${result.kind}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+        {/* 掃描結果（相機框內覆蓋 / 無相機時 inline，兩種模式共用） */}
+        {(() => {
+          const resultEl = result && (
+            <motion.div
+              className={`scan-result scan-result--${result.kind} ${camLive ? '' : 'scan-result--inline'}`}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
               {result.kind === 'success' ? (
                 <>
                   <img className="scan-result__art" src={result.species.artworkUrl} alt={result.species.nameZh} />
@@ -164,14 +164,33 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
               )}
               <button className="btn btn--sm" onClick={rescan}>再掃一張</button>
             </motion.div>
-          )}
-        </div>
+          )
+          return camLive ? (
+            <div className="scan-view">
+              <video ref={videoRef} className="scan-view__video" playsInline muted />
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
+              {status === 'scanning' && !result && <div className="scan-view__reticle" />}
+              {status === 'starting' && <div className="scan-view__msg">啟動相機中…</div>}
+              {resultEl}
+            </div>
+          ) : (
+            // 相機被拒/不支援：不留大黑框，提示＋手動輸入收成同一焦點
+            <div className="scan-nocam">
+              <div className="scan-nocam__icon">⌨️</div>
+              <div className="scan-nocam__msg">
+                {status === 'denied' ? '相機無法使用（權限被拒或無相機）。' : '此瀏覽器不支援相機。'}
+                <br />請在下方手動輸入卡碼。
+              </div>
+              {resultEl}
+            </div>
+          )
+        })()}
 
-        {/* 手動輸入（相機不可用時的後備，永遠可用） */}
-        <div className="scan-manual">
+        {/* 手動輸入（相機不可用時為主要操作，永遠可用） */}
+        <div className={`scan-manual ${camLive ? '' : 'scan-manual--primary'}`}>
           <input
             className="model-search"
-            placeholder="或手動輸入卡碼：MZ1:卡號:校驗"
+            placeholder="手動輸入卡碼：MZ1:卡號:校驗"
             value={manual}
             onChange={(e) => setManual(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submitManual() }}
