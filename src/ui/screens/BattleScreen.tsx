@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
 import { useSettings } from '@/store/settingsStore'
+import { applyBattlePrep } from '@/store/ext'
 import { buildBattlePokemon } from '@/game/stats'
 import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
@@ -209,8 +210,10 @@ export function BattleScreen() {
   const support = useBattleStore((s) => s.support)
   const energy = useBattleStore((s) => s.energy)
   const log = useBattleStore((s) => s.log)
-  // 已啟用模組組成的注入能力包（plan/09 §0）；M6 註冊表為空＝EMPTY_EXT＝零行為改變。
+  // 已啟用模組組成的注入能力包（plan/09 §0）：ext=戰中縫（S3/S4/S5）、prep=戰前縫（S1/S2）。
+  // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
   const ext = useSettings((s) => s.ext)
+  const prep = useSettings((s) => s.prep)
 
   const fxRef = useRef<FxHandle>(null)
   const stageRef = useRef<StageHandle>(null)
@@ -227,8 +230,9 @@ export function BattleScreen() {
   useEffect(() => {
     if (initedRef.current || context.playerTeam.length === 0 || context.foeTeam.length === 0) return
     initedRef.current = true
-    const players = context.playerTeam.map(buildBattlePokemon)
-    const foes = context.foeTeam.map(buildBattlePokemon)
+    // 戰前縫：S1 道具/特性 statMod（兩方）+ S2 羈絆（只玩家隊）。全關＝原封不動。
+    const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattlePokemon), prep, true)
+    const { team: foes } = applyBattlePrep(context.foeTeam.map(buildBattlePokemon), prep, false)
     const s = useBattleStore.getState()
     s.init(players, foes)
     ;(async () => {
@@ -236,9 +240,17 @@ export function BattleScreen() {
       s.pushLog(`對手派出了 ${foes[0].nameZh}！`)
       await wait(280)
       s.pushLog(`上吧，${players[0].nameZh}！`)
+      if (modifiers.length > 0) {
+        await wait(220)
+        s.setBanner(`✦ 羈絆發動！ ${modifiers.map((m) => m.icon).join(' ')}`)
+        for (const m of modifiers) s.pushLog(`羈絆：${m.label}`)
+        await wait(1000)
+        s.setBanner(null)
+        await wait(140)
+      }
       s.setPhase('playerChoice')
     })()
-  }, [context])
+  }, [context, prep])
 
   // 戰鬥結束 → 通知流程狀態機
   useEffect(() => {

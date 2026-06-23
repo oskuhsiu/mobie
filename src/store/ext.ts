@@ -8,15 +8,18 @@ import {
   type ExtensionModule,
   type BuildUnitHook,
   type PreBattleHook,
+  type NamedModifier,
 } from '@/game/ext/seams'
+import type { BattlePokemon } from '@/game/types'
 import type { GameSettings } from '@/game/settings'
+import { SYNERGY_MODULE } from '@/game/ext/synergy'
 
 /**
  * 模組註冊表。各延伸系統把自己的 ExtensionModule 加進來（M7：羈絆 S2 / 持有道具 S1·S3·S4 /
  * 特性 S1·S3；M9+ 再 push 連鎖/進化/塔）。關閉的模組由 assembleExt/assembleBattlePrep
  * 依 settings 過濾掉＝零殘留。
  */
-export const MODULE_REGISTRY: ExtensionModule[] = []
+export const MODULE_REGISTRY: ExtensionModule[] = [SYNERGY_MODULE]
 
 /**
  * 戰前縫（S1 buildUnit / S2 preBattleModifiers）的注入包。
@@ -68,4 +71,25 @@ export function assembleBattlePrep(
     if (m.seams.preBattleModifiers) prep.preBattleHooks.push(m.seams.preBattleModifiers)
   }
   return prep
+}
+
+/**
+ * 把戰前縫套到一隊已 build 好的 BattlePokemon 上（純函數，戰鬥初始化時呼叫一次）：
+ *   ① S1 buildUnitHooks（道具/特性 statMod）逐隻 fold
+ *   ② 若 withSynergy，再算 S2 preBattleHooks（羈絆）modifier、套到每隻
+ * 回傳 patch 後的隊伍與生效 modifier（供 UI 開場 banner / tag 回顯）。
+ * 羈絆只給玩家隊（withSynergy=true）；野生對手只吃 S1（特性 statMod），不吃羈絆。
+ */
+export function applyBattlePrep(
+  team: BattlePokemon[],
+  prep: BattlePrep,
+  withSynergy: boolean,
+): { team: BattlePokemon[]; modifiers: NamedModifier[] } {
+  let out = team.map((u) => prep.buildUnitHooks.reduce((acc, h) => h(acc), u))
+  let modifiers: NamedModifier[] = []
+  if (withSynergy && prep.preBattleHooks.length > 0) {
+    modifiers = prep.preBattleHooks.flatMap((h) => h(out))
+    out = out.map((u) => modifiers.reduce((acc, m) => (m.apply ? m.apply(acc) : acc), u))
+  }
+  return { team: out, modifiers }
 }

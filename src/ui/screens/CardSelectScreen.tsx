@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { TEAM_SIZE } from '@/game/machine/gameMachine'
 import { useRoster } from '@/store/rosterStore'
+import { useSettings } from '@/store/settingsStore'
 import { ownedToCard } from '@/game/growth'
 import { buildBattlePokemon } from '@/game/stats'
 import { scoreCardVsFoes, recommendTeamIds, type Matchup } from '@/game/recommend'
@@ -40,6 +41,14 @@ export function CardSelectScreen() {
 
   // 已選卡片 id（依點選順序，最多 TEAM_SIZE 隻）
   const [picked, setPicked] = useState<string[]>([])
+
+  // 生效羈絆（plan/09 §2）：用同一份 prep；羈絆模組關閉時 preBattleHooks 為空＝無 tag。
+  const prep = useSettings((s) => s.prep)
+  const pickedMons = useMemo(
+    () => picked.map((id) => cards.find((c) => c.card.cardId === id)?.mon).filter((m): m is NonNullable<typeof m> => Boolean(m)),
+    [picked, cards],
+  )
+  const synergies = useMemo(() => prep.preBattleHooks.flatMap((h) => h(pickedMons)), [prep, pickedMons])
 
   // 一鍵填入推薦陣容（玩家可再自行調整後再出戰）
   const pickRecommended = () => {
@@ -151,6 +160,15 @@ export function CardSelectScreen() {
           )
         })}
       </div>
+
+      {synergies.length > 0 && (
+        <motion.div className="synergy-tags" style={{ justifyContent: 'center' }}
+          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+          {synergies.map((m, i) => (
+            <span key={i} className="synergy-tag" title={m.label}>{m.icon} {m.label}</span>
+          ))}
+        </motion.div>
+      )}
 
       <motion.button
         className="btn"
