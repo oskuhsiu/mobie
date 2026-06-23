@@ -8,6 +8,7 @@ import {
   type ExtensionModule,
   type BuildUnitHook,
   type PreBattleHook,
+  type PostGrowthHook,
   type NamedModifier,
 } from '@/game/ext/seams'
 import type { BattlePokemon } from '@/game/types'
@@ -16,13 +17,14 @@ import { SYNERGY_MODULE } from '@/game/ext/synergy'
 import { HELD_ITEMS_MODULE } from '@/game/ext/items'
 import { ABILITIES_MODULE } from '@/game/ext/abilities'
 import { CHAIN_MODULE } from '@/game/ext/chain'
+import { EVOLUTION_MODULE } from '@/game/ext/evolution'
 
 /**
  * 模組註冊表。各延伸系統把自己的 ExtensionModule 加進來（M7：羈絆 S2 / 持有道具 S1·S3·S4 /
  * 特性 S1·S3；M9+ 再 push 連鎖/進化/塔）。關閉的模組由 assembleExt/assembleBattlePrep
  * 依 settings 過濾掉＝零殘留。
  */
-export const MODULE_REGISTRY: ExtensionModule[] = [SYNERGY_MODULE, HELD_ITEMS_MODULE, ABILITIES_MODULE, CHAIN_MODULE]
+export const MODULE_REGISTRY: ExtensionModule[] = [SYNERGY_MODULE, HELD_ITEMS_MODULE, ABILITIES_MODULE, CHAIN_MODULE, EVOLUTION_MODULE]
 
 /**
  * 戰前縫（S1 buildUnit / S2 preBattleModifiers）的注入包。
@@ -55,6 +57,21 @@ export function assembleExt(
     if (m.seams.chainResolve) bundle.chain = m.seams.chainResolve // 連鎖目前最多一個模組提供
   }
   return bundle
+}
+
+/**
+ * 組出戰後縫（S6 postGrowth：進化）給 `grantBattleExp` 升級後消費。
+ * 全關＝[]＝升級不檢查進化。registry 可注入，方便單測。
+ */
+export function assemblePostGrowth(
+  settings: GameSettings,
+  registry: ExtensionModule[] = MODULE_REGISTRY,
+): PostGrowthHook[] {
+  const out: PostGrowthHook[] = []
+  for (const m of registry) {
+    if (settings.modules[m.id] && m.seams.postGrowth) out.push(m.seams.postGrowth)
+  }
+  return out
 }
 
 /**

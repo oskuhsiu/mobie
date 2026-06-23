@@ -47,6 +47,16 @@ export interface Species {
   moveId: number // M1：單一專屬招式
   /** PokéAPI 官方 artwork（billboard / 立繪用），runtime 載入 */
   artworkUrl: string
+  /**
+   * 進化目標 speciesId（M10，產生檔由 PokéAPI evolution-chain 派生）。
+   * 無＝最終進化 / 不進化。分歧進化（如伊布）取鏈中第一個子代（決定論）。
+   */
+  evolvesTo?: number
+  /**
+   * 進化觸發等級（M10）。本傳的道具/通信/親密度進化在本遊戲一律**簡化為等級觸發**
+   * （街機簡化，不引入道具進化）：有 min_level 用之，否則依進化階深合成（第一段 20 / 第二段 38）。
+   */
+  evolveLevel?: number
 }
 
 /** 實體卡（M2 由 QR 反查），M1 用本地假卡 roster 取代 */

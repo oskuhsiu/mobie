@@ -9,9 +9,8 @@ import {
   setModuleEnabledIn,
   type GameSettings,
 } from '@/game/settings'
-import type { ModuleId } from '@/game/ext/seams'
-import type { ExtBundle } from '@/game/ext/seams'
-import { assembleExt, assembleBattlePrep, type BattlePrep } from '@/store/ext'
+import type { ModuleId, ExtBundle, PostGrowthHook } from '@/game/ext/seams'
+import { assembleExt, assembleBattlePrep, assemblePostGrowth, type BattlePrep } from '@/store/ext'
 
 interface SettingsStore {
   settings: GameSettings
@@ -19,6 +18,8 @@ interface SettingsStore {
   ext: ExtBundle
   /** 由 settings 組好的戰前注入包（S1/S2；模組關閉時為 EMPTY_PREP） */
   prep: BattlePrep
+  /** 由 settings 組好的戰後縫（S6 進化；模組關閉時為 []） */
+  postGrowth: PostGrowthHook[]
   setModuleEnabled: (id: ModuleId, on: boolean) => void
 }
 
@@ -28,10 +29,11 @@ export const useSettings = create<SettingsStore>((set, get) => {
     settings,
     ext: assembleExt(settings),
     prep: assembleBattlePrep(settings),
+    postGrowth: assemblePostGrowth(settings),
     setModuleEnabled: (id, on) => {
       const next = setModuleEnabledIn(get().settings, id, on)
       saveSettings(next)
-      set({ settings: next, ext: assembleExt(next), prep: assembleBattlePrep(next) })
+      set({ settings: next, ext: assembleExt(next), prep: assembleBattlePrep(next), postGrowth: assemblePostGrowth(next) })
     },
   }
 })

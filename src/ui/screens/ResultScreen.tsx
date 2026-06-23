@@ -5,9 +5,11 @@ import { buildBattlePokemon } from '@/game/stats'
 import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
+import { useSettings } from '@/store/settingsStore'
 import { getSpecies } from '@/game/data/species'
 import { canCaptureIn } from '@/game/data/regionLookup'
 import { PokemonSprite } from '@/ui/components/PokemonSprite'
+import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
 const CaptureStage = lazy(() => import('@/scene/r3f/CaptureStage'))
@@ -186,6 +188,9 @@ export function ResultScreen() {
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
   const captureUnit = useRoster((s) => s.captureUnit)
   const lastResults = useRoster((s) => s.lastResults)
+  const lastEvolutions = useRoster((s) => s.lastEvolutions)
+  // S6 進化縫（evolution 模組開啟才非空）：傳給 grantBattleExp 於升級後套用
+  const postGrowth = useSettings((s) => s.postGrowth)
   const grantedRef = useRef(false)
   useEffect(() => {
     if (!context.outcome || grantedRef.current) return
@@ -194,8 +199,13 @@ export function ResultScreen() {
       context.playerTeam.map((c) => c.cardId),
       context.foeTeam.map((c) => c.level),
       isWin ? 1 : LOSS_EXP_RATIO,
+      postGrowth,
     )
-  }, [isWin, context.outcome, context.playerTeam, context.foeTeam, grantBattleExp])
+  }, [isWin, context.outcome, context.playerTeam, context.foeTeam, grantBattleExp, postGrowth])
+
+  // 進化演出：等捕獲流程結束（或本來就不捕獲）後才播，避免兩段演出疊在一起
+  const [evoDone, setEvoDone] = useState(false)
+  const showEvo = captureDone && !evoDone && lastEvolutions.length > 0
 
   // 收服回呼：穩定參照（避免 WinView 計時器 effect 因父層 re-render churn）
   const onCaptured = useCallback((ok: boolean) => {
@@ -229,7 +239,7 @@ export function ResultScreen() {
       )}
 
       <AnimatePresence>
-        {captureDone && (
+        {captureDone && !showEvo && (
           <motion.div className="row center" style={{ gap: 12, justifyContent: 'center', paddingTop: 8 }}
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <button className="btn" onClick={() => send({ type: 'PLAY_AGAIN' })}>
@@ -239,6 +249,13 @@ export function ResultScreen() {
               🗺 回到區域
             </button>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* M10 進化演出（捕獲流程結束後播放，full-screen overlay） */}
+      <AnimatePresence>
+        {showEvo && (
+          <EvolutionOverlay evolutions={lastEvolutions} onDone={() => setEvoDone(true)} />
         )}
       </AnimatePresence>
     </div>

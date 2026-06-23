@@ -342,6 +342,22 @@ body {
 .combo-overlay__num { font-size: clamp(46px, 11vw, 84px); font-weight: 900; color: #7ae0ff; }
 .combo-overlay__label { font-size: 16px; font-weight: 800; letter-spacing: 0.28em; color: #cdf6ff; }
 
+/* ============ M10 進化演出 overlay ============ */
+.evo-overlay {
+  position: absolute; inset: 0; z-index: 20; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(circle at 50% 42%, rgba(40,30,80,0.92), rgba(6,6,14,0.97));
+}
+.evo-overlay__stage { width: min(56vw, 260px); height: min(56vw, 260px); display: grid; place-items: center; }
+.evo-overlay__mon { width: 100%; height: 100%; }
+.evo-overlay__mon--morph { filter: brightness(1); }
+.evo-overlay__caption { text-align: center; min-height: 2em; }
+.evo-overlay__hint { font-size: 20px; color: var(--text-dim); letter-spacing: 0.1em; }
+.evo-overlay__done { font-size: clamp(20px, 5vw, 30px); font-weight: 800; }
+.evo-overlay__done b { color: var(--accent); text-shadow: 0 0 18px rgba(255,210,63,0.7); }
+.evo-overlay__page { font-size: 13px; color: var(--text-dim); }
+.evo-overlay__skip { opacity: 0.7; }
+
 /* ============ Battle log ============ */
 .battle-log {
   width: 100%; max-width: 620px; min-height: 64px;

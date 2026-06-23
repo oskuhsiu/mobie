@@ -72,7 +72,23 @@ async function fetchOne(id) {
   const zh = sp.names.find((n) => n.language.name === 'zh-hant')
     || sp.names.find((n) => n.language.name === 'zh-hans')
   const nameZh = zh ? zh.name : cap(pk.name)
-  return { id, name: cap(pk.name), nameZh, types, baseStats }
+  return { id, name: cap(pk.name), nameZh, types, baseStats, evoChainUrl: sp.evolution_chain?.url ?? null }
+}
+
+// ── 進化鏈解析（M10）──
+// PokéAPI evolution-chain 是樹（species + evolves_to[]）。我們把每個「父→子」邊收成
+// speciesId → { to, level }：等級進化用 min_level；道具/通信/親密度等非等級進化「簡化為等級觸發」
+// （街機不引入道具進化）——依進化階深合成（第一段 20 / 第二段 38）。分歧進化（伊布）取第一個子代＝決定論。
+const speciesIdFromUrl = (url) => { const m = url && url.match(/\/pokemon-species\/(\d+)\/?$/); return m ? Number(m[1]) : null }
+function walkChain(node, evoMap, depth = 0) {
+  const fromId = speciesIdFromUrl(node.species?.url)
+  for (const child of node.evolves_to ?? []) {
+    const toId = speciesIdFromUrl(child.species?.url)
+    const det = (child.evolution_details && child.evolution_details[0]) || {}
+    const level = det.min_level || (depth === 0 ? 20 : 38)
+    if (fromId && toId && toId <= MAX_ID && !evoMap.has(fromId)) evoMap.set(fromId, { to: toId, level })
+    walkChain(child, evoMap, depth + 1)
+  }
 }
 
 // 並發池
@@ -97,6 +113,13 @@ const ids = Array.from({ length: MAX_ID }, (_, i) => i + 1)
 const dex = await pool(ids, fetchOne)
 dex.sort((a, b) => a.id - b.id)
 console.log(`完成，共 ${dex.length} 隻。範例：`, JSON.stringify(dex[0]))
+
+// ── 抓取進化鏈、建 speciesId → { to, level } 對照（M10）──
+const chainUrls = [...new Set(dex.map((d) => d.evoChainUrl).filter(Boolean))]
+const chains = await pool(chainUrls, (url) => getJson(url, `evo-${url.match(/\/evolution-chain\/(\d+)\//)?.[1] ?? 'x'}.json`))
+const evoMap = new Map()
+for (const c of chains) if (c?.chain) walkChain(c.chain, evoMap)
+console.log(`進化鏈：${evoMap.size} 個可進化物種`)
 
 // ── 產生 moves.ts ──
 const moveLines = []
@@ -131,10 +154,12 @@ const specLines = dex.map((d) => {
   const b = d.baseStats
   const mid = moveId(d.types[0], bstTier(bstOf(b)))
   const typesStr = d.types.map((t) => `'${t}'`).join(', ')
+  const evo = evoMap.get(d.id)
+  const evoStr = evo ? `\n    evolvesTo: ${evo.to}, evolveLevel: ${evo.level},` : ''
   return `  ${d.id}: {\n` +
     `    id: ${d.id}, name: '${d.name}', nameZh: '${d.nameZh}', types: [${typesStr}],\n` +
     `    baseStats: { hp: ${b.hp}, atk: ${b.atk}, def: ${b.def}, spa: ${b.spa}, spd: ${b.spd}, spe: ${b.spe} },\n` +
-    `    moveId: ${mid}, artworkUrl: artwork(${d.id}),\n` +
+    `    moveId: ${mid}, artworkUrl: artwork(${d.id}),${evoStr}\n` +
     `  },`
 }).join('\n')
 const speciesTs = `import type { Species } from '@/game/types'

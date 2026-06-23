@@ -37,7 +37,12 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
     desc: '普攻命中累積連鎖槽，集滿可發動連鎖：最多 3 隻隊友依序連續出擊（吃速度、目標倒下即截斷）。',
     available: true,
   },
-  evolution: { icon: '🧬', label: '進化', desc: '到達等級觸發進化、重算能力值。', available: false },
+  evolution: {
+    icon: '🧬',
+    label: '進化',
+    desc: '寶可夢到達進化等級時於戰後進化、變更種族並重算能力值（個體/道具保留，招式仍單一）。',
+    available: true,
+  },
   tower: { icon: '🗼', label: '連勝塔', desc: '連續戰鬥不回血的長線遠征模式。', available: false },
 }
 
