@@ -5,13 +5,14 @@
 ---
 
 ## 1. 現況一句話
-**M1.x + M3 + M2 + M5 + M6 全部完成並 Chrome CDP 驗證**（139 測試 / typecheck / build 全綠）。
+**M1.x + M3 + M2 + M5 + M6 + M7 全部完成並 Chrome CDP 驗證**（169 測試 / typecheck / build 全綠）。
 - **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
 - **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
 - **M2（QR 掃描 + 卡庫）**：`game/cardCode.ts`（MZ1+CRC16 解析，純函數+測試）、`game/cardsImport.ts`（JSON/CSV，純函數+測試）、`game/cardLibrary.ts`（IndexedDB cards 表，PLAYER_CARDS 種子）、`CardScannerModal`（jsQR 相機掃 + 手動輸入後備 + 明確錯誤 UI，掃到→`captureUnit` 入隊去重）、`CardLibraryModal`（檢視/匯入/新增自製卡/可列印 QR 產生器，qrcode）。Title 加「📷 掃卡 / 🗂 卡庫 / 🧩 3D 模型」入口。
 - **M5（可攜存檔檔案）**：見下方 2026-06-23 註記。**設計重定位為「使用者自有雲端」而非後端同步**。
 - **M6（共用地基）**：見下方 2026-06-23 M6 註記。延伸系統的掛載地基 + 模式 contract 已落地。
-- 兩里程碑畫面都經 **三方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M7 戰鬥條件 hook 層（羈絆/道具/特性，複用 M6 的 S1–S8 引擎），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST / `14-roadmap-m6-m13.md`。**
+- **M7（戰鬥條件 hook 層）**：見下方 2026-06-23 M7 註記。羈絆（S2）/ 持有道具（S1/S3/S4）/ 特性（S1/S3）+ 設定 UI，全複用 M6 引擎、reducer/engine 不動。
+- 兩里程碑畫面都經 **三方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M8 場域/地形（導入 `fieldState` 容器，地形影響攻擊 power、混合/隨機地形），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST / `11-terrain-modes-accidents.md` / `14-roadmap-m6-m13.md`。**
 
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
@@ -30,6 +31,16 @@
 > `ResultScreen` 競技場勝利走新 `ArenaWinView`（不進捕獲流程）。**新增持久化：`mz.settings.v1`(localStorage)。新增依賴：無。** +13 vitest（ext 7 / settings 6）+4（regionLookup mode contract）＝139 全綠。
 > **CDP 驗證（SwiftShader WebGL）**：競技場勝利→ArenaWinView（純經驗、無寶貝球）；野外（常綠森林）勝利→WinView 捕獲（超級球→收服成功→加入隊伍）；全程零 console error。
 > **關鍵約束守住**：純 reducer（ext 是注入純能力包，如 rng）、只存 canonical roster（settings 是另一命名空間）、可選掛載（預設全關、關掉零殘留）。M7 直接複用此 S1–S8 引擎，把 ItemDef/SynergyRule/AbilityDef push 進 MODULE_REGISTRY 即可。
+
+> **M7 戰鬥條件 hook 層（2026-06-23，已完成 Chrome CDP 驗證）**：羈絆 / 持有道具 / 特性，全複用 M6 的 S1–S8 引擎，**reducer/engine 不動**（唯一 additive：BattleEvent 加 `heal` 變體供 S4 回血演出）。
+> **掛載分流**：戰前縫（S1 buildUnit / S2 preBattleModifiers）走新的 `store/ext.ts` `assembleBattlePrep`＋`applyBattlePrep`（BattleScreen 初始化套到玩家隊；對手只吃 S1）；戰中縫（S3 damageHook / S4 turnEnd）走既有 `assembleExt`/`ExtBundle`。**hook 讀 BattlePokemon 暫態 `heldItemId`/`abilityId` 自行分流**（縫關閉＝該欄不存在＝零殘留）。
+> ① **羈絆**（`game/ext/synergy.ts`）：`computeSynergy(team)` 純函數 + 3 規則（多樣陣容速度 / 同屬共鳴攻特攻 / 世代羈絆 HP），每 modifier 帶 label/source/icon；只玩家隊吃；選卡 tag + 開場 banner/log。
+> ② **持有道具**（`game/ext/items.ts`）：`OwnedUnit.heldItemId`（canonical）+ 7 道具三類（statMod S1 / damageHook S3 / turnEnd S4 剩飯）；`mz.itembag.v1` 背包（`store/bagStore.ts` exactly-once 對帳）、`rosterStore.setHeldItem`、`sanitizeRoster` 只留已知 id；`TeamModal`（🎒 隊伍）裝備 UI + HpPlate icon。**致命傷攔截型 onceTrigger（氣勢披帶）需改 engine→刻意延後。**
+> ③ **特性**（`game/ext/abilities.ts`）：`AbilityDef` 6 種 + **依主屬性決定論指派**（`abilityForType`，不改 generated species.ts、不連網）；S1 寫 abilityId+statMod、S3 攻擊方 pinch（HP≤1/3 ×1.5）+ 防守方 guard（剋制 ×0.8）同 hook 讀雙方；對戰雙方皆生效。**onSwitchIn（威嚇）需改 reducer→刻意延後。**
+> ④ **設定 UI**（`SettingsModal`，Title「⚙️ 設定」）：逐系統 toggle，未實作模組（chain/evolution/tower）標敬請期待；`ModuleId`/`MODULE_IDS` 加 `abilities`。共用 `game/ext/statPatch.ts`（scale/applyStatMod/createLookup）。
+> **持久化**：新增 `mz.itembag.v1`(localStorage)；`OwnedUnit` 加 canonical `heldItemId`（隨 roster 序列化，含 .save 匯出匯入）。**新增依賴：無。** +30 vitest（synergy 8 / items 11 / abilities 11）= 169 全綠。
+> **CDP 驗證（SwiftShader）**：開三模組+裝道具→選卡顯羈絆 tag→戰鬥雙方顯特性徽章（絕境爆發）+ 道具 icon（生命寶珠）+ 打一回合（注入 S3）零 console error。
+> **已知 follow-up**：氣勢披帶（post-damage 縫）/ 威嚇（onSwitchIn 縫）待補；背包 `mz.itembag.v1` 尚未進 .save 匯出（heldItemId 在 roster 內已含）。
 >
 > **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
 
@@ -98,19 +109,19 @@
 ## 3. 程式地圖（里程碑歷史見 `git log`）
 完整里程碑歷史在 `git log`（M1 → M1.5a–h → M2 → M3 → M5 → M6，每小階段一 commit、訊息為 Conventional 中文）。本節只列接手常碰的點；完整分層/資料流見 `ARCHITECTURE.md`。
 - `game/types.ts` 型別（含 `Region.mode:'arena'|'wild'`）；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts`（競技場，手動維護）**、`regionLookup.ts`＝`lookupRegion`/`canCaptureIn`）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（選隊評分+推薦）；`game/individual.ts`/`growth.ts`/`persistence.ts`/**`settings.ts`**（個體/成長/roster 持久化/設定 slice）。
-- **`game/ext/seams.ts`（M6 擴充縫 S1–S8 + ExtBundle + ExtensionModule）**；`game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球倍率 + **S3 damageHook**）；**`game/battle/reducer.ts`（3v3 純 reducer，`resolveTurn(state, action, {rng, ext})` + **S4 turnEndTrigger** + `MAX_TURNS`）**；`game/machine/gameMachine.ts`（XState 流程，`lookupRegion`）。
-- `store/battleStore.ts`（Zustand display）；`store/rosterStore.ts`（持久 roster：`grantBattleExp`/`captureUnit`）；**`store/ext.ts`（`assembleExt` + `MODULE_REGISTRY`）/`store/settingsStore.ts`（組 ext，BattleScreen 消費）**。
+- **`game/ext/seams.ts`（M6 擴充縫 S1–S8 + ExtBundle + ExtensionModule）**；**M7 模組：`game/ext/synergy.ts`（S2 羈絆 computeSynergy）/`items.ts`（S1/S3/S4 道具 ItemDef）/`abilities.ts`（S1/S3 特性 + abilityForType）/`statPatch.ts`（共用 scale/applyStatMod/createLookup）**；`game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球倍率 + **S3 damageHook**）；**`game/battle/reducer.ts`（3v3 純 reducer，`resolveTurn(state, action, {rng, ext})` + **S4 turnEndTrigger** + `heal` event + `MAX_TURNS`）**；`game/machine/gameMachine.ts`（XState 流程，`lookupRegion`）。
+- `store/battleStore.ts`（Zustand display）；`store/rosterStore.ts`（持久 roster：`grantBattleExp`/`captureUnit`/**`setHeldItem`**）；**`store/bagStore.ts`（`mz.itembag.v1` 背包 + equip 對帳）**；**`store/ext.ts`（`assembleExt`/`assembleBattlePrep`/`applyBattlePrep` + `MODULE_REGISTRY`）/`store/settingsStore.ts`（組 ext+prep，BattleScreen 消費）**。
+- `ui/components/`：**`SettingsModal`（逐系統開關）/`TeamModal`（裝備道具 + 顯特性）** 等 Title overlay（皆 lazy）。
 - `input/qte.ts`（`qualityFromPointer` seam）。
-- `ui/`：screens（Title/RegionSelect[**含競技場入口**]/Encounter/CardSelect[對手條+剋弱徽章+推薦]/Battle[**resolveTurn 傳 ext**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗，依 `canCaptureIn` 分流**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo）、`styles/global.css`。
+- `ui/`：screens（Title[**含 ⚙️設定/🎒隊伍 入口**]/RegionSelect[**含競技場入口**]/Encounter/CardSelect[對手條+剋弱徽章+推薦+**羈絆 tag**]/Battle[**resolveTurn 傳 ext、applyBattlePrep 套 prep、特性/道具徽章、heal 演出**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗，依 `canCaptureIn` 分流**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo/**SettingsModal/TeamModal**）、`styles/global.css`。
 
-## 5. 下一步（建議 M7：戰鬥條件 hook 層）
-M6 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext})`、`mz.settings.v1` 開關、`store/ext.ts` 的 `MODULE_REGISTRY`、模式 contract）。
-**M7 直接複用此引擎，reducer/engine 不用再動**——只把模組 push 進 `MODULE_REGISTRY`、在 settings 開關即生效。規格真相見 `plan/09`（道具/羈絆/特性）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M7 區。
-- **羈絆**（最乾淨、先驗證）：`computeSynergy(team)→NamedModifier[]` 純函數 + 規則集 + S2 掛載 + 選卡 UI tag。
-- **持有道具**：`ItemDef` 手寫表（statMod/damageHook/onceTrigger 三類）+ `mz.itembag.v1` 獨立 slice + S1/S3/S4（同步 `applyItemTriggers`，禁 async/重入）+ 裝備 UI。
-- **特性**：species `abilityId` + `AbilityDef` + 複用道具引擎 + 「換人解析內同步」onSwitchIn（bounded/non-reentrant）。
-- **先補的小東西**：目前**沒有設定 UI**——模組雖可開關但使用者無入口。M7 第一步可順手加一個 settings 面板（Title 入口，逐系統開關 toggle，呼 `useSettings.setModuleEnabled`）。
-- 守地基不變式：純 reducer（ext 是注入純能力包）、只存 canonical roster（itemBag/settings 是另一命名空間）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性不引新攻擊招）。
+## 5. 下一步（建議 M8：場域 / 地形，導入 `fieldState`）
+M6/M7 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext})`、`assembleExt`/`assembleBattlePrep`、`MODULE_REGISTRY` 已有三模組、模式 contract）。
+**M8 同樣複用引擎、reducer/engine 盡量不動**——地形影響攻擊 power（`engine.resolveAttack` 在屬性相剋後乘注入的 terrainMult，每屬性夾 [0.5,1.5]），導入 `fieldState` 容器（terrainEffects/…）。規格真相見 `plan/11`（地形/模式/野外意外）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M8 區。
+- **地形效果**：`data/terrains.ts` `TerrainDef` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → 夾 [0.5,1.5]）；地形放 `fieldState.terrainEffects`（暫態、分 initial/current）；開場地形 UI 揭示。
+- **更多/混合/隨機地形**：`gen_dex.mjs` `REGION_THEMES` 各區加 `mode`/`terrains`（重產 regions.ts）+ 混合地形 wild 區 + 隨機地形 wild 區（決定論抽）。
+- **M7 收尾留的 follow-up**：氣勢披帶需 post-damage 縫（改 engine）、威嚇需 onSwitchIn 縫（改 reducer 換人段）——若 M8 要碰 engine/reducer 可順手把這兩縫補上。
+- 守地基不變式：純 reducer（ext 是注入純能力包）、只存 canonical roster（itemBag/settings 是另一命名空間）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性/地形不引新攻擊招）。
 
 ## 6. 硬性約束 / 偏好（務必遵守）
 - **平台 Web/PWA**（使用者已拍板，非原生 iOS；原生留作日後效能逃生路線）。

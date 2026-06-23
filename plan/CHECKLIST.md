@@ -150,18 +150,23 @@
 - [x] `Region.mode: 'arena'|'wild'`（`types.ts`）；gen_dex 主題區 emit `mode:'wild'` 重產 regions.ts；gating 集中 result setup（依 mode 決定捕獲）
 - [x] 捕獲改依 `canCaptureIn(id)`（mode==='wild'）；移除未用的 `isPracticeRegion`；練習場→競技場 relabel（mode='arena'、中性地形、純得經驗、保留支援輪盤）+ ArenaWinView（+4 vitest）
 
-## M7 — 戰鬥條件 hook 層（道具/特性/技能同一 S1–S8 引擎；見 `09`/`10`）
+## M7 — 戰鬥條件 hook 層（道具/特性/技能同一 S1–S8 引擎；見 `09`/`10`）✅ 完成（Chrome CDP 驗證）
+> 守住硬約束「reducer/engine 不動」：S1（statMod）/S2（羈絆）走戰前縫 `applyBattlePrep`、S3（damageHook）/S4（剩飯）
+> 走既有 `ext`／`ExtBundle`；hook 讀 BattlePokemon 暫態 heldItemId/abilityId 自行分流。reducer 只 additive 加一個 `heal` event。
+> **先補的設定 UI**：`SettingsModal`（Title「⚙️ 設定」，逐系統 toggle，未實作模組標敬請期待）；ModuleId/MODULE_IDS 加 `abilities`。
 ### 隊伍羈絆（原 M6.a，最乾淨先驗證地基）
-- [ ] `computeSynergy(team)→NamedModifier[]` 純函數 + 規則集（每 modifier 帶 label/source/icon）
-- [ ] S2 掛載：戰鬥初始化/編隊變更單次重算（換 active 不重算）；選卡畫面顯示生效 tag
+- [x] `computeSynergy(team)→NamedModifier[]` 純函數 + 規則集（多樣陣容/同屬共鳴/世代羈絆，每 modifier 帶 label/source/icon）
+- [x] S2 掛載：戰鬥初始化單次套用（換 active 不重算）；選卡畫面顯示生效 tag + 開場 banner/log（只玩家隊吃羈絆）
 ### 持有道具（原 M6.b，**建立 S1/S3/S4 hook 引擎**）
-- [ ] `OwnedUnit.heldItemId` 一欄（canonical）+ `ItemDef` 手寫表（三類：statMod/damageHook/onceTrigger）
-- [ ] `mz.itembag.v1` 獨立背包 slice；S1/S3/S4 掛載；同步 `applyItemTriggers`（禁 async/callback/重入）
-- [ ] 裝備 UI + 戰鬥道具 icon + onceTrigger 演出
+- [x] `OwnedUnit.heldItemId` 一欄（canonical）+ `ItemDef` 手寫表（statMod/damageHook/turnEnd 三類；`onceTrigger` 致命傷攔截需改 engine→刻意延後）
+- [x] `mz.itembag.v1` 獨立背包 slice（`bagStore` exactly-once 對帳）；S1 進 prep、S3/S4 進 ext；同步 turnEnd（禁 async/重入）
+- [x] 裝備 UI（`TeamModal`，🎒 隊伍）+ 戰鬥道具 icon（HpPlate）+ 剩飯回血演出（heal event，綠 spark）
 ### 特性 Abilities（原 M6.g，**複用道具引擎**）
-- [ ] species `abilityId` + `AbilityDef` 手寫表（statMod/damageHook/onceTrigger/onSwitchIn）
-- [ ] 掛載：S1/S3/S4 +「換人解析步驟內同步結算」onSwitchIn（bounded/non-reentrant、不可再觸發換人）
-- [ ] 與道具同類加法疊加（靠數值池上限控平衡，不做來源攔截）；個體面板特性/道具分區顯示
+- [x] `AbilityDef` 手寫表 + **依主屬性決定論指派**（不改 generated species.ts；statMod/pinch/guard 三類）
+- [x] 掛載：S1（寫 abilityId + statMod）/ S3（pinch 攻擊方 + guard 防守方，同 hook 讀雙方）；onSwitchIn（威嚇）需改 reducer→刻意延後
+- [x] 與道具同類加法疊加（數值池上限控平衡，不做來源攔截）；TeamModal/HpPlate 特性與道具分區顯示
+> **CDP 驗證**：開三模組 + 裝道具 → 選卡顯羈絆 tag（多樣陣容/世代羈絆）→ 戰鬥雙方顯特性徽章（絕境爆發）+ 道具 icon（生命寶珠）
+> + 完整打一回合（注入 S3 damageHooks）零 console error。共 +30 vitest（synergy 8 / items 11 / abilities 11）= 169 全綠。
 
 ## M8 — 場域 / 地形（見 `11`；**導入 `fieldState` 容器**）
 ### 地形效果（原 M7.a，影響攻擊 power）
