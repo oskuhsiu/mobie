@@ -263,7 +263,6 @@ export function BattleScreen() {
         const atk = monAt(b0, e.attackerSide, e.attackerIndex)
         const def = monAt(b0, e.targetSide, e.targetIndex)
         const atkPrefix = e.attackerSide === 'foe' ? '對手的 ' : ''
-        store().setAttacking(e.attackerSide)
         stageRef.current?.lunge(e.attackerSide) // 3D：出手方撲擊
         store().setBanner(`${atkPrefix}${atk.nameZh} 使出 ${atk.move.nameZh}！`)
         audio.play('attack')
@@ -312,14 +311,12 @@ export function BattleScreen() {
       } else if (e.type === 'memberFainted') {
         const m = monAt(b0, e.side, e.index)
         const prefix = e.side === 'foe' ? '對手的 ' : ''
-        store().setFainting(e.side) // 觸發倒下淡出
         stageRef.current?.faint(e.side) // 3D：傾倒淡沉
         fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
         audio.play('faint')
         store().pushLog(`${prefix}${m.nameZh} 倒下了！`)
         await wait(620)
       } else if (e.type === 'activeChanged') {
-        store().setFainting(null) // 換上新的一隻 → 清掉淡出
         store().setActiveIndex(e.side, e.toIndex)
         stageRef.current?.enter(e.side) // 3D：新一隻落場入場（並清除倒下狀態）
         const m = monAt(b0, e.side, e.toIndex)

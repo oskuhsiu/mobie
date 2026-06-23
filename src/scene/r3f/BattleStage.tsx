@@ -4,7 +4,7 @@ import { ContactShadows } from '@react-three/drei'
 import type { BattlePokemon } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
-import { Combatant3D, makeAnim, type MonAnim } from './Combatant3D'
+import { Combatant3D, makeAnim, LUNGE_DUR, SHAKE_DUR, ENTER_DUR, type MonAnim } from './Combatant3D'
 
 // 站位：foe 在後（畫面上方）、player 在前（畫面下方），對齊 2D 版面語言。
 // player z 往後一點（畫面上抬），留底部控制列 safe zone。
@@ -45,11 +45,11 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
     ref,
     () => ({
       lunge: (side) => {
-        anim.current[side].lungeT = 0.42
+        anim.current[side].lungeT = LUNGE_DUR
       },
       hitReact: (side, strength = 1) => {
         const a = anim.current[side]
-        a.shakeT = 0.34
+        a.shakeT = SHAKE_DUR
         a.shakeMag = 0.16 * strength
       },
       faint: (side) => {
@@ -59,7 +59,7 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
         const a = anim.current[side]
         a.fainted = false
         a.faintT = 0
-        a.enterT = 0.5
+        a.enterT = ENTER_DUR
       },
     }),
     [],

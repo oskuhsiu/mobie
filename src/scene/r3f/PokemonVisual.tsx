@@ -16,15 +16,26 @@ interface PokemonVisualProps {
 /** ①使用者 drop-in GLB（IndexedDB）→ ②billboard（PokéAPI artwork 貼圖平面，永遠面向相機）。 */
 export function PokemonVisual({ speciesId, artworkUrl, shiny }: PokemonVisualProps) {
   const modelUrl = useModelUrl(speciesId)
-  const billboard = <BillboardSprite url={artworkUrl} shiny={shiny} />
-
   // 還在查 IndexedDB：先不決定，避免閃一下 billboard 再換 GLB
   if (modelUrl === undefined) return null
 
+  // billboard 也包邊界：artwork 載入失敗 → 隱藏（不讓整個 canvas 崩）。
+  // 此元件自我保護，呼叫端（Combatant3D / CaptureStage）無須再外包邊界。
+  const billboard = (
+    <VisualBoundary key={artworkUrl} fallback={null}>
+      <Suspense fallback={null}>
+        <BillboardSprite url={artworkUrl} shiny={shiny} />
+      </Suspense>
+    </VisualBoundary>
+  )
+  // 無自訂 GLB → billboard；有 → 載 GLB，失敗退回 billboard
+  if (!modelUrl) return billboard
   return (
-    <VisualErrorBoundary key={modelUrl ?? 'billboard'} fallback={<Suspense fallback={null}>{billboard}</Suspense>}>
-      <Suspense fallback={null}>{modelUrl ? <GlbModel url={modelUrl} /> : billboard}</Suspense>
-    </VisualErrorBoundary>
+    <VisualBoundary key={modelUrl} fallback={billboard}>
+      <Suspense fallback={null}>
+        <GlbModel url={modelUrl} />
+      </Suspense>
+    </VisualBoundary>
   )
 }
 
@@ -65,8 +76,8 @@ function BillboardSprite({ url, shiny }: { url: string; shiny?: boolean }) {
   )
 }
 
-/** GLB 壞檔/載入失敗時退回 billboard，不讓整個 canvas 崩掉。 */
-class VisualErrorBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+/** 造型載入失敗（GLB 壞檔、artwork 網路失敗）時退回 fallback，不讓整個 canvas 崩掉。 */
+class VisualBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
   static getDerivedStateFromError() {
     return { failed: true }

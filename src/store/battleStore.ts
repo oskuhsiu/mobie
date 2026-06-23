@@ -25,12 +25,9 @@ interface BattleUiState {
   phase: BattlePhase
   log: string[]
   banner: string | null
-  attacking: Side | null
   hitFx: HitFx | null
   fxCounter: number
   captured: boolean | null
-  /** 正在倒下淡出的一方（其當前 active），活躍換上後清掉 */
-  fainting: Side | null
   /** 支援輪盤結果 overlay（null=不顯示） */
   support: SupportOutcome | null
   /** 星擊能量槽 0..100（只由 QTE 表現+連鎖累積，不綁隨機） */
@@ -48,8 +45,6 @@ interface BattleUiState {
   setPhase: (p: BattlePhase) => void
   pushLog: (msg: string) => void
   setBanner: (b: string | null) => void
-  setAttacking: (s: Side | null) => void
-  setFainting: (s: Side | null) => void
   setSupport: (o: SupportOutcome | null) => void
   /** 累積能量（dealtDamage=該回合有命中→連鎖+1，否則歸零）；回傳是否剛集滿 */
   addEnergy: (delta: number, dealtDamage: boolean) => void
@@ -64,11 +59,9 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   phase: 'intro',
   log: [],
   banner: null,
-  attacking: null,
   hitFx: null,
   fxCounter: 0,
   captured: null,
-  fainting: null,
   support: null,
   energy: 0,
   chain: 0,
@@ -77,8 +70,8 @@ export const useBattleStore = create<BattleUiState>((set) => ({
     set({
       battle: createBattleState(playerMembers, foeMembers),
       phase: 'intro', log: [], banner: null,
-      attacking: null, hitFx: null, fxCounter: 0, captured: null,
-      fainting: null, support: null, energy: 0, chain: 0,
+      hitFx: null, fxCounter: 0, captured: null,
+      support: null, energy: 0, chain: 0,
     }),
 
   setBattle: (battle) => set({ battle }),
@@ -100,8 +93,6 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   setPhase: (phase) => set({ phase }),
   pushLog: (msg) => set((s) => ({ log: [...s.log.slice(-4), msg] })),
   setBanner: (banner) => set({ banner }),
-  setAttacking: (attacking) => set({ attacking }),
-  setFainting: (fainting) => set({ fainting }),
   setSupport: (support) => set({ support }),
   addEnergy: (delta, dealtDamage) =>
     set((s) => {
@@ -112,6 +103,6 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   resetEnergy: () => set({ energy: 0 }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
-  clearFx: () => set({ hitFx: null, attacking: null }),
+  clearFx: () => set({ hitFx: null }),
   setCaptured: (captured) => set({ captured }),
 }))

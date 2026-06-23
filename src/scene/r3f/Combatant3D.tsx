@@ -1,4 +1,4 @@
-import { Component, useRef, type ReactNode } from 'react'
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group } from 'three'
 import type { BattlePokemon } from '@/game/types'
@@ -24,9 +24,11 @@ export function makeAnim(): MonAnim {
   return { lungeT: 0, shakeT: 0, shakeMag: 0, enterT: 0, fainted: false, faintT: 0 }
 }
 
-const LUNGE_DUR = 0.42
-const SHAKE_DUR = 0.34
-const ENTER_DUR = 0.5
+// 動畫時長（秒）。BattleStage 的 StageHandle 以同名常數 seed 對應的剩餘秒數，
+// useFrame 內以 `剩餘/DUR` 正規化進度——seed 必須等於 DUR，故共用同一來源。
+export const LUNGE_DUR = 0.42
+export const SHAKE_DUR = 0.34
+export const ENTER_DUR = 0.5
 const FAINT_DUR = 0.6
 
 const easeOutBack = (p: number) => {
@@ -99,22 +101,10 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase }
     g.scale.setScalar(scale)
   })
 
+  // PokemonVisual 自我保護（內含造型載入失敗的邊界），此處無須再外包。
   return (
     <group ref={group} position={base}>
-      <VisualBoundary>
-        <PokemonVisual speciesId={mon.speciesId} artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
-      </VisualBoundary>
+      <PokemonVisual speciesId={mon.speciesId} artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
     </group>
   )
-}
-
-/** 任何造型載入失敗都不讓整個場景崩（artwork 網路失敗等邊角狀況）。 */
-class VisualBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-  render() {
-    return this.state.failed ? null : this.props.children
-  }
 }
