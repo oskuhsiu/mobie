@@ -1,0 +1,3 @@
+同意目前收斂版。①用「最終每屬性倍率」夾 `[0.5,1.5]`，單一/混合都走同一函式，避免例外規則；②地形突變放 `BattleState.currentTerrains` 沒問題，但要把「初始地形」和「目前地形」分清楚，UI/戰報才能說明變化，不要回寫 Region；③arena 我也改成支持保留既有支援輪盤，因為它是核心操作手感，不應和 wild-only RandomEvent 混在同一 gating；④紅線再補一條：捕獲資格、稀有 boss、幸運加碼都應該是 encounter/reward 層 flag，不要讓 OwnedUnit 或 canonical unit schema 帶戰鬥臨時資訊。
+
+STATUS: AGREE

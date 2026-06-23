@@ -1,0 +1,20 @@
+{
+  "topic": "pokemon-mezastar：設計地形系統(更多/混合/隨機地形 + 地形影響戰力)、競技場/野外模式分流、並從 10 種野外意外挑 5",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T10:26:47+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-102647",
+  "models": {}
+}

@@ -32,6 +32,13 @@
 > 孵化 egg 只存 seed（不存預生成結果）+ 重複轉化只處理新候選不刪既有 + `pendingCaptures` 持久 transaction(exactly-once 防斷線遺失)。
 > 12 跨場療傷退回 backlog（改做塔局內 modifier）。圓桌結論：`session-20260623-094704`（選 5）+ `session-20260623-095457`（設計審查）。
 
+> **地形 + 模式分流 + 野外意外 = M7（2026-06-23，尚未實作）**：設計＋圓桌全文 `plan/11-terrain-modes-accidents.md`（CHECKLIST 已加 M7.0–c）。核心擴充（非可選模組）：
+> ①**地形影響戰力**——只影響攻擊 power，engine.resolveAttack 在相剋後乘注入的 terrainMult；混合地形逐屬性相乘 + **每屬性夾 [0.5,1.5]**；隨機地形開場決定論抽；
+> BattleState 分 initial/current terrains(暫態不持久化)。②**模式 contract** `Region.mode:'arena'|'wild'`——競技場(原練習場)中性地形/無意外/不可捕獲/純經驗但**保留支援輪盤**，
+> 野外=地形+捕獲+意外；gating 集中 setup、捕獲改依 mode、移除 isPracticeRegion 散落。③**野外意外×5**(wild-only,走 RandomEvent)：亂入野生(不新增第4隻)/地形突變/天降補給(限開場·戰後)/稀有閃光boss(encounter flag)/幸運加碼(reward)。
+> 升級了延伸 backlog #3 場地效果為核心。Backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制。圓桌結論：`session-20260623-102647`。
+> 連帶要改：`types.ts`(Region+mode/terrains)、`gen_dex.mjs` REGION_THEMES(重產 regions.ts)、新 `data/terrains.ts`、engine/reducer/BattleState、捕獲 gating。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）

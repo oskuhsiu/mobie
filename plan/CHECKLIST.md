@@ -179,3 +179,19 @@
 ### M6.j 難度修飾 Ascension（依附連勝塔）
 - [ ] 拆兩條：靜態敵強化（enemyHpMulti/levelBonus）pre-bake 進 encounter/buildUnit；回合修飾（Fate/healReduced）走 ext
 - [ ] tower ascension 選擇器（meta `ascensionUnlocked` 解鎖階級）+ run 內生效修飾 tag；嚴守 §0.4 不新增戰鬥規則
+
+## M7 — 地形 + 模式分流 + 野外意外（核心擴充；見 `11-terrain-modes-accidents.md`）
+> 純 reducer（地形如 rng 注入）、只存 canonical（地形/意外全暫態或 encounter/reward flag）、單招街機、不重引硬控。
+### M7.0 模式 contract：競技場 vs 野外
+- [ ] `Region.mode: 'arena'|'wild'`；gating 集中 encounter/battle setup（mode==='wild' 才 roll terrain/意外/捕獲）
+- [ ] 捕獲改依 `mode==='wild'`；移除散落 `isPracticeRegion`；練習場→競技場 relabel（mode='arena'、中性地形、保留支援輪盤）
+### M7.a 地形效果（影響攻擊 power）
+- [ ] `data/terrains.ts`：`TerrainDef{mods}` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → **每屬性夾 [0.5,1.5]**）
+- [ ] engine `resolveAttack` 在 type 相剋後乘 `terrainMult`（預設 1，既有測試不動）；`BattleState` 加 initial/current terrains（暫態）
+- [ ] 開場地形 UI 揭示；vitest（clamp/混合相乘/中性=1）
+### M7.b 更多 / 混合 / 隨機地形
+- [ ] gen_dex `REGION_THEMES` 各區加 `mode`/`terrains`；新增 1–2 混合地形 wild 區 + 1 隨機地形 wild 區（決定論抽）；重產 regions.ts
+### M7.c 野外意外 ×5（wild-only，走 RandomEvent）
+- [ ] 亂入野生（一次性傷害、不新增第 4 隻 unit）／地形突變（改 currentTerrains）
+- [ ] 天降補給（**開場前/戰後**三選一，絕不戰鬥中途）／稀有閃光 boss（encounter flag→異色/高 Grade）／幸運加碼（reward modifier）
+- [ ] backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制
