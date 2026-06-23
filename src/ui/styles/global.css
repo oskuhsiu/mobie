@@ -476,6 +476,30 @@ body {
 .indiv__iv { font-variant-numeric: tabular-nums; opacity: 0.92; }
 .indiv__iv b { margin-left: 3px; }
 
+/* ============ M10 星級 Grade 徽章（純展示） ============ */
+.grade-badge {
+  display: inline-flex; align-items: center; gap: 2px; font-weight: 900;
+  border-radius: 999px; padding: 1px 7px; line-height: 1.5;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: var(--text);
+}
+.grade-badge--sm { font-size: 10px; padding: 0 6px; }
+.grade-badge--md { font-size: 12px; }
+.grade-badge__star { font-size: 0.9em; }
+.grade-badge--g1, .grade-badge--g2 { color: var(--text-dim); }
+.grade-badge--g3 { color: #7ec8ff; border-color: rgba(126,200,255,0.4); }
+.grade-badge--g4 { color: #c08bff; border-color: rgba(192,139,255,0.5); }
+.grade-badge--shine {
+  color: #1b160a;
+  background: linear-gradient(110deg, #ffe27a, #ffb347 60%, #ff7ae0);
+  border-color: rgba(255,210,63,0.9);
+  box-shadow: 0 0 10px rgba(255,200,80,0.6);
+  animation: gradeShine 2.2s ease-in-out infinite;
+}
+@keyframes gradeShine {
+  0%, 100% { box-shadow: 0 0 8px rgba(255,200,80,0.45); }
+  50% { box-shadow: 0 0 16px rgba(255,200,80,0.85); }
+}
+
 /* ============ EXP 結算 ============ */
 .exp-summary {
   display: flex; flex-direction: column; gap: 6px;

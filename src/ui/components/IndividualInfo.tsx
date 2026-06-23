@@ -1,5 +1,6 @@
 import type { BattlePokemon, Stats } from '@/game/types'
 import { ivStars, getNature, IV_MAX } from '@/game/individual'
+import { GradeBadge } from '@/ui/components/GradeBadge'
 
 const STAT_LABEL: Record<keyof Stats, string> = {
   hp: 'HP', atk: '攻', def: '防', spa: '特攻', spd: '特防', spe: '速',
@@ -30,6 +31,7 @@ export function IndividualInfo({ mon, detailed = false }: { mon: BattlePokemon; 
           {nat.down && <span style={{ color: '#5fa8ff' }}>{` ${STAT_LABEL[nat.down]}↓`}</span>}
         </span>
         {mon.shiny && <span className="indiv__shiny">✦異色</span>}
+        <GradeBadge indiv={mon} speciesId={mon.speciesId} size="sm" />
       </div>
       {detailed && (
         <div className="indiv__ivs" title={`個體值 0–${IV_MAX}`}>
