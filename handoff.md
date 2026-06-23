@@ -95,46 +95,22 @@
   - `.claude/agent-chat/session-20260622-163656/conclusion.md`（意外機制+個體/成長）
 - 反安裝說明（含機器原有套件勿動）：`uninstall.txt`
 
-## 3. 已完成（git log）
-- `9cd91a0` **M1**：XState 流程（title→region→encounter→cardSelect→battle→result）、12 種族 seed、18 型相剋表、戰鬥引擎（`resolveAttack`）21 vitest 全綠、直/橫式實機截圖驗證勝敗兩路徑。
-- `f54db94` docs：對戰常識查證 + 3v3/換人/聲光設計。
-- `fed020b` docs：意外機制 + 個體差異/成長性設計。
-- `3e7fb96` **M1.5a reducer 地基**：`engine.damageMult`/`defenseMultiplier`、`reducer.ts`（`resolveTurn` 純函數 + 5 domain events + `applyForcedSwitch`）、11 測試。
-- **（未 commit）M1.5a UI 接線**：見 §5、§1。
-
-> 完整分層/資料流見 `ARCHITECTURE.md`，此處只列接手常碰的點。
-- `game/types.ts` 型別；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts` 手動維護**、**`regionLookup.ts` 含練習場的 `lookupRegion`**）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（**選隊評分 vs 全隊 + 一鍵推薦，純函數+測試**）；`game/individual.ts`/`growth.ts`/`persistence.ts`（個體/成長/持久化）。
-- `game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球/捕獲倍率 + 測試）；**`game/battle/reducer.ts`（3v3 純 reducer + 測試；含 `MAX_TURNS` 回合上限依剩餘血量判勝）**；`game/machine/gameMachine.ts`（XState 流程，改用 `lookupRegion`）。
-- `store/battleStore.ts`（Zustand display：`BattleState` + 逐 event setter）；`store/rosterStore.ts`（持久 roster：`load`/`grantBattleExp(…, ratio)`/**`captureUnit(card)`**）。
+## 3. 程式地圖（里程碑歷史見 `git log`）
+完整里程碑歷史在 `git log`（M1 → M1.5a–h → M2 → M3 → M5 → M6，每小階段一 commit、訊息為 Conventional 中文）。本節只列接手常碰的點；完整分層/資料流見 `ARCHITECTURE.md`。
+- `game/types.ts` 型別（含 `Region.mode:'arena'|'wild'`）；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts`（競技場，手動維護）**、`regionLookup.ts`＝`lookupRegion`/`canCaptureIn`）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（選隊評分+推薦）；`game/individual.ts`/`growth.ts`/`persistence.ts`/**`settings.ts`**（個體/成長/roster 持久化/設定 slice）。
+- **`game/ext/seams.ts`（M6 擴充縫 S1–S8 + ExtBundle + ExtensionModule）**；`game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球倍率 + **S3 damageHook**）；**`game/battle/reducer.ts`（3v3 純 reducer，`resolveTurn(state, action, {rng, ext})` + **S4 turnEndTrigger** + `MAX_TURNS`）**；`game/machine/gameMachine.ts`（XState 流程，`lookupRegion`）。
+- `store/battleStore.ts`（Zustand display）；`store/rosterStore.ts`（持久 roster：`grantBattleExp`/`captureUnit`）；**`store/ext.ts`（`assembleExt` + `MODULE_REGISTRY`）/`store/settingsStore.ts`（組 ext，BattleScreen 消費）**。
 - `input/qte.ts`（`qualityFromPointer` seam）。
-- `ui/`：screens（Title/RegionSelect[**含練習入口**]/Encounter/CardSelect[**對手條+剋弱徽章+推薦**]/Battle[**HpPlate 貼角色同側**]/Result[**捕獲入隊+勝敗經驗**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo）、`styles/global.css`。
+- `ui/`：screens（Title/RegionSelect[**含競技場入口**]/Encounter/CardSelect[對手條+剋弱徽章+推薦]/Battle[**resolveTurn 傳 ext**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗，依 `canCaptureIn` 分流**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo）、`styles/global.css`。
 
-## 5. 已完成：M1.5a 完整（reducer 已 commit `3e7fb96`；UI 接線未 commit）
-**純 reducer**（`src/game/battle/reducer.ts`，無 UI/動畫字眼）：
-- 型別：`Side` / `BattleSide`(members[≤3]+activeIndex) / `BattleState`(player/foe/turn/winner) / `BattleAction`(`ATTACK{quality?}` | `SWITCH{index,defenseQuality?}`) / `BattleEvent`（5 種 domain events）/ `TurnResult`。
-- `createBattleState`、`resolveTurn(state, action, {rng}) → {nextState, events}`。ATTACK 依速度先後手、先手秒殺則後手略過、倒下 `applyForcedSwitch` 依序換、全滅 `battleEnded`。SWITCH 防禦 QTE 抵減（`defenseMultiplier` perfect .1/good .4/normal .7/weak 1）、換上即倒立即強制換。
-- **注意**：經 SWITCH「換上即倒」**不會**讓玩家全滅（被換下的原 active 仍存活可接回）。`RandomEvent` 統一格式留 **M1.5g**。
-
-**UI 接線（已實作＋實機驗證，未 commit）**：
-- `gameMachine` context = `playerTeam`/`foeTeam`（各 3）、`TEAM_SIZE`；`rollEncounterTeam` roll 3 隻、末隻 boss；`SELECT_TEAM{cards}`。
-- `CardSelectScreen` 多選 3（序號徽章、n/3、選滿才解鎖）；`EncounterScreen` 對手 3 隻縮圖（boss 描金邊）。
-- `battleStore` 改持 `BattleState`(display) + `setMemberHp/setActiveIndex/setBattle/showHit/...`。
-- `BattleScreen` 用 `resolveTurn` 算整回合 → **依序消費 events 演出**（damage=lunge+受擊+浮傷+HP tween；fainted；activeChanged=換上入場；end=won/lost）→ `setBattle(nextState)` 收尾；底部雙方隊伍 tray（3 HP pip + 倒下灰階/✕ + active 高亮）。
-- `ResultScreen` 捕獲對象＝foeTeam 末隻 boss；LoseView 用 playerTeam lead。
-- 驗證：Chrome headless+CDP 跑完整 loop，**勝利並捕獲 boss**（截圖在 `/tmp/mz_shots/`）。
-
-## 5b. 已完成 M1.5b：主動換人 + 防禦 QTE（實機驗證）
-- 行動選單「攻擊 / 換人」；`SwitchPanel`（player 隊友卡，active/倒下/剛換下 disabled）→ 選人 → **防禦 QTE**（`TimingBar` 加 `hint` prop）→ `runSwitchTurn` 呼 `resolveTurn(SWITCH)` → 依序演出 `activeChanged(forced:false)`/`switchDefenseResolved`(banner 減傷%)/`damageApplied`。
-- 防濫用在 **display 層**：換人＝整回合；`lockedIndex` 鎖住剛換下的那隻一回合（攻擊後解鎖）。reducer 維持純淨。
-- 驗證：換人面板→傑尼龜換上→對手剋制攻擊（效果絕佳/減傷 30%）正確。
-
-## 下一步：M1.5e → f → g → h（完成全部 M1.x）
-- **c 視覺特效** ✅、**d 音效** ✅（`audio/audioEngine`，Tone.js 動態 import，SFX+BGM+intensity，驗證零錯）。
-- **e 個體差異**：`individual.ts`（seed→ivs/nature/shiny 決定論）、`stats.ts` 補 nature 乘數、個體 UI（星級/紅藍色標/異色）+ 測試。
-- **f 成長**：`growth.ts`（n^3 曲線/gainExp/levelUp）、`OwnedUnit`(canonical) vs `BattleUnit`、`PersistenceAdapter`+`LocalStorageAdapter`（只存 canonical）+ 測試。
-- **g 意外**：統一 `RandomEvent`、支援輪盤（每 N 回合 攻擊UP/必定會心/支援補刀/摃龜）、捕獲球輪盤、連打蓄力 + 測試。
-- **h 星擊**：QTE/連鎖累積能量槽（不綁隨機）+ 自製大招演出。
-- 細節真相見 `plan/06`（對戰常識）、`plan/07`（意外+個體/成長）。
+## 5. 下一步（建議 M7：戰鬥條件 hook 層）
+M6 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext})`、`mz.settings.v1` 開關、`store/ext.ts` 的 `MODULE_REGISTRY`、模式 contract）。
+**M7 直接複用此引擎，reducer/engine 不用再動**——只把模組 push 進 `MODULE_REGISTRY`、在 settings 開關即生效。規格真相見 `plan/09`（道具/羈絆/特性）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M7 區。
+- **羈絆**（最乾淨、先驗證）：`computeSynergy(team)→NamedModifier[]` 純函數 + 規則集 + S2 掛載 + 選卡 UI tag。
+- **持有道具**：`ItemDef` 手寫表（statMod/damageHook/onceTrigger 三類）+ `mz.itembag.v1` 獨立 slice + S1/S3/S4（同步 `applyItemTriggers`，禁 async/重入）+ 裝備 UI。
+- **特性**：species `abilityId` + `AbilityDef` + 複用道具引擎 + 「換人解析內同步」onSwitchIn（bounded/non-reentrant）。
+- **先補的小東西**：目前**沒有設定 UI**——模組雖可開關但使用者無入口。M7 第一步可順手加一個 settings 面板（Title 入口，逐系統開關 toggle，呼 `useSettings.setModuleEnabled`）。
+- 守地基不變式：純 reducer（ext 是注入純能力包）、只存 canonical roster（itemBag/settings 是另一命名空間）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性不引新攻擊招）。
 
 ## 6. 硬性約束 / 偏好（務必遵守）
 - **平台 Web/PWA**（使用者已拍板，非原生 iOS；原生留作日後效能逃生路線）。
