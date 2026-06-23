@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { audio } from '@/audio/audioEngine'
-import { ModelManagerModal } from '@/ui/components/ModelManagerModal'
-import { CardScannerModal } from '@/ui/components/CardScannerModal'
-import { CardLibraryModal } from '@/ui/components/CardLibraryModal'
+
+// Title 工具 overlay 較重（jsqr/qrcode/three），lazy 載入避免拖慢開場
+const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
+const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
+const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
 
 type Overlay = 'none' | 'models' | 'scan' | 'library'
 
@@ -63,11 +65,13 @@ export function TitleScreen() {
         <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
       </motion.div>
 
-      <AnimatePresence>
-        {overlay === 'models' && <ModelManagerModal onClose={() => setOverlay('none')} />}
-        {overlay === 'scan' && <CardScannerModal onClose={() => setOverlay('none')} />}
-        {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
-      </AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {overlay === 'models' && <ModelManagerModal onClose={() => setOverlay('none')} />}
+          {overlay === 'scan' && <CardScannerModal onClose={() => setOverlay('none')} />}
+          {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
+        </AnimatePresence>
+      </Suspense>
     </div>
   )
 }

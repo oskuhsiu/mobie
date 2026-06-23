@@ -96,14 +96,15 @@
 - [x] 滿槽放自製大招「星擊」（`starStrike` action：×3 倍率+必定會心+跳過支援輪盤）+ 演出（FxCanvas flash/ring/spark + shake + audio）
 - [x] vitest（+2）：星擊傷害遠高於普攻且必定會心、星擊跳過支援輪盤
 
-## M2 — QR 掃描 + 卡庫
-- [ ] `parseCardCode()`：MZ1 解析 + CRC 校驗
-- [ ] BarcodeDetector 掃描 + zxing fallback
-- [ ] cards 表 JSON/CSV 匯入
-- [ ] 掃描→反查→存入「我的寶可夢」
-- [ ] 自製產卡/印卡工具
-- [ ] 掃描失敗 UI 回饋
-- [ ] **持久化換 Dexie 時導入 `SaveEnvelope`（`updatedAt`/`revision`/`deviceId`/`schemaVersion`）** → 為 M5 雲端同步鋪路（見 `08-cloud-sync.md` C/H 段）
+## M2 — QR 掃描 + 卡庫 ✅ 完成（Chrome CDP 驗證）
+- [x] `parseCardCode()`：MZ1 解析 + CRC16-CCITT 校驗 → `game/cardCode.ts`（失敗分類 format/version/crc，+8 測試）
+- [x] 相機掃描 → **改用 jsQR**（getUserMedia+canvas，比 BarcodeDetector 在 iPad Safari 可靠；zxing fallback 不需）+ 手動輸入後備（永遠可用、可測）
+- [x] cards 表 JSON/CSV 匯入 → `game/cardsImport.ts`（+7 測試）+ `CardLibraryModal` 貼上/選檔
+- [x] 掃描→反查→存入「我的寶可夢」→ `game/cardLibrary.ts`（IndexedDB cards 表，PLAYER_CARDS 種子）+ `rosterStore.captureUnit`（去重）
+- [x] 自製產卡/印卡工具 → `CardLibraryModal` 新增自製卡 + 每卡產生可列印 QR（qrcode）
+- [x] 掃描失敗 UI 回饋 → CRC 錯 / 查無卡 / 相機被拒（縮成提示＋手動主 CTA）皆明確
+- [~] `SaveEnvelope`（M5 鋪路）→ **未觸發**：roster 維持 `LocalStorageAdapter`、cards 用獨立 raw-IDB；本里程碑未把 roster 換 Dexie，故信封延到 M5 真正導入持久化遷移時做
+- 入口：Title「📷 掃卡 / 🗂 卡庫」；造型/個體：掃描卡的顯式 ivs/nature/shiny 經 `createOwnedUnit` 覆寫落到 canonical
 
 ## M3 — R3F 3D 場景 + 造型層 ✅ 完成（Chrome CDP 驗證）
 - [x] R3F 戰鬥舞台（台座、光照、運鏡）→ `scene/r3f/BattleStage`（ContactShadows + lazy 載入）
