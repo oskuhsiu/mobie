@@ -9,7 +9,7 @@ import { resolveTurn, type BattleEvent, type BattleState, type SupportOutcome } 
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattlePokemon, TerrainId } from '@/game/types'
 import { lookupRegion } from '@/game/data/regionLookup'
-import { resolveBattleTerrains, resolveTerrainMult, lookupTerrain } from '@/game/data/terrains'
+import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf } from '@/game/data/terrains'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
@@ -70,7 +70,7 @@ function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
 
 /** 場域地形小徽章（常駐 HUD）：顯示目前生效地形 icon + 名稱；中性/無地形不顯示。 */
 function TerrainChip({ terrainIds }: { terrainIds: TerrainId[] }) {
-  const defs = terrainIds.map(lookupTerrain).filter((d): d is NonNullable<typeof d> => !!d && d.id !== 'neutral')
+  const defs = terrainDefsOf(terrainIds)
   if (defs.length === 0) return null
   return (
     <div className="terrain-chip" title="場域地形：影響該屬性招式的威力">
@@ -259,7 +259,7 @@ export function BattleScreen() {
     const region = context.regionId ? lookupRegion(context.regionId) : null
     const terrainSeed = context.foeTeam.map((c) => c.cardId).join('|')
     const terrains = region ? resolveBattleTerrains(region, terrainSeed) : []
-    const terrainDefs = terrains.map(lookupTerrain).filter((d): d is NonNullable<typeof d> => !!d && d.id !== 'neutral')
+    const terrainDefs = terrainDefsOf(terrains)
     const s = useBattleStore.getState()
     s.init(players, foes, terrains)
     ;(async () => {

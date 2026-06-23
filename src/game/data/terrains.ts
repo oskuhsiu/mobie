@@ -5,6 +5,7 @@
 
 import type { TypeName, TerrainId } from '@/game/types'
 import { hashSeed } from '@/game/individual'
+import { createLookup } from '@/game/ext/statPatch'
 
 export interface TerrainDef {
   id: TerrainId
@@ -34,10 +35,12 @@ export const TERRAINS: TerrainDef[] = [
   { id: 'neutral', name: '中性', icon: '⬜', mods: {} },
 ]
 
-const TERRAIN_BY_ID = new Map(TERRAINS.map((t) => [t.id, t]))
+/** 依 id 取地形定義；查無回 undefined（未知 id 視為無效，倍率計算自動略過）。共用 createLookup（同 items/abilities）。 */
+export const lookupTerrain = createLookup(TERRAINS)
 
-/** 依 id 取地形定義；查無回 undefined（未知 id 視為無效，倍率計算自動略過） */
-export const lookupTerrain = (id: TerrainId): TerrainDef | undefined => TERRAIN_BY_ID.get(id)
+/** 解析一組地形 id 為「有效且非中性」的 TerrainDef（UI 揭示/徽章共用，過濾未知與 neutral）。 */
+export const terrainDefsOf = (terrainIds: TerrainId[]): TerrainDef[] =>
+  terrainIds.map(lookupTerrain).filter((d): d is TerrainDef => d !== undefined && d.id !== 'neutral')
 
 /**
  * 純函數：某招式屬性在當前地形（可多個＝混合）下的最終 power 倍率。
