@@ -192,22 +192,27 @@
 > **CDP 驗證（SwiftShader）**：開 chain 模組 → 普攻填滿連鎖槽（gauge 0→100%）→ 🔗連鎖鈕亮起 → 發動連鎖 → 逐段 foe tray 確認皆命中同一 active 敵、目標倒下即截斷剩餘 hits、零 console error。
 > +14 vitest（資格/累積/截斷/重驗死亡攻擊者/領銜者 KO/決定論/純函數）= 237 全綠；typecheck/build 綠。simplify 清理（合併重複 opts、去除無效 Omit 標註）。
 
-## M10 — 養成 · 收集 · 孵化（見 `09`/`10`）
+## M10 — 養成 · 收集 · 孵化（見 `09`/`10`）✅ 完成（Chrome CDP 驗證）
+> 守鐵律：只存 canonical OwnedUnit（meta/incubator 各自命名空間 S8）、egg 只存 seed/pool/progress（不存預生成結果）、
+> Grade 純派生零新欄零持久化、進化只改 canonical speciesId（個體欄位全保留、單招）、`game/` 純（store 才知模組開關）。
 ### 進化（原 M6.c；**預留技能槽解鎖接點**給 M12）
-- [ ] `gen_dex.mjs` 加 PokéAPI evolution-chain → species `evolvesTo`/`evolveLevel`
-- [ ] S6 postGrowth：等級觸發改 `speciesId`、個體欄位全保留、招式維持單一；結算進化演出（可取消）
+- [x] `gen_dex.mjs` 加 PokéAPI evolution-chain → species `evolvesTo`/`evolveLevel`（道具/通信/親密度進化簡化為等級觸發、分歧取第一子代；+113 進化邊，moves/regions/playerCards 確定性不變）
+- [x] S6 postGrowth（`game/ext/evolution.ts`，`EVOLUTION_MODULE` 只掛 S6 + `assemblePostGrowth`）：等級觸發改 `speciesId`、個體欄位全保留、招式維持單一、可連跳多階；`grantBattleExp` 升級後套用、記 `lastEvolutions`；`EvolutionOverlay` 結算進化演出（剪影→閃光→定格，可跳過）
 ### 星級 Grade（原 M6.f）
-- [ ] `computeGrade(unit, species)` 純函數（shiny + IV tier + species 靜態稀有度；**零 buff、零新欄**）
-- [ ] Grade 徽章 UI + 高 Grade 光效；圖鑑按 Grade 篩選
+- [x] `computeGrade(indiv, species)` 純函數（shiny + IV 總和 tier + species BST 稀有度；**零 buff、零新欄、零持久化**）；`GRADE_LABEL`(5=Star/6=Superstar)/`isShiningGrade`/`gradeShort`
+- [x] `GradeBadge` 徽章 UI + 高 Grade 漸層光效（接 IndividualInfo→CardSelect/Encounter）；圖鑑按 Grade 篩選（✦閃耀）
 ### 圖鑑 / 成就（原 M6.h）
-- [ ] `mz.meta.v1` 三層語義：`currentlyOwned`(roster 派生) / `registered`(meta 單調) / `seen`(meta) + stats
-- [ ] `metaStore` 事件點更新（捕獲/勝利/塔通關）+ `computeAchievements` + `claimAchievementReward(id)` action
-- [ ] 圖鑑頁（1–251 三態 + Grade 篩選）+ 成就頁（進度 + 領取）
+- [x] `mz.meta.v1`（`game/meta.ts`）三層語義：`currentlyOwned`(roster 派生) / `registered`(meta 單調、**進化不倒退**) / `seen`(meta) + stats；純更新可測
+- [x] `metaStore` 事件點更新（看到/收服/勝利/進化）+ `computeAchievements`(7 成就純派生) + `claimAchievement(id)` action（exactly-once 回傳 reward）
+- [x] 圖鑑頁（`DexModal` 1–251 三態 + Grade 篩選，Set 化 O(1)/格）+ 成就頁（`AchievementsModal` 進度 + 領取→產蛋）
 ### 抽蛋孵化（原 M6.i；**預留蛋帶技能接點**給 M12）
-- [ ] `mz.incubator.v1`：egg 只存 `seed/source/speciesPool/progress/requiredProgress`（不付費/不刷池/不存預生成結果）
-- [ ] egg 來源（塔/重複捕獲轉化/成就首領取）+ 進度權重（戰鬥數+塔層數，非真實時間/每日/步數）
-- [ ] 捕獲結算 keep/convert + `pendingCaptures` 持久 transaction（exactly-once、重啟復原、不刪既有個體）
-- [ ] `hatchEgg(egg)` 由 seed+speciesPool 走 individual roll 產 canonical OwnedUnit + 孵化頁/動畫
+- [x] `mz.incubator.v1`（`game/incubator.ts`）：egg 只存 `seed/source/speciesPool/progress/requiredProgress`（不付費/不刷池/不存預生成結果）；決定論 id/seed
+- [x] egg 來源（重複捕獲轉化 / 成就領取；塔留 source 給 M11）+ 進度權重（每場戰鬥 advance，非真實時間/每日/步數）
+- [~] 重複捕獲 **overflow policy=自動轉蛋**（plan/10 §5.3.1 允許 policy 取代 per-capture 選擇）+ 絕不刪既有個體；**完整 `pendingCaptures` 持久 transaction（斷線復原）刻意簡化為單機同步**（自用本機足夠，記為 follow-up）
+- [x] `hatchEgg(egg)` 由 seed+speciesPool 走 individual roll 產 canonical OwnedUnit（`rosterStore.addUnit` id 去重 + 登錄圖鑑）+ 孵化頁/reveal 動畫
+> **CDP 驗證（SwiftShader，14/14 checks 全過、零 console error）**：A 全 7 Title modal 開啟煙霧；B 注入近進化 roster→競技場勝→進化演出（獨角蟲→鐵殼蛹）+ 圖鑑登錄進化前後物種（**registered 單調不倒退**）；C 注入 meta/incubator→成就 6 可領→領 1→蛋入孵化所→孵化(皮卡丘 +Grade)。
+> +44 vitest（evolution 9 / grade 8 / meta 10 / incubator 7 + …）= **271 全綠**；typecheck/build 綠。simplify 清理（metaStore commit / DexModal O(1) / 共用 gradeShort）。
+> **已知 follow-up（不阻塞）**：完整 `pendingCaptures` 斷線復原 transaction（自用單機簡化）；meta/itembag 尚未進 .save 匯出；進化/孵化的技能槽接點待 M12；塔來源 egg 待 M11。
 
 ## M11 — 模式 · 長線 · 野外意外（見 `09`/`11`）
 ### 連勝塔 / 遠征（原 M6.e；依賴 M6 模式 contract、給 M12 技能 SP）
@@ -298,22 +303,21 @@
 - [ ] CardSelect 點自己 `poke-card` → 全卡、點 `foe-strip__mon` → 對手卡（保留既有點選出戰手感，開卡走 ⓘ/長按）
 - [ ] Chrome CDP：各畫面開卡零 console error；typecheck/test/build 全綠
 
-## M17 — Partner 技能系（提前並重定位 M12 核心；見 `16` §M17）
-> **與 M12 共 S1–S8 hook 引擎、提前實作**：技能 hook+loadout（原 M8.a）＋訓練/解鎖（原 M8.b）重定位為「夥伴技能」。
-> 守單招（技能不直接傷害）、純 reducer（自動技能走既有 hook、看穿走顯示層）、只存 canonical skill id、不動 §0.4。
-> M12 剩餘子項（合體技/對手 profile/孵化繼承）續留原里程碑，本里程碑預留接點（進化解槽/塔給 SP/蛋帶技能）。
+## M17 — Partner 技能系（**修訂：純玩家/訓練師技能**；見 `16` §M17）
+> **⚠️ 範圍修訂（2026-06-24）**：M17 = **玩家本人(訓練師)帳號級技能**（看穿/全隊支援/丟道具），**不掛 OwnedUnit**、無 per-creature 上限。
+> 原本掛怪物身上的 buff（鼓舞/守護/疾風/回復/整地）**已下放成怪物變化招 → M19**（plan/17）。怪物招式 loadout/訓練/解鎖**全部移到 M19**。
+> 守純 reducer（看穿走顯示層）、玩家技能無直接傷害、SP 與 M19 共用但分池顯示。
 ### M17.a — schema / catalog / persistence 純資料
-- [ ] `game/ext/partnerSkills.ts` `PartnerSkillDef` + 起始 catalog（看穿/鼓舞/守護/疾風，選配整地/回復）+ `resolveSkillHooks` 純函數
-- [ ] `OwnedUnit` 加 canonical `learnedSkillIds/equippedSkillIds`（不存派生倍率/cooldown）+ `sanitizeRoster` 只留已知 id + vitest（護欄：無 `damage` 效果）
-### M17.b — 自動技能掛載（複用 M7 引擎，零新機制）
-- [ ] push `MODULE_REGISTRY`；鼓舞=S3 pinch / 守護=S3 guard / 疾風=S1 statMod（選 回復=S4 turnEnd / 整地=寫 field.current）
-- [ ] `assembleExt`/`assembleBattlePrep` 帶 `equippedSkillIds` 進 `BattlePokemon` 暫態、hook 自行分流 + HpPlate 技能徽章 + vitest（觸發/分流/關閉零殘留）
-### M17.c — 看穿主動槽（1 個、每場一次、純顯示層）
+- [ ] `game/ext/partnerSkills.ts` `PartnerSkillDef`（mode active/support）+ 起始 catalog（看穿，選配 訓練師加油/丟道具）
+- [ ] 帳號級 slice `mobie.playerskills.v1`（`learnedSkillIds`，**不掛 OwnedUnit**）+ vitest（護欄：無 `damage`、不寫 OwnedUnit）
+### M17.b — 看穿主動鈕（每場一次、純顯示層）
 - [ ] 戰鬥行動列「✨ 夥伴技能 → 🔍 看穿」鈕 → 設 `revealedFoes.add(activeIndex)` + FxCanvas 揭露演出 + 扣每場一次預算（display state，不持久化）
 - [ ] 接 M16 `MobCard`/`HpPlate` 讀 `revealedFoes` 揭露對手深度資訊（**不進 reducer、不耗回合、對手不回擊**）
-### M17.d — SP 訓練經濟
-- [ ] SP 錢包 slice `mobie.skillpoints.v1`（帳號級）+ wild 區 boss 勝利給 SP（接 `rosterStore`，與 `grantBattleExp` 同處；塔 SP 預留 M11）
-- [ ] `PartnerSkillModal`（Title「✨ 夥伴技能」入口，複用 team-row/item-picker）：花 SP 學技能/調 loadout/第 2 槽解鎖（SP 或等級；進化解槽預留 M10）+ MobCard 技能列
+### M17.c — （選）全隊級訓練師支援
+- [ ] 開場/一次性 teamBuff 寫 `fieldState`（零 reducer 改動）；或強化既有支援輪盤權重
+### M17.d — SP 取得 + 夥伴技能分頁（與 M19 共用 SP）
+- [ ] SP 錢包 slice `mobie.skillpoints.v1`（帳號級，**M17/M19 共用**）+ wild 區 boss 勝利給 SP（接 `rosterStore`，與 `grantBattleExp` 同處；塔 SP 預留 M11）
+- [ ] `PartnerSkillModal`「✨ 夥伴技能」分頁：花 SP 解鎖玩家技能（→ `mobie.playerskills.v1`）；**與 M19 招式分頁分池顯示**（兩成本表）
 - [ ] `mobie.settings.v1` 加 `modules.partnerSkills` toggle（預設關，關掉零殘留）+ vitest + Chrome CDP
 
 ## M18 — 全面改名 → Mobie（取代並擴大 M15；見 `16` §M18）
@@ -331,3 +335,41 @@
 - [ ] handoff/README/CLAUDE/ARCHITECTURE/plan 的 `pokemon-mezastar`/「寶可夢」品牌字 → mobie/Mobie（PokéAPI 技術引用與物種資料來源照舊）
 ### M18.e — repo 目錄改名（最後、單獨）
 - [ ] `pokemon-mezastar/` → `mobie/`（本機資料夾 + git remote，使用者執行）+ `npm run dev` 路徑確認 + 既有存檔載入驗證 + 立繪正常（artwork URL 未誤改）
+
+## M19 — Mobie 多招式制（放寬單招 → 寶可夢式；見 `17`）
+> **放寬 CLAUDE.md 單招硬約束**為多招式（≤4）。身分由星擊 finisher 承載。怪物 buff（原 M17）下放成變化招。
+> 守純 reducer（slotIndex 進、resolvedMoveId 出、單回合單 ATTACK）、canonical 只加兩 id 陣列、被動效果歸特性。
+> 四方 agent-chat 收斂：`.claude/agent-chat/session-20260624-012214/conclusion.md`。建議在 M17 前或並行。
+### M19.a — 資料模型 + 向後相容
+- [ ] `OwnedUnit` 加 canonical `learnedMoveIds`/`equippedMoveIds`；`Species` 加 `learnset`/`teachableMoveIds`（+選 `eggMoveIds`）；`BattlePokemon.move`→`moves[]`
+- [ ] load lazy 遷移（既有單招→slot0）+ `sanitizeRoster` 只留合法 moveId/截上限 + vitest（遷移/合法性/上限）。先手寫小樣本 learnset
+### M19.b — reducer/engine 多招式（additive）
+- [ ] ATTACK 加 `slotIndex`、`performAttack`/`resolveAttack`/`AttackParams` 吃 `moveIndex`、`resolvedMoveId` 寫 `damageApplied` event、loadout snapshot
+- [ ] 純函式 `chooseOpponentMove(state, rng)` 加權選 slot（剋制×3/本系×2，不新增相位）+ vitest（選槽/重驗/AI 決定論/向後相容預設 slot0）
+### M19.c — 戰鬥 UI 選招
+- [ ] BattleScreen 四槽「選槽即開打」（方向/四鍵映射、逾時 slot0）+ 攻擊招命中 QTE；星擊分離；MobCard 顯 4 招 + Chrome CDP
+### M19.d — 變化招（status move）
+- [ ] 變化招池 + 輕量強度 QTE（**只影響幅度不影響成敗**、硬上限）+ 複用 S1/S3/S4 effect 寫 `fieldState`
+- [ ] 連鎖規則：變化招不斷鏈/貢獻支援值、合體技需鏈中≥1 攻擊招 + vitest（效果/上限/鏈不爆傷）
+### M19.e — 招式訓練所 + SP 經濟
+- [ ] `mobie.skillpoints.v1`（與 M17 共用）+ boss/塔給 SP + 招式訓練所「📖 招式」分頁（學/憶/忘/調 loadout，與 Partner 分池）
+- [ ] 升級自動領悟（學習表≤等級→`learnedMoveIds`）+ `moveLearned` event 提示
+### M19.f — gen_dex 學習表產生 + 平衡
+- [ ] gen_dex 抓 PokéAPI level-up learnset 降維映射到精簡招式池（+變化招池）、重產 species.ts/moves.ts（向後相容 slot0）
+- [ ] `simulation.test.ts` 納入多招式 + AI 選招壓力（HP 邊界/無 NaN/終局/決定論）+ Chrome CDP 全 loop
+
+## M20 — DQ 魔物來源（第二 mobie 來源，可開關；見 `18`）
+> 資料比照 Pokémon 從 wiki/攻略抓取（數值是事實、低風險）；**美術≠Pokémon——無合法圖床，走 drop-in/placeholder、絕不熱連結版權圖**。
+> 對映既有 18 型相剋 + M19 招式，引擎零分叉。設定可開關（預設關）。M20.d 依賴 M19。
+### M20.a — 多來源抽象
+- [ ] `Species.source:'pokemon'|'dq'` + id 命名空間（dq 偏移段）+ lookup 合併 + artwork 解析層分流（pokemon 不變、dq→placeholder）+ vitest
+### M20.b — 屬性/系統族對映 + 樣本
+- [ ] DQ 9 屬性/14 系統族 → 18 型對映表（手寫）+ 少量手寫樣本 DQ 魔物跑通戰鬥 + vitest
+### M20.c — 設定開關
+- [ ] `mobie.settings.v1` 加 `source.dq`（預設關）→ encounter/區域/卡庫/推薦過濾 dq 段；已捕獲容錯保留；（選）獨立 DQ 主題區
+### M20.d — 呪文/特技 → M19 learnset（依賴 M19）
+- [ ] DQ 呪文/特技映射到 M19 招式池、產 DQ `learnset`/`teachableMoveIds`（先不引 MP）
+### M20.e — gen_dq 抓取管線
+- [ ] `scripts/gen_dq.mjs`（Woodus 優先，比照 gen_dex 快取/並發/重試）→ 重產 `dqMonsters.ts`（產生檔、不寫圖片 URL）+ 資料完整性測試 + 模擬壓力納入 DQ
+### M20.f —（選）DQ 獨有
+- [ ] 吸收=回血耐性檔 / 系統族專剋 / MP 資源 / DQ 系列地形

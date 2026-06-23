@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-**M1.x + M3 + M2 + M5 + M6 + M7 + M8 + M9 全部完成並 Chrome CDP 驗證**（237 測試 / typecheck / build 全綠）。
+**M1.x + M3 + M2 + M5 + M6 + M7 + M8 + M9 + M10 全部完成並 Chrome CDP 驗證**（271 測試 / typecheck / build 全綠）。
 > **全專案實際案例驗證（2026-06-23）**：①**資料完整性**（全 251 物種/招式/8 區+競技場/起始卡/相剋表逐筆掃過，14 測試）②**模擬戰鬥壓力**（324 場完整對戰＝9 區×18 seed×模組關/開，每步驗 HP 邊界/無 NaN/必定終局/決定論，5 測試）③**道具持久化全鏈路**（ownedToCard→build→sanitize→.save 往返，6 測試）④**CDP 真機**（競技場勝→純經驗不捕獲、野外勝→收服 boss roster 16→17、M7 三模組戰鬥生效、4 個 Title modal 開啟皆零 console error）。結論：M1–M7 功能與資料正確、可正常遊玩。
 - **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
 - **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
@@ -15,7 +15,8 @@
 - **M7（戰鬥條件 hook 層）**：見下方 2026-06-23 M7 註記。羈絆（S2）/ 持有道具（S1/S3/S4）/ 特性（S1/S3）+ 設定 UI，全複用 M6 引擎、reducer/engine 不動。
 - **M8（場域/地形）**：見下方 2026-06-23 M8 註記。地形只影響攻擊 power（engine 屬性相剋後乘注入倍率）、`fieldState` 容器、混合/隨機地形區、開場揭示 UI；全複用 M6 注入機制、reducer/engine 不認識地形語意。
 - **M9（連鎖攻擊 Combo 基底）**：見下方 2026-06-24 M9 註記。連鎖槽（`BattleState.chainGauge` 暫態）滿 → `chainOpportunity` → `SUBMIT_CHAIN_RESULT` 單一 action（reducer 重驗存活/目標、吃速度、倒下截斷）；複用 M6 S5 注入 + `performAttack`，純 reducer/單招不變式不破。
-- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M10 養成·收集·孵化（進化 S6 postGrowth / 星級 Grade / 圖鑑成就 `mz.meta.v1` / 抽蛋孵化 `mz.incubator.v1`），或 M16 Mobie 資訊卡（純 UI、無相依，直接修「戰鬥中看不到自己夥伴」痛點），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M10 / M16 / `09-extension-systems.md` / `10-extension-systems-wave2.md` / `14-roadmap-m6-m13.md`。**
+- **M10（養成·收集·孵化）**：見下方 2026-06-24 M10 註記。進化（S6 postGrowth 改 speciesId、個體保留、單招）/ 星級 Grade（純派生零 buff）/ 圖鑑成就（`mz.meta.v1` 三層語義、registered 單調進化不倒退）/ 抽蛋孵化（`mz.incubator.v1` egg 只存 seed/pool/progress、決定論孵化）。各自 S8 命名空間、不碰 roster canonical；CDP 14/14 全過。
+- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M16 Mobie 資訊卡（純 UI、無相依，直接修「戰鬥中看不到自己夥伴」痛點），或 **M19 Mobie 多招式制（plan/17，放寬單招、戰鬥核心，含 M17 修訂/M20 DQ 來源，見下方 2026-06-24 註記）**，或 M11 模式·長線·野外意外（連勝塔/Ascension/野外意外），或 M4（MediaPipe 體感，使用者目前略過）。見 CHECKLIST M16/M19/M20/M11 / `16`/`17`/`18` / `14-roadmap-m6-m13.md`。**
 
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
@@ -61,6 +62,16 @@
 > **持久化**：無新增（chainGauge 暫態）。**新增依賴：無。** +14 vitest = 237 全綠。**simplify**：合併 chain/foe `opts`、去除無效 `Omit<AttackParams>` 標註（欄位本就 optional）。
 > **CDP 驗證（SwiftShader）**：開 chain 模組 → 普攻填滿連鎖槽（0→100%）→ 🔗連鎖鈕 → 發動 → 逐段 foe tray 證**皆命中同一 active 敵、目標倒下即截斷剩餘 hits**（熔岩蟲 28→61→倒下，第 3 段截斷、不追擊新上場敵）、零 console error。
 > **已知 follow-up（不阻塞）**：合體技（M12）＝連鎖升級變體（`ComboDef` + `SUBMIT_CHAIN_RESULT` 升級判定 + `comboCastEffects` 灌注 fieldState），此處基底已備。
+>
+> **M10 養成·收集·孵化（2026-06-24，已完成 Chrome CDP 驗證）**：收集養成四件套，**皆獨立 save slice（S8），不碰 roster canonical**。
+> **① 進化**（`game/ext/evolution.ts`，S6 postGrowth）：`gen_dex.mjs` 抓 PokéAPI evolution-chain → `species.evolvesTo/evolveLevel`（本傳道具/通信/親密度進化**一律簡化為等級觸發**＝街機簡化、分歧取鏈中第一子代＝決定論；重產 species.ts，**只動 species.ts，moves/regions/playerCards 確定性不變**）。`evolvedSpeciesId` 連跳多階；`EVOLUTION_MODULE` 只掛 S6、`assemblePostGrowth(settings)` 組好交 `rosterStore.grantBattleExp`（applyExp 之後套用）：**只改 canonical speciesId、個體欄位全保留（IV/EXP/nature/seed/shiny/heldItemId）、招式維持單一**。記 `lastEvolutions`，`EvolutionOverlay` 結算演出（剪影→閃光→定格，可跳過）。停用＝升級不檢查進化（零殘留）。
+> **② 星級 Grade**（`game/grade.ts`，**純派生零 buff/零新欄/零持久化**）：`computeGrade(indiv, species)→1..6`（shiny + IV 總和 tier + species BST 稀有度，與 IV 星級嚴格分軸）；`GradeBadge` 接 IndividualInfo→CardSelect/Encounter/Dex，5=Star/6=Superstar 漸層光效。**無 settings 開關（純展示恆顯）**。
+> **③ 圖鑑/成就**（`game/meta.ts` `mz.meta.v1` / `game/achievements.ts`）：**三層語義避免雙真相**——`currentlyOwned`(roster 即時派生不存) / `registered`(歷史已捕，**單調遞增→進化不倒退**) / `seen`；stats + achievements claimedAt。`metaStore` 事件點更新（Encounter→recordSeen / Result→recordWin·recordEvolutions / capture→recordCapture），`computeAchievements`(7 成就純派生)，`claimAchievement` exactly-once 回傳 reward。`DexModal`(1–251 三態 + Grade 篩選，registered/seen Set 化 O(1)/格) / `AchievementsModal`(進度 + 領取→產蛋)。
+> **④ 抽蛋孵化**（`game/incubator.ts` `mz.incubator.v1`）：**egg 只存 seed/source/speciesPool/progress（不付費/不刷池/不存預生成結果）**、決定論 id/seed；`advanceAll` 每場戰鬥推進、`hatchEgg` 由 seed 在 pool 內定種 + individual roll 產 **canonical** OwnedUnit。來源：成就領取（`addRewardEgg`）/ 重複捕獲轉化（**overflow policy=自動轉蛋、絕不刪既有個體**，plan/10 §5.3.1 允許 policy）/ 塔（留 source 給 M11）。`incubatorStore.hatch`＝移蛋 + `rosterStore.addUnit`(id 去重) + 登錄圖鑑；`IncubatorModal` 蛋進度 + 孵化 reveal（+Grade）。
+> **持久化新增**：`mz.meta.v1` / `mz.incubator.v1`（localStorage，各自命名空間）。**新增依賴：無。** +44 vitest（evolution 9 / grade 8 / meta 10 / incubator 7 …）= 271 全綠。store/ext 加 `assemblePostGrowth`、settingsStore 暴露 `postGrowth`。Title 加 📖圖鑑/🏆成就(可領紅點)/🥚孵化所(可孵!)。
+> **CDP 驗證（SwiftShader，14/14 全過、零 console error）**：A 全 7 Title modal 煙霧；B 注入近進化 roster→競技場勝→進化演出（獨角蟲→鐵殼蛹）+ 圖鑑同時登錄進化前(010/013/016)後(011/014/017)物種證**單調不倒退**；C 注入 meta/incubator→成就 6 可領→領 1→蛋入孵化所→孵化皮卡丘(+Grade ◆3 入隊)。
+> **守住約束**：只存 canonical OwnedUnit（meta/incubator 另命名空間、egg 不存預生成結果）、Grade 純派生、進化只改 speciesId 不解鎖新招、`game/` 純（store 才知模組開關）。simplify 清理（metaStore commit / DexModal O(1) 三態 / 共用 gradeShort / 去 computeAchievements 死參數）。
+> **已知 follow-up（不阻塞）**：完整 `pendingCaptures` 斷線復原 transaction（自用單機刻意簡化為同步轉蛋）；`mz.meta.v1`/`mz.incubator.v1`/`mz.itembag.v1` 尚未進 `.save` 匯出（roster 內 heldItemId 已含）；進化解鎖技能槽 / 蛋帶技能 接點待 M12；塔來源 egg + SP 待 M11。
 >
 > **內容擴充（2026-06-22）**：圖鑑由 12 隻擴到 **全國 dex 1–251**、區域由 3 個擴到 **8 個主題區**（覆蓋全 18 型、等級帶遞增、各區末項為高等 boss）、起始 roster 由 5 隻擴到 **跨屬性 16 隻**。資料（zh-Hant 名/屬性/種族值）全由 PokéAPI 經 **`scripts/gen_dex.mjs`** 一次性產生（`node scripts/gen_dex.mjs` 可重產）；artwork 走官方 raw URL、runtime 載入、**不內建侵權資產**。`moves.ts` 改為 18 型×3 power tier 主題招式池，species.moveId 依主屬性+BST tier 決定論指派。`src/game/data/{species,moves,regions,playerCards}.ts` 為**產生檔，請勿手改**——要改改產生器。持久化 KEY bump 至 `mz.roster.v2`（讓既有存檔重新種子出新 roster）。typecheck/64 測試/build 全綠；Chrome CDP 走完勝/敗兩路徑、iPad (A16) 模擬器實機載入皆正常。
 
@@ -122,6 +133,15 @@
 > **M18 全面改名 → Mobie（取代並擴大 M15）**：**分類精準改名非一鍵替換**。詞彙全用 `mobie`（`BattlePokemon`→`BattleMobie`、`PokemonSprite`→`MobieSprite`、UI「寶可夢」→「Mobie」）。範圍 src 約 137 處/32 檔 + 「寶可夢」32 處/24 檔 + 2 檔名 + 品牌字串 + docs + repo 目錄。**⚠️ 絕不可改**：`artwork()` helper / gen_dex 的 `raw.githubusercontent.com/PokeAPI/.../pokemon/...` URL、外部服務名 `PokéAPI`、物種 zh-Hant 正典名。存檔 key `mz.*`/`mz-*` → `mobie.*`/`mobie-*` + 一次性 `migrateKeys()`，`.save` 舊欄位向後相容匯入。**放 M16/M17 之後做**（機械式大改動避免衝突）。
 > **先後**：M16（純 UI 先修痛點）→ M17（看穿接上 M16）→ M18（最後改名）。本輪僅**登錄規劃文件**，未開工。
 
+> **⚠️ 技能系重構 + 多招式制 + DQ 來源 = M17 修訂 / M19 / M20（2026-06-24，使用者回饋；plan/17、plan/18、plan/16 修訂、CLAUDE.md 更新）**：
+> 使用者澄清「mobie 技能不只一個（現在只有一個）」並拍板**放寬單招硬約束 → 寶可夢式多招式制**，且**把「玩家技能」與「怪物技能」徹底分離**。
+> **⚠️ 上面 M17 那段（自動技能 鼓舞/守護/疾風 掛怪物、`learnedSkillIds/equippedSkillIds` 掛 OwnedUnit）已被本段取代。** 四方 agent-chat 收斂全體 agree：`.claude/agent-chat/session-20260624-012214/conclusion.md`。
+> - **M19 Mobie 多招式制（plan/17，新；戰鬥核心）**：每隻怪物有種族**學習表**（領悟/學習/繼承/出生自帶，照寶可夢維基），出生帶 1、**可學可忘、出戰上限 4**（攻擊招＋變化招）。戰鬥「**選槽即開打**」（四鍵/方向映射、逾時 slot0）；reducer **additive**——ATTACK 加 `slotIndex`、resolve 後寫 `resolvedMoveId` 進 event、loadout 戰中 snapshot 不可變、**仍單回合單一 ATTACK action 不開新相位、純 reducer 不破**；身分由**星擊 finisher** 承載；`species.moveId`→slot0 向後相容。變化招走輕量 QTE（**只影響強度不影響成敗**、硬上限）、複用 M7 S1/S3/S4 effect 寫 fieldState；連鎖：變化招不斷鏈/貢獻支援值、合體技需鏈中≥1 攻擊招；對手 AI 純函式 `chooseOpponentMove` 加權選槽（不新增相位）。canonical 只加 `learnedMoveIds`/`equippedMoveIds` 兩 id 陣列。**取代並落實原 M12 技能 loadout 核心**；gen_dex 從 PokéAPI learnset **降維映射**到精簡招式池。
+> - **M17 修訂（plan/16）**：M17 從「混入怪物 buff」**瘦身成純玩家(訓練師)技能**（看穿/全隊支援/丟道具，**不掛 OwnedUnit**、無 per-creature 上限）。原 鼓舞/守護/疾風 等 buff **下放成怪物變化招（M19）**。**分界線：主動施放=招式（M19）／被動常駐=特性（M7）／玩家自有工具=Partner（M17）**。SP 為單一貨幣供 M17/M19 共用但**分池顯示**（`mobie.skillpoints.v1`；玩家技能改存帳號級 `mobie.playerskills.v1`）。
+> - **M20 DQ 魔物來源（plan/18，新）**：把《勇者鬥惡龍》魔物做成**第二 mobie 來源、設定可開關**（預設關）。**資料抓、美術不抓**——數值是事實低風險可從 wiki/攻略抓；但 **DQ ≠ Pokémon**：無 PokéAPI 式合法圖床，熱連結 wiki 圖＝盜連版權圖，故美術走 drop-in/placeholder（守不內建侵權資產）。對映既有 18 型相剋 + M19 招式＝引擎零分叉；`Species.source` + id 命名空間；DQ 呪文/特技→M19 learnset（M20.d 依賴 M19）。
+> - **CLAUDE.md 已更新**：Hard constraints 新增「Move system is now MULTI-MOVE」條目，明載單招放寬、`plan/17` 為現行真相（舊 plan 的「單招」字眼歷史化）。
+> - **建議先後**：M19（多招式核心地基，建議先於/並行 M17）→ M16/M17（卡片＋看穿揭露 M19 招式）→ M20（依賴 M19）→ M18（改名最後）。本輪僅**登錄規劃文件 + agent-chat 結論**，未開工。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）
@@ -150,8 +170,8 @@
 ## 5. 下一步（建議 M9：連鎖攻擊 Combo 基底）
 M6/M7/M8 地基已備好（S1–S8 縫、`resolveTurn(…, {rng, ext, terrainMultiplier})`、`assembleExt`/`assembleBattlePrep`、`MODULE_REGISTRY` 已有三模組、模式 contract、`fieldState` 容器與地形注入）。
 **M9 連鎖攻擊**＝Combo 基底（M12 合體技的升級變體先在此建底）：連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event；`SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告，reducer 重驗存活/目標、吃速度、倒下截斷）；連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX。規格真相見 `plan/09`（§連鎖）、`plan/14`（里程碑歸屬）、`plan/CHECKLIST.md` M9 區。
-- **新登錄 M16–M18（2026-06-24，使用者回饋；`plan/16`）**：M16 Mobie 資訊卡（純 UI 修「看不到自己夥伴資訊」痛點，**無相依、可優先於 M9 做**）→ M17 Partner 技能系（提前 M12 核心，複用 M7/M8 地基、戰鬥機制零 reducer 改動，看穿接 M16）→ M18 全面改名 → Mobie（取代 M15）。本輪只登錄規劃文件，未開工。
-- **守地基不變式**：純 reducer（ext/terrain 是注入純能力包，不寫死語意）、只存 canonical roster（itemBag/settings 另命名空間、field 是戰鬥暫態）、可選掛載（預設全關、關掉零殘留）、單招街機（道具/特性/地形/連鎖不引新攻擊招）、高頻值只走 ref/rAF/Zustand。
+- **新登錄 M16–M20（2026-06-24，使用者回饋；`plan/16` 修訂、`plan/17`、`plan/18`）**：M16 Mobie 資訊卡（純 UI 修「看不到自己夥伴資訊」痛點，**無相依、可優先於 M9 做**）；**M19 Mobie 多招式制（plan/17，放寬單招、戰鬥核心，建議先於/並行 M17）**；M17 Partner 技能系**修訂為純玩家(訓練師)技能**（怪物 buff 已下放 M19）；**M20 DQ 魔物來源（plan/18，第二來源可開關，依賴 M19）**；M18 全面改名 → Mobie（最後）。詳見上方 2026-06-24 技能系重構註記。本輪只登錄規劃文件 + agent-chat 結論，未開工。
+- **守地基不變式**：純 reducer（ext/terrain/slotIndex 是注入，resolvedMoveId 由 reducer 算，不寫死語意）、只存 canonical roster（itemBag/settings 另命名空間、field 是戰鬥暫態）、可選掛載（預設全關、關掉零殘留）、**多招式街機（M19：每回合單一 ATTACK action 不開新相位；道具/特性/地形/連鎖本身不引新攻擊招、招式由 M19 學習表管理；被動效果歸特性不入招式槽）**、高頻值只走 ref/rAF/Zustand。
 - **M7/M8 收尾 follow-up（不阻塞、可順手）**：氣勢披帶需 post-damage 縫（改 engine）、威嚇需 onSwitchIn 縫（改 reducer 換人段）；M11 地形突變（terrainShift 改 `field.terrainEffects.current`）會用到 M8 已備的 current/initial 分流。
 
 ## 6. 硬性約束 / 偏好（務必遵守）
