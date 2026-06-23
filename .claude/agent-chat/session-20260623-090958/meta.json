@@ -1,0 +1,20 @@
+{
+  "topic": "審查 pokemon-mezastar 延伸系統設計草案 plan/09-extension-systems.md（5 系統 + 統一掛載機制），抓設計漏洞、不變式風險、落地順序",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T09:09:58+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-090958",
+  "models": {}
+}

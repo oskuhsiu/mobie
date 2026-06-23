@@ -130,3 +130,31 @@
 - [ ] 比對新舊：LWW by `updatedAt`→`revision`→server time；divergence 偵測 + 舊檔本地備份
 - [ ] 同步狀態 UI：上次同步時間 / 已最新 / 同步中 / 離線 / 手動立即同步
 - [ ] 邊界：雲端空、本地空（新裝置）、schema 遷移、時鐘偏移
+
+## M6 — 延伸系統群（可模組化、可選式掛載；見 `09-extension-systems.md`）
+> 每個系統能整顆關掉、關掉零殘留、不破壞「純 reducer / 只存 canonical OwnedUnit」兩不變式。預設全關。
+
+### M6.0 掛載地基 + 回合相位契約（地基，先做）
+- [ ] `ExtensionModule` + 擴充縫（S1–S8）定義；`assembleExt(enabledModules)` 住 store 層
+- [ ] `resolveTurn(state, action, {rng, ext})` 第三參數加 `ext`（預設 `{}`，既有 69 測試不動）
+- [ ] settings save slice（`mz.settings.v1`，獨立命名空間，逐系統開關）
+- [ ] §0.4 回合相位契約落地：`starStrike` 收成 `ATTACK` mode、S4 在 timeout 判定前、攻擊型動作吃速度排序 + 對應測試
+### M6.a 隊伍羈絆（最乾淨，先驗證地基）
+- [ ] `computeSynergy(team)→NamedModifier[]` 純函數 + 規則集（每 modifier 帶 label/source/icon）
+- [ ] S2 掛載：戰鬥初始化/編隊變更單次重算（換 active 不重算）；選卡畫面顯示生效 tag
+### M6.b 持有道具
+- [ ] `OwnedUnit.heldItemId` 一欄（canonical）+ `ItemDef` 手寫表（三類：statMod/damageHook/onceTrigger）
+- [ ] `mz.itembag.v1` 獨立背包 slice；S1/S3/S4 掛載；同步 `applyItemTriggers`（禁 async/callback/重入）
+- [ ] 裝備 UI + 戰鬥道具 icon + onceTrigger 演出
+### M6.c 進化
+- [ ] `gen_dex.mjs` 加 PokéAPI evolution-chain → species `evolvesTo`/`evolveLevel`
+- [ ] S6 postGrowth：等級觸發改 `speciesId`、個體欄位全保留、招式維持單一；結算進化演出（可取消）
+### M6.d 連鎖攻擊
+- [ ] 連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event
+- [ ] `SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告）；reducer 重驗存活/目標、吃速度、倒下截斷
+- [ ] 連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX
+### M6.e 連勝塔 / 遠征
+- [ ] `RunState` 獨立 slice（`mz.run.v1`，只參照 roster id；防火牆：暫態不逆寫 OwnedUnit）
+- [ ] `generateRunMap(seed)` 決定論節點（battle/elite/event/campfire/shop/boss）+ 分支選路
+- [ ] XState `tower` 平行子模式 + RegionSelect 入口；run 內合成載入（OwnedUnit+runModifiers+runHp→BattleUnit）
+- [ ] run 結算才寫回 roster（EXP/道具/捕獲/進化）；二階 Ascension（backlog #15）延後

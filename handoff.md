@@ -18,6 +18,13 @@
 > 6) **HP 牌貼角色同側**（不易看錯）；**選寶可夢對全 3 隻對手剋制建議 + 一鍵推薦**（`recommend.ts`）。
 > 詳見 `plan/07-systems-design.md` H 段。`species/moves/regions/playerCards.ts` 仍為產生檔勿手改；`practiceRegion.ts` 是手動維護的非產生檔。
 
+> **延伸系統設計（2026-06-23，尚未實作）**：上網查 20 個類卡牌戰鬥遊戲特點 → 三方圓桌選 5 個**可模組化、可選式掛載**系統：
+> **1 持有道具 / 6 隊伍羈絆 / 5 連鎖攻擊 / 8 進化 / 13 連勝塔遠征**（戰前→戰中→戰後→長線一條龍）。設計＋審查全文 `plan/09-extension-systems.md`，
+> 排 **M6**（CHECKLIST 已加 M6.0→a–e）。關鍵地基：統一擴充縫 S1–S8 + `resolveTurn(…, {rng, ext})` 注入純能力包（`ext` 預設 `{}`＝行為等同 M1.x）
+> + **§0.4 回合相位契約**（吃速度不寫死先手、starStrike 收成 ATTACK mode、S4 在 timeout 前）。獨立 save slice（itemBag/runState/settings）+ RunState 防火牆（暫態不逆寫 OwnedUnit）。
+> Backlog 順位：11 圖鑑成就 > 12 全域療傷 > 15 Ascension。圓桌結論：`.claude/agent-chat/session-20260623-090044`（選 5）+ `session-20260623-090958`（設計審查）。
+> M6 為 M2 之後的可選擴充，不阻塞 M2–M5。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）

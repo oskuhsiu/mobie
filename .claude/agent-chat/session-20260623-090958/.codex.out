@@ -1,0 +1,3 @@
+同意收尾，但我會在 plan 補一條 reducer 防線：`SUBMIT_CHAIN_RESULT` payload 只能當「玩家宣告/輸入結果」，不能是權威 damage 或命中結果；reducer 必須在輪到玩家後手時重新檢查 active 是否仍存活、chain 參與者是否合法、目標是否仍是同一個 enemy active，失敗就整個 chain no-op 或截斷。這能防 UI 預算結果在「敵方先手 KO / 強制換」後變成幽靈傷害。除此之外，contract、M6.0 前移、落地順序都收斂了。
+
+STATUS: AGREE

@@ -1,0 +1,20 @@
+{
+  "topic": "為 pokemon-mezastar（iPad-first Mezastar 風 Web/PWA 遊戲，M1.x 已完成）從 20 個類卡牌戰鬥遊戲特點候選中，挑出最適合做成『可模組化、可選式掛載』延伸系統的 5 個",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T09:00:44+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-090044",
+  "models": {}
+}

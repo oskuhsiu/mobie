@@ -1,0 +1,3 @@
+我同意 backlog `11 > 12 > 15`，而且 15 應該依附連勝塔成熟後再做。補齊五個地雷：1 道具最大雷是效果種類失控，緩解＝先只允許 stat modifier / damage hook / once-per-battle trigger 三類；5 連鎖最大雷是 QTE 序列和 reducer 重入，緩解＝只提交單一 `SUBMIT_CHAIN_RESULT`；6 羈絆最大雷是隱形加成，緩解＝所有 modifier 必須有 `label/source/icon` 可回顯；8 進化最大雷是 speciesId 改掉後既有 IV/EXP/持有道具語義不清，緩解＝進化只替換 species/base stats/art URL，個體欄位全部保留；13 連勝塔最大雷是 run state 偷渡進 roster persistence，緩解＝用獨立 `RunState` + 載入時合成 `BattleUnit`，run 結束只結算獎勵不回寫暫態。
+
+STATUS: AGREE
