@@ -132,93 +132,100 @@
 - [ ] 同步狀態 UI：上次同步時間 / 已最新 / 同步中 / 離線 / 手動立即同步
 - [ ] 邊界：雲端空、本地空（新裝置）、schema 遷移、時鐘偏移
 
-## M6 — 延伸系統群（可模組化、可選式掛載；wave-1 見 `09-extension-systems.md`、wave-2 見 `10-extension-systems-wave2.md`）
-> 每個系統能整顆關掉、關掉零殘留、不破壞「純 reducer / 只存 canonical OwnedUnit」兩不變式。預設全關。
+> **M6–M13 延伸里程碑**：依 `14-roadmap-m6-m13.md` 把原 M6.x/M7.x/M8.x 共 22 項依類型重歸成獨立里程碑、依賴排序。
+> 兩不變式不變：**純 reducer / 只存 canonical OwnedUnit**；可選掛載（預設全關、關掉零殘留）。各項括號標原子編號方便對照。
 
-### M6.0 掛載地基 + 回合相位契約（地基，先做）
+## M6 — 共用地基（Foundation；全部前提，先做）
+> 見 `09 §0`（掛載地基/相位契約）、`11 §2`（模式 contract）。
+### 掛載地基 + 回合相位契約（原 M6.0）
 - [ ] `ExtensionModule` + 擴充縫（S1–S8）定義；`assembleExt(enabledModules)` 住 store 層
 - [ ] `resolveTurn(state, action, {rng, ext})` 第三參數加 `ext`（預設 `{}`，既有 69 測試不動）
 - [ ] settings save slice（`mz.settings.v1`，獨立命名空間，逐系統開關）
 - [ ] §0.4 回合相位契約落地：`starStrike` 收成 `ATTACK` mode、S4 在 timeout 判定前、攻擊型動作吃速度排序 + 對應測試
-### M6.a 隊伍羈絆（最乾淨，先驗證地基）
+### 模式 contract：競技場 vs 野外（原 M7.0）
+- [ ] `Region.mode: 'arena'|'wild'`；gating 集中 encounter/battle setup（mode==='wild' 才 roll terrain/意外/捕獲）
+- [ ] 捕獲改依 `mode==='wild'`；移除散落 `isPracticeRegion`；練習場→競技場 relabel（mode='arena'、中性地形、保留支援輪盤）
+
+## M7 — 戰鬥條件 hook 層（道具/特性/技能同一 S1–S8 引擎；見 `09`/`10`）
+### 隊伍羈絆（原 M6.a，最乾淨先驗證地基）
 - [ ] `computeSynergy(team)→NamedModifier[]` 純函數 + 規則集（每 modifier 帶 label/source/icon）
 - [ ] S2 掛載：戰鬥初始化/編隊變更單次重算（換 active 不重算）；選卡畫面顯示生效 tag
-### M6.b 持有道具
+### 持有道具（原 M6.b，**建立 S1/S3/S4 hook 引擎**）
 - [ ] `OwnedUnit.heldItemId` 一欄（canonical）+ `ItemDef` 手寫表（三類：statMod/damageHook/onceTrigger）
 - [ ] `mz.itembag.v1` 獨立背包 slice；S1/S3/S4 掛載；同步 `applyItemTriggers`（禁 async/callback/重入）
 - [ ] 裝備 UI + 戰鬥道具 icon + onceTrigger 演出
-### M6.c 進化
-- [ ] `gen_dex.mjs` 加 PokéAPI evolution-chain → species `evolvesTo`/`evolveLevel`
-- [ ] S6 postGrowth：等級觸發改 `speciesId`、個體欄位全保留、招式維持單一；結算進化演出（可取消）
-### M6.d 連鎖攻擊
-- [ ] 連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event
-- [ ] `SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告）；reducer 重驗存活/目標、吃速度、倒下截斷
-- [ ] 連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX
-### M6.e 連勝塔 / 遠征
-- [ ] `RunState` 獨立 slice（`mz.run.v1`，只參照 roster id；防火牆：暫態不逆寫 OwnedUnit）
-- [ ] `generateRunMap(seed)` 決定論節點（battle/elite/event/campfire/shop/boss）+ 分支選路
-- [ ] XState `tower` 平行子模式 + RegionSelect 入口；run 內合成載入（OwnedUnit+runModifiers+runHp→BattleUnit）
-- [ ] run 結算才寫回 roster（EXP/道具/捕獲/進化）
-
-## M6 wave-2 — 延伸系統第二批（見 `10-extension-systems-wave2.md`；沿用 M6.0 機制）
-### M6.f 星級 Grade（最乾淨，先做）
-- [ ] `computeGrade(unit, species)` 純函數（shiny + IV tier + species 靜態稀有度；**零 buff、零新欄**）
-- [ ] Grade 徽章 UI + 高 Grade 光效；圖鑑按 Grade 篩選
-### M6.g 特性 Abilities
+### 特性 Abilities（原 M6.g，**複用道具引擎**）
 - [ ] species `abilityId` + `AbilityDef` 手寫表（statMod/damageHook/onceTrigger/onSwitchIn）
 - [ ] 掛載：S1/S3/S4 +「換人解析步驟內同步結算」onSwitchIn（bounded/non-reentrant、不可再觸發換人）
 - [ ] 與道具同類加法疊加（靠數值池上限控平衡，不做來源攔截）；個體面板特性/道具分區顯示
-### M6.h 圖鑑 / 成就
+
+## M8 — 場域 / 地形（見 `11`；**導入 `fieldState` 容器**）
+### 地形效果（原 M7.a，影響攻擊 power）
+- [ ] `data/terrains.ts`：`TerrainDef{mods}` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → **每屬性夾 [0.5,1.5]**）
+- [ ] engine `resolveAttack` 在 type 相剋後乘 `terrainMult`（預設 1，既有測試不動）；地形放 **`fieldState.terrainEffects`**（非一次性 currentTerrains），分 initial/current（暫態）
+- [ ] 開場地形 UI 揭示；vitest（clamp/混合相乘/中性=1）
+### 更多 / 混合 / 隨機地形（原 M7.b）
+- [ ] gen_dex `REGION_THEMES` 各區加 `mode`/`terrains`；新增 1–2 混合地形 wild 區 + 1 隨機地形 wild 區（決定論抽）；重產 regions.ts
+
+## M9 — 連鎖攻擊（Combo 基底；見 `09`）
+### 連鎖攻擊（原 M6.d）
+- [ ] 連鎖槽（QTE/連續命中累積，不綁隨機）+ `chainOpportunity` event
+- [ ] `SUBMIT_CHAIN_RESULT{hits}` 單一 action（payload 只是 quality 宣告）；reducer 重驗存活/目標、吃速度、倒下截斷
+- [ ] 連續 QTE overlay（高頻走 ref/rAF）+ 連段 FX
+- [ ] → 合體技（M12）是其升級變體，此處建好基底
+
+## M10 — 養成 · 收集 · 孵化（見 `09`/`10`）
+### 進化（原 M6.c；**預留技能槽解鎖接點**給 M12）
+- [ ] `gen_dex.mjs` 加 PokéAPI evolution-chain → species `evolvesTo`/`evolveLevel`
+- [ ] S6 postGrowth：等級觸發改 `speciesId`、個體欄位全保留、招式維持單一；結算進化演出（可取消）
+### 星級 Grade（原 M6.f）
+- [ ] `computeGrade(unit, species)` 純函數（shiny + IV tier + species 靜態稀有度；**零 buff、零新欄**）
+- [ ] Grade 徽章 UI + 高 Grade 光效；圖鑑按 Grade 篩選
+### 圖鑑 / 成就（原 M6.h）
 - [ ] `mz.meta.v1` 三層語義：`currentlyOwned`(roster 派生) / `registered`(meta 單調) / `seen`(meta) + stats
 - [ ] `metaStore` 事件點更新（捕獲/勝利/塔通關）+ `computeAchievements` + `claimAchievementReward(id)` action
 - [ ] 圖鑑頁（1–251 三態 + Grade 篩選）+ 成就頁（進度 + 領取）
-### M6.i 抽蛋孵化
+### 抽蛋孵化（原 M6.i；**預留蛋帶技能接點**給 M12）
 - [ ] `mz.incubator.v1`：egg 只存 `seed/source/speciesPool/progress/requiredProgress`（不付費/不刷池/不存預生成結果）
 - [ ] egg 來源（塔/重複捕獲轉化/成就首領取）+ 進度權重（戰鬥數+塔層數，非真實時間/每日/步數）
 - [ ] 捕獲結算 keep/convert + `pendingCaptures` 持久 transaction（exactly-once、重啟復原、不刪既有個體）
 - [ ] `hatchEgg(egg)` 由 seed+speciesPool 走 individual roll 產 canonical OwnedUnit + 孵化頁/動畫
-### M6.j 難度修飾 Ascension（依附連勝塔）
+
+## M11 — 模式 · 長線 · 野外意外（見 `09`/`11`）
+### 連勝塔 / 遠征（原 M6.e；依賴 M6 模式 contract、給 M12 技能 SP）
+- [ ] `RunState` 獨立 slice（`mz.run.v1`，只參照 roster id；防火牆：暫態不逆寫 OwnedUnit）
+- [ ] `generateRunMap(seed)` 決定論節點（battle/elite/event/campfire/shop/boss）+ 分支選路
+- [ ] XState `tower` 平行子模式 + RegionSelect 入口；run 內合成載入（OwnedUnit+runModifiers+runHp→BattleUnit）
+- [ ] run 結算才寫回 roster（EXP/道具/捕獲/進化）
+### 難度修飾 Ascension（原 M6.j，依附連勝塔）
 - [ ] 拆兩條：靜態敵強化（enemyHpMulti/levelBonus）pre-bake 進 encounter/buildUnit；回合修飾（Fate/healReduced）走 ext
 - [ ] tower ascension 選擇器（meta `ascensionUnlocked` 解鎖階級）+ run 內生效修飾 tag；嚴守 §0.4 不新增戰鬥規則
-
-## M7 — 地形 + 模式分流 + 野外意外（核心擴充；見 `11-terrain-modes-accidents.md`）
-> 純 reducer（地形如 rng 注入）、只存 canonical（地形/意外全暫態或 encounter/reward flag）、單招街機、不重引硬控。
-### M7.0 模式 contract：競技場 vs 野外
-- [ ] `Region.mode: 'arena'|'wild'`；gating 集中 encounter/battle setup（mode==='wild' 才 roll terrain/意外/捕獲）
-- [ ] 捕獲改依 `mode==='wild'`；移除散落 `isPracticeRegion`；練習場→競技場 relabel（mode='arena'、中性地形、保留支援輪盤）
-### M7.a 地形效果（影響攻擊 power）
-- [ ] `data/terrains.ts`：`TerrainDef{mods}` + `terrainMultiplier(moveType, terrains)`（混合逐屬性相乘 → **每屬性夾 [0.5,1.5]**）
-- [ ] engine `resolveAttack` 在 type 相剋後乘 `terrainMult`（預設 1，既有測試不動）；`BattleState` 加 initial/current terrains（暫態）
-- [ ] 開場地形 UI 揭示；vitest（clamp/混合相乘/中性=1）
-### M7.b 更多 / 混合 / 隨機地形
-- [ ] gen_dex `REGION_THEMES` 各區加 `mode`/`terrains`；新增 1–2 混合地形 wild 區 + 1 隨機地形 wild 區（決定論抽）；重產 regions.ts
-### M7.c 野外意外 ×5（wild-only，走 RandomEvent）
-- [ ] 亂入野生（一次性傷害、不新增第 4 隻 unit）／地形突變（改 currentTerrains）
+### 野外意外 ×5（原 M7.c，wild-only，走 RandomEvent）
+- [ ] 亂入野生（一次性傷害、不新增第 4 隻 unit）／地形突變（改 fieldState.currentTerrains）
 - [ ] 天降補給（**開場前/戰後**三選一，絕不戰鬥中途）／稀有閃光 boss（encounter flag→異色/高 Grade）／幸運加碼（reward modifier）
 - [ ] backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制
 
-## M8 — 戰鬥技能大模組（見 `12-battle-skill-module.md`）
+## M12 — 戰鬥技能大模組（見 `12`；縱向小樣本一次打穿）
 > 守單招（技能不直接傷害、進化只解鎖技能槽非新攻擊招）、純 reducer（deterministic hook）、只存 canonical skill id、不動 §0.4。
-> **圓桌定：先用小樣本（如初代御三家）縱向打穿 M8.0–e 全套地基並驗收平衡，再橫向鋪內容（見 `13`）。**
-### M8.0 schema / catalog / persistence（純資料）
+> **圓桌定：先用小樣本（如初代御三家）縱向打穿全套地基並驗收平衡，再進 M13 橫向鋪內容。**
+### schema / catalog / persistence + `fieldState` 補全（原 M8.0 + 場域統一）
 - [ ] `SkillDef`/`ComboDef`/`EncounterSkillProfile`/`FieldState` 型別 + 手寫 catalog（小樣本）+ `resolveSkillHooks` 純函數 + vitest
 - [ ] OwnedUnit 加 canonical `learnedSkillIds/equippedSkillIds/inheritedSkillIds`（不存派生倍率/cooldown）
-### M8.a 技能 hook 觸發（玩家 loadout）
+- [ ] `fieldState` 容器補全 4 子欄（terrainEffects/teamStatuses/enemyStatuses/comboCastEffects，各帶 source/expiry）
+### 技能 hook + loadout（原 M8.a，複用 M7 引擎）
 - [ ] S1–S8 掛載技能 deterministic hook（canonical 輸入→effect commands，機率走 reducer RNG）+ 戰前 loadout 套用
 - [ ] 護欄測試：技能無直接傷害（只 statMod/debuff/terrain/heal/conditionRewrite）；個體面板技能區（與特性分區）
-### M8.b 訓練 / 解鎖
+### 訓練 / 解鎖（原 M8.b，用 M10 進化槽 + M11 塔 SP）
 - [ ] SP 取得（boss/塔層/里程碑，不刷技能 EXP）+ 技能訓練所 UI（學/裝）+ 進化/節點解鎖第 2 槽
-### M8.c 孵化繼承
+### 孵化繼承（原 M8.c，擴 M10 孵化）
 - [ ] incubator egg 帶 `inheritedSkillId`（plan/10）+ hatch 落到 `inheritedSkillIds`（種族可學才生效）
-### M8.d 合體技（chain variant + 施放效果）
+### 合體技（原 M8.d，擴 M9 連鎖 + M8 地形灌注）
 - [ ] `ComboDef` + SUBMIT_CHAIN_RESULT 升級判定（屬性配對/種族/羈絆）+ `usedComboKeys` 每組合每場一次（不回寫 OwnedUnit）
 - [ ] 三類施放效果（灌注地形/全隊增益/敵方弱化）寫 `fieldState` + 演出（FxCanvas/framer/audio）+ vitest
-### M8.e 對手技能多樣性（Encounter Skill Profile）
+### 對手技能多樣性（原 M8.e，Encounter Skill Profile）
 - [ ] 生成附 0–2 技能標籤（純反射 hook，AI 仍只提交 ATTACK）+ boss/雙人組宣告合體技
-### 場域狀態統一
-- [ ] `fieldState` 容器（terrainEffects/teamStatuses/enemyStatuses/comboCastEffects，各帶 source/expiry）；地形（plan/11）併入
 
-## 內容補完路線圖（見 `13-content-roadmap.md`；引擎驗收後橫向鋪）
+## M13 — 內容補完（見 `13`；引擎驗收後橫向鋪）
 - [ ] 內容階段 1：寶可夢 G3(252–386) + 天氣型地形（晴/雨/沙暴/雪/霧/強風）
 - [ ] 內容階段 2：G4–G5(387–649) + 場地型地形（草地/電氣/精神/薄霧）+ 混合地形區
 - [ ] 內容階段 3：G6–G9(650–1025) 補完 + 特殊型地形（花海/沼澤/蒸氣/聖域）+ 隨機地形區

@@ -52,7 +52,12 @@
 > **對手多樣性＝Encounter Skill Profile**（單招+0–2 技能標籤的純反射 hook，AI 仍只提交 ATTACK，守對手簡單）。場域狀態統一 `fieldState`(terrainEffects/teamStatuses/enemyStatuses/comboCastEffects)。
 > 持久化只加 canonical `learnedSkillIds/equippedSkillIds/inheritedSkillIds`。圓桌定**先小樣本縱向打穿 M8.0–e、再橫向鋪內容**。圓桌結論：`session-20260623-104127`。
 
-> **內容補完路線圖（plan/13-content-roadmap.md）**：寶可夢分階段補完 G3→G9（共 1025，現 1–251）、地形擴充（天氣/場地/特殊型，依本傳整理）；資料 PokéAPI、圖走**官方 artwork runtime URL（不內建侵權）**；每階段重產 `gen_dex.mjs`。引擎(M6/M7/M8)各自縱向做完後，內容按階段 1/2/3 橫向鋪。
+> **內容補完路線圖（plan/13-content-roadmap.md）**：寶可夢分階段補完 G3→G9（共 1025，現 1–251）、地形擴充（天氣/場地/特殊型，依本傳整理）；資料 PokéAPI、圖走**官方 artwork runtime URL（不內建侵權）**；每階段重產 `gen_dex.mjs`。
+
+> **里程碑重編號 M6–M13（plan/14-roadmap-m6-m13.md，2026-06-23）**：原本把 22 項擠在 M6/M7/M8（M6.a–j、M7.a–c、M8.a–e），現**依類型歸類後拆成獨立里程碑**、依賴排序：
+> **M6 共用地基（掛載+相位契約+模式contract）→ M7 戰鬥hook層（羈絆/道具/特性同引擎）→ M8 場域地形（導入fieldState）→ M9 連鎖 → M10 養成收集孵化（進化/Grade/圖鑑/孵化）→ M11 模式長線意外（連勝塔/Ascension/野外意外）→ M12 技能大模組（技能/合體技/對手，縱向小樣本先打穿）→ M13 內容補完**。
+> 設計細節仍在 09–13（內容未變，只是里程碑歸屬重編）；CHECKLIST 已改成 M6–M13、每項標原子編號對照；plan/14 §3 有「舊 Mx.y → 新里程碑」完整對應表（22 項全數歸位無漏）。
+> 4 個跨里程碑合併點：道具/特性/技能=同一 S1–S8 hook 引擎、連鎖/合體技=同一 Combo 系統、地形/合體灌注/buff=共用 fieldState、進化↔技能槽/孵化↔技能繼承。
 
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
