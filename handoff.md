@@ -25,6 +25,13 @@
 > Backlog 順位：11 圖鑑成就 > 12 全域療傷 > 15 Ascension。圓桌結論：`.claude/agent-chat/session-20260623-090044`（選 5）+ `session-20260623-090958`（設計審查）。
 > M6 為 M2 之後的可選擴充，不阻塞 M2–M5。
 
+> **延伸系統 wave-2（2026-06-23，尚未實作）**：從 wave-1 backlog 再選第二批 5 個：**2 特性 / 10 星級Grade / 11 圖鑑成就 / 15 Ascension / 18 抽蛋孵化**
+> （戰鬥深度第二層 + 收集三件套 + 挑戰二階）。設計＋審查全文 `plan/10-extension-systems-wave2.md`（CHECKLIST 已加 M6.f–j）。**幾乎全複用 wave-1 機制**（驗證掛載地基可延展）：
+> 特性複用道具 S1/S3/S4 +「換人解析內同步」onSwitchIn(bounded/non-reentrant)；Grade 純派生零 buff 零新欄；圖鑑/孵化只加 meta/incubator 兩獨立 slice；
+> Ascension 拆「敵強化 pre-bake 進 buildUnit」vs「回合修飾走 ext」。關鍵護欄：圖鑑三層語義(currentlyOwned 派生 / registered 單調 / seen)防進化倒退；
+> 孵化 egg 只存 seed（不存預生成結果）+ 重複轉化只處理新候選不刪既有 + `pendingCaptures` 持久 transaction(exactly-once 防斷線遺失)。
+> 12 跨場療傷退回 backlog（改做塔局內 modifier）。圓桌結論：`session-20260623-094704`（選 5）+ `session-20260623-095457`（設計審查）。
+
 > commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。typecheck/build/test（69）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）

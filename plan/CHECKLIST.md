@@ -131,7 +131,7 @@
 - [ ] 同步狀態 UI：上次同步時間 / 已最新 / 同步中 / 離線 / 手動立即同步
 - [ ] 邊界：雲端空、本地空（新裝置）、schema 遷移、時鐘偏移
 
-## M6 — 延伸系統群（可模組化、可選式掛載；見 `09-extension-systems.md`）
+## M6 — 延伸系統群（可模組化、可選式掛載；wave-1 見 `09-extension-systems.md`、wave-2 見 `10-extension-systems-wave2.md`）
 > 每個系統能整顆關掉、關掉零殘留、不破壞「純 reducer / 只存 canonical OwnedUnit」兩不變式。預設全關。
 
 ### M6.0 掛載地基 + 回合相位契約（地基，先做）
@@ -157,4 +157,25 @@
 - [ ] `RunState` 獨立 slice（`mz.run.v1`，只參照 roster id；防火牆：暫態不逆寫 OwnedUnit）
 - [ ] `generateRunMap(seed)` 決定論節點（battle/elite/event/campfire/shop/boss）+ 分支選路
 - [ ] XState `tower` 平行子模式 + RegionSelect 入口；run 內合成載入（OwnedUnit+runModifiers+runHp→BattleUnit）
-- [ ] run 結算才寫回 roster（EXP/道具/捕獲/進化）；二階 Ascension（backlog #15）延後
+- [ ] run 結算才寫回 roster（EXP/道具/捕獲/進化）
+
+## M6 wave-2 — 延伸系統第二批（見 `10-extension-systems-wave2.md`；沿用 M6.0 機制）
+### M6.f 星級 Grade（最乾淨，先做）
+- [ ] `computeGrade(unit, species)` 純函數（shiny + IV tier + species 靜態稀有度；**零 buff、零新欄**）
+- [ ] Grade 徽章 UI + 高 Grade 光效；圖鑑按 Grade 篩選
+### M6.g 特性 Abilities
+- [ ] species `abilityId` + `AbilityDef` 手寫表（statMod/damageHook/onceTrigger/onSwitchIn）
+- [ ] 掛載：S1/S3/S4 +「換人解析步驟內同步結算」onSwitchIn（bounded/non-reentrant、不可再觸發換人）
+- [ ] 與道具同類加法疊加（靠數值池上限控平衡，不做來源攔截）；個體面板特性/道具分區顯示
+### M6.h 圖鑑 / 成就
+- [ ] `mz.meta.v1` 三層語義：`currentlyOwned`(roster 派生) / `registered`(meta 單調) / `seen`(meta) + stats
+- [ ] `metaStore` 事件點更新（捕獲/勝利/塔通關）+ `computeAchievements` + `claimAchievementReward(id)` action
+- [ ] 圖鑑頁（1–251 三態 + Grade 篩選）+ 成就頁（進度 + 領取）
+### M6.i 抽蛋孵化
+- [ ] `mz.incubator.v1`：egg 只存 `seed/source/speciesPool/progress/requiredProgress`（不付費/不刷池/不存預生成結果）
+- [ ] egg 來源（塔/重複捕獲轉化/成就首領取）+ 進度權重（戰鬥數+塔層數，非真實時間/每日/步數）
+- [ ] 捕獲結算 keep/convert + `pendingCaptures` 持久 transaction（exactly-once、重啟復原、不刪既有個體）
+- [ ] `hatchEgg(egg)` 由 seed+speciesPool 走 individual roll 產 canonical OwnedUnit + 孵化頁/動畫
+### M6.j 難度修飾 Ascension（依附連勝塔）
+- [ ] 拆兩條：靜態敵強化（enemyHpMulti/levelBonus）pre-bake 進 encounter/buildUnit；回合修飾（Fate/healReduced）走 ext
+- [ ] tower ascension 選擇器（meta `ascensionUnlocked` 解鎖階級）+ run 內生效修飾 tag；嚴守 §0.4 不新增戰鬥規則

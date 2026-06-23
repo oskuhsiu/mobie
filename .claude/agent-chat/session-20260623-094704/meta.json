@@ -1,0 +1,20 @@
+{
+  "topic": "從 pokemon-mezastar plan/09 backlog 的 14 個剩餘候選中，挑第二批 5 個可模組化/可選掛載延伸系統（沿用 M6 掛載機制 S1-S8 + ext 注入 + 相位契約）",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T09:47:04+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-094704",
+  "models": {}
+}

@@ -1,0 +1,20 @@
+{
+  "topic": "審查 pokemon-mezastar 第二批延伸系統設計 plan/10（特性/Grade/圖鑑成就/Ascension/孵化），抓設計漏洞與不變式風險",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-23T09:54:57+08:00",
+  "session_dir": "/Users/apple/Projects/games/pokemon-mezastar/.claude/agent-chat/session-20260623-095457",
+  "models": {}
+}

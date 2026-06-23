@@ -1,0 +1,2 @@
+同意 gemini 的 `pendingCaptures`，但我會把它收斂成「持久化 reward transaction」，不要放 volatile battle session：捕獲候選一旦生成並進入 keep/convert UI，就先以 `pendingCaptureId + resolved candidate + encounter/reward id + choices` 寫入 meta/save，之後決策是 exactly-once consume，重啟只恢復同一個候選，不能重抽 seed、不能重複領獎。這不違反 B4，因為此時已經過捕獲結算點，不是 egg 建立時預塞 OwnedUnit；另外補一條 R1 小不變式：`onSwitchIn` chain 必須有 bounded/non-reentrant 規則，避免入場效果又觸發換人造成遞迴或同一單位多次 fire。  
+STATUS: AGREE

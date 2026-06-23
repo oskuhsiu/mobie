@@ -1,0 +1,3 @@
+B3 我建議成就維持「判定/領取狀態」在 `mz.meta.v1`，但獎勵發放走明確 action：`claimAchievementReward(id)` 產生 egg/incubator entry，而不是圖鑑讀取時自動寫入，這樣 11 仍是 meta 系統、18 是獨立經濟入口，副作用可測且可防重領。B4 egg 來源我同意 ①塔/遠征 + ③重複捕獲轉化，再加少量成就首領取；進度用「有效戰鬥完成數 + 塔層完成數加權」，不要真實時間/每日/步數，避免手遊體力感。防線要寫死：egg 只存 `seed/source/speciesPool/progress/requiredProgress`，孵化才生成 OwnedUnit；不能付費、不能刷新池、不能存預生成結果。
+
+STATUS: CONTINUE
