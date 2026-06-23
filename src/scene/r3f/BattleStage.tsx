@@ -3,12 +3,13 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { ContactShadows } from '@react-three/drei'
 import type { BattlePokemon } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
-import { StageLights, Pedestal, ArenaFloor } from './sceneParts'
+import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { Combatant3D, makeAnim, type MonAnim } from './Combatant3D'
 
 // 站位：foe 在後（畫面上方）、player 在前（畫面下方），對齊 2D 版面語言。
-const PLAYER_BASE: [number, number, number] = [-1.15, 0, 0.5]
-const FOE_BASE: [number, number, number] = [1.15, 0, -1.7]
+// player z 往後一點（畫面上抬），留底部控制列 safe zone。
+const PLAYER_BASE: [number, number, number] = [-1.15, 0, 0.2]
+const FOE_BASE: [number, number, number] = [1.15, 0, -1.8]
 const PLAYER_LUNGE: [number, number] = [0.95, -0.9]
 const FOE_LUNGE: [number, number] = [-0.95, 0.9]
 
@@ -32,7 +33,7 @@ interface BattleStageProps {
 function CameraRig() {
   const { camera } = useThree()
   useEffect(() => {
-    camera.lookAt(0, 0.9, -0.4)
+    camera.lookAt(0, 1.05, -0.55)
   }, [camera])
   return null
 }
@@ -69,7 +70,7 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       dpr={[1, 2]}
       frameloop="always"
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      camera={{ position: [0, 2.7, 5.6], fov: 40 }}
+      camera={{ position: [0, 2.95, 6.4], fov: 40 }}
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
     >
       <CameraRig />
@@ -77,7 +78,9 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       <ArenaFloor />
       <Pedestal position={FOE_BASE} color="#ff7a9c" />
       <Pedestal position={PLAYER_BASE} color="#5b8cff" />
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.5} scale={10} blur={2.4} far={4} resolution={256} color="#05060f" />
+      <group position={FOE_BASE}><BlobShadow /></group>
+      <group position={PLAYER_BASE}><BlobShadow /></group>
+      <ContactShadows position={[0, 0.01, 0]} opacity={0.35} scale={10} blur={2.6} far={4} resolution={256} color="#05060f" />
 
       <Combatant3D
         side="foe"

@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { ContactShadows } from '@react-three/drei'
 import { Group } from 'three'
-import { StageLights, Pedestal } from './sceneParts'
+import { StageLights, Pedestal, BlobShadow } from './sceneParts'
 import { PokemonVisual } from './PokemonVisual'
 
 interface CaptureStageProps {
@@ -24,7 +24,8 @@ export default function CaptureStage({ speciesId, artworkUrl, shiny, vanish }: C
     >
       <StageLights />
       <Pedestal position={[0, 0, 0]} color="#9b7aff" />
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.5} scale={6} blur={2.4} far={3} resolution={256} color="#05060f" />
+      <BlobShadow />
+      <ContactShadows position={[0, 0.01, 0]} opacity={0.4} scale={6} blur={2.4} far={3} resolution={256} color="#05060f" />
       <CaptureMon speciesId={speciesId} artworkUrl={artworkUrl} shiny={shiny} vanish={vanish} />
     </Canvas>
   )

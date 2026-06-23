@@ -143,7 +143,7 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
     },
     ring: ({ nx, ny, color }) => {
       const s = stateRef.current
-      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 6, max: Math.min(s.w, s.h) * 0.28, color, life: 1 })
+      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 6, max: Math.min(s.w, s.h) * 0.2, color, life: 1 })
       ensureRunning()
     },
     flash: (color, alpha = 0.5) => {
