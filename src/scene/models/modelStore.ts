@@ -2,6 +2,8 @@
 // repo 不散布任何侵權模型——這裡只是「使用者自己放進自己瀏覽器」的保管箱。
 // 純 I/O glue，不在 vitest（node 無 indexedDB）覆蓋；正規化數學見 normalize.ts。
 
+import { bumpSaveMeta } from '@/game/save/saveMeta'
+
 const DB_NAME = 'mz-models'
 const DB_VERSION = 1
 const STORE = 'glb'
@@ -59,6 +61,7 @@ export async function putModel(speciesId: number, blob: Blob): Promise<void> {
     URL.revokeObjectURL(old)
     urlCache.delete(speciesId)
   }
+  bumpSaveMeta(Date.now()) // 匯入模型 → 存檔變新
   emit()
 }
 
@@ -83,6 +86,7 @@ export async function deleteModel(speciesId: number): Promise<void> {
     URL.revokeObjectURL(old)
     urlCache.delete(speciesId)
   }
+  bumpSaveMeta(Date.now()) // 刪除模型 → 存檔變新
   emit()
 }
 

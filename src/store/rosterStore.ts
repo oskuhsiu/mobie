@@ -4,6 +4,7 @@ import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { applyExp, createOwnedUnit, expYield, type ExpResult } from '@/game/growth'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { LocalStorageAdapter, type PersistenceAdapter } from '@/game/persistence'
+import { bumpSaveMeta } from '@/game/save/saveMeta'
 
 const adapter: PersistenceAdapter = new LocalStorageAdapter()
 
@@ -64,6 +65,7 @@ export const useRoster = create<RosterState>((set, get) => ({
     })
     set({ roster, lastResults: results })
     await adapter.saveRoster(roster)
+    bumpSaveMeta(Date.now()) // 進度推進 → 存檔變新（供匯出/匯入新舊判斷）
     return results
   },
 
@@ -79,6 +81,7 @@ export const useRoster = create<RosterState>((set, get) => ({
     const roster = [...get().roster, unit]
     set({ roster, lastCaptured: unit })
     await adapter.saveRoster(roster)
+    bumpSaveMeta(Date.now()) // 收服 → 存檔變新
     return unit
   },
 

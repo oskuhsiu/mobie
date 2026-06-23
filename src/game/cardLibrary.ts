@@ -1,5 +1,6 @@
 import type { Card } from '@/game/types'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
+import { bumpSaveMeta } from '@/game/save/saveMeta'
 
 // 卡庫：cardId → Card 的本地表（IndexedDB）。掃卡時反查、QR 產生器列出可印的卡。
 // 首次存取時用 PLAYER_CARDS 種子（讓自製 DEV-* 卡碼開箱即可掃到）。
@@ -75,6 +76,7 @@ function ensureSeeded(): Promise<void> {
 export async function putCards(cards: Card[]): Promise<void> {
   if (!hasIDB()) throw new Error('此瀏覽器不支援 IndexedDB，無法保存卡庫')
   await writeAll((s) => cards.forEach((c) => s.put(c)))
+  bumpSaveMeta(Date.now()) // 卡庫變動 → 存檔變新
   emit()
 }
 
@@ -98,5 +100,6 @@ export async function listCards(): Promise<Card[]> {
 export async function deleteCard(cardId: string): Promise<void> {
   if (!hasIDB()) return
   await writeAll((s) => s.delete(cardId))
+  bumpSaveMeta(Date.now()) // 卡庫變動 → 存檔變新
   emit()
 }
