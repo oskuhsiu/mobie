@@ -21,6 +21,7 @@ const REASON_TEXT: Record<CardCodeReason, string> = {
 }
 
 const MAX_DIM = 640 // 解碼前縮圖上限，顧 iPad 幀率
+const DECODE_INTERVAL_MS = 80 // 解碼節流 ~12fps（相機預覽仍全速）
 
 /** 掃實體卡 QR → 解析校驗 → 反查卡庫 → 加入我的寶可夢。相機不可用時可手動輸入卡碼。 */
 export function CardScannerModal({ onClose }: { onClose: () => void }) {
@@ -53,21 +54,24 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
   }, [])
 
   // 相機掃描迴圈：抓幀 → 縮圖 → jsQR。全程走 ref/rAF，不過 React 頂層 state。
+  // 解碼節流到 ~12fps（getImageData+jsQR 是重活）；context 與畫布尺寸只在需要時取/改。
   useEffect(() => {
     let alive = true
-    const tick = () => {
+    let lastDecode = 0
+    let ctx: CanvasRenderingContext2D | null = null
+    const tick = (now: number) => {
       if (!alive) return
       rafRef.current = requestAnimationFrame(tick)
-      if (!decodeRef.current) return
+      if (!decodeRef.current || now - lastDecode < DECODE_INTERVAL_MS) return
+      lastDecode = now
       const v = videoRef.current
       const c = canvasRef.current
       if (!v || !c || v.readyState < 2 || !v.videoWidth) return
       const scale = Math.min(1, MAX_DIM / Math.max(v.videoWidth, v.videoHeight))
       const w = Math.round(v.videoWidth * scale)
       const h = Math.round(v.videoHeight * scale)
-      c.width = w
-      c.height = h
-      const ctx = c.getContext('2d', { willReadFrequently: true })
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h }
+      ctx ??= c.getContext('2d', { willReadFrequently: true })
       if (!ctx) return
       ctx.drawImage(v, 0, 0, w, h)
       const img = ctx.getImageData(0, 0, w, h)

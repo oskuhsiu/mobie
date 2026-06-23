@@ -9,7 +9,7 @@ const adapter: PersistenceAdapter = new LocalStorageAdapter()
 
 /** 預設 roster：由本地假卡 seed（id = cardId，與持久化一致） */
 function defaultRoster(): OwnedUnit[] {
-  return PLAYER_CARDS.map((c) => createOwnedUnit(c.cardId, c.speciesId, c.level))
+  return PLAYER_CARDS.map((c) => createOwnedUnit(c.cardId, c.speciesId, c.level, c))
 }
 
 interface RosterState {
@@ -69,7 +69,8 @@ export const useRoster = create<RosterState>((set, get) => ({
 
   captureUnit: async (card) => {
     // seed = cardId，與 buildBattlePokemon 對野生卡的決定論個體一致 → 收服後個體不變
-    const unit = createOwnedUnit(card.cardId, card.speciesId, card.level)
+    // card 顯式給的 ivs/nature/shiny（自製/掃描卡）會覆寫 seed roll
+    const unit = createOwnedUnit(card.cardId, card.speciesId, card.level, card)
     // 去重：同 id（同一次遭遇）不重複加入
     if (get().roster.some((u) => u.id === unit.id)) {
       set({ lastCaptured: null })

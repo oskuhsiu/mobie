@@ -86,6 +86,15 @@ describe('createOwnedUnit / ownedToCard', () => {
     const c = ownedToCard(u)
     expect(c).toMatchObject({ cardId: 'seed-y', speciesId: 1, level: 5, ivs: u.ivs, nature: u.nature, shiny: u.shiny })
   })
+
+  it('card 顯式 shiny/nature/ivs 覆寫 seed roll（掃描/自製卡）', () => {
+    const u = createOwnedUnit('seed-z', 25, 12, { shiny: true, nature: 7, ivs: { atk: 31 } })
+    expect(u.shiny).toBe(true)
+    expect(u.nature).toBe(7)
+    expect(u.ivs.atk).toBe(31) // 覆寫
+    // 未指定的 iv 仍走 seed roll（與不帶覆寫時一致）
+    expect(u.ivs.hp).toBe(createOwnedUnit('seed-z', 25, 12).ivs.hp)
+  })
 })
 
 describe('PersistenceAdapter（MemoryAdapter 契約）', () => {

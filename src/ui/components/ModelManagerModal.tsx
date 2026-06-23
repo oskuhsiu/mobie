@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { SPECIES } from '@/game/data/species'
+import { SPECIES_SORTED, matchesSpecies } from '@/game/data/speciesQuery'
 import { putModel, deleteModel, listModelIds, subscribeModels } from '@/scene/models/modelStore'
 import { audio } from '@/audio/audioEngine'
-
-const ALL = Object.values(SPECIES).sort((a, b) => a.id - b.id)
 
 /**
  * 3D 模型管理：把本機 GLB drop-in 對應到某 speciesId（存進 IndexedDB）。
@@ -25,10 +23,8 @@ export function ModelManagerModal({ onClose }: { onClose: () => void }) {
   }, [])
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase()
-    const base = s
-      ? ALL.filter((sp) => sp.nameZh.includes(s) || sp.name.toLowerCase().includes(s) || String(sp.id) === s)
-      : ALL
+    const s = q.trim()
+    const base = s ? SPECIES_SORTED.filter((sp) => matchesSpecies(sp, s)) : SPECIES_SORTED
     if (s) return base.slice(0, 80)
     // 無搜尋時：已套用自訂模型者優先，其餘限量顯示（避免一次塞滿 251 列）
     const custom = base.filter((sp) => customIds.has(sp.id))

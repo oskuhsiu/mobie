@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import QRCode from 'qrcode'
-import { SPECIES, getSpecies } from '@/game/data/species'
+import { getSpecies } from '@/game/data/species'
+import { SPECIES_SORTED, matchesSpecies } from '@/game/data/speciesQuery'
 import { listCards, putCards, deleteCard, subscribeCards } from '@/game/cardLibrary'
 import { parseCardsImport } from '@/game/cardsImport'
 import { makeCardCode } from '@/game/cardCode'
 import { audio } from '@/audio/audioEngine'
 import type { Card } from '@/game/types'
-
-const SPECIES_LIST = Object.values(SPECIES).sort((a, b) => a.id - b.id)
 
 type Panel = 'none' | 'add' | 'import'
 
@@ -86,9 +85,8 @@ function AddCardPanel({ existing, onDone }: { existing: Card[]; onDone: () => vo
   const [level, setLevel] = useState(15)
   const [shiny, setShiny] = useState(false)
   const matches = useMemo(() => {
-    const s = q.trim().toLowerCase()
-    if (!s) return SPECIES_LIST.slice(0, 8)
-    return SPECIES_LIST.filter((sp) => sp.nameZh.includes(s) || sp.name.toLowerCase().includes(s) || String(sp.id) === s).slice(0, 8)
+    const s = q.trim()
+    return (s ? SPECIES_SORTED.filter((sp) => matchesSpecies(sp, s)) : SPECIES_SORTED).slice(0, 8)
   }, [q])
 
   const add = async (speciesId: number) => {

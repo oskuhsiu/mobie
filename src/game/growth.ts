@@ -1,7 +1,7 @@
 // 成長（M1.5f）：Medium Fast n^3 經驗曲線、戰勝得 EXP、升級重算。
 // 只動 canonical 的 level/exp；能力值由 buildBattlePokemon 依新 level 重算（不存派生）。
 
-import type { Card, OwnedUnit } from '@/game/types'
+import type { Card, OwnedUnit, Stats } from '@/game/types'
 import { rollIndividual } from '@/game/individual'
 
 export const MAX_LEVEL = 100
@@ -50,18 +50,37 @@ export function applyExp(unit: OwnedUnit, gained: number): ExpResult {
   }
 }
 
-/** 由 seed 建一隻 OwnedUnit（個體決定論 roll，exp 對齊起始等級） */
-export function createOwnedUnit(seed: string, speciesId: number, level: number): OwnedUnit {
+/**
+ * 由 seed 建一隻 OwnedUnit（個體決定論 roll，exp 對齊起始等級）。
+ * `card` 顯式給的 ivs/nature/shiny 會覆寫 seed roll（與 buildBattlePokemon 一致），
+ * 讓掃描/自製卡上標的異色等屬性能落到 canonical 存檔，而非被 seed roll 蓋掉。
+ */
+export function createOwnedUnit(
+  seed: string,
+  speciesId: number,
+  level: number,
+  card?: Pick<Card, 'ivs' | 'nature' | 'shiny'>,
+): OwnedUnit {
   const ind = rollIndividual(seed)
+  const ivs: Stats = card?.ivs
+    ? {
+        hp: card.ivs.hp ?? ind.ivs.hp,
+        atk: card.ivs.atk ?? ind.ivs.atk,
+        def: card.ivs.def ?? ind.ivs.def,
+        spa: card.ivs.spa ?? ind.ivs.spa,
+        spd: card.ivs.spd ?? ind.ivs.spd,
+        spe: card.ivs.spe ?? ind.ivs.spe,
+      }
+    : ind.ivs
   return {
     id: seed,
     speciesId,
     level,
     exp: expForLevel(level),
-    ivs: ind.ivs,
-    nature: ind.nature,
+    ivs,
+    nature: card?.nature ?? ind.nature,
     seed,
-    shiny: ind.shiny,
+    shiny: card?.shiny ?? ind.shiny,
   }
 }
 
