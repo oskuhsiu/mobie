@@ -1040,3 +1040,55 @@ body {
   background: rgba(0,0,0,0.5); border: 1px solid var(--stroke);
   text-shadow: 0 1px 4px rgba(0,0,0,0.6);
 }
+
+/* ============ 戰鬥回放（M14.d/e）============ */
+.replay-player { max-width: 720px; }
+.replay-stage {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 4px 0 10px;
+}
+.replay-team {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--panel); border: 1px solid var(--stroke); border-radius: var(--radius-sm); padding: 10px;
+}
+.replay-team__label { font-size: 12px; font-weight: 800; color: var(--text-dim); letter-spacing: 0.08em; }
+.replay-unit { display: grid; grid-template-columns: 1fr; gap: 3px; opacity: 0.65; transition: opacity 0.2s; }
+.replay-unit--active { opacity: 1; }
+.replay-unit--fainted { opacity: 0.32; filter: grayscale(0.8); }
+.replay-unit__name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+.replay-unit__dot { color: var(--accent); font-size: 11px; }
+.replay-unit__lv { color: var(--text-dim); font-size: 11px; font-weight: 600; }
+.replay-hpbar { height: 7px; border-radius: 999px; background: rgba(0,0,0,0.4); overflow: hidden; }
+.replay-hpbar__fill { height: 100%; border-radius: 999px; transition: width 0.25s ease, background 0.25s; }
+.replay-unit__hp { font-size: 11px; color: var(--text-dim); text-align: right; }
+
+.replay-report {
+  height: 200px; overflow-y: auto; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.28); border: 1px solid var(--stroke);
+  font-size: 13px; line-height: 1.7; display: flex; flex-direction: column; gap: 2px;
+}
+.replay-report__line { color: var(--text-dim); }
+.replay-report__line--cur { color: var(--text); font-weight: 700; }
+
+.replay-controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+.replay-speed { display: flex; gap: 4px; margin-left: auto; }
+.replay-progress { height: 4px; border-radius: 999px; background: rgba(0,0,0,0.4); margin-top: 8px; overflow: hidden; }
+.replay-progress__fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.2s linear; }
+
+.replay-item {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--stroke); border-radius: var(--radius-sm); padding: 8px 10px;
+}
+.replay-item__main { flex: 1; cursor: pointer; min-width: 0; }
+.replay-item__title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.replay-item__vs { color: var(--text-dim); font-weight: 600; font-size: 12px; }
+.replay-item__sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.replay-item__badge {
+  font-size: 11px; font-weight: 900; padding: 1px 8px; border-radius: 999px; color: #0b1026;
+}
+.replay-item__badge--win { background: var(--good); }
+.replay-item__badge--lose { background: var(--bad); }
+.replay-empty { padding: 24px 14px; text-align: center; color: var(--text-dim); font-size: 13px; line-height: 1.7; }
+.replay-error {
+  margin: 4px 0 8px; padding: 8px 12px; border-radius: var(--radius-sm);
+  background: rgba(255,107,107,0.14); border: 1px solid var(--bad); color: #ffd9d9; font-size: 13px;
+}

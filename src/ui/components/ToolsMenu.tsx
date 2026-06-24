@@ -18,8 +18,9 @@ const PartnerSkillModal = lazy(() => import('@/ui/components/PartnerSkillModal')
 const DexModal = lazy(() => import('@/ui/components/DexModal').then((m) => ({ default: m.DexModal })))
 const AchievementsModal = lazy(() => import('@/ui/components/AchievementsModal').then((m) => ({ default: m.AchievementsModal })))
 const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then((m) => ({ default: m.IncubatorModal })))
+const ReplayListModal = lazy(() => import('@/ui/components/ReplayListModal').then((m) => ({ default: m.ReplayListModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator'
+type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
 
 /**
  * 共用工具列：掃卡 / 卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 3D 模型 / 存檔 / 設定。
@@ -49,6 +50,7 @@ export function ToolsMenu() {
         <button className="btn btn--ghost btn--sm" onClick={() => open('incubator')}>
           🥚 孵化所{hatchable && <span className="title-dot">!</span>}
         </button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('replays')}>🎬 回放</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
@@ -67,6 +69,7 @@ export function ToolsMenu() {
           {overlay === 'dex' && <DexModal onClose={() => setOverlay('none')} />}
           {overlay === 'achievements' && <AchievementsModal onClose={() => setOverlay('none')} />}
           {overlay === 'incubator' && <IncubatorModal onClose={() => setOverlay('none')} />}
+          {overlay === 'replays' && <ReplayListModal onClose={() => setOverlay('none')} />}
         </AnimatePresence>
       </Suspense>
     </>
