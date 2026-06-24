@@ -48,19 +48,25 @@ input/      QTE seam (qualityFromPointer / zones)
 **Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Extension modules
 (`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
 which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
-pure is what makes the battle system testable (194 tests) and the animation layer swappable.
+pure is what makes the battle system testable (372 tests) and the animation layer swappable.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
 ```
 title → regionSelect → encounter → cardSelect → battle → result
-                ↑__________________________________________|
-        (result: PLAY_AGAIN rerolls foes → encounter; TO_REGIONS → regionSelect)
+   ↑            ↑  ↘ OPEN_TOWER → towerSetup → battle ↗        |
+   |  BACK      |___________________________________________|
+   (result: PLAY_AGAIN rerolls foes → encounter; TO_REGIONS → regionSelect)
 ```
 
 - The machine only carries `regionId`, `foeTeam` (3 Cards, last = boss/capture target),
-  `playerTeam` (3 Cards), `outcome`, `captured`. **It does not run the battle** — turn/HP/QTE/switch
-  are handled by `battleStore` + the pure reducer.
+  `playerTeam` (3 Cards), `outcome`, `captured`, and the M11 `tower` run. **It does not run the
+  battle** — turn/HP/QTE/switch are handled by `battleStore` + the pure reducer.
+- **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
+  `ui/components/ToolsMenu` (scan / library / team / moves / partner skills / dex / achievements /
+  incubator / 3D models / save / settings — all lazy-loaded modals), so every tool stays reachable
+  after the game starts, not just from the title. `regionSelect` adds `BACK → title` (a 🏠 button);
+  it is the in-game hub returned to after each result.
 - `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. The arena (id `'practice'`) resolves
   through `data/regionLookup.lookupRegion` to the hand-authored `data/practiceRegion.ts` — so it reuses
   the entire normal flow with no special-casing.
@@ -71,14 +77,19 @@ title → regionSelect → encounter → cardSelect → battle → result
 
 ## 4. Data model (`game/types.ts`)
 
-- **`Species`** — national-dex entry (types, base stats, single `moveId`, PokéAPI artwork URL).
+- **`Species`** — national-dex entry (types, base stats, `moveId` = slot-0 star-strike identity,
+  plus the M19 `learnset` / `teachableMoveIds`, PokéAPI artwork URL).
 - **`Card`** — a battle entry (speciesId + level, optional ivs/nature/shiny). Sourced from local
   `playerCards`, scanned QR codes (M2), or imported save files (M5).
 - **`OwnedUnit`** — the **only persisted, canonical** shape (id, speciesId, level, exp, ivs, nature,
-  seed, shiny, optional `heldItemId` [M7]). Derived battle numbers are never persisted.
+  seed, shiny, optional `heldItemId` [M7], and M19 `learnedMoveIds` / `equippedMoveIds`). Derived
+  battle numbers are never persisted.
 - **`BattleMobie`** — fully-resolved battle instance, computed by `stats.buildBattleMobie(card)`.
-  Carries battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the
-  abilities module's S1 hook); these are never persisted and are absent when a module is off.
+  Holds the resolved `moves[]` loadout (≤4; `move` = slot-0 kept for back-compat, M19) and
+  battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the abilities
+  module's S1 hook); these are never persisted and are absent when a module is off. The read-only
+  `MobCard` detail view (M16) renders one of these — in battle it reads the live, prep-applied member;
+  outside battle (the Team modal) it builds a fresh one from an `OwnedUnit` for an owner-full view.
 - **`Region.mode`** — `'arena' | 'wild'` (M6 mode contract, see §3).
 
 **Determinism:** `game/individual.rollIndividual(seed)` derives ivs/nature/shiny from a seeded RNG
@@ -97,6 +108,10 @@ Two halves, deliberately separated:
    crit/accuracy, ball/capture, charge tier, `playerActsFirst`).
    - `ext` is an injected **pure capability bundle** (like `rng`) — the reducer never imports modules
      and never knows the words "item"/"ability". Default `EMPTY_EXT` ⇒ behavior identical to M1.x. See §6.
+   - **Multi-move (M19):** `ATTACK` carries an additive `slotIndex`; the reducer resolves it against the
+     immutable battle loadout and writes the chosen `resolvedMoveId` back into the event. It is still
+     **one `ATTACK` action per turn** (no new phase); identity is the single star-strike finisher; status
+     moves write `fieldState` via the M7 S1/S3/S4 seams. Missing `slotIndex` ⇒ slot 0 (back-compat).
    - **Turn cap:** `MAX_TURNS = 30`. If a turn resolves with no natural winner past the cap, the winner
      is decided by remaining team-HP fraction (ties favor the player) and a `battleEnded{reason:'timeout'}`
      event is emitted — guards against type-immunity stalemates.
@@ -104,17 +119,25 @@ Two halves, deliberately separated:
    BattleScreen calls `resolveTurn` (computing the full turn), then **consumes the event queue one by
    one**, driving framer-motion + FxCanvas + audio, and writing display HP/active via `battleStore`.
    Final `setBattle(nextState)` snaps turn/winner. The reducer stays pure; all "play it out slowly"
-   logic is here.
+   logic is here. The move picker stays in the bottom strip, but timing-critical inputs (attack QTE,
+   mash-charge, defense/chain QTE) render in a centered `.battle-action` overlay so they sit in the
+   battle area, not pinned to the screen bottom. (Centering uses a full-bleed flex layer, **not** a CSS
+   `translate(-50%,-50%)` — framer-motion writes its own `transform` for the scale/opacity entrance and
+   would clobber a translate-based centering.)
 
 **Performance red-line:** high-frequency values (QTE pointer position, future MediaPipe coords) go
 through refs/rAF/DOM or Zustand — **never** React top-level state. See `TimingBar`, `MashMeter`, `FxCanvas`.
 
 ## 6. Extension system (optional modules via seams — M6 / M7)
 
-Optional gameplay systems (held items, team synergy, abilities, and future chain/evolution/tower) are
+Optional gameplay systems (held items, team synergy, abilities, chain, evolution) are
 **not** if/else'd into the core. The core defines fixed **seams (S1–S8)**; a module registers only the
 seams it uses. **Disabled = not registered = zero residue** (the core loop is byte-for-byte M1.x).
 Design source: `plan/09-extension-systems.md` §0; the seam definitions live in `game/ext/seams.ts`.
+`ModuleId` lists only real toggleable modules — `synergy / heldItems / abilities / chain / evolution`
+(seam-registered) plus `partnerSkills` (M17, a display-layer/fieldState gate, not in `MODULE_REGISTRY`).
+**The tower (M11) is a game *mode* entered from `regionSelect`, not a settings toggle**, so it is not a
+`ModuleId` — an earlier dead "tower" toggle that read "coming soon" was removed.
 
 | Seam | Where it runs | Purity | Used by |
 |---|---|---|---|
@@ -218,10 +241,15 @@ user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the 
   to keep the bundle lean.
 - The app is `localhost`-bound in dev. For real iPad testing run `vite --host` and open the Mac's LAN
   IP from iPad Safari, or build static files and install as a PWA.
+- **framer-motion clobbers CSS `transform`:** a `motion.*` element that animates `scale`/`y` writes its
+  own inline `transform`, overriding any CSS `transform: translate(-50%, …)` used for centering — the
+  element drifts off-center. Center such overlays with a flex layer instead (see `.battle-action-layer`).
+  Four older battle overlays (`star-orb`, `battle-banner`, `support-overlay`, `combo-overlay`) still use
+  translate-based centering under scale animation and may drift slightly — a known follow-up.
 
 ## 11. Testing & verification
 
-- `npm test` (Vitest) — **194 tests.** Domain logic (type chart, individuality, growth, engine,
+- `npm test` (Vitest) — **372 tests.** Domain logic (type chart, individuality, growth, engine,
   reducer incl. turn cap, accidents, recommend, card-code/import, roster sanitize, save meta
   `compareSaves` + bundle round-trip & corruption classification) plus the M6/M7 extension suites
   (ext/settings, synergy, items, abilities, held-item persistence) and the project-wide verification
