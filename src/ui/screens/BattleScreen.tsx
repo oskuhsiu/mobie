@@ -527,6 +527,7 @@ export function BattleScreen() {
           rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
           stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1) // 3D：受擊抖動
           audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit')
+          audio.playMoveSound(recipe.sound) // M21.e：疊一層屬性材質音色（火=爆/電=zap/水=波…）
         }
         if (e.missed) {
           store().setBanner('攻擊沒有命中…')
@@ -577,6 +578,7 @@ export function BattleScreen() {
         audio.play('select')
         await wait(540)
         playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
+        audio.playMoveSound(recipe.sound) // M21.e：變化招也帶屬性材質音
         if (e.effectKind === 'heal' && e.hpAfter != null) {
           store().setMemberHp(e.side, e.index, e.hpAfter)
           audio.play('super')

@@ -24,6 +24,18 @@ describe('fxCatalog', () => {
     }
   })
 
+  it('M21.e：每型指派一個材質音色家族（6 種之一），resolveFx 帶出', () => {
+    const families = new Set(['blast', 'zap', 'wave', 'chime', 'rustle', 'airy'])
+    for (const [type, palette] of Object.entries(typePalette)) {
+      expect(families.has(palette.sound)).toBe(true)
+      expect(resolveFx(move(1000, type as Move['type'], 'physical')).sound).toBe(palette.sound)
+    }
+    // 代表性指派
+    expect(typePalette.fire.sound).toBe('blast')
+    expect(typePalette.electric.sound).toBe('zap')
+    expect(typePalette.water.sound).toBe('wave')
+  })
+
   it('uses category delivery without needing per-move presets', () => {
     expect(resolveFx(move(1011, 'fire', 'special')).mode).toBe('travel')
     expect(resolveFx(move(1062, 'fighting', 'physical')).mode).toBe('impact')

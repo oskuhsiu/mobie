@@ -6,11 +6,19 @@ export type SfxId =
   | 'select' | 'attack' | 'hit' | 'super' | 'crit'
   | 'faint' | 'switch' | 'lowhp' | 'victory' | 'defeat' | 'capture'
 
+/**
+ * M21.e 招式「材質」音色家族：18 屬性歸 6 種音色（fxCatalog 的 typePalette.sound 指派）。
+ * 疊在通用 hit/super/crit 之上（不取代），給不同屬性招式不同打擊質感。
+ */
+export type MoveSoundId = 'blast' | 'zap' | 'wave' | 'chime' | 'rustle' | 'airy'
+
 export interface AudioEngine {
   /** iOS 首次觸控時呼叫：解鎖 AudioContext、載入 Tone、建合成器、開 BGM */
   unlock(): Promise<void>
   isReady(): boolean
   play(id: SfxId): void
+  /** M21.e：依招式屬性音色家族播一層「材質」音（疊在 hit/super/crit 上、不取代）。 */
+  playMoveSound(id: MoveSoundId): void
   startBgm(): void
   stopBgm(): void
   /** 0..1，越高越緊張（低血量）：調暗 BGM 濾波 + 觸發警報嗶 */
@@ -27,6 +35,9 @@ class ToneAudioEngine implements AudioEngine {
   private vol: any = null
   private sfxLead: any = null
   private sfxNoise: any = null
+  // M21.e：招式材質音專用合成器（與 hit/crit 的 sfxLead/sfxNoise 分開，避免互相截斷）
+  private fxLead: any = null
+  private fxNoise: any = null
   private bgmLead: any = null
   private bgmBass: any = null
   private seq: any = null
@@ -64,6 +75,18 @@ class ToneAudioEngine implements AudioEngine {
     this.sfxNoise = new T.NoiseSynth({
       noise: { type: 'white' },
       envelope: { attack: 0.001, decay: 0.13, sustain: 0 },
+    }).connect(this.filter)
+
+    // M21.e 招式材質音專用（獨立合成器，不打斷 hit/crit）
+    this.fxLead = new T.Synth({
+      oscillator: { type: 'triangle' },
+      envelope: { attack: 0.002, decay: 0.12, sustain: 0.04, release: 0.1 },
+      volume: -4,
+    }).connect(this.filter)
+    this.fxNoise = new T.NoiseSynth({
+      noise: { type: 'pink' },
+      envelope: { attack: 0.001, decay: 0.16, sustain: 0 },
+      volume: -6,
     }).connect(this.filter)
 
     // BGM 專用合成器（與 SFX 分開，互不打斷）
@@ -140,6 +163,39 @@ class ToneAudioEngine implements AudioEngine {
         case 'capture': this.arp(['C6', 'G5', 'C6'], 0.07, '16n', 0.6); break
       }
     } catch (e) { console.warn('[audio] play', id, e) }
+  }
+
+  playMoveSound(id: MoveSoundId) {
+    if (!this.ready) return
+    try {
+      const T = this.Tone!
+      const now = T.now()
+      switch (id) {
+        case 'blast': // 火/格鬥/地/岩/惡：噪音爆 + 低頻轟
+          this.fxNoise.triggerAttackRelease('8n', now, 0.85)
+          this.fxLead.triggerAttackRelease('C2', '16n', now, 0.6)
+          break
+        case 'zap': // 電/鋼/龍：高頻 zap（雙音上跳）
+          this.fxLead.triggerAttackRelease('B5', '32n', now, 0.6)
+          this.fxLead.triggerAttackRelease('E6', '32n', now + 0.03, 0.5)
+          break
+        case 'wave': // 水/冰：低頻波 + 短噪
+          this.fxLead.triggerAttackRelease('G3', '16n', now, 0.6)
+          this.fxNoise.triggerAttackRelease('32n', now, 0.3)
+          break
+        case 'chime': // 妖精/超能力/幽靈：清亮鈴
+          this.fxLead.triggerAttackRelease('E6', '32n', now, 0.5)
+          this.fxLead.triggerAttackRelease('A6', '32n', now + 0.05, 0.42)
+          break
+        case 'rustle': // 草/蟲/毒：中頻沙沙
+          this.fxNoise.triggerAttackRelease('16n', now, 0.45)
+          this.fxLead.triggerAttackRelease('E4', '32n', now, 0.4)
+          break
+        case 'airy': // 飛行/一般：氣流掃過
+          this.fxNoise.triggerAttackRelease('8n', now, 0.4)
+          break
+      }
+    } catch (e) { console.warn('[audio] move sound', id, e) }
   }
 
   setIntensity(level: number) {
