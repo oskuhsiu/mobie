@@ -31,6 +31,8 @@ export interface GamePrefs {
     /** 即使 off 也預設填滿 true，避免日後 undefined gating；mode 開啟後才實際生效。 */
     surfaces: Record<InteractSurface, boolean>
   }
+  /** M14：是否錄製戰鬥回放（存進 IndexedDB mz-replays）。預設 off＝零殘留；開啟才開始錄。 */
+  recordReplays: boolean
 }
 
 export interface GameSettings {
@@ -83,7 +85,7 @@ function allSurfacesOn(): Record<InteractSurface, boolean> {
 
 /** M22 UX 偏好預設：mode='off'（現狀一字不差）、surfaces 全 true（待 mode 開啟才生效）。 */
 export function defaultPrefs(): GamePrefs {
-  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() } }
+  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() }, recordReplays: false }
 }
 
 export function defaultSettings(): GameSettings {
@@ -92,21 +94,24 @@ export function defaultSettings(): GameSettings {
 
 /** 把任意外來物正規化成合法 GamePrefs（遷移 / 防壞檔 / 缺欄補預設）。純函數，可測。 */
 export function migratePrefs(raw: unknown): GamePrefs {
-  const base = defaultPrefs()
-  if (!raw || typeof raw !== 'object') return base
-  const ei = (raw as Record<string, unknown>).enhancedInteractivity
-  if (!ei || typeof ei !== 'object') return base
-  const e = ei as Record<string, unknown>
-  const mode: InteractMode = e.mode === 'lite' || e.mode === 'arcade' ? e.mode : 'off'
+  if (!raw || typeof raw !== 'object') return defaultPrefs()
+  const o = raw as Record<string, unknown>
+  const recordReplays = o.recordReplays === true // 缺欄/未知 → 預設 off
+  let mode: InteractMode = 'off'
   const surfaces = allSurfacesOn()
-  const s = e.surfaces
-  if (s && typeof s === 'object') {
-    for (const id of INTERACT_SURFACES) {
-      // 只認顯式 false 才關；其餘（缺漏/未知）維持預設 true
-      if ((s as Record<string, unknown>)[id] === false) surfaces[id] = false
+  const ei = o.enhancedInteractivity
+  if (ei && typeof ei === 'object') {
+    const e = ei as Record<string, unknown>
+    mode = e.mode === 'lite' || e.mode === 'arcade' ? e.mode : 'off'
+    const s = e.surfaces
+    if (s && typeof s === 'object') {
+      for (const id of INTERACT_SURFACES) {
+        // 只認顯式 false 才關；其餘（缺漏/未知）維持預設 true
+        if ((s as Record<string, unknown>)[id] === false) surfaces[id] = false
+      }
     }
   }
-  return { enhancedInteractivity: { mode, surfaces } }
+  return { enhancedInteractivity: { mode, surfaces }, recordReplays }
 }
 
 /** 把任意外來物正規化成合法 GameSettings（遷移 / 防壞檔）。純函數，可測。 */
@@ -140,6 +145,11 @@ export function setInteractModeIn(settings: GameSettings, mode: InteractMode): G
     ...settings,
     prefs: { ...settings.prefs, enhancedInteractivity: { ...settings.prefs.enhancedInteractivity, mode } },
   }
+}
+
+/** 純函數：回傳把「錄製戰鬥回放」開關設成新值後的設定（M14）。 */
+export function setReplayRecordingIn(settings: GameSettings, on: boolean): GameSettings {
+  return { ...settings, prefs: { ...settings.prefs, recordReplays: on } }
 }
 
 /**

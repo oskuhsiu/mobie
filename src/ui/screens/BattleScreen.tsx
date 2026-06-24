@@ -20,6 +20,8 @@ import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
 import { makeWildEvents } from '@/game/accidents'
 import { makeRng } from '@/game/rng'
+import { ReplayRecorder } from '@/store/replayRecorder'
+import type { ReplayInput, DisplayUnitSnapshot } from '@/game/replay/types'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { TimingBar } from '@/ui/components/TimingBar'
@@ -70,6 +72,23 @@ const SLOT_KEY_MAP: Record<string, number> = {
 }
 // M11 地形突變可抽的池（全地形除中性）；wild 戰鬥才注入。
 const WILD_SHIFT_POOL = TERRAINS.filter((t) => t.id !== 'neutral').map((t) => t.id)
+
+// M14.c：把一方 BattleMobie[] 轉成回放用的 DisplayUnitSnapshot[]（只取畫面/FX 分派要的穩定欄位）。
+function teamSnapshot(side: Side, members: BattleMobie[]): DisplayUnitSnapshot[] {
+  return members.map((m, slot) => ({
+    instanceId: `${side}:${slot}`,
+    side,
+    slot,
+    speciesId: m.speciesId,
+    displayName: m.nameZh,
+    level: m.level,
+    maxHp: m.maxHp,
+    initialHp: m.currentHp,
+    shiny: m.shiny,
+    ...(m.heldItemId ? { heldItemId: m.heldItemId } : {}),
+    ...(m.abilityId ? { abilityId: m.abilityId } : {}),
+  }))
+}
 
 /** 浮傷數字：3D 場景之上的 DOM 疊層，依 FX_POS 對齊在受擊方上方。 */
 function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
@@ -369,6 +388,8 @@ export function BattleScreen() {
   // （取代各回合預設 Math.random）。同 seed + 同輸入 → 同事件流，為回放重模擬鋪地基。
   const battleSeedRef = useRef('')
   const battleRngRef = useRef<() => number>(Math.random)
+  // M14.c：戰鬥回放單點錄製器（每場一個 instance；recordReplays 關＝不 start＝record/finish 皆 no-op）。
+  const recorderRef = useRef(new ReplayRecorder())
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
@@ -405,6 +426,16 @@ export function BattleScreen() {
     const terrainDefs = terrainDefsOf(terrains)
     const s = useBattleStore.getState()
     s.init(players, foes, terrains)
+    // M14.c：若開啟回放錄製（settings.prefs.recordReplays），開戰即 start（讀 getState 不增 effect 依賴）。
+    if (useSettings.getState().settings.prefs.recordReplays) {
+      recorderRef.current.start({
+        battleSeed,
+        regionId: context.regionId ?? (context.tower ? 'tower' : ''),
+        mode: region?.mode === 'wild' ? 'wild' : 'arena',
+        snapshot: [...teamSnapshot('player', players), ...teamSnapshot('foe', foes)],
+        createdAt: Date.now(),
+      })
+    }
     ;(async () => {
       await wait(700)
       s.pushLog(`對手派出了 ${foes[0].nameZh}！`)
@@ -649,6 +680,21 @@ export function BattleScreen() {
     }
   }, [rootShake])
 
+  // M14.c：每回合結束統一收尾——依勝負設 phase；分出勝負時 finish 錄製（持久化回放）。
+  // 四個 run 函式共用，取代各自重複的「winner→phase」三行。
+  const concludeTurn = useCallback((nextState: BattleState) => {
+    const setPhase = useBattleStore.getState().setPhase
+    if (nextState.winner === 'player') {
+      void recorderRef.current.finish('win')
+      setPhase('won')
+    } else if (nextState.winner === 'foe') {
+      void recorderRef.current.finish('lose')
+      setPhase('lost')
+    } else {
+      setPhase('playerChoice')
+    }
+  }, [])
+
   const runPlayerTurn = useCallback(async (quality: QteQuality, mashCount = 0) => {
     const store = useBattleStore.getState
     const b0 = store().battle
@@ -657,7 +703,9 @@ export function BattleScreen() {
 
     // M19.c：玩家選定的招式槽（缺省/逾時＝slot0）。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
     const slotIndex = pendingSlotRef.current
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount, slotIndex }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const input: ReplayInput = { type: 'ATTACK', quality, mashCount, slotIndex }
+    const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    recorderRef.current.record(input, events)
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -666,10 +714,8 @@ export function BattleScreen() {
     store().addEnergy(energyGain(quality, mashCount), dealt)
 
     setLockedIndex(null) // 攻擊一回合後解除換回鎖
-    if (nextState.winner === 'player') store().setPhase('won')
-    else if (nextState.winner === 'foe') store().setPhase('lost')
-    else store().setPhase('playerChoice')
-  }, [playEvents, ext, wildEvents])
+    concludeTurn(nextState)
+  }, [playEvents, concludeTurn, ext, wildEvents])
 
   // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出
   const runStarStrike = useCallback(async () => {
@@ -686,16 +732,16 @@ export function BattleScreen() {
     await wait(620)
     fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const input: ReplayInput = { type: 'ATTACK', starStrike: true }
+    const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    recorderRef.current.record(input, events)
     await playEvents(b0, events)
     store().setBattle(nextState)
     store().setBanner(null)
     store().addEnergy(0, false) // 連鎖歸零（星擊消耗）
 
-    if (nextState.winner === 'player') store().setPhase('won')
-    else if (nextState.winner === 'foe') store().setPhase('lost')
-    else store().setPhase('playerChoice')
-  }, [playEvents, rootShake, ext, wildEvents])
+    concludeTurn(nextState)
+  }, [playEvents, concludeTurn, rootShake, ext, wildEvents])
 
   // 主動換人：收回換上 index → 對手打換上的 → 防禦 QTE 抵減
   const runSwitchTurn = useCallback(async (index: number, defenseQuality: QteQuality) => {
@@ -706,15 +752,15 @@ export function BattleScreen() {
     setPendingSwitch(null)
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const input: ReplayInput = { type: 'SWITCH', index, defenseQuality }
+    const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    recorderRef.current.record(input, events)
     await playEvents(b0, events)
     store().setBattle(nextState)
 
     setLockedIndex(fromIndex) // 剛換下的不能立刻換回
-    if (nextState.winner === 'player') store().setPhase('won')
-    else if (nextState.winner === 'foe') store().setPhase('lost')
-    else store().setPhase('playerChoice')
-  }, [playEvents, ext, wildEvents])
+    concludeTurn(nextState)
+  }, [playEvents, concludeTurn, ext, wildEvents])
 
   // M9 連鎖：提交收集到的 hits → reducer 同步重驗 + 結算（吃速度/截斷在 reducer）
   const runChain = useCallback(async (hits: ChainHit[]) => {
@@ -727,17 +773,17 @@ export function BattleScreen() {
     fxRef.current?.flash('#7ae0ff', 0.4)
     await wait(420)
 
+    const input: ReplayInput = { type: 'CHAIN', hits: hits.map((h) => ({ attackerIndex: h.attackerIndex, quality: h.quality })) }
     const { nextState, events } = resolveTurn(b0, { type: 'SUBMIT_CHAIN_RESULT', hits }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    recorderRef.current.record(input, events)
     await playEvents(b0, events)
     store().setBattle(nextState)
     await wait(180)
     store().setCombo(null) // 連段 overlay 收尾
 
     setLockedIndex(null)
-    if (nextState.winner === 'player') store().setPhase('won')
-    else if (nextState.winner === 'foe') store().setPhase('lost')
-    else store().setPhase('playerChoice')
-  }, [playEvents, ext, wildEvents])
+    concludeTurn(nextState)
+  }, [playEvents, concludeTurn, ext, wildEvents])
 
   // M9 連鎖：發動 → 依當前戰況算出參與隊友、開始連續 QTE 序列
   const startChain = useCallback(() => {

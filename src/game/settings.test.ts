@@ -68,6 +68,15 @@ describe('M22 增強互動性偏好（prefs）', () => {
     expect('bogus' in s.enhancedInteractivity.surfaces).toBe(false) // 未知鍵不滲入
   })
 
+  it('M14 recordReplays：預設 off、只認顯式 true、向後相容缺欄', () => {
+    expect(defaultPrefs().recordReplays).toBe(false)
+    expect(migratePrefs({}).recordReplays).toBe(false) // 缺欄 → off
+    expect(migratePrefs({ recordReplays: true }).recordReplays).toBe(true)
+    expect(migratePrefs({ recordReplays: 'yes' }).recordReplays).toBe(false) // 非布林 true → off
+    // 與 enhancedInteractivity 不互相干擾
+    expect(migratePrefs({ recordReplays: true, enhancedInteractivity: { mode: 'lite' } }).enhancedInteractivity.mode).toBe('lite')
+  })
+
   it('setInteractModeIn 純函數、不改原物件、surfaces 不動', () => {
     const a = defaultSettings()
     const b = setInteractModeIn(a, 'arcade')
@@ -84,7 +93,7 @@ describe('M22 增強互動性偏好（prefs）', () => {
   it('isEnhancedSurfaceEnabled：mode≠off 且 surface 開 → true；surface 關 → false', () => {
     const lite = setInteractModeIn(defaultSettings(), 'lite')
     expect(isEnhancedSurfaceEnabled(lite, 'capture')).toBe(true)
-    const off1 = { ...lite, prefs: { enhancedInteractivity: { mode: 'lite' as const, surfaces: { ...lite.prefs.enhancedInteractivity.surfaces, capture: false } } } }
+    const off1 = { ...lite, prefs: { ...lite.prefs, enhancedInteractivity: { mode: 'lite' as const, surfaces: { ...lite.prefs.enhancedInteractivity.surfaces, capture: false } } } }
     expect(isEnhancedSurfaceEnabled(off1, 'capture')).toBe(false)
   })
 

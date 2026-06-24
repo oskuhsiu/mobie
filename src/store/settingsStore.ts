@@ -8,6 +8,7 @@ import {
   saveSettings,
   setModuleEnabledIn,
   setInteractModeIn,
+  setReplayRecordingIn,
   type GameSettings,
   type InteractMode,
 } from '@/game/settings'
@@ -25,6 +26,8 @@ interface SettingsStore {
   setModuleEnabled: (id: ModuleId, on: boolean) => void
   /** M22 增強互動性 mode（UX 偏好，不參與 ext/prep/postGrowth 注入；低頻、走一般 state） */
   setInteractMode: (mode: InteractMode) => void
+  /** M14 是否錄製戰鬥回放（不參與戰鬥注入；低頻、走一般 state） */
+  setReplayRecording: (on: boolean) => void
 }
 
 export const useSettings = create<SettingsStore>((set, get) => {
@@ -42,6 +45,11 @@ export const useSettings = create<SettingsStore>((set, get) => {
     setInteractMode: (mode) => {
       // prefs 不參與戰鬥注入 → 不重組 ext/prep/postGrowth，只更新 settings + 寫回 localStorage。
       const next = setInteractModeIn(get().settings, mode)
+      saveSettings(next)
+      set({ settings: next })
+    },
+    setReplayRecording: (on) => {
+      const next = setReplayRecordingIn(get().settings, on)
       saveSettings(next)
       set({ settings: next })
     },

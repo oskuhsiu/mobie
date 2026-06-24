@@ -66,7 +66,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const settings = useSettings((s) => s.settings)
   const setModuleEnabled = useSettings((s) => s.setModuleEnabled)
   const setInteractMode = useSettings((s) => s.setInteractMode)
+  const setReplayRecording = useSettings((s) => s.setReplayRecording)
   const interactMode = settings.prefs.enhancedInteractivity.mode
+  const recordReplays = settings.prefs.recordReplays
 
   const toggle = (id: ModuleId, available: boolean) => {
     if (!available) return
@@ -146,6 +148,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
+
+          <div className="settings-divider">🎬 戰鬥回放</div>
+          <div
+            className={`mod-row ${recordReplays ? 'mod-row--on' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => { audio.play('select'); setReplayRecording(!recordReplays) }}
+          >
+            <span className="mod-row__icon">🎬</span>
+            <div className="mod-row__text">
+              <div className="mod-row__label">錄製戰鬥回放</div>
+              <div className="mod-row__desc">把每場戰鬥存成可重播的紀錄（從 Title「🎬 回放」觀看／匯出文字戰報）。最多保留最近 50 場。預設關＝不錄製。</div>
+            </div>
+            <span className={`switch ${recordReplays ? 'switch--on' : ''}`}>
+              <span className="switch__knob" />
+            </span>
+          </div>
         </div>
 
         <div className="model-foot">
