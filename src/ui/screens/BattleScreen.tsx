@@ -764,10 +764,11 @@ export function BattleScreen() {
     const b = store().battle
     if (!b || partnerUsed.includes(skill.id)) return
     audio.play('select')
+    let banner: string | null = null
     if (skill.reveal) {
       const idx = b.foe.activeIndex
       store().revealFoe(idx)
-      store().setBanner('🔍 看穿了對手！')
+      banner = '🔍 看穿了對手！'
       store().pushLog(`看穿了對手的 ${b.foe.members[idx].nameZh}！招式與數值現形`)
       fxRef.current?.flash('#7ae0ff', 0.3)
       fxRef.current?.ring({ ...FX_POS.foe, color: '#7ae0ff' })
@@ -776,13 +777,19 @@ export function BattleScreen() {
     const statuses = teamBuffStatuses(skill)
     if (statuses.length > 0) {
       store().applyTeamStatuses(statuses)
-      store().setBanner(`${skill.icon} ${skill.name}！`)
+      banner = `${skill.icon} ${skill.name}！`
       store().pushLog(`${skill.name}！全隊氣勢提升（攻擊・特攻 ↑）`)
       fxRef.current?.flash('#ffd23f', 0.3)
       fxRef.current?.ring({ ...FX_POS.player, color: '#ffd23f' })
       fxRef.current?.burst({ ...FX_POS.player, color: '#ffd23f', count: 16, kind: 'spark' })
     }
     setPartnerUsed((prev) => (prev.includes(skill.id) ? prev : [...prev, skill.id]))
+    // 仍停在 playerChoice（不耗回合）→ 主動清掉提示 banner，避免一直掛著（若玩家先出手由 playEvents 覆寫，故守 banner 未變才清）。
+    if (banner) {
+      store().setBanner(banner)
+      const shown = banner
+      setTimeout(() => { if (store().banner === shown) store().setBanner(null) }, 1500)
+    }
   }, [partnerUsed])
 
   if (!battle) return <div className="center" style={{ flex: 1 }}>準備戰鬥…</div>

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { BattleMobie, TerrainId } from '@/game/types'
-import { createBattleState, type BattleState, type Side, type SupportOutcome, type StatusEffect } from '@/game/battle/reducer'
+import { createBattleState, upsertStatus, type BattleState, type Side, type SupportOutcome, type StatusEffect } from '@/game/battle/reducer'
 
 export type { Side }
 
@@ -120,8 +120,10 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   applyTeamStatuses: (statuses) =>
     set((s) => {
       if (!s.battle || statuses.length === 0) return {}
-      const field = { ...s.battle.field, teamStatuses: [...s.battle.field.teamStatuses, ...statuses] }
-      return { battle: { ...s.battle, field } }
+      // 同 stat 取 max（不疊乘）——與 reducer 變化招同規則，避免加油 + 變化招對同屬性連乘爆表。
+      let teamStatuses = s.battle.field.teamStatuses
+      for (const st of statuses) teamStatuses = upsertStatus(teamStatuses, st)
+      return { battle: { ...s.battle, field: { ...s.battle.field, teamStatuses } } }
     }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),

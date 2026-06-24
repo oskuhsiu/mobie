@@ -18,12 +18,14 @@ export function PartnerSkillModal({ onClose }: { onClose: () => void }) {
   const moduleOn = useSettings((s) => s.settings.modules.partnerSkills)
 
   const unlock = (skill: PartnerSkillDef) => {
+    // 已習得（含起始）就直接返回——learn() 冪等但 spend() 不是，故先讀「最新」狀態擋住快速重複點擊的重扣。
+    if (isPartnerSkillLearned(skill.id, usePlayerSkills.getState().learnedSkillIds)) return
     if (!spend(skill.cost)) { audio.play('defeat'); return } // spend 自帶餘額檢查、不足不扣
     learn(skill.id)
     audio.play('super')
   }
 
-  const modeLabel = (m: PartnerSkillDef['mode']) => (m === 'active' ? '戰中主動' : '開戰支援')
+  const modeLabel = (m: PartnerSkillDef['mode']) => (m === 'active' ? '戰中主動' : '全隊支援')
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>

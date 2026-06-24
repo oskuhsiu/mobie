@@ -2,7 +2,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   PARTNER_SKILLS,
-  STARTER_PARTNER_SKILL_IDS,
   getPartnerSkill,
   isPartnerSkillLearned,
   learnedPartnerSkills,
@@ -29,7 +28,6 @@ describe('M17 partnerSkills catalog 護欄', () => {
     expect(insight?.mode).toBe('active')
     expect(insight?.reveal).toBe(true)
     expect(insight?.cost).toBe(0)
-    expect(STARTER_PARTNER_SKILL_IDS).toContain('insight')
   })
 
   it('support 技能的 teamBuff 一律是「增益」（mult>1、turns>0），不是減益', () => {

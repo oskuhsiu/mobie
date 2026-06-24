@@ -7,8 +7,8 @@
 // 兩種模式：
 //   active  — 戰中主動鈕（看穿），純顯示層：設 revealedFoes + 揭露演出，每場一次，
 //             **不進 reducer、不耗回合、對手不回擊**（守相位契約）。
-//   support — 開戰時一次性灌注全隊增益，寫進 fieldState.teamStatuses（複用 M19.d 機制，
-//             reducer 早已消費此欄）＝**零 reducer 改動**，每場一次。
+//   support — 戰鬥中使用一次（玩家自選時機），為全隊一次性灌注增益，寫進 fieldState.teamStatuses
+//             （複用 M19.d 機制，reducer 早已消費此欄）＝**零 reducer 改動**，每場一次。
 //
 // 本檔為「catalog」（手寫非產生檔），純資料 + 純函式，可單測。零直接傷害（護欄見 partnerSkills.test.ts）。
 
@@ -67,12 +67,9 @@ export const PARTNER_SKILLS: PartnerSkillDef[] = [
       { stat: 'atk', mult: 1.2, turns: 3 },
       { stat: 'spa', mult: 1.2, turns: 3 },
     ],
-    desc: '開戰時為全隊灌注士氣，攻擊與特攻短暫提升 3 回合（每場一次）。',
+    desc: '使出後為全隊灌注士氣，攻擊與特攻短暫提升 3 回合（每場一次）。',
   },
 ]
-
-/** 起始（cost 0）技能 id：開啟模組即預設可用、不需 SP。 */
-export const STARTER_PARTNER_SKILL_IDS: PartnerSkillId[] = PARTNER_SKILLS.filter((s) => s.cost === 0).map((s) => s.id)
 
 /** id → def 的 O(1) 查表（共用 statPatch.createLookup，同 items/abilities/terrains 慣例）。 */
 export const getPartnerSkill = createLookup(PARTNER_SKILLS)
@@ -89,7 +86,7 @@ export function learnedPartnerSkills(learnedIds: readonly string[]): PartnerSkil
   return PARTNER_SKILLS.filter((s) => isPartnerSkillLearned(s.id, learnedIds))
 }
 
-/** support 技能 → 灌注 fieldState.teamStatuses 的 StatusEffect[]（source=-1＝非招式來源、僅供顯示）。 */
+/** support 技能 → 全隊一次性 buff 的 StatusEffect[]（寫 fieldState.teamStatuses；source=-1＝非招式來源、僅供顯示）。 */
 export function teamBuffStatuses(def: PartnerSkillDef): StatusEffect[] {
   if (!def.teamBuff) return []
   return def.teamBuff.map((b) => ({ stat: b.stat, mult: b.mult, remaining: b.turns, source: -1, label: def.name }))

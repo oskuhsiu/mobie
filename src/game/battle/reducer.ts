@@ -411,6 +411,25 @@ function tickStatuses(list: StatusEffect[]): StatusEffect[] {
 }
 
 /**
+ * 把一筆能力值增益併入 status 清單（純函數，回新清單）：同 stat 取 max mult + max remaining
+ * （守 M19.d 硬上限「不疊乘爆表」），否則 append。供 display 層（M17 訓練師加油寫 teamStatuses）共用，
+ * 避免不同來源（怪物變化招 / 玩家技能）對同一 stat 留多筆並存、被 statusDamageMult 連乘超出設計上限。
+ */
+export function upsertStatus(list: StatusEffect[], incoming: StatusEffect): StatusEffect[] {
+  const idx = list.findIndex((s) => s.stat === incoming.stat)
+  if (idx === -1) return [...list, incoming]
+  const cur = list[idx]
+  const merged: StatusEffect = {
+    ...cur,
+    mult: Math.max(cur.mult, incoming.mult),
+    remaining: Math.max(cur.remaining, incoming.remaining),
+    source: incoming.source,
+    label: incoming.label,
+  }
+  return list.map((s, i) => (i === idx ? merged : s))
+}
+
+/**
  * 施放變化招（無傷害）：依 effect.kind 寫入 fieldState 暫態 / 回血 / 設地形。
  * QTE 品質只影響強度（buff 回合數 / heal 量），不影響成敗；buff 同 stat 刷新（取 max mult、不疊乘爆表）。
  * 純函數（只改 working 複本），emit statusApplied 供 display 演出。

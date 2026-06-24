@@ -310,18 +310,18 @@
 > **⚠️ 範圍修訂（2026-06-24）**：M17 = **玩家本人(訓練師)帳號級技能**（看穿/全隊支援/丟道具），**不掛 OwnedUnit**、無 per-creature 上限。
 > 原本掛怪物身上的 buff（鼓舞/守護/疾風/回復/整地）**已下放成怪物變化招 → M19**（plan/17）。怪物招式 loadout/訓練/解鎖**全部移到 M19**。
 > 守純 reducer（看穿走顯示層）、玩家技能無直接傷害、SP 與 M19 共用但分池顯示。
-### M17.a — schema / catalog / persistence 純資料
-- [ ] `game/ext/partnerSkills.ts` `PartnerSkillDef`（mode active/support）+ 起始 catalog（看穿，選配 訓練師加油/丟道具）
-- [ ] 帳號級 slice `mobie.playerskills.v1`（`learnedSkillIds`，**不掛 OwnedUnit**）+ vitest（護欄：無 `damage`、不寫 OwnedUnit）
-### M17.b — 看穿主動鈕（每場一次、純顯示層）
-- [ ] 戰鬥行動列「✨ 夥伴技能 → 🔍 看穿」鈕 → 設 `revealedFoes.add(activeIndex)` + FxCanvas 揭露演出 + 扣每場一次預算（display state，不持久化）
-- [ ] 接 M16 `MobCard`/`HpPlate` 讀 `revealedFoes` 揭露對手深度資訊（**不進 reducer、不耗回合、對手不回擊**）
-### M17.c — （選）全隊級訓練師支援
-- [ ] 開場/一次性 teamBuff 寫 `fieldState`（零 reducer 改動）；或強化既有支援輪盤權重
-### M17.d — SP 取得 + 夥伴技能分頁（與 M19 共用 SP）
-- [ ] SP 錢包 slice `mobie.skillpoints.v1`（帳號級，**M17/M19 共用**）+ wild 區 boss 勝利給 SP（接 `rosterStore`，與 `grantBattleExp` 同處；塔 SP 預留 M11）
-- [ ] `PartnerSkillModal`「✨ 夥伴技能」分頁：花 SP 解鎖玩家技能（→ `mobie.playerskills.v1`）；**與 M19 招式分頁分池顯示**（兩成本表）
-- [ ] `mobie.settings.v1` 加 `modules.partnerSkills` toggle（預設關，關掉零殘留）+ vitest + Chrome CDP
+### M17.a — schema / catalog / persistence 純資料 ✅
+- [x] `game/ext/partnerSkills.ts` `PartnerSkillDef`（mode active/support、cost、reveal、teamBuff）+ 起始 catalog（🔍 看穿 active/reveal cost0 起始、📣 訓練師加油 support/teamBuff SP6）+ 純函式 `getPartnerSkill`（共用 createLookup）/`isPartnerSkillLearned`/`learnedPartnerSkills`/`teamBuffStatuses`
+- [x] 帳號級 slice `mobie.playerskills.v1`（`store/playerSkillsStore.ts`，`learnedSkillIds`，**不掛 OwnedUnit**）+ 7 vitest（護欄：無 damage/OwnedUnit 欄位、teamBuff 皆增益、起始恆習得、store 冪等）
+### M17.b — 看穿主動鈕（每場一次、純顯示層）✅
+- [x] 戰鬥行動列「✨ 夥伴技能」群（模組開+已習得才顯示）「🔍 看穿」鈕 → `revealFoe(foe.activeIndex)` + FxCanvas 揭露演出（flash/ring/spark）+ 每場一次預算（`partnerUsed` component state，不持久化、init 重置）
+- [x] 接 M16 `MobCard`/`HpPlate` 讀 `revealedFoes` 揭露對手深度資訊（**不進 reducer、不耗回合、對手不回擊**——維持 playerChoice 相位）
+### M17.c — （選）全隊級訓練師支援 ✅
+- [x] 訓練師加油（support）→ `battleStore.applyTeamStatuses` 灌注全隊增益到 `field.teamStatuses`（複用 M19.d StatusEffect、reducer 既有消費＝**零 reducer 改動**）+ FX/log；每場一次
+### M17.d — SP 取得 + 夥伴技能分頁（與 M19 共用 SP）✅
+- [x] SP 錢包 `mobie.skillpoints.v1` 與 M19 共用（boss 勝利給 SP 已由 M19.e ResultScreen 提供；塔 SP 走 M11 floorReward）
+- [x] `PartnerSkillModal`「✨ 夥伴技能」分頁（Title 入口）：花 SP 解鎖玩家技能（→ `mobie.playerskills.v1`）；**與 M19 招式分頁分池顯示**（兩 modal/兩成本表）；模組關時可瀏覽+提示去設定
+- [x] `mobie.settings.v1` 加 `modules.partnerSkills` toggle（預設關、非 seam 模組不入 MODULE_REGISTRY、同 tower 慣例）+ SettingsModal MODULE_META；Chrome CDP（ON：SP20→14 解鎖、看穿揭露對手 3 招、加油全隊提升、零 error／OFF：無夥伴鈕零殘留、零 error）
 
 ## M18 — 全面改名 → Mobie（取代並擴大 M15；見 `20`；**⚠️ 執行序提前到最先做**）
 > **分類精準改名，不是一鍵 find-replace。** **改排「先做」（2026-06-24 使用者拍板）**：M19/M16/M11 之前先改名，

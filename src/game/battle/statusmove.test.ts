@@ -127,3 +127,43 @@ describe('M19.d 變化招', () => {
     expect(gStatus).toBeLessThan(gAtk) // 但少於攻擊招
   })
 })
+
+// M17 訓練師加油（玩家技能）寫 teamStatuses 走 upsertStatus：同 stat 取 max、不與變化招連乘。
+import { upsertStatus } from './reducer'
+
+describe('M17 upsertStatus（玩家技能 / 變化招共用的同 stat 合併規則）', () => {
+  const eff = (stat: StatusEffect['stat'], mult: number, remaining = 3, source = -1): StatusEffect =>
+    ({ stat, mult, remaining, source, label: 'x' })
+
+  it('空清單 → append', () => {
+    expect(upsertStatus([], eff('atk', 1.2))).toEqual([eff('atk', 1.2)])
+  })
+
+  it('不同 stat → 並存（各自一筆）', () => {
+    const list = upsertStatus(upsertStatus([], eff('atk', 1.2)), eff('spa', 1.2))
+    expect(list.map((s) => s.stat).sort()).toEqual(['atk', 'spa'])
+  })
+
+  it('同 stat → 取 max mult + max remaining，不新增第二筆（守硬上限不疊乘）', () => {
+    let list = upsertStatus([], eff('atk', 1.5, 4)) // 既有較強較長
+    list = upsertStatus(list, eff('atk', 1.2, 3)) // 加油較弱較短
+    expect(list).toHaveLength(1)
+    expect(list[0].mult).toBe(1.5)
+    expect(list[0].remaining).toBe(4)
+  })
+
+  it('加油（atk×1.2）疊在變化招（atk×1.5）上不連乘成 1.8', () => {
+    const moveBuff = eff('atk', 1.5)
+    const rally = eff('atk', 1.2)
+    const merged = upsertStatus([moveBuff], rally)
+    // 連乘所有同 stat 偏置（複刻 statusDamageMult 的算法）應＝1.5 而非 1.8
+    const product = merged.filter((s) => s.stat === 'atk').reduce((m, s) => m * s.mult, 1)
+    expect(product).toBe(1.5)
+  })
+
+  it('純函數：不就地改原清單', () => {
+    const orig = [eff('atk', 1.2)]
+    upsertStatus(orig, eff('atk', 1.9))
+    expect(orig[0].mult).toBe(1.2)
+  })
+})
