@@ -6,7 +6,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 
 > This is a hobby project for personal use. It bundles **no copyrighted assets** — artwork is loaded
 > at runtime from official PokéAPI URLs, audio is procedurally synthesized, and any 3D models are
-> user-supplied drop-ins. See `uninstall.txt`.
+> user-supplied drop-ins. Pokémon and all related marks/data are the property of their respective
+> owners; this project is non-commercial and unaffiliated — see **[ATTRIBUTION.md](ATTRIBUTION.md)**.
+> See also `uninstall.txt`.
 
 ## Features
 

@@ -16,6 +16,13 @@ truth and reference them instead of re-deriving.
   domain events that `BattleScreen` plays out. Persist only canonical `OwnedUnit` — never derived/RNG state.
 - **Performance red-line:** high-frequency values (QTE pointer, future MediaPipe coords) go through
   refs/rAF/DOM/Zustand, never React top-level state.
+- **Move system is now MULTI-MOVE (Pokémon-style), not single-move.** Earlier docs (plan/09–12, code
+  comments) say 「單招街機 / 每隻單一專屬招」— **that constraint was relaxed by the user (2026-06-24; M19,
+  see `plan/17-mobie-multimove-skills.md`).** Each mobie has up to 4 equipped moves from a species learnset
+  (learn/forget, capped); identity is carried by the single **star-strike finisher**. **Still invariant:**
+  the arcade resolves **one `ATTACK` action per turn** (player picks a slot → QTE), the reducer stays pure
+  (`slotIndex` in, `resolvedMoveId` out), and passive/auto effects stay in the **ability** system (M7),
+  not in move slots. Treat `plan/17` as the current truth over older 單招 wording.
 
 ## Workflow expectations (user preferences)
 

@@ -279,7 +279,7 @@
 
 ## M15 — 收尾改名 mobie（🏁 所有里程碑完成後才做；依賴 M1–M14 全綠）
 > **⚠️ 已併入 M18（取代並擴大）**：使用者要求改名擴大為「含檔名/內容/key 遷移/.save 相容」的精準全面改名，
-> 本輕量版（保留 mz.* key、只改品牌字）由 **M18** 取代。完整規格見 `plan/16` §M18，下列子項保留作對照。
+> 本輕量版（保留 mz.* key、只改品牌字）由 **M18** 取代。完整規格見 `plan/20`，下列子項保留作對照。
 > **mobie＝「小怪物」之意**。把專案 / app 識別正式改名（repo、套件、app 品牌）並定名。
 > **守則：不破壞既有存檔**——persistence key（`mz.*` localStorage / `mz-*` IndexedDB）若改名會孤立既有存檔，
 > 自用單人**建議保留現有 key 前綴**（只改顯示品牌），或寫一次性遷移；存檔檔案 `<profileName>.save` 不受影響。
@@ -290,7 +290,11 @@
 - [ ] persistence key 決策：**保留 `mz.*`/`mz-*`（不破壞既有存檔）** 或寫遷移；二選一明文記錄
 - [ ] 驗證：typecheck/build/test 全綠、Chrome CDP 跑通、PWA 重裝顯示新名、**既有存檔仍可載入**
 
-## M16 — Mobie 資訊卡（檢視自己＋對手；見 `16` §M16）
+> **⚠️ 執行順序（2026-06-24 使用者拍板「先改名」）**：下列里程碑按編號排列，但**實際執行序為
+> M18（改名，先）→ M19（多招式）→ M16（資訊卡）→ M11（模式長線）**。理由：改名影響後期所有資料命名，
+> 現在程式碼/key 最少、成本最低；新碼天生用對命名。M17 順位其後，M20（DQ）已棄置。
+
+## M16 — Mobie 資訊卡（檢視自己＋對手；見 `16`）
 > 修「戰鬥中看不到自己夥伴的型別/技能/數值」痛點。**純 UI／顯示層，不動 reducer/engine/持久化。**
 > 自己一律全顯；對手基本面（名稱/型別/Lv）顯示、深度（招式/數值/IV 星級）遮罩 → 留給 M17 看穿揭露。
 ### M16.a — MobCard 元件
@@ -303,7 +307,7 @@
 - [ ] CardSelect 點自己 `poke-card` → 全卡、點 `foe-strip__mon` → 對手卡（保留既有點選出戰手感，開卡走 ⓘ/長按）
 - [ ] Chrome CDP：各畫面開卡零 console error；typecheck/test/build 全綠
 
-## M17 — Partner 技能系（**修訂：純玩家/訓練師技能**；見 `16` §M17）
+## M17 — Partner 技能系（**修訂：純玩家/訓練師技能**；見 `19`）
 > **⚠️ 範圍修訂（2026-06-24）**：M17 = **玩家本人(訓練師)帳號級技能**（看穿/全隊支援/丟道具），**不掛 OwnedUnit**、無 per-creature 上限。
 > 原本掛怪物身上的 buff（鼓舞/守護/疾風/回復/整地）**已下放成怪物變化招 → M19**（plan/17）。怪物招式 loadout/訓練/解鎖**全部移到 M19**。
 > 守純 reducer（看穿走顯示層）、玩家技能無直接傷害、SP 與 M19 共用但分池顯示。
@@ -320,8 +324,9 @@
 - [ ] `PartnerSkillModal`「✨ 夥伴技能」分頁：花 SP 解鎖玩家技能（→ `mobie.playerskills.v1`）；**與 M19 招式分頁分池顯示**（兩成本表）
 - [ ] `mobie.settings.v1` 加 `modules.partnerSkills` toggle（預設關，關掉零殘留）+ vitest + Chrome CDP
 
-## M18 — 全面改名 → Mobie（取代並擴大 M15；見 `16` §M18）
-> **分類精準改名，不是一鍵 find-replace。** 放 M16/M17 之後做（機械式大改動，避免衝突 merge）。
+## M18 — 全面改名 → Mobie（取代並擴大 M15；見 `20`；**⚠️ 執行序提前到最先做**）
+> **分類精準改名，不是一鍵 find-replace。** **改排「先做」（2026-06-24 使用者拍板）**：M19/M16/M11 之前先改名，
+> 新碼天生用對命名、key 遷移趁早（現僅 7 個 key）。M18.e repo 目錄改名由使用者執行（動到工作目錄絕對路徑）。
 > **⚠️ 絕不可改**：`artwork()` helper / gen_dex 的 `raw.githubusercontent.com/PokeAPI/.../pokemon/...` URL、外部服務名 `PokéAPI`、物種 zh-Hant 正典名。
 ### M18.a — 程式識別符＋檔名
 - [ ] 型別/函式/元件/變數：`BattlePokemon`→`BattleMobie`、`buildBattlePokemon`→`buildBattleMobie`、`pokemon`→`mobie`（src 約 137 處/32 檔，扣除不可改 URL）
@@ -358,7 +363,8 @@
 - [ ] gen_dex 抓 PokéAPI level-up learnset 降維映射到精簡招式池（+變化招池）、重產 species.ts/moves.ts（向後相容 slot0）
 - [ ] `simulation.test.ts` 納入多招式 + AI 選招壓力（HP 邊界/無 NaN/終局/決定論）+ Chrome CDP 全 loop
 
-## M20 — DQ 魔物來源（第二 mobie 來源，可開關；見 `18`）
+## M20 — DQ 魔物來源（第二 mobie 來源，可開關；見 `18`）⛔ 棄置／不執行
+> **⛔ 棄置（2026-06-24，使用者拍板）：「當前要先棄置，因為沒有官方 API。」** DQ 無 PokéAPI 式合法資料/圖床來源，整個 M20 暫不執行；保留規劃供日後（若出現合法官方 API）重啟。不影響 M19。
 > 資料比照 Pokémon 從 wiki/攻略抓取（數值是事實、低風險）；**美術≠Pokémon——無合法圖床，走 drop-in/placeholder、絕不熱連結版權圖**。
 > 對映既有 18 型相剋 + M19 招式，引擎零分叉。設定可開關（預設關）。M20.d 依賴 M19。
 ### M20.a — 多來源抽象

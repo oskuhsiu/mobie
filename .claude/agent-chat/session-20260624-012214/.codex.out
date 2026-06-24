@@ -1,0 +1,3 @@
+A/C 我同意，但 SP 單一經濟要加一個平衡護欄：Mobie 招式訓練與 Partner 技能可共用 SP 來源，但 UI 和成本曲線要分池顯示，避免玩家誤以為兩者是同一類能力；資料上仍只持久化 `learnedMoveIds/equippedMoveIds` 很乾淨。B 我選「輕量 QTE 決定效果強度」，但強度必須有硬上限且只影響幅度/回合數，不影響是否成功，避免變化招因 QTE 失敗變成廢回合，也避免 buff 鏈爆表。整體結論可收斂：4 槽 Mobie 招式含攻擊/變化，Partner 留給帳號級 trainer kit，星擊承擔身分，非戰鬥學忘，戰鬥仍單 action reducer。
+
+STATUS: AGREE
