@@ -360,9 +360,9 @@
 ### M19.e — 招式訓練所 + SP 經濟 ✅
 - [x] `mobie.skillpoints.v1`（`skillPointsStore`，帳號級，與 M17 共用、UI 分池）+ boss SP 獎勵（ResultScreen：野外 boss 2+lv/10、競技場 1；塔 SP 預留 M11）+ 招式訓練所「📖 招式」modal（學新招花 SP〔teachable 未學、依威力 tier 計價〕/ 調出戰 loadout〔點切換、上限 4 至少留 1〕，與 Partner 分池）；rosterStore `learnMove`/`setEquippedMoves`、learnset `effectiveLearnedMoves`/`newlyLearned`/`teachableNotLearned`
 - [x] 升級自動領悟（`grantBattleExp` 同種族 union learnedMoveIds + `lastMoveLearns` 追蹤）+ 7 vitest；CDP（Lv.20 妙蛙種子→招式所→學瞑想 SP10→8、loadout 上限 4 強制、零 error）。**「憶/忘」併入 loadout 點切換；moveLearned 結算提示 UI 留 follow-up**
-### M19.f — gen_dex 學習表產生 + 平衡
-- [ ] gen_dex 抓 PokéAPI level-up learnset 降維映射到精簡招式池（+變化招池）、重產 species.ts/moves.ts（向後相容 slot0）
-- [ ] `simulation.test.ts` 納入多招式 + AI 選招壓力（HP 邊界/無 NaN/終局/決定論）+ Chrome CDP 全 loop
+### M19.f — gen_dex 學習表產生 + 平衡 ✅
+- [x] gen_dex `buildLearnset`（slot0@L1 + 各屬性 3 tier 攻擊招依 PokéAPI **真實 level-up 級數分位** + 變化招回復/攻防取向增益）/`buildTeachable`（型別全 tier + 全變化招）→ emit `learnset`/`teachableMoveIds` 進 species.ts（重產**只動 species.ts**，moves/regions/playerCards 確定性不變；向後相容 slot0）；運行時 learnsetOf/teachableOf 改走產生檔（deriveLearnset 留 fallback）
+- [x] `simulation.test.ts` 玩家攻擊帶隨機 slotIndex（多招式 + 變化招 + AI 選招壓力，HP 邊界/無 NaN/終局/決定論皆不破）+ Chrome CDP 全 loop（預設 roster data-driven learnset 打完整場到結算、零 error）
 
 ## M20 — DQ 魔物來源（第二 mobie 來源，可開關；見 `18`）⛔ 棄置／不執行
 > **⛔ 棄置（2026-06-24，使用者拍板）：「當前要先棄置，因為沒有官方 API。」** DQ 無 PokéAPI 式合法資料/圖床來源，整個 M20 暫不執行；保留規劃供日後（若出現合法官方 API）重啟。不影響 M19。
