@@ -6,6 +6,8 @@ import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
+import { interactModeOf, INTENSITY_BY_MODE } from '@/game/settings'
+import { SwipeThrow, CircleSeal } from '@/ui/components/CaptureGestures'
 import { useSkillPoints } from '@/store/skillPointsStore'
 import { useAccidents } from '@/store/accidentStore'
 import { useRun } from '@/store/runStore'
@@ -35,7 +37,7 @@ function Pokeball({ size = 64, color = '#ff5161' }: { size?: number; color?: str
   )
 }
 
-type Stage = 'throw' | 'wobble' | 'result'
+type Stage = 'aim' | 'throw' | 'wobble' | 'seal' | 'result'
 
 function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
   const { context } = useGame()
@@ -47,27 +49,61 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
   // 捕獲球輪盤：轉出球種 → 套捕獲率係數（M11 幸運捕獲球 captureMult 加成）
   const ball = useRef(getBall(rollBall()))
   const captureMult = useAccidents.getState().captureMult
+  // 捕獲命中：掛載時 Math.random 預先決定。M22 手勢只決定演出，**此處一字不動、絕不改機率**。
   const success = useRef<boolean>(
     wild ? Math.random() < captureChanceWithBall(wild, ball.current.mult * captureMult) : false,
   )
-  const [stage, setStage] = useState<Stage>('throw')
+  // M22 捕獲增強互動 mode（off＝現狀一字不差）。掛載時讀一次，戰中不變。
+  const capMode = useMemo(() => interactModeOf(useSettings.getState().settings, 'capture'), [])
+  const enhanced = capMode !== 'off'
+
+  const [stage, setStage] = useState<Stage>(enhanced ? 'aim' : 'throw')
+  const [sealRound, setSealRound] = useState(0) // 「再搏一下」純演出寬限：最多重畫一次
+  const finishedRef = useRef(false)
   // onCaptured 走 ref：結算時 roster 更新會讓父層 re-render（onCaptured 重建），
   // 計時器 effect 必須只跑一次、且不因依賴變動被 cleanup 清掉，否則會卡在 throw 階段。
   const onCapturedRef = useRef(onCaptured)
   onCapturedRef.current = onCaptured
 
-  useEffect(() => {
-    const t1 = setTimeout(() => setStage('wobble'), 650)
-    const t2 = setTimeout(() => {
-      setStage('result')
-      if (success.current) audio.play('capture')
-      onCapturedRef.current(success.current)
-    }, 2500)
-    return () => { clearTimeout(t1); clearTimeout(t2) }
+  // 揭曉（只跑一次）：caught 預先決定，這裡只演出收尾 + 通知父層。
+  const reveal = useCallback(() => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    setStage('result')
+    if (success.current) audio.play('capture')
+    onCapturedRef.current(success.current)
   }, [])
+
+  // off：維持原自動流程（throw→wobble@650→result@2500），DOM 不出現任何手勢 wrapper（零回歸）。
+  useEffect(() => {
+    if (enhanced) return
+    const t1 = setTimeout(() => setStage('wobble'), 650)
+    const t2 = setTimeout(() => reveal(), 2500)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
+  }, [enhanced, reveal])
+
+  // 增強：丟球後自動推進（lite 直接 wobble→reveal；arcade 進 seal 由畫圈推進）。
+  useEffect(() => {
+    if (!enhanced) return
+    if (stage === 'throw') {
+      const t = setTimeout(() => setStage(capMode === 'arcade' ? 'seal' : 'wobble'), 600)
+      return () => clearTimeout(t)
+    }
+    if (stage === 'wobble') {
+      const t = setTimeout(() => reveal(), 1500)
+      return () => clearTimeout(t)
+    }
+  }, [enhanced, stage, capMode, reveal])
+
+  // 畫圈封印完成：注定逃脫時給一次「再搏一下」（純演出、不改 caught），否則揭曉。
+  const onSealed = useCallback(() => {
+    if (!success.current && sealRound === 0) { setSealRound(1); return }
+    reveal()
+  }, [sealRound, reveal])
 
   if (!wild) return null
   const caught = success.current
+  const wobbling = stage === 'wobble' || stage === 'seal'
 
   return (
     <div className="center" style={{ flex: 1, gap: 18 }}>
@@ -93,19 +129,34 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
             style={{ position: 'absolute', left: '50%', top: '38%', x: '-50%' }}
             initial={{ y: 160, scale: 0.4, opacity: 0, rotate: -40 }}
             animate={
-              stage === 'throw'
-                ? { y: 0, scale: 1, opacity: 1, rotate: 0 }
-                : stage === 'wobble'
-                  ? { rotate: [0, -18, 16, -12, 8, 0], y: 0, scale: 1, opacity: 1 }
-                  : { y: 0, scale: 1, opacity: 1 }
+              stage === 'aim'
+                ? { y: 128, scale: 0.82, opacity: 1, rotate: 0 }
+                : stage === 'throw'
+                  ? { y: 0, scale: 1, opacity: 1, rotate: 0 }
+                  : wobbling
+                    ? { rotate: [0, -18, 16, -12, 8, 0], y: 0, scale: 1, opacity: 1 }
+                    : { y: 0, scale: 1, opacity: 1 }
             }
-            transition={stage === 'wobble'
-              ? { duration: 1.6, times: [0, 0.2, 0.45, 0.65, 0.85, 1] }
+            transition={wobbling
+              ? { duration: 1.6, times: [0, 0.2, 0.45, 0.65, 0.85, 1], repeat: stage === 'seal' ? Infinity : 0 }
               : { type: 'spring', stiffness: 140, damping: 12 }}
           >
             <Pokeball size={72} color={ball.current.color} />
           </motion.div>
         ) : null}
+
+        {/* M22 增強互動手勢 overlay（off 不渲染＝DOM 零新增 wrapper） */}
+        {enhanced && stage === 'aim' && (
+          <SwipeThrow mode={capMode} onThrow={() => setStage('throw')} />
+        )}
+        {enhanced && stage === 'seal' && (
+          <CircleSeal
+            key={sealRound}
+            targetRad={INTENSITY_BY_MODE.arcade.circleTargetRad}
+            onSealed={onSealed}
+            label={sealRound === 0 ? '✦ 畫圈封印！' : '差一點…再搏一下！'}
+          />
+        )}
 
         {/* 收服成功星光 */}
         <AnimatePresence>
