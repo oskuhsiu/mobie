@@ -49,14 +49,14 @@ describe('matchCombo（純配對）', () => {
 })
 
 describe('合體技 reducer 整合', () => {
-  it('連鎖提交火＋水 → comboCast（enemyDebuff）+ usedComboKeys + 合成大招傷害', () => {
+  it('連鎖提交火＋水 → comboCast（infuseTerrain 蒸氣）+ usedComboKeys + 合成大招傷害', () => {
     const s = full(createBattleState([fireMon(), waterMon(), plainMon()], [tank(), tank(), tank()]))
     const { nextState, events } = resolveTurn(s, { type: 'SUBMIT_CHAIN_RESULT', hits: HITS }, { rng: RNG, ext: comboExt() })
     const cast = events.find((e) => e.type === 'comboCast')
-    expect(cast).toMatchObject({ type: 'comboCast', key: 'steam-burst', castKind: 'enemyDebuff' })
+    expect(cast).toMatchObject({ type: 'comboCast', key: 'steam-burst', castKind: 'infuseTerrain' })
     expect(nextState.usedComboKeys).toContain('steam-burst')
-    // enemyDebuff 寫進 enemyStatuses + 展示標記
-    expect(nextState.field.enemyStatuses.some((st) => st.stat === 'atk' && st.mult < 1)).toBe(true)
+    // infuseTerrain 改 current 地形 + 展示標記
+    expect(nextState.field.terrainEffects.current).toContain('steam')
     expect(nextState.field.comboCastEffects.some((m) => m.key === 'steam-burst')).toBe(true)
     // 合成大招（source=combo-…）多一次 damageApplied
     expect(events.some((e) => e.type === 'damageApplied' && e.attackerSide === 'player')).toBe(true)

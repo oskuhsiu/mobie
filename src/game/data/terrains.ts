@@ -32,6 +32,20 @@ export const TERRAINS: TerrainDef[] = [
   { id: 'sandstorm', name: '沙暴', icon: '🏜️', mods: { rock: 1.2, ground: 1.2, steel: 1.1, water: 0.8 } },
   { id: 'snowfield', name: '雪原', icon: '❄️', mods: { ice: 1.4, water: 1.1, grass: 0.8, fire: 0.7 } },
   { id: 'flowerfield', name: '花海', icon: '🌸', mods: { fairy: 1.3, grass: 1.2, bug: 1.1, poison: 0.8 } },
+  // ── M13 內容階段 1：天氣型地形（plan/13 §2.2，本傳 weather）──
+  { id: 'sunny', name: '晴天', icon: '☀️', mods: { fire: 1.5, grass: 1.1, water: 0.6, ice: 0.85 } },
+  { id: 'rain', name: '雨天', icon: '🌧️', mods: { water: 1.5, electric: 1.1, fire: 0.6 } },
+  { id: 'fog', name: '濃霧', icon: '🌫️', mods: { ghost: 1.2, dark: 1.2, normal: 0.9, flying: 0.85 } },
+  { id: 'strong-winds', name: '強風', icon: '🌪️', mods: { flying: 1.3, dragon: 1.1, ground: 0.8, rock: 0.85 } },
+  // ── M13 內容階段 2：場地型地形（plan/13 §2.3，本傳 terrain）──
+  { id: 'grassy-field', name: '草地場', icon: '🌱', mods: { grass: 1.3, ground: 0.85 } },
+  { id: 'electric-field', name: '電氣場', icon: '🔌', mods: { electric: 1.3, dragon: 0.9 } },
+  { id: 'psychic-field', name: '精神場', icon: '🔮', mods: { psychic: 1.3 } },
+  { id: 'misty-field', name: '薄霧場', icon: '🌸', mods: { fairy: 1.3, dragon: 0.5 } },
+  // ── M13 內容階段 3：特殊型地形（plan/13 §2.3 + 合體技灌注）──
+  { id: 'swamp', name: '沼澤', icon: '🪻', mods: { ground: 1.2, water: 1.2, poison: 1.1, fire: 0.8, flying: 0.85 } },
+  { id: 'steam', name: '蒸氣', icon: '♨️', mods: { fire: 1.2, water: 1.2, ice: 0.8 } },
+  { id: 'holy-ground', name: '聖域', icon: '✨', mods: { psychic: 1.2, fairy: 1.2, dark: 0.7, ghost: 0.8 } },
   { id: 'neutral', name: '中性', icon: '⬜', mods: {} },
 ]
 

@@ -103,3 +103,27 @@ describe('resolveBattleTerrains — 依 region 解析開場地形', () => {
     expect(resolveBattleTerrains({ mode: 'wild' }, 's')).toEqual([])
   })
 })
+
+describe('M13 地形擴充（天氣/場地/特殊型）', () => {
+  const NEW_IDS: TerrainId[] = ['sunny', 'rain', 'fog', 'strong-winds', 'grassy-field', 'electric-field', 'psychic-field', 'misty-field', 'swamp', 'steam', 'holy-ground']
+  it('新地形皆可查、有名稱/圖示/mods', () => {
+    for (const id of NEW_IDS) {
+      const d = lookupTerrain(id)
+      expect(d).toBeTruthy()
+      expect(d!.name.length).toBeGreaterThan(0)
+      expect(d!.icon.length).toBeGreaterThan(0)
+    }
+  })
+  it('晴天火↑水↓、雨天水↑火↓（代表性數值）', () => {
+    expect(resolveTerrainMult('fire', ['sunny'])).toBeGreaterThan(1)
+    expect(resolveTerrainMult('water', ['sunny'])).toBeLessThan(1)
+    expect(resolveTerrainMult('water', ['rain'])).toBeGreaterThan(1)
+    expect(resolveTerrainMult('fire', ['rain'])).toBeLessThan(1)
+  })
+  it('蒸氣（合體灌注）火/水皆↑、夾上限仍 ≤1.5', () => {
+    expect(resolveTerrainMult('fire', ['steam'])).toBeGreaterThan(1)
+    expect(resolveTerrainMult('water', ['steam'])).toBeGreaterThan(1)
+    // 混合 steam+rain 對 water 逐屬性相乘後仍夾 1.5
+    expect(resolveTerrainMult('water', ['steam', 'rain'])).toBeLessThanOrEqual(1.5)
+  })
+})

@@ -38,6 +38,12 @@ export type TerrainId =
   | 'grassland' | 'volcanic' | 'coastal' | 'stormfield' | 'cavern'
   | 'haunt' | 'mystic' | 'dragons-peak' | 'sandstorm' | 'snowfield'
   | 'flowerfield' | 'neutral'
+  // M13 內容階段 1：天氣型（plan/13 §2.2）
+  | 'sunny' | 'rain' | 'fog' | 'strong-winds'
+  // M13 內容階段 2：場地型（plan/13 §2.3）
+  | 'grassy-field' | 'electric-field' | 'psychic-field' | 'misty-field'
+  // M13 內容階段 3：特殊型（plan/13 §2.3）
+  | 'swamp' | 'steam' | 'holy-ground'
 
 /** 性格 id（0–24），對應 individual.ts 的 NATURES 表 */
 export type NatureId = number

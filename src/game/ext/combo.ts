@@ -37,7 +37,7 @@ export interface ComboDef {
  * 數值為示意、待玩測平衡。地形只引用既有 data/terrains.ts 的 id（不新增地形）。
  */
 export const COMBO_DEFS: ComboDef[] = [
-  { id: 'steam-burst', name: '蒸氣爆破', icon: '♨️', requires: { typePair: ['fire', 'water'] }, power: 2.6, cast: { kind: 'enemyDebuff', stat: 'atk', mult: 0.7, turns: 3 } },
+  { id: 'steam-burst', name: '蒸氣爆破', icon: '♨️', requires: { typePair: ['fire', 'water'] }, power: 2.6, cast: { kind: 'infuseTerrain', terrainId: 'steam', turns: 4 } },
   { id: 'verdant-surge', name: '青翠奔流', icon: '🌿', requires: { typePair: ['grass', 'water'] }, power: 2.4, cast: { kind: 'infuseTerrain', terrainId: 'grassland', turns: 4 } },
   { id: 'thunderstorm', name: '雷暴連擊', icon: '⛈️', requires: { typePair: ['electric', 'water'] }, power: 2.5, cast: { kind: 'infuseTerrain', terrainId: 'stormfield', turns: 4 } },
   { id: 'magma-quake', name: '熔岩震', icon: '🌋', requires: { typePair: ['fire', 'ground'] }, power: 2.6, cast: { kind: 'infuseTerrain', terrainId: 'volcanic', turns: 4 } },
