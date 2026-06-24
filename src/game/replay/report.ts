@@ -4,7 +4,7 @@
 
 import type { BattleEvent, Side } from '@/game/battle/reducer'
 import { getBall, type BallId } from '@/game/battle/engine'
-import { getMove } from '@/game/data/moves'
+import { findMove } from '@/game/data/moves'
 import type { ReplayLog, DisplayUnitSnapshot } from './types'
 
 /** 投影上下文：把 `${side}:${index}` 解析成顯示名。 */
@@ -28,7 +28,7 @@ export function makeReportCtx(snapshot: DisplayUnitSnapshot[]): ReportCtx {
   }
 }
 
-const moveName = (id?: number): string => (id ? getMove(id).nameZh : '招式')
+const moveName = (id?: number): string => (id ? findMove(id)?.nameZh ?? `招式#${id}` : '招式')
 
 function renderDamage(ev: Extract<BattleEvent, { type: 'damageApplied' }>, ctx: ReportCtx): string {
   const attacker = ctx.nameOf(ev.attackerSide, ev.attackerIndex)

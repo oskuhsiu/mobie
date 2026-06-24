@@ -70,3 +70,8 @@ export function getMove(id: number): Move {
   if (!m) throw new Error(`Unknown move id: ${id}`)
   return m
 }
+
+/** 安全查招：未知 id 回 undefined（不丟例外）。回放戰報等「不可崩」路徑用。 */
+export function findMove(id: number): Move | undefined {
+  return MOVES[id]
+}

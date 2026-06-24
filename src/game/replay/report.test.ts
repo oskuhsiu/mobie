@@ -70,6 +70,11 @@ describe('report — 逐 handler 投影中文', () => {
   it('未知 variant 安全回退 [type]', () => {
     expect(line({ type: 'comboCast' } as unknown as BattleEvent)).toBe('[comboCast]')
   })
+
+  it('未知 resolvedMoveId 不丟例外、回退招式#id（回放不可崩）', () => {
+    const s = line({ type: 'damageApplied', attackerSide: 'player', attackerIndex: 0, targetSide: 'foe', targetIndex: 0, amount: 5, missed: false, crit: false, effectiveness: 1, effectivenessText: null, hpBefore: 36, hpAfter: 31, maxHp: 36, resolvedMoveId: 999999 })
+    expect(s).toContain('招式#999999')
+  })
 })
 
 describe('report — logToReport 全場', () => {
