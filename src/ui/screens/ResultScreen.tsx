@@ -8,6 +8,8 @@ import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
 import { useAccidents } from '@/store/accidentStore'
+import { useRun } from '@/store/runStore'
+import { floorReward, towerExpMult, isBossFloor, getAscension } from '@/game/tower'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
@@ -182,11 +184,44 @@ function ArenaWinView() {
   )
 }
 
+/** M11 連勝塔結算畫面：突破/敗北 + 樓層 + 難度階；無捕獲。 */
+function TowerView({ isWin }: { isWin: boolean }) {
+  const { context } = useGame()
+  const t = context.tower!
+  const lead = useMemo(() => (context.playerTeam[0] ? buildBattleMobie(context.playerTeam[0]) : null), [context.playerTeam])
+  const asc = getAscension(t.ascension)
+  useEffect(() => { audio.play(isWin ? 'victory' : 'defeat') }, [isWin])
+  return (
+    <div className="center" style={{ flex: 1, gap: 14 }}>
+      <motion.div className="eyebrow" style={{ color: isWin ? 'var(--good)' : 'var(--bad)' }}
+        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>🗼 連勝塔 · {asc.name}</motion.div>
+      {lead && (
+        <motion.div style={{ width: 'min(48vw,200px)', height: 'min(48vw,200px)' }}
+          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 140, damping: 13 }}>
+          <MobieSprite src={lead.artworkUrl} alt={lead.nameZh} />
+        </motion.div>
+      )}
+      {isWin ? (
+        <>
+          <div className="h-title" style={{ fontSize: 28 }}>第 {t.floor} 層突破！{isBossFloor(t.floor) ? ' 🏆 BOSS' : ''}</div>
+          <div className="h-sub">繼續攻向第 {t.floor + 1} 層，或見好就收結算。</div>
+        </>
+      ) : (
+        <>
+          <div className="h-title" style={{ fontSize: 28 }}>遠征結束 · 到達第 {t.floor} 層</div>
+          <div className="h-sub">已結算本場經驗與 SP。下次挑戰更高樓層！</div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function ResultScreen() {
   const { context, send } = useGame()
   const isWin = context.outcome === 'win'
-  // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場勝利不進捕獲流程。
-  const canCapture = isWin && canCaptureIn(context.regionId)
+  const tower = context.tower
+  // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場/連勝塔勝利不進捕獲流程。
+  const canCapture = isWin && !tower && canCaptureIn(context.regionId)
   const [captureDone, setCaptureDone] = useState(!canCapture)
 
   // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
@@ -200,22 +235,31 @@ export function ResultScreen() {
   useEffect(() => {
     if (!context.outcome || grantedRef.current) return
     grantedRef.current = true
-    // 圖鑑/成就：勝利依 mode 計數；進化在 grant 完成（lastEvolutions 寫入）後登錄
-    if (isWin) useMeta.getState().recordWin(canCaptureIn(context.regionId) ? 'wild' : 'arena')
-    // M19.e SP 經濟：勝利給技能點（野外 boss 依等級多給、競技場固定 1）；供招式訓練所/夥伴技能（M17）共用
+    // 圖鑑/成就：勝利依 mode 計數（塔戰算 arena 純戰鬥）；進化在 grant 完成後登錄
+    if (isWin) useMeta.getState().recordWin(!tower && canCaptureIn(context.regionId) ? 'wild' : 'arena')
+    // SP 經濟：塔→樓層獎勵（boss 加碼）；野外 boss→依等級；競技場→1
     if (isWin) {
-      const bossLevel = context.foeTeam[context.foeTeam.length - 1]?.level ?? 1
-      const spReward = canCaptureIn(context.regionId) ? Math.max(1, 2 + Math.floor(bossLevel / 10)) : 1
+      let spReward: number
+      if (tower) spReward = floorReward(tower.floor, tower.ascension).sp
+      else {
+        const bossLevel = context.foeTeam[context.foeTeam.length - 1]?.level ?? 1
+        spReward = canCaptureIn(context.regionId) ? Math.max(1, 2 + Math.floor(bossLevel / 10)) : 1
+      }
       useSkillPoints.getState().add(spReward)
+    }
+    // M11 連勝塔 meta：記錄到達樓層（勝＝清掉本樓、敗＝清到前一樓）；清 boss 樓解鎖下一難度階
+    if (tower) {
+      useRun.getState().recordFloor(isWin ? tower.floor : tower.floor - 1)
+      if (isWin && isBossFloor(tower.floor)) useRun.getState().unlockAscension(tower.ascension + 1)
     }
     // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
     useIncubator.getState().advance(isWin ? 2 : 1)
-    // M11 幸運加碼 / 補給經驗符：勝利經驗倍率（expMult）；敗北維持部分比例
-    const expMult = useAccidents.getState().expMult
+    // 經驗倍率：塔→towerExpMult(樓層)；野外→幸運加碼/補給符 expMult；敗北維持部分比例
+    const winMult = tower ? towerExpMult(tower.floor) : useAccidents.getState().expMult
     void grantBattleExp(
       context.playerTeam.map((c) => c.cardId),
       context.foeTeam.map((c) => c.level),
-      isWin ? expMult : LOSS_EXP_RATIO,
+      isWin ? winMult : LOSS_EXP_RATIO,
       postGrowth,
     ).then(() => {
       const evos = useRoster.getState().lastEvolutions
@@ -253,11 +297,13 @@ export function ResultScreen() {
 
   return (
     <div className="col" style={{ flex: 1 }}>
-      {canCapture
-        ? <WinView onCaptured={onCaptured} />
-        : isWin
-          ? <ArenaWinView />
-          : <LoseView />}
+      {tower
+        ? <TowerView isWin={isWin} />
+        : canCapture
+          ? <WinView onCaptured={onCaptured} />
+          : isWin
+            ? <ArenaWinView />
+            : <LoseView />}
 
       {dupConverted && (
         <motion.div className="dup-note" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -282,12 +328,27 @@ export function ResultScreen() {
         {captureDone && !showEvo && (
           <motion.div className="row center" style={{ gap: 12, justifyContent: 'center', paddingTop: 8 }}
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <button className="btn" onClick={() => send({ type: 'PLAY_AGAIN' })}>
-              🔄 再戰一場
-            </button>
-            <button className="btn btn--ghost" onClick={() => send({ type: 'TO_REGIONS' })}>
-              🗺 回到區域
-            </button>
+            {tower ? (
+              <>
+                {isWin && (
+                  <button className="btn" onClick={() => send({ type: 'TOWER_CONTINUE' })}>
+                    ⬆ 攻向第 {tower.floor + 1} 層
+                  </button>
+                )}
+                <button className="btn btn--ghost" onClick={() => send({ type: 'TOWER_QUIT' })}>
+                  🏳 結束遠征
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="btn" onClick={() => send({ type: 'PLAY_AGAIN' })}>
+                  🔄 再戰一場
+                </button>
+                <button className="btn btn--ghost" onClick={() => send({ type: 'TO_REGIONS' })}>
+                  🗺 回到區域
+                </button>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

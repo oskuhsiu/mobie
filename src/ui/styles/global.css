@@ -885,6 +885,15 @@ body {
 .supply-opt:hover { filter: brightness(1.12); }
 .supply-opt:active { transform: scale(0.98); }
 .supply-opt__icon { font-size: 26px; width: 36px; text-align: center; flex: 0 0 auto; }
+
+/* ============ M11 連勝塔 ============ */
+.tower-cta { background: linear-gradient(135deg, rgba(145,65,203,0.55), rgba(58,42,90,0.55)); }
+.asc-chip {
+  padding: 8px 14px; font-size: 14px; font-weight: 800; border-radius: 999px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--stroke); color: var(--text);
+}
+.asc-chip--on { border-color: var(--accent); background: rgba(255,210,63,0.14); color: var(--accent); }
+.asc-chip:disabled { opacity: 0.45; cursor: not-allowed; }
 .synergy-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .synergy-tag {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; font-size: 12px; font-weight: 700;

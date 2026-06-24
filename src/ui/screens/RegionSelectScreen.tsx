@@ -39,6 +39,21 @@ export function RegionSelectScreen() {
         <span className="practice-cta__go">開始 →</span>
       </motion.button>
 
+      {/* M11 連勝塔入口：連續 escalating 戰鬥、Ascension 難度、依深度給 SP */}
+      <motion.button
+        className="practice-cta tower-cta"
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => send({ type: 'OPEN_TOWER' })}
+      >
+        <span className="practice-cta__icon">🗼</span>
+        <div className="practice-cta__body">
+          <div className="practice-cta__title">連勝塔 · 遠征</div>
+          <div className="practice-cta__sub">連續對戰、樓層越高敵越強；通關得 SP 與難度解鎖。輸一場即結算。</div>
+        </div>
+        <span className="practice-cta__go">挑戰 →</span>
+      </motion.button>
+
       <div className="region-grid scroll-y" style={{ paddingBottom: 8 }}>
         {REGIONS.map((r, i) => (
           <motion.button

@@ -336,11 +336,12 @@ export function BattleScreen() {
   // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
   const ext = useSettings((s) => s.ext)
   const prep = useSettings((s) => s.prep)
-  // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場不注入＝零意外。
+  // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場/連勝塔不注入＝零意外。
   const wildEvents = useMemo(() => {
+    if (context.tower) return undefined // 塔戰無野外意外
     const region = context.regionId ? lookupRegion(context.regionId) : null
     return region?.mode === 'wild' ? makeWildEvents({ terrainPool: WILD_SHIFT_POOL }) : undefined
-  }, [context.regionId])
+  }, [context.regionId, context.tower])
 
   const fxRef = useRef<FxHandle>(null)
   const stageRef = useRef<StageHandle>(null)
@@ -368,7 +369,8 @@ export function BattleScreen() {
     // 決定論抽（同一場遭遇穩定、不隨 re-render 變動）。arena/無地形＝空＝中性。
     const region = context.regionId ? lookupRegion(context.regionId) : null
     const terrainSeed = context.foeTeam.map((c) => c.cardId).join('|')
-    const terrains = region ? resolveBattleTerrains(region, terrainSeed) : []
+    // 連勝塔（M11）視為中性場：無地形（也無野外意外，見 wildEvents memo）
+    const terrains = context.tower || !region ? [] : resolveBattleTerrains(region, terrainSeed)
     const terrainDefs = terrainDefsOf(terrains)
     const s = useBattleStore.getState()
     s.init(players, foes, terrains)

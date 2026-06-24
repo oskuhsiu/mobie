@@ -11,6 +11,7 @@ import { EncounterScreen } from '@/ui/screens/EncounterScreen'
 import { CardSelectScreen } from '@/ui/screens/CardSelectScreen'
 import { BattleScreen } from '@/ui/screens/BattleScreen'
 import { ResultScreen } from '@/ui/screens/ResultScreen'
+import { TowerSetupScreen } from '@/ui/screens/TowerSetupScreen'
 
 const fade = {
   initial: { opacity: 0, scale: 0.98 },
@@ -36,6 +37,7 @@ function Stage() {
         <motion.div key={value} className="screen" {...fade}>
           {value === 'title' && <TitleScreen />}
           {value === 'regionSelect' && <RegionSelectScreen />}
+          {value === 'towerSetup' && <TowerSetupScreen />}
           {value === 'encounter' && <EncounterScreen />}
           {value === 'cardSelect' && <CardSelectScreen />}
           {value === 'battle' && <BattleScreen />}
