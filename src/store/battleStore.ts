@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { BattleMobie, TerrainId } from '@/game/types'
-import { createBattleState, type BattleState, type Side, type SupportOutcome } from '@/game/battle/reducer'
+import { createBattleState, type BattleState, type Side, type SupportOutcome, type StatusEffect } from '@/game/battle/reducer'
 
 export type { Side }
 
@@ -59,6 +59,8 @@ interface BattleUiState {
   setCombo: (n: number | null) => void
   /** M17 看穿：標記某對手 index 已揭露（M16 不呼叫；exactly-once 去重）。 */
   revealFoe: (index: number) => void
+  /** M17 訓練師加油（support）：開戰一次性灌注全隊增益到 field.teamStatuses（複用 M19.d，reducer 既有消費）。 */
+  applyTeamStatuses: (statuses: StatusEffect[]) => void
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
@@ -115,6 +117,12 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   resetEnergy: () => set({ energy: 0 }),
   setCombo: (combo) => set({ combo }),
   revealFoe: (index) => set((s) => (s.revealedFoes.includes(index) ? {} : { revealedFoes: [...s.revealedFoes, index] })),
+  applyTeamStatuses: (statuses) =>
+    set((s) => {
+      if (!s.battle || statuses.length === 0) return {}
+      const field = { ...s.battle.field, teamStatuses: [...s.battle.field.teamStatuses, ...statuses] }
+      return { battle: { ...s.battle, field } }
+    }),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null }),

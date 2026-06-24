@@ -51,6 +51,12 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
     available: true,
   },
   tower: { icon: '🗼', label: '連勝塔', desc: '連續戰鬥不回血的長線遠征模式。', available: false },
+  partnerSkills: {
+    icon: '✨',
+    label: '夥伴技能',
+    desc: '訓練師自己的帳號級戰術工具：戰鬥中「🔍 看穿」對手底細、「📣 訓練師加油」灌注全隊士氣。在「夥伴技能」頁花 SP 解鎖。',
+    available: true,
+  },
 }
 
 /**

@@ -19,6 +19,8 @@ import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
 import { makeWildEvents } from '@/game/accidents'
+import { usePlayerSkills } from '@/store/playerSkillsStore'
+import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
 import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
@@ -342,6 +344,10 @@ export function BattleScreen() {
   const prep = useSettings((s) => s.prep)
   // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
   const starMode = useSettings((s) => interactModeOf(s.settings, 'starStrike'))
+  // M17 夥伴（訓練師）技能：帳號級、純顯示層。模組關＝行動列不顯示；已習得（起始∪解鎖）才可用。
+  const partnerOn = useSettings((s) => s.settings.modules.partnerSkills)
+  const learnedSkillIds = usePlayerSkills((s) => s.learnedSkillIds)
+  const partnerSkills = useMemo(() => learnedPartnerSkills(learnedSkillIds), [learnedSkillIds])
   // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場/連勝塔不注入＝零意外。
   const wildEvents = useMemo(() => {
     if (context.tower) return undefined // 塔戰無野外意外
@@ -365,11 +371,14 @@ export function BattleScreen() {
   const [chainSeq, setChainSeq] = useState<{ participants: number[]; step: number; hits: ChainHit[] } | null>(null)
   // M22 星擊增強互動：開啟蓄力/節奏手勢的暫態（off 模式恆 false、不渲染手勢）
   const [starCharging, setStarCharging] = useState(false)
+  // M17 夥伴技能「每場一次」預算：本場已用過的技能 id（display state，不持久化）
+  const [partnerUsed, setPartnerUsed] = useState<string[]>([])
 
   // 初始化：建出雙方 3 隻隊伍，進場
   useEffect(() => {
     if (initedRef.current || context.playerTeam.length === 0 || context.foeTeam.length === 0) return
     initedRef.current = true
+    setPartnerUsed([]) // M17：每場一次預算重置
     // 戰前縫：S1 道具/特性 statMod（兩方）+ S2 羈絆（只玩家隊）。全關＝原封不動。
     const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattleMobie), prep, true)
     const { team: foes } = applyBattlePrep(context.foeTeam.map(buildBattleMobie), prep, false)
@@ -747,6 +756,35 @@ export function BattleScreen() {
     void runPlayerTurn(pendingQualityRef.current, count)
   }, [runPlayerTurn])
 
+  // M17 夥伴技能發動（每場一次、純顯示層）：看穿＝設 revealedFoes + 揭露演出；
+  // 訓練師加油（support）＝灌注全隊增益到 field.teamStatuses（複用 M19.d，零 reducer 改動）。
+  // **不進 reducer、不耗回合、對手不回擊**——維持 playerChoice 相位。
+  const activatePartnerSkill = useCallback((skill: PartnerSkillDef) => {
+    const store = useBattleStore.getState
+    const b = store().battle
+    if (!b || partnerUsed.includes(skill.id)) return
+    audio.play('select')
+    if (skill.reveal) {
+      const idx = b.foe.activeIndex
+      store().revealFoe(idx)
+      store().setBanner('🔍 看穿了對手！')
+      store().pushLog(`看穿了對手的 ${b.foe.members[idx].nameZh}！招式與數值現形`)
+      fxRef.current?.flash('#7ae0ff', 0.3)
+      fxRef.current?.ring({ ...FX_POS.foe, color: '#7ae0ff' })
+      fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 14, kind: 'spark' })
+    }
+    const statuses = teamBuffStatuses(skill)
+    if (statuses.length > 0) {
+      store().applyTeamStatuses(statuses)
+      store().setBanner(`${skill.icon} ${skill.name}！`)
+      store().pushLog(`${skill.name}！全隊氣勢提升（攻擊・特攻 ↑）`)
+      fxRef.current?.flash('#ffd23f', 0.3)
+      fxRef.current?.ring({ ...FX_POS.player, color: '#ffd23f' })
+      fxRef.current?.burst({ ...FX_POS.player, color: '#ffd23f', count: 16, kind: 'spark' })
+    }
+    setPartnerUsed((prev) => (prev.includes(skill.id) ? prev : [...prev, skill.id]))
+  }, [partnerUsed])
+
   if (!battle) return <div className="center" style={{ flex: 1 }}>準備戰鬥…</div>
 
   const player = battle.player.members[battle.player.activeIndex]
@@ -947,6 +985,27 @@ export function BattleScreen() {
                 </motion.button>
               )}
             </div>
+            {/* M17 夥伴（訓練師）技能列：模組開 + 已習得才顯示。每場一次，純顯示層、不耗回合。 */}
+            {partnerOn && partnerSkills.length > 0 && (
+              <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>✨ 夥伴技能</span>
+                {partnerSkills.map((skill) => {
+                  const used = partnerUsed.includes(skill.id)
+                  return (
+                    <motion.button
+                      key={skill.id}
+                      className="btn btn--ghost btn--sm"
+                      whileTap={used ? undefined : { scale: 0.95 }}
+                      disabled={used}
+                      title={skill.desc}
+                      onClick={() => activatePartnerSkill(skill)}
+                    >
+                      {skill.icon} {skill.name}{used ? ' ✓' : ''}
+                    </motion.button>
+                  )
+                })}
+              </div>
+            )}
           </motion.div>
         )}
 
