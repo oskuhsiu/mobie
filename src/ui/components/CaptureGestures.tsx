@@ -6,10 +6,9 @@ import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react
 import { swipeFromPointer, swipeThrowValid, angleTo, wrapAngle, type Pt } from '@/input/gestures'
 import type { InteractMode } from '@/game/settings'
 
-/** 把 PointerEvent 座標正規化到手勢面板的 0..1。 */
-function normPt(surface: HTMLDivElement, e: ReactPointerEvent): Pt {
-  const r = surface.getBoundingClientRect()
-  return { x: (e.clientX - r.left) / Math.max(1, r.width), y: (e.clientY - r.top) / Math.max(1, r.height), t: e.timeStamp }
+/** 把 PointerEvent 座標正規化到手勢面板的 0..1。rect 於 pointerdown 快取一次，避免每次 move 觸發 layout。 */
+function normPt(rect: DOMRect, e: ReactPointerEvent): Pt {
+  return { x: (e.clientX - rect.left) / Math.max(1, rect.width), y: (e.clientY - rect.top) / Math.max(1, rect.height), t: e.timeStamp }
 }
 
 /** 甩動丟球：向上快甩即丟出；逾時自動以基準速度丟（絕不卡死）。 */
@@ -19,6 +18,7 @@ export function SwipeThrow({ mode, onThrow, timeoutMs = 6000 }: {
   timeoutMs?: number
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
+  const rectRef = useRef<DOMRect | null>(null)
   const dotRef = useRef<HTMLDivElement>(null)
   const samplesRef = useRef<Pt[]>([])
   const draggingRef = useRef(false)
@@ -42,12 +42,13 @@ export function SwipeThrow({ mode, onThrow, timeoutMs = 6000 }: {
   const down = (e: ReactPointerEvent) => {
     if (doneRef.current || !surfaceRef.current) return
     draggingRef.current = true
-    samplesRef.current = [normPt(surfaceRef.current, e)]
+    rectRef.current = surfaceRef.current.getBoundingClientRect()
+    samplesRef.current = [normPt(rectRef.current, e)]
     if (dotRef.current) dotRef.current.style.opacity = '1'
   }
   const move = (e: ReactPointerEvent) => {
-    if (!draggingRef.current || doneRef.current || !surfaceRef.current) return
-    const p = normPt(surfaceRef.current, e)
+    if (!draggingRef.current || doneRef.current || !rectRef.current) return
+    const p = normPt(rectRef.current, e)
     samplesRef.current.push(p)
     if (dotRef.current) {
       dotRef.current.style.left = `${p.x * 100}%`
@@ -91,6 +92,7 @@ export function CircleSeal({ targetRad, onSealed, label = '✦ 畫圈封印！',
   timeoutMs?: number
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
+  const rectRef = useRef<DOMRect | null>(null)
   const ringRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
   const lastAngleRef = useRef(0)
@@ -122,11 +124,12 @@ export function CircleSeal({ targetRad, onSealed, label = '✦ 畫圈封印！',
   const down = (e: ReactPointerEvent) => {
     if (doneRef.current || !surfaceRef.current) return
     draggingRef.current = true
-    lastAngleRef.current = angleTo(center, normPt(surfaceRef.current, e))
+    rectRef.current = surfaceRef.current.getBoundingClientRect()
+    lastAngleRef.current = angleTo(center, normPt(rectRef.current, e))
   }
   const move = (e: ReactPointerEvent) => {
-    if (!draggingRef.current || doneRef.current || !surfaceRef.current) return
-    const a = angleTo(center, normPt(surfaceRef.current, e))
+    if (!draggingRef.current || doneRef.current || !rectRef.current) return
+    const a = angleTo(center, normPt(rectRef.current, e))
     accRef.current += Math.abs(wrapAngle(a - lastAngleRef.current))
     lastAngleRef.current = a
     paint()

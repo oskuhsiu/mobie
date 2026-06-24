@@ -340,8 +340,8 @@ export function BattleScreen() {
   // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
   const ext = useSettings((s) => s.ext)
   const prep = useSettings((s) => s.prep)
-  // M22 星擊增強互動 mode（off＝原本單擊即放）。低頻、隨設定變動重算。
-  const starMode = interactModeOf(useSettings((s) => s.settings), 'starStrike')
+  // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
+  const starMode = useSettings((s) => interactModeOf(s.settings, 'starStrike'))
   // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場/連勝塔不注入＝零意外。
   const wildEvents = useMemo(() => {
     if (context.tower) return undefined // 塔戰無野外意外
