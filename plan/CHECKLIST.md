@@ -223,10 +223,10 @@
 ### 難度修飾 Ascension（原 M6.j，依附連勝塔）
 - [ ] 拆兩條：靜態敵強化（enemyHpMulti/levelBonus）pre-bake 進 encounter/buildUnit；回合修飾（Fate/healReduced）走 ext
 - [ ] tower ascension 選擇器（meta `ascensionUnlocked` 解鎖階級）+ run 內生效修飾 tag；嚴守 §0.4 不新增戰鬥規則
-### 野外意外 ×5（原 M7.c，wild-only，走 RandomEvent）
-- [ ] 亂入野生（一次性傷害、不新增第 4 隻 unit）／地形突變（改 fieldState.currentTerrains）
-- [ ] 天降補給（**開場前/戰後**三選一，絕不戰鬥中途）／稀有閃光 boss（encounter flag→異色/高 Grade）／幸運加碼（reward modifier）
-- [ ] backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制
+### 野外意外 ×5（原 M7.c，wild-only，走 RandomEvent）✅
+- [x] 亂入野生（一次性**非致命**削血、不新增第 4 隻 unit）／地形突變（改 field.current）——`game/accidents.ts` `makeWildEvents` 注入 reducer `wildEvents` hook（守純 reducer/不引強制換）；BattleScreen wild 區注入 + `wildAccident` event 演出
+- [x] 天降補給（**開場前**三選一 SP/經驗×1.5/捕獲加成 modal，絕不戰鬥中途）／稀有閃光 boss（`maybeRareBoss` encounter flag→異色+高IV→高 Grade）／幸運加碼（`rollEncounterAccidents` 自動 expMult）；`accidentStore` per-battle reward 旗標；ResultScreen 套 expMult/captureMult；+11 vitest；CDP（dev）全 5 意外驗、零 error
+- [ ] backlog：暴擊潮/氣象疊加/狂暴化/背水一戰/狙擊先制（暫不做）
 
 ## M12 — 戰鬥技能大模組（見 `12`；縱向小樣本一次打穿）
 > 守單招（技能不直接傷害、進化只解鎖技能槽非新攻擊招）、純 reducer（deterministic hook）、只存 canonical skill id、不動 §0.4。
