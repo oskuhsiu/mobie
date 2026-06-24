@@ -817,6 +817,29 @@ body {
 .move-chip__name { font-weight: 800; font-size: 13px; }
 .move-chip__sub { font-size: 11px; color: var(--text-dim); }
 .move-chip__cost { font-size: 11px; font-weight: 800; color: var(--accent); margin-top: 1px; }
+
+/* ============ M16 Mobie 資訊卡 ============ */
+.mobcard__art { width: 72px; height: 72px; flex: 0 0 auto; }
+.mobcard-sec { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 0.06em; margin: 12px 0 6px; }
+.mobcard-masked {
+  padding: 12px; border-radius: 12px; text-align: center; font-size: 13px; color: var(--text-dim);
+  background: rgba(0,0,0,0.28); border: 1px dashed var(--stroke);
+}
+.mobcard-moves { display: flex; flex-direction: column; gap: 6px; }
+.mobcard-move {
+  display: flex; align-items: center; gap: 8px; padding: 7px 11px;
+  border-radius: 10px; background: var(--panel); border: 1px solid var(--stroke); border-left: 4px solid var(--mv, var(--stroke));
+}
+.mobcard-move__name { font-weight: 800; font-size: 14px; min-width: 5.5em; }
+.mobcard-move__cat { font-size: 11px; color: var(--text-dim); }
+.mobcard-move__stat { font-size: 11px; color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+.mobcard-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+.mobcard-stat { display: flex; align-items: center; gap: 8px; }
+.mobcard-stat__label { font-size: 12px; color: var(--text-dim); min-width: 2.4em; }
+.mobcard-stat__track { flex: 1; height: 7px; border-radius: 999px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); overflow: hidden; }
+.mobcard-stat__fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #5fa8ff, var(--accent)); }
+.mobcard-stat__val { font-size: 12px; font-weight: 700; min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.mobcard-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--text-dim); }
 .synergy-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .synergy-tag {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; font-size: 12px; font-weight: 700;

@@ -1,11 +1,14 @@
-import { motion } from 'framer-motion'
-import { useEffect, useMemo } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { buildBattleMobie } from '@/game/stats'
 import { useMeta } from '@/store/metaStore'
+import type { BattleMobie } from '@/game/types'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
+import { MobCard } from '@/ui/components/MobCard'
+import { audio } from '@/audio/audioEngine'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
@@ -13,6 +16,9 @@ export function EncounterScreen() {
     () => context.foeTeam.map(buildBattleMobie),
     [context.foeTeam],
   )
+  // M16：點對手開資訊卡（對手＝基本面，深度遮罩待 M17 看穿）
+  const [cardMon, setCardMon] = useState<BattleMobie | null>(null)
+  const openCard = (m: BattleMobie) => { audio.play('select'); setCardMon(m) }
   // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）
   useEffect(() => {
     if (context.foeTeam.length > 0) useMeta.getState().recordSeen(context.foeTeam.map((c) => c.speciesId))
@@ -48,11 +54,13 @@ export function EncounterScreen() {
           </div>
           <TypeBadges types={wild.types} />
           <IndividualInfo mon={wild} detailed />
-          {/* 對手隊伍縮圖（最後一隻為 boss） */}
+          <button className="btn btn--ghost btn--sm" onClick={() => openCard(wild)}>ⓘ 查看資訊卡</button>
+          {/* 對手隊伍縮圖（最後一隻為 boss）；點開資訊卡 */}
           <div className="row" style={{ gap: 10, marginTop: 6 }}>
             {foes.map((f, i) => (
-              <div
+              <button
                 key={i}
+                onClick={() => openCard(f)}
                 style={{
                   width: 46, height: 46, borderRadius: 12, padding: 3,
                   border: `1px solid ${i === foes.length - 1 ? 'var(--accent)' : 'var(--stroke)'}`,
@@ -61,7 +69,7 @@ export function EncounterScreen() {
                 title={i === foes.length - 1 ? `${f.nameZh}（boss）` : f.nameZh}
               >
                 <img src={f.artworkUrl} alt={f.nameZh} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              </div>
+              </button>
             ))}
           </div>
         </motion.div>
@@ -75,6 +83,10 @@ export function EncounterScreen() {
       >
         ⚔ 出戰
       </motion.button>
+
+      <AnimatePresence>
+        {cardMon && <MobCard mon={cardMon} owner={false} revealed={false} onClose={() => setCardMon(null)} />}
+      </AnimatePresence>
     </div>
   )
 }
