@@ -351,8 +351,9 @@
 ### M19.b — reducer/engine 多招式（additive）✅
 - [x] ATTACK 加 `slotIndex`、`AttackOptions`/`AttackParams` 吃 `moveIndex`、`resolveAttack` 回 `resolvedMoveId` 寫 `damageApplied` event（loadout 由 buildBattleMobie snapshot 進 moves[]、戰中不可變）
 - [x] 純函式 `chooseOpponentMove(attacker,defender,rng)` 加權選 slot（剋制×3/有效×2/不利×0.6/無效×0.1、本系×2、變化招低權；**單招回 0 不耗 rng**＝既有測試序不變）+ 5 vitest（選槽路由/向後相容 slot0/AI 不耗 rng/決定論/加權偏好剋制）
-### M19.c — 戰鬥 UI 選招（⏸ 暫停於此，待使用者玩測/做 M18.e 後續做）
-- [ ] BattleScreen 四槽「選槽即開打」（方向/四鍵映射、逾時 slot0）+ 攻擊招命中 QTE；星擊分離；MobCard 顯 4 招 + Chrome CDP
+### M19.c — 戰鬥 UI 選招 ✅
+- [x] BattleScreen 四槽「選槽即開打」（`MoveSlots`：招名/屬性/物理特殊/威力命中/鍵位；點槽即進 QTE）+ 方向/四鍵映射（數字 1–4、方向鍵 2×2 順時針）+ 逾時 8s slot0（CSS 倒數條，不過 React state）+ 攻擊招命中 QTE；星擊/換人/連鎖移次要列分離
+- [x] `playEvents` 用 `resolvedMoveId` 解析實際出招名/特效色（修對手多招式顯示 slot0 錯招缺口）；`runPlayerTurn` 帶 `slotIndex`；Chrome CDP 驗證（四槽渲染/選槽即開打/槽1 噴射火焰 82 傷害/「使出 噴射火焰」banner/數字鍵 2 觸發 QTE/零 console error）。**MobCard 顯 4 招留 M16（MobCard 屬 M16.a）**
 ### M19.d — 變化招（status move）
 - [ ] 變化招池 + 輕量強度 QTE（**只影響幅度不影響成敗**、硬上限）+ 複用 S1/S3/S4 effect 寫 `fieldState`
 - [ ] 連鎖規則：變化招不斷鏈/貢獻支援值、合體技需鏈中≥1 攻擊招 + vitest（效果/上限/鏈不爆傷）
