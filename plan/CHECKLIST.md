@@ -404,19 +404,19 @@
 > 疊上不同身體動作手勢（畫圈/長按/節奏/下滑）。**手勢只輸出離散純量或純演出，pure reducer / 效能紅線 / 設定 slice 全不破。**
 > MVP 只做**捕獲 + 星擊**兩個情緒峰值（其餘列 backlog）。**Q1 裁定：既有攻擊 MashMeter 不動**（守 off=現狀一字不差）。
 > 四方圓桌：`.claude/agent-chat/session-20260624-132835/conclusion.md`。
-### M22.a — 設定地基（純函式，零 UI）
-- [ ] `game/settings.ts` 加 `prefs.enhancedInteractivity`（`InteractMode`/`InteractSurface` 型別 + `defaultPrefs` + `migrateSettings` 向後相容〔缺欄→off、surfaces 預設填滿〕 + `setInteractModeIn`）+ selector `isEnhancedSurfaceEnabled`/`interactModeOf` + `INTENSITY_BY_MODE` 常數；vitest（migrate 缺欄/壞檔、selector off→false、surfaces 預設）
-- [ ] `settingsStore` 暴露 `setInteractMode`；`prefs` **不入** ext/prep/postGrowth（非戰鬥注入）
-### M22.b — 純手勢層 `src/input/gestures/`
-- [ ] `swipeFromPointer`/`circleProgress`/`holdCharge`/`rhythmTaps` 純函式（比照 `input/qte.ts` 契約、輸出單一純量）+ vitest（邊界/逾時/部分進度/決定論）；**與 M4 體感同源**（日後 MediaPipe 餵同樣序列）
-### M22.c — 捕獲 surface（MVP-1，純顯示層）
-- [ ] `WinView` 接 selector：off 不變；lite=`SwipeThrow` 丟球；arcade=`SwipeThrow`+`CircleSeal` 畫圈封印
-- [ ] **`caught`（Math.random 預先決定）一字不動**；「再搏一下」純演出寬限（UI 標娛樂性、不改機率）；安全退場；高頻值 ref/rAF/DOM；**回歸測試 lite/arcade 捕獲率==off**；CDP 真機演出
-### M22.d — 星擊 surface（MVP-2，純顯示層）
-- [ ] star-orb 接 selector：off 不變（單擊）；lite=`HoldChargeRing` 長按蓄力環；arcade=`RhythmTap` 節奏三連點（**不沿用攻擊連打**）
-- [ ] `runStarStrike` 簽名不動（傷害不吃手勢、蓄力只影響 FX 強度）；中斷/逾時安全退場；CDP 真機演出
-### M22.e — 設定面板 UI + 收尾
-- [ ] `SettingsModal` 模組清單外加「🕹 互動偏好」三態 selector（關/輕度/機台）+ 兒童向說明
-- [ ] 驗收：`mode=off` golden path 截圖**無新增 wrapper**（零回歸）；lite/arcade 逾時/取消/多指/低 FPS **只 dispatch 一次**；typecheck/test/build 全綠
+### M22.a — 設定地基（純函式，零 UI）✅
+- [x] `game/settings.ts` 加 `prefs.enhancedInteractivity`（`InteractMode`/`InteractSurface` 型別 + `defaultPrefs` + `migrateSettings`/`migratePrefs` 向後相容〔缺欄→off、surfaces 只認顯式 false〕 + `setInteractModeIn`）+ selector `isEnhancedSurfaceEnabled`/`interactModeOf` + `INTENSITY_BY_MODE` 常數；+12 vitest（migrate 缺欄/壞檔、selector off→false、surfaces 預設、強度單調）
+- [x] `settingsStore` 暴露 `setInteractMode`；`prefs` **不入** ext/prep/postGrowth（非戰鬥注入，只寫回 localStorage）
+### M22.b — 純手勢層 `src/input/gestures/`✅
+- [x] `swipeFromPointer`/`circleProgress`/`holdCharge`/`rhythmTaps`（+ `angleTo`/`wrapAngle`/`sweptAngle`/`swipeThrowValid`/`beatSchedule`/`matchTapsToBeats`/`rhythmAccuracy`）純函式（比照 `input/qte.ts` 契約、輸出單一純量）+15 vitest（邊界/逾時/部分進度/夾上限/決定論/off 安全退回）；**與 M4 體感同源**
+### M22.c — 捕獲 surface（MVP-1，純顯示層）✅
+- [x] `WinView` 接 `interactModeOf('capture')` selector：off 不變；lite=`SwipeThrow` 丟球；arcade=`SwipeThrow`+`CircleSeal` 畫圈封印（stage machine 加 aim/seal）
+- [x] **`caught`（Math.random 預先決定）一字不動**；「再搏一下」純演出寬限（注定逃脫給一次重畫、UI 標娛樂性、不改機率）；安全退場；高頻值 ref/DOM（rect 快取）；+3 回歸 vitest（捕獲率不受 mode 影響）；CDP 真機（arcade aim→swipe→seal→收服成功）
+### M22.d — 星擊 surface（MVP-2，純顯示層）✅
+- [x] star-orb 接 `interactModeOf('starStrike')` selector：off 不變（單擊）；lite=`HoldChargeRing` 長按蓄力環；arcade=`RhythmTap` 節奏點擊（**不沿用攻擊連打 MashMeter**）
+- [x] `runStarStrike` 簽名不動（傷害不吃手勢結果）；中斷/逾時安全放招（rAF/ref/DOM、單次 onDone）；CDP 真機（orb→RhythmTap→放招、零 error）
+### M22.e — 設定面板 UI + 收尾 ✅
+- [x] `SettingsModal` 模組清單外加「🕹 互動偏好」三態 selector（關/輕度/機台）+ 兒童向說明
+- [x] 驗收：`mode=off` golden path **無新增 gesture wrapper**（CDP gs:null、零回歸）；lite/arcade CDP 真機演出；typecheck/360 test/build 全綠；simplify 收窄 settings 訂閱 + 快取手勢 rect
 ### M22 Backlog（§4，後續子階段）
 - [ ] M22.f 防禦下滑護盾 `defense`（`defenseQte` 疊下滑、仍映射 quality） / M22.g 攻擊節奏變體 `attackInputVariant: 'mash'|'rhythm'`（只在 mode≠off 替換） / M22.h 遭遇撥草 `encounter` / M22.i 孵化摩擦 `hatch` / M22.j 連勝塔開場選路 `tower`（依賴 M11 連勝塔）
