@@ -1,8 +1,15 @@
 import { motion } from 'framer-motion'
 import { useSettings } from '@/store/settingsStore'
-import { MODULE_IDS } from '@/game/settings'
+import { MODULE_IDS, type InteractMode } from '@/game/settings'
 import type { ModuleId } from '@/game/ext/seams'
 import { audio } from '@/audio/audioEngine'
+
+/** M22 增強互動性三態（plan/22 §1.2, §5.4）：mode 派生強度，不做使用者滑桿。 */
+const INTERACT_OPTIONS: { id: InteractMode; label: string; hint: string }[] = [
+  { id: 'off', label: '關', hint: '點一下就好，最單純' },
+  { id: 'lite', label: '輕度', hint: '滑動丟球、長按蓄力' },
+  { id: 'arcade', label: '機台', hint: '畫圈封印、節奏點擊' },
+]
 
 /** 各模組的 UI 文案 + 是否已實作（未實作的在設定頁標「敬請期待」、不可開）。 */
 interface ModuleMeta {
@@ -53,6 +60,8 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const settings = useSettings((s) => s.settings)
   const setModuleEnabled = useSettings((s) => s.setModuleEnabled)
+  const setInteractMode = useSettings((s) => s.setInteractMode)
+  const interactMode = settings.prefs.enhancedInteractivity.mode
 
   const toggle = (id: ModuleId, available: boolean) => {
     if (!available) return
@@ -78,6 +87,34 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* M22 增強互動性（UX 偏好，非戰鬥模組）：三態 selector + 兒童向說明 */}
+          <div className="interact-pref">
+            <div className="interact-pref__head">
+              <span className="mod-row__icon">🕹</span>
+              <div className="mod-row__text">
+                <div className="mod-row__label">增強互動性</div>
+                <div className="mod-row__desc">
+                  讓集氣、丟球這些步驟多出身體動作（滑動／畫圈／長按／節奏），給小朋友更多參與感。預設「關」＝只要點一下。
+                </div>
+              </div>
+            </div>
+            <div className="interact-seg" role="group" aria-label="增強互動性程度">
+              {INTERACT_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  className={`interact-seg__btn ${interactMode === o.id ? 'interact-seg__btn--on' : ''}`}
+                  aria-pressed={interactMode === o.id}
+                  onClick={() => { if (interactMode !== o.id) { audio.play('select'); setInteractMode(o.id) } }}
+                >
+                  <span className="interact-seg__label">{o.label}</span>
+                  <span className="interact-seg__hint">{o.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="settings-divider">🧩 延伸系統模組</div>
+
           {MODULE_IDS.map((id) => {
             const meta = MODULE_META[id]
             const on = settings.modules[id] && meta.available
