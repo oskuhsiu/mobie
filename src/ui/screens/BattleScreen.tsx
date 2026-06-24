@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
@@ -17,7 +17,8 @@ import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattleMobie, Move, TerrainId } from '@/game/types'
 import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
-import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf } from '@/game/data/terrains'
+import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
+import { makeWildEvents } from '@/game/accidents'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
@@ -58,6 +59,8 @@ const SLOT_KEY_MAP: Record<string, number> = {
   '1': 0, '2': 1, '3': 2, '4': 3,
   ArrowUp: 0, ArrowRight: 1, ArrowDown: 3, ArrowLeft: 2,
 }
+// M11 地形突變可抽的池（全地形除中性）；wild 戰鬥才注入。
+const WILD_SHIFT_POOL = TERRAINS.filter((t) => t.id !== 'neutral').map((t) => t.id)
 
 /** 浮傷數字：3D 場景之上的 DOM 疊層，依 FX_POS 對齊在受擊方上方。 */
 function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
@@ -333,6 +336,11 @@ export function BattleScreen() {
   // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
   const ext = useSettings((s) => s.ext)
   const prep = useSettings((s) => s.prep)
+  // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場不注入＝零意外。
+  const wildEvents = useMemo(() => {
+    const region = context.regionId ? lookupRegion(context.regionId) : null
+    return region?.mode === 'wild' ? makeWildEvents({ terrainPool: WILD_SHIFT_POOL }) : undefined
+  }, [context.regionId])
 
   const fxRef = useRef<FxHandle>(null)
   const stageRef = useRef<StageHandle>(null)
@@ -512,6 +520,33 @@ export function BattleScreen() {
         await wait(820)
         store().setBanner(null)
         await wait(140)
+      } else if (e.type === 'wildAccident') {
+        // M11 野外意外演出：地形突變（改場域）/ 亂入野生（非致命削血）。
+        if (e.kind === 'terrainShift' && e.terrainId) {
+          const def = lookupTerrain(e.terrainId)
+          store().setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
+          store().pushLog(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
+          fxRef.current?.flash('#a07aff', 0.35)
+          fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: '#a07aff' })
+          audio.play('super')
+          await wait(950)
+          store().setBanner(null)
+          await wait(140)
+        } else if (e.kind === 'intrusion' && e.side != null && e.index != null && e.hpAfter != null) {
+          const m = monAt(b0, e.side, e.index)
+          const prefix = e.side === 'foe' ? '對手的 ' : ''
+          store().setMemberHp(e.side, e.index, e.hpAfter)
+          store().showHit({ target: e.side, amount: e.amount ?? 0, crit: false, effText: null, missed: false })
+          fxRef.current?.burst({ ...FX_POS[e.side], color: '#ff9a3c', count: 14, kind: 'puff' })
+          rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
+          audio.play('hit')
+          store().setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
+          store().pushLog(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
+          await wait(820)
+          store().clearFx()
+          store().setBanner(null)
+          await wait(140)
+        }
       } else if (e.type === 'activeChanged') {
         store().setActiveIndex(e.side, e.toIndex)
         stageRef.current?.enter(e.side) // 3D：新一隻落場入場（並清除倒下狀態）
@@ -581,7 +616,7 @@ export function BattleScreen() {
 
     // M19.c：玩家選定的招式槽（缺省/逾時＝slot0）。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
     const slotIndex = pendingSlotRef.current
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount, slotIndex }, { ext, terrainMultiplier: resolveTerrainMult })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount, slotIndex }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -593,7 +628,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents, ext])
+  }, [playEvents, ext, wildEvents])
 
   // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出
   const runStarStrike = useCallback(async () => {
@@ -610,7 +645,7 @@ export function BattleScreen() {
     await wait(620)
     fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { ext, terrainMultiplier: resolveTerrainMult })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState)
     store().setBanner(null)
@@ -619,7 +654,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents, rootShake, ext])
+  }, [playEvents, rootShake, ext, wildEvents])
 
   // 主動換人：收回換上 index → 對手打換上的 → 防禦 QTE 抵減
   const runSwitchTurn = useCallback(async (index: number, defenseQuality: QteQuality) => {
@@ -630,7 +665,7 @@ export function BattleScreen() {
     setPendingSwitch(null)
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { ext, terrainMultiplier: resolveTerrainMult })
+    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState)
 
@@ -638,7 +673,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents, ext])
+  }, [playEvents, ext, wildEvents])
 
   // M9 連鎖：提交收集到的 hits → reducer 同步重驗 + 結算（吃速度/截斷在 reducer）
   const runChain = useCallback(async (hits: ChainHit[]) => {
@@ -651,7 +686,7 @@ export function BattleScreen() {
     fxRef.current?.flash('#7ae0ff', 0.4)
     await wait(420)
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SUBMIT_CHAIN_RESULT', hits }, { ext, terrainMultiplier: resolveTerrainMult })
+    const { nextState, events } = resolveTurn(b0, { type: 'SUBMIT_CHAIN_RESULT', hits }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState)
     await wait(180)
@@ -661,7 +696,7 @@ export function BattleScreen() {
     if (nextState.winner === 'player') store().setPhase('won')
     else if (nextState.winner === 'foe') store().setPhase('lost')
     else store().setPhase('playerChoice')
-  }, [playEvents, ext])
+  }, [playEvents, ext, wildEvents])
 
   // M9 連鎖：發動 → 依當前戰況算出參與隊友、開始連續 QTE 序列
   const startChain = useCallback(() => {

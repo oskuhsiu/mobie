@@ -3,7 +3,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { buildBattleMobie } from '@/game/stats'
 import { useMeta } from '@/store/metaStore'
+import { useAccidents } from '@/store/accidentStore'
+import { useSkillPoints } from '@/store/skillPointsStore'
 import type { BattleMobie } from '@/game/types'
+import { lookupRegion } from '@/game/data/regionLookup'
+import { rollEncounterAccidents, type SupplyOption } from '@/game/accidents'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
@@ -19,10 +23,30 @@ export function EncounterScreen() {
   // M16：點對手開資訊卡（對手＝基本面，深度遮罩待 M17 看穿）
   const [cardMon, setCardMon] = useState<BattleMobie | null>(null)
   const openCard = (m: BattleMobie) => { audio.play('select'); setCardMon(m) }
-  // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）
+  // M11 野外意外：遭遇 roll（決定論）→ luckyBonus 自動加成 + 天降補給三選一 modal。
+  const accidents = useMemo(() => {
+    const region = context.regionId ? lookupRegion(context.regionId) : null
+    return region ? rollEncounterAccidents(region, context.foeTeam) : { luckyExpMult: 1, supply: null }
+  }, [context.regionId, context.foeTeam])
+  const bossShiny = foes.length > 0 && foes[foes.length - 1].shiny
+  const [supplyOpen, setSupplyOpen] = useState(false)
+  // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）；同時套用本場意外旗標。
   useEffect(() => {
-    if (context.foeTeam.length > 0) useMeta.getState().recordSeen(context.foeTeam.map((c) => c.speciesId))
-  }, [context.foeTeam])
+    if (context.foeTeam.length === 0) return
+    useMeta.getState().recordSeen(context.foeTeam.map((c) => c.speciesId))
+    useAccidents.getState().reset()
+    useAccidents.getState().setExpMult(accidents.luckyExpMult) // 幸運加碼（自動）
+    if (accidents.supply) setSupplyOpen(true) // 天降補給：開場前三選一
+  }, [context.foeTeam, accidents])
+
+  const pickSupply = (opt: SupplyOption) => {
+    audio.play('super')
+    if (opt.kind === 'sp') useSkillPoints.getState().add(3)
+    else if (opt.kind === 'exp') useAccidents.getState().setExpMult(Math.max(accidents.luckyExpMult, 1.5))
+    else if (opt.kind === 'capture') useAccidents.getState().setCaptureMult(1.3)
+    setSupplyOpen(false)
+  }
+
   const wild = foes[0] ?? null
   if (!wild) return null
 
@@ -49,6 +73,13 @@ export function EncounterScreen() {
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
         >
           <div className="eyebrow">對手帶著 {foes.length} 隻Mobie出現了！</div>
+          {/* M11 野外意外旗標：稀有閃光 boss / 幸運加碼 */}
+          {(bossShiny || accidents.luckyExpMult > 1) && (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {bossShiny && <span className="accident-tag accident-tag--rare">✦ 稀有閃光 boss！</span>}
+              {accidents.luckyExpMult > 1 && <span className="accident-tag">🍀 幸運加碼 · 經驗 ×{accidents.luckyExpMult}</span>}
+            </div>
+          )}
           <div className="h-title" style={{ fontSize: 36 }}>
             {wild.nameZh} <span className="hpbar__lv">Lv.{wild.level}</span>
           </div>
@@ -86,6 +117,32 @@ export function EncounterScreen() {
 
       <AnimatePresence>
         {cardMon && <MobCard mon={cardMon} owner={false} revealed={false} onClose={() => setCardMon(null)} />}
+      </AnimatePresence>
+
+      {/* M11 天降補給：開場前三選一（絕不戰鬥中途，守單招心流） */}
+      <AnimatePresence>
+        {supplyOpen && accidents.supply && (
+          <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div
+              className="modal-card" style={{ maxWidth: 420 }}
+              initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}
+            >
+              <div className="h-title" style={{ fontSize: 22 }}>📦 天降補給</div>
+              <div className="h-sub" style={{ marginBottom: 10 }}>野外發現補給箱！三選一帶進這場戰鬥。</div>
+              <div className="col" style={{ gap: 8 }}>
+                {accidents.supply.map((opt) => (
+                  <button key={opt.kind} className="supply-opt" onClick={() => pickSupply(opt)}>
+                    <span className="supply-opt__icon">{opt.icon}</span>
+                    <span className="col" style={{ gap: 2, alignItems: 'flex-start' }}>
+                      <b>{opt.label}</b>
+                      <span className="h-sub" style={{ fontSize: 12 }}>{opt.desc}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )

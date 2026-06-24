@@ -848,6 +848,21 @@ body {
 .mobcard-stat__fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #5fa8ff, var(--accent)); }
 .mobcard-stat__val { font-size: 12px; font-weight: 700; min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
 .mobcard-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--text-dim); }
+
+/* ============ M11 野外意外 ============ */
+.accident-tag {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 11px; font-size: 13px; font-weight: 800;
+  border-radius: 999px; background: rgba(74,222,128,0.14); border: 1px solid rgba(74,222,128,0.45); color: #b9f6cf;
+}
+.accident-tag--rare { background: rgba(255,122,224,0.16); border-color: rgba(255,122,224,0.5); color: #ffc7f3; }
+.supply-opt {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left;
+  border-radius: 14px; background: var(--panel); border: 1px solid var(--stroke); color: var(--text); cursor: pointer;
+  transition: filter 0.12s ease, transform 0.08s ease;
+}
+.supply-opt:hover { filter: brightness(1.12); }
+.supply-opt:active { transform: scale(0.98); }
+.supply-opt__icon { font-size: 26px; width: 36px; text-align: center; flex: 0 0 auto; }
 .synergy-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .synergy-tag {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; font-size: 12px; font-weight: 700;

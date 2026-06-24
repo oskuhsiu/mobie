@@ -7,6 +7,7 @@ import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
+import { useAccidents } from '@/store/accidentStore'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
@@ -41,10 +42,11 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
     const boss = context.foeTeam[context.foeTeam.length - 1]
     return boss ? buildBattleMobie(boss) : null
   }, [context.foeTeam])
-  // 捕獲球輪盤：轉出球種 → 套捕獲率係數
+  // 捕獲球輪盤：轉出球種 → 套捕獲率係數（M11 幸運捕獲球 captureMult 加成）
   const ball = useRef(getBall(rollBall()))
+  const captureMult = useAccidents.getState().captureMult
   const success = useRef<boolean>(
-    wild ? Math.random() < captureChanceWithBall(wild, ball.current.mult) : false,
+    wild ? Math.random() < captureChanceWithBall(wild, ball.current.mult * captureMult) : false,
   )
   const [stage, setStage] = useState<Stage>('throw')
   // onCaptured 走 ref：結算時 roster 更新會讓父層 re-render（onCaptured 重建），
@@ -208,10 +210,12 @@ export function ResultScreen() {
     }
     // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
     useIncubator.getState().advance(isWin ? 2 : 1)
+    // M11 幸運加碼 / 補給經驗符：勝利經驗倍率（expMult）；敗北維持部分比例
+    const expMult = useAccidents.getState().expMult
     void grantBattleExp(
       context.playerTeam.map((c) => c.cardId),
       context.foeTeam.map((c) => c.level),
-      isWin ? 1 : LOSS_EXP_RATIO,
+      isWin ? expMult : LOSS_EXP_RATIO,
       postGrowth,
     ).then(() => {
       const evos = useRoster.getState().lastEvolutions
