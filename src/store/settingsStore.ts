@@ -9,8 +9,10 @@ import {
   setModuleEnabledIn,
   setInteractModeIn,
   setReplayRecordingIn,
+  setAttackInputVariantIn,
   type GameSettings,
   type InteractMode,
+  type AttackInputVariant,
 } from '@/game/settings'
 import type { ModuleId, ExtBundle, PostGrowthHook } from '@/game/ext/seams'
 import { assembleExt, assembleBattlePrep, assemblePostGrowth, type BattlePrep } from '@/store/ext'
@@ -28,6 +30,8 @@ interface SettingsStore {
   setInteractMode: (mode: InteractMode) => void
   /** M14 是否錄製戰鬥回放（不參與戰鬥注入；低頻、走一般 state） */
   setReplayRecording: (on: boolean) => void
+  /** M22.g 攻擊輸入變體（連打/節奏；UX 偏好，不參與戰鬥注入） */
+  setAttackInputVariant: (variant: AttackInputVariant) => void
 }
 
 export const useSettings = create<SettingsStore>((set, get) => {
@@ -50,6 +54,11 @@ export const useSettings = create<SettingsStore>((set, get) => {
     },
     setReplayRecording: (on) => {
       const next = setReplayRecordingIn(get().settings, on)
+      saveSettings(next)
+      set({ settings: next })
+    },
+    setAttackInputVariant: (variant) => {
+      const next = setAttackInputVariantIn(get().settings, variant)
       saveSettings(next)
       set({ settings: next })
     },

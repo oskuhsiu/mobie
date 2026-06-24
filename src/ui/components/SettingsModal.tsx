@@ -67,8 +67,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const setModuleEnabled = useSettings((s) => s.setModuleEnabled)
   const setInteractMode = useSettings((s) => s.setInteractMode)
   const setReplayRecording = useSettings((s) => s.setReplayRecording)
+  const setAttackInputVariant = useSettings((s) => s.setAttackInputVariant)
   const interactMode = settings.prefs.enhancedInteractivity.mode
   const recordReplays = settings.prefs.recordReplays
+  const attackVariant = settings.prefs.attackInputVariant
 
   const toggle = (id: ModuleId, available: boolean) => {
     if (!available) return
@@ -118,6 +120,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
+            {/* M22.g 攻擊輸入變體：僅在開啟增強互動時顯示（off＝沿用連打、不顯示避免混淆） */}
+            {interactMode !== 'off' && (
+              <div className="interact-seg interact-seg--sub" role="group" aria-label="攻擊輸入方式" style={{ marginTop: 8 }}>
+                {([['mash', '連打蓄力', '快速點擊集氣'], ['rhythm', '節奏點擊', '跟著節拍按']] as const).map(([id, label, hint]) => (
+                  <button
+                    key={id}
+                    className={`interact-seg__btn ${attackVariant === id ? 'interact-seg__btn--on' : ''}`}
+                    aria-pressed={attackVariant === id}
+                    onClick={() => { if (attackVariant !== id) { audio.play('select'); setAttackInputVariant(id) } }}
+                  >
+                    <span className="interact-seg__label">⚔ {label}</span>
+                    <span className="interact-seg__hint">{hint}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="settings-divider">🧩 延伸系統模組</div>

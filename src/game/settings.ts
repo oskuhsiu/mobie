@@ -25,6 +25,9 @@ export const INTERACT_SURFACES: InteractSurface[] = ['capture', 'starStrike', 'd
 /** off＝零互動（現狀）；lite＝直覺單一手勢；arcade＝機台式高頻手勢。 */
 export type InteractMode = 'off' | 'lite' | 'arcade'
 
+/** M22.g 攻擊輸入變體：mash＝既有連打（預設）；rhythm＝太鼓式節奏點擊（只在 mode≠off 時替換）。 */
+export type AttackInputVariant = 'mash' | 'rhythm'
+
 export interface GamePrefs {
   enhancedInteractivity: {
     mode: InteractMode
@@ -33,6 +36,8 @@ export interface GamePrefs {
   }
   /** M14：是否錄製戰鬥回放（存進 IndexedDB mz-replays）。預設 off＝零殘留；開啟才開始錄。 */
   recordReplays: boolean
+  /** M22.g：攻擊蓄力輸入變體（mash 連打／rhythm 節奏）。預設 mash＝現狀；只在 mode≠off 時生效。 */
+  attackInputVariant: AttackInputVariant
 }
 
 export interface GameSettings {
@@ -85,7 +90,7 @@ function allSurfacesOn(): Record<InteractSurface, boolean> {
 
 /** M22 UX 偏好預設：mode='off'（現狀一字不差）、surfaces 全 true（待 mode 開啟才生效）。 */
 export function defaultPrefs(): GamePrefs {
-  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() }, recordReplays: false }
+  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() }, recordReplays: false, attackInputVariant: 'mash' }
 }
 
 export function defaultSettings(): GameSettings {
@@ -97,6 +102,7 @@ export function migratePrefs(raw: unknown): GamePrefs {
   if (!raw || typeof raw !== 'object') return defaultPrefs()
   const o = raw as Record<string, unknown>
   const recordReplays = o.recordReplays === true // 缺欄/未知 → 預設 off
+  const attackInputVariant: AttackInputVariant = o.attackInputVariant === 'rhythm' ? 'rhythm' : 'mash'
   let mode: InteractMode = 'off'
   const surfaces = allSurfacesOn()
   const ei = o.enhancedInteractivity
@@ -111,7 +117,7 @@ export function migratePrefs(raw: unknown): GamePrefs {
       }
     }
   }
-  return { enhancedInteractivity: { mode, surfaces }, recordReplays }
+  return { enhancedInteractivity: { mode, surfaces }, recordReplays, attackInputVariant }
 }
 
 /** 把任意外來物正規化成合法 GameSettings（遷移 / 防壞檔）。純函數，可測。 */
@@ -150,6 +156,17 @@ export function setInteractModeIn(settings: GameSettings, mode: InteractMode): G
 /** 純函數：回傳把「錄製戰鬥回放」開關設成新值後的設定（M14）。 */
 export function setReplayRecordingIn(settings: GameSettings, on: boolean): GameSettings {
   return { ...settings, prefs: { ...settings.prefs, recordReplays: on } }
+}
+
+/** 純函數：回傳把攻擊輸入變體設成新值後的設定（M22.g）。 */
+export function setAttackInputVariantIn(settings: GameSettings, variant: AttackInputVariant): GameSettings {
+  return { ...settings, prefs: { ...settings.prefs, attackInputVariant: variant } }
+}
+
+/** 當前生效的攻擊輸入變體：只有 mode≠off 且選了 rhythm 才回 'rhythm'，否則 'mash'（現狀）。 */
+export function attackInputVariantOf(settings: GameSettings): AttackInputVariant {
+  const ei = settings.prefs.enhancedInteractivity
+  return ei.mode !== 'off' && settings.prefs.attackInputVariant === 'rhythm' ? 'rhythm' : 'mash'
 }
 
 /**

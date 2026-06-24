@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import {
   defaultSettings, migrateSettings, setModuleEnabledIn, MODULE_IDS,
   defaultPrefs, migratePrefs, setInteractModeIn, isEnhancedSurfaceEnabled, interactModeOf,
+  setAttackInputVariantIn, attackInputVariantOf,
   INTERACT_SURFACES, INTENSITY_BY_MODE,
 } from '@/game/settings'
 import { assembleExt } from '@/store/ext'
@@ -66,6 +67,18 @@ describe('M22 增強互動性偏好（prefs）', () => {
     expect(s.enhancedInteractivity.surfaces.capture).toBe(false) // 顯式 false → 關
     expect(s.enhancedInteractivity.surfaces.starStrike).toBe(true) // 缺漏 → 維持預設 true
     expect('bogus' in s.enhancedInteractivity.surfaces).toBe(false) // 未知鍵不滲入
+  })
+
+  it('M22.g attackInputVariant：預設 mash、選擇器只在 mode≠off+rhythm 時回 rhythm', () => {
+    expect(defaultPrefs().attackInputVariant).toBe('mash')
+    expect(migratePrefs({}).attackInputVariant).toBe('mash') // 缺欄
+    expect(migratePrefs({ attackInputVariant: 'rhythm' }).attackInputVariant).toBe('rhythm')
+    expect(migratePrefs({ attackInputVariant: 'bogus' }).attackInputVariant).toBe('mash')
+    // 選擇器：off 時 rhythm 不生效
+    const offRhythm = setAttackInputVariantIn(defaultSettings(), 'rhythm')
+    expect(attackInputVariantOf(offRhythm)).toBe('mash')
+    const onRhythm = setAttackInputVariantIn(setInteractModeIn(defaultSettings(), 'arcade'), 'rhythm')
+    expect(attackInputVariantOf(onRhythm)).toBe('rhythm')
   })
 
   it('M14 recordReplays：預設 off、只認顯式 true、向後相容缺欄', () => {

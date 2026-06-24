@@ -127,3 +127,44 @@ describe('rhythmTaps（太鼓式）', () => {
     expect(rhythmTaps([], beats, 'arcade')).toBe(0)
   })
 })
+
+// ── M22.f/g/h/i 新增純helpers ────────────────────────────────────────────────
+import { rhythmToMashCount, swipeShieldQuality, pathLength, frictionProgress, MASH_COUNT_CAP } from '@/input/gestures'
+
+describe('rhythmToMashCount（M22.g）', () => {
+  it('accuracy 0→0、1→CAP、夾邊界', () => {
+    expect(rhythmToMashCount(0)).toBe(0)
+    expect(rhythmToMashCount(1)).toBe(MASH_COUNT_CAP)
+    expect(rhythmToMashCount(0.5)).toBe(Math.round(MASH_COUNT_CAP * 0.5))
+    expect(rhythmToMashCount(2)).toBe(MASH_COUNT_CAP) // 夾上限
+    expect(rhythmToMashCount(-1)).toBe(0) // 夾下限
+  })
+})
+
+describe('swipeShieldQuality（M22.f）', () => {
+  const down = (speedMul: number): Pt[] => {
+    // 由上往下的快滑：dy>0；速度＝dist/dt
+    return [pt(0.5, 0.2, 0), pt(0.5, 0.2 + 0.4, 0.4 / (0.0008 * speedMul))]
+  }
+  it('無效甩動→weak', () => {
+    expect(swipeShieldQuality(swipeFromPointer([pt(0.5, 0.5, 0), pt(0.5, 0.51, 1000)]), 'lite')).toBe('weak')
+  })
+  it('向下快滑依速度給 good/perfect', () => {
+    const r = swipeFromPointer(down(3))
+    expect(r.dir).toBe('down')
+    expect(['good', 'perfect']).toContain(swipeShieldQuality(r, 'lite'))
+  })
+})
+
+describe('pathLength / frictionProgress（M22.h/i）', () => {
+  it('pathLength 累加折線段長', () => {
+    expect(pathLength([pt(0, 0, 0), pt(0, 1, 1), pt(1, 1, 2)])).toBeCloseTo(2, 5)
+    expect(pathLength([pt(0, 0, 0)])).toBe(0)
+  })
+  it('frictionProgress 夾 0..1、target<=0→1', () => {
+    const back = [pt(0, 0, 0), pt(1, 0, 1), pt(0, 0, 2)] // 來回 = 長度 2
+    expect(frictionProgress(back, 4)).toBeCloseTo(0.5, 5)
+    expect(frictionProgress(back, 1)).toBe(1) // 超過夾 1
+    expect(frictionProgress(back, 0)).toBe(1)
+  })
+})

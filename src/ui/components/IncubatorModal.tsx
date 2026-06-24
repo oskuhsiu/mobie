@@ -6,6 +6,9 @@ import { isHatchable, type Egg } from '@/game/incubator'
 import { getSpecies } from '@/game/data/species'
 import { GradeBadge } from '@/ui/components/GradeBadge'
 import { MobieSprite } from '@/ui/components/MobieSprite'
+import { GestureGate } from '@/ui/components/GestureGate'
+import { useSettings } from '@/store/settingsStore'
+import { interactModeOf } from '@/game/settings'
 import { audio } from '@/audio/audioEngine'
 import type { OwnedUnit } from '@/game/types'
 
@@ -15,11 +18,15 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
   const eggs = useIncubator((s) => s.state.eggs)
   const hatch = useIncubator((s) => s.hatch)
   const [hatched, setHatched] = useState<OwnedUnit | null>(null)
+  // M22.i：孵化前摩擦生熱（純演出）。off＝直接孵化；開啟＝來回摩擦蛋後才 hatch。
+  const rubOn = useSettings((s) => interactModeOf(s.settings, 'hatch') !== 'off')
+  const [rubEgg, setRubEgg] = useState<string | null>(null)
 
   const doHatch = async (id: string) => {
     const u = await hatch(id)
     if (u) { audio.play('capture'); setHatched(u) }
   }
+  const onHatchClick = (id: string) => { if (rubOn) setRubEgg(id); else void doHatch(id) }
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -56,7 +63,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
                   <div className="egg-row__track"><div className="egg-row__fill" style={{ width: `${pct}%` }} /></div>
                   <div className="egg-row__prog">{e.progress} / {e.requiredProgress}</div>
                 </div>
-                <button className="btn btn--sm" disabled={!ready} onClick={() => ready && doHatch(e.id)}>
+                <button className="btn btn--sm" disabled={!ready} onClick={() => ready && onHatchClick(e.id)}>
                   {ready ? '孵化' : '培育中'}
                 </button>
               </div>
@@ -84,6 +91,19 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
               </motion.div>
             )
           })()}
+        </AnimatePresence>
+
+        {/* M22.i 摩擦生熱 gate（純演出，摩擦或逾時即孵化） */}
+        <AnimatePresence>
+          {rubEgg && (
+            <GestureGate
+              title="🔥 摩擦生熱"
+              icon="🥚"
+              hint="來回快速摩擦蛋殼，幫小生命破殼！"
+              onComplete={() => { const id = rubEgg; setRubEgg(null); void doHatch(id) }}
+              onCancel={() => setRubEgg(null)}
+            />
+          )}
         </AnimatePresence>
       </motion.div>
     </motion.div>

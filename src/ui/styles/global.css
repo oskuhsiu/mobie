@@ -1092,3 +1092,18 @@ body {
   margin: 4px 0 8px; padding: 8px 12px; border-radius: var(--radius-sm);
   background: rgba(255,107,107,0.14); border: 1px solid var(--bad); color: #ffd9d9; font-size: 13px;
 }
+
+/* ============ M22.f–j 增強互動手勢（護盾下滑 / 撥草·摩擦·破門 gate）============ */
+.gesture-surface--shield { z-index: 18; }
+.shield-icon { font-size: 64px; filter: drop-shadow(0 4px 12px rgba(122,214,255,0.7)); will-change: transform; }
+
+.gesture-gate { max-width: 380px; align-items: stretch; gap: 12px; }
+.gesture-surface--gate {
+  position: relative; inset: auto; height: 200px; border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.32); border: 1px dashed var(--stroke);
+}
+.gesture-gate__icon { font-size: 60px; will-change: transform; pointer-events: none; }
+.gesture-gate__track { height: 10px; border-radius: 999px; background: rgba(0,0,0,0.4); overflow: hidden; }
+.gesture-gate__fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #f97316); transition: width 0.08s linear; }
+
+.interact-seg--sub .interact-seg__btn { padding: 8px 6px; }

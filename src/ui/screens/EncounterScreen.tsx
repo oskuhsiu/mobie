@@ -12,10 +12,17 @@ import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
 import { MobCard } from '@/ui/components/MobCard'
+import { GestureGate } from '@/ui/components/GestureGate'
+import { useSettings } from '@/store/settingsStore'
+import { interactModeOf } from '@/game/settings'
 import { audio } from '@/audio/audioEngine'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
+  // M22.h：遭遇前撥草（純演出）。off＝直接出戰；開啟＝撥開草叢手勢後才 ENGAGE。
+  const grassOn = useSettings((s) => interactModeOf(s.settings, 'encounter') !== 'off')
+  const [grassGate, setGrassGate] = useState(false)
+  const engage = () => { if (grassOn) setGrassGate(true); else send({ type: 'ENGAGE' }) }
   const foes = useMemo(
     () => context.foeTeam.map(buildBattleMobie),
     [context.foeTeam],
@@ -110,10 +117,23 @@ export function EncounterScreen() {
         className="btn" style={{ alignSelf: 'center', fontSize: 19, padding: '16px 44px' }}
         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
         whileTap={{ scale: 0.96 }}
-        onClick={() => send({ type: 'ENGAGE' })}
+        onClick={engage}
       >
         ⚔ 出戰
       </motion.button>
+
+      {/* M22.h 撥草 gate（純演出，撥開或逾時即出戰） */}
+      <AnimatePresence>
+        {grassGate && (
+          <GestureGate
+            title="🌿 撥開草叢"
+            icon="🌿"
+            hint="來回撥動，撥開草叢找出對手！"
+            onComplete={() => { setGrassGate(false); send({ type: 'ENGAGE' }) }}
+            onCancel={() => setGrassGate(false)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {cardMon && <MobCard mon={cardMon} owner={false} revealed={false} onClose={() => setCardMon(null)} />}

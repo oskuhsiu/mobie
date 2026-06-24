@@ -10,6 +10,9 @@ import { ASCENSIONS } from '@/game/tower'
 import { audio } from '@/audio/audioEngine'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
+import { GestureGate } from '@/ui/components/GestureGate'
+import { useSettings } from '@/store/settingsStore'
+import { interactModeOf } from '@/game/settings'
 
 /**
  * M11 連勝塔出戰準備：選 3 隻 run 隊伍 + 難度階（Ascension，受 runStore 解鎖上限限制）→ 開始遠征。
@@ -26,6 +29,9 @@ export function TowerSetupScreen() {
   )
   const [picked, setPicked] = useState<string[]>([])
   const [ascension, setAscension] = useState(0)
+  // M22.j：開場破門手勢（純演出，整段遠征一次）。off＝直接開始。
+  const gateOn = useSettings((s) => interactModeOf(s.settings, 'tower') !== 'off')
+  const [breakGate, setBreakGate] = useState(false)
 
   const toggle = (cardId: string) => {
     audio.play('select')
@@ -33,12 +39,15 @@ export function TowerSetupScreen() {
   }
 
   const ready = picked.length === TEAM_SIZE
-  const start = () => {
-    if (!ready) return
+  const beginRun = () => {
     const chosen = picked.map((id) => cards.find((c) => c.card.cardId === id)?.card).filter((c): c is NonNullable<typeof c> => Boolean(c))
     const seed = `${Date.now()}-${Math.floor(Math.random() * 1e6)}` // run-unique 種子（決定論 foe）
     audio.play('super')
     send({ type: 'START_TOWER', cards: chosen, ascension, seed })
+  }
+  const start = () => {
+    if (!ready) return
+    if (gateOn) setBreakGate(true); else beginRun()
   }
 
   return (
@@ -109,6 +118,19 @@ export function TowerSetupScreen() {
       >
         🗼 開始遠征　<span style={{ fontSize: 14, opacity: 0.85 }}>{picked.length}/{TEAM_SIZE}</span>
       </motion.button>
+
+      {/* M22.j 破門 gate（純演出，破門或逾時即開始遠征） */}
+      <AnimatePresence>
+        {breakGate && (
+          <GestureGate
+            title="🗼 破門而入"
+            icon="🚪"
+            hint="來回推撞塔門，闖進連勝塔！"
+            onComplete={() => { setBreakGate(false); beginRun() }}
+            onCancel={() => setBreakGate(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

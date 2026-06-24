@@ -5,11 +5,7 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { swipeFromPointer, swipeThrowValid, angleTo, wrapAngle, type Pt } from '@/input/gestures'
 import type { InteractMode } from '@/game/settings'
-
-/** 把 PointerEvent 座標正規化到手勢面板的 0..1。rect 於 pointerdown 快取一次，避免每次 move 觸發 layout。 */
-function normPt(rect: DOMRect, e: ReactPointerEvent): Pt {
-  return { x: (e.clientX - rect.left) / Math.max(1, rect.width), y: (e.clientY - rect.top) / Math.max(1, rect.height), t: e.timeStamp }
-}
+import { normPt } from '@/ui/components/gestureUtil'
 
 /** 甩動丟球：向上快甩即丟出；逾時自動以基準速度丟（絕不卡死）。 */
 export function SwipeThrow({ mode, onThrow, timeoutMs = 6000 }: {

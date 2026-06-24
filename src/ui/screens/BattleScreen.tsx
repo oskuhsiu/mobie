@@ -27,7 +27,9 @@ import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
 import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
-import { interactModeOf } from '@/game/settings'
+import { ShieldSwipe } from '@/ui/components/BattleGestures'
+import { interactModeOf, attackInputVariantOf } from '@/game/settings'
+import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
@@ -369,6 +371,10 @@ export function BattleScreen() {
   const prep = useSettings((s) => s.prep)
   // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
   const starMode = useSettings((s) => interactModeOf(s.settings, 'starStrike'))
+  // M22.f 換人防禦下滑護盾（off＝原 TimingBar）；M22.g 攻擊節奏變體（mash＝原連打）。
+  const defenseMode = useSettings((s) => interactModeOf(s.settings, 'defense'))
+  const attackVariant = useSettings((s) => attackInputVariantOf(s.settings))
+  const interactMode = useSettings((s) => s.settings.prefs.enhancedInteractivity.mode)
   // M17 夥伴（訓練師）技能：帳號級、純顯示層。模組關＝行動列不顯示；已習得（起始∪解鎖）才可用。
   const partnerOn = useSettings((s) => s.settings.modules.partnerSkills)
   const learnedSkillIds = usePlayerSkills((s) => s.learnedSkillIds)
@@ -1113,19 +1119,23 @@ export function BattleScreen() {
                 onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }}
               />
             )}
-            {phase === 'mash' && <MashMeter onDone={onMashDone} />}
+            {phase === 'mash' && (attackVariant === 'rhythm'
+              ? <RhythmTap mode={interactMode} onDone={(acc) => onMashDone(rhythmToMashCount(acc))} />
+              : <MashMeter onDone={onMashDone} />)}
             {phase === 'statusQte' && (
               <TimingBar
                 hint="變化招！抓準時機強化效果（只影響強度、不影響成敗）"
                 onResult={(q) => { void runPlayerTurn(q, 0) }}
               />
             )}
-            {phase === 'defenseQte' && (
-              <TimingBar
-                hint="換人中！點擊停在正中可大幅減傷！"
-                onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }}
-              />
-            )}
+            {phase === 'defenseQte' && (defenseMode !== 'off'
+              ? <ShieldSwipe mode={defenseMode} onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }} />
+              : (
+                <TimingBar
+                  hint="換人中！點擊停在正中可大幅減傷！"
+                  onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }}
+                />
+              ))}
             {phase === 'chainQte' && chainSeq && (
               <TimingBar
                 key={`chain-${chainSeq.step}`} /* 每段重掛 → 指針動畫重置 */

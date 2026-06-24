@@ -5,6 +5,7 @@
 // 高頻 component（SwipeThrow/CircleSeal/HoldChargeRing/RhythmTap）走 ref/rAF/DOM，只在完成時呼叫一次。
 
 import { INTENSITY_BY_MODE, type InteractMode } from '@/game/settings'
+import type { QteQuality } from '@/game/battle/engine'
 
 /** 取樣點：x/y 已由 component 正規化到 0..1（相對手勢面板）；t 為毫秒時戳。 */
 export interface Pt {
@@ -140,4 +141,39 @@ export function rhythmAccuracy(offsetsMs: number[], windowMs: number): number {
 export function rhythmTaps(tapTimes: number[], beatTimes: number[], mode: InteractMode): number {
   const { rhythmWindowMs } = intensity(mode)
   return rhythmAccuracy(matchTapsToBeats(tapTimes, beatTimes, rhythmWindowMs), rhythmWindowMs)
+}
+
+// ── M22.g 攻擊節奏變體：accuracy → mashCount（沿用攻擊蓄力的 count 通道） ──────────
+/** 連打蓄力的 count 上限（energyGain/chargeTier 皆以此為飽和點）。 */
+export const MASH_COUNT_CAP = 24
+/** 把節奏準確度 0..1 映成等效連打次數 0..CAP（perfect≈滿打，純強度、不改命中/勝負）。 */
+export function rhythmToMashCount(accuracy: number): number {
+  return Math.round(Math.max(0, Math.min(1, accuracy)) * MASH_COUNT_CAP)
+}
+
+// ── M22.f 防禦下滑護盾：swipe → QteQuality（仍映射既有 quality 通道） ──────────────
+/** 下滑拉護盾：有效甩動依速度給 quality（向下＝預期方向、給滿分機會）；無效甩動＝weak。 */
+export function swipeShieldQuality(r: SwipeResult, mode: InteractMode): QteQuality {
+  const min = intensity(mode).swipeMinSpeed
+  if (!swipeThrowValid(r, mode)) return 'weak'
+  const downward = r.dir === 'down'
+  if (r.speed >= min * 2.4 && downward) return 'perfect'
+  if (r.speed >= min * 1.5) return downward ? 'good' : 'normal'
+  return 'normal'
+}
+
+// ── M22.h/i 撥草・摩擦：累積路徑長度 → 進度（純演出 gate，不影響任何結果） ─────────
+/** 取樣序列的折線總長（正規化單位）。 */
+export function pathLength(samples: Pt[]): number {
+  let d = 0
+  for (let i = 1; i < samples.length; i++) {
+    d += Math.hypot(samples[i].x - samples[i - 1].x, samples[i].y - samples[i - 1].y)
+  }
+  return d
+}
+
+/** 摩擦/撥動進度 0..1＝累積路徑長 / 目標長（夾上限）。 */
+export function frictionProgress(samples: Pt[], targetUnits: number): number {
+  if (targetUnits <= 0) return 1
+  return Math.min(1, pathLength(samples) / targetUnits)
 }
