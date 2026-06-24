@@ -1,11 +1,12 @@
-// 一次性產生器：從 PokéAPI 抓 dex 1–251，產生 species/moves/regions/playerCards 四個資料檔。
+// 一次性產生器：從 PokéAPI 抓 dex 1–1025（G1–G9），產生 species/moves/regions/playerCards 四個資料檔。
 // Node 24（內建 fetch）。本地快取 /tmp/dexcache，並發 + 重試。不內建侵權資產：artwork 走官方 raw URL（runtime 載）。
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 // 用法：node scripts/gen_dex.mjs —— 從 PokéAPI 重新產生 src/game/data 的四個資料檔。
-const MAX_ID = 251
+// M13 內容補完：1025＝全國圖鑑 G1–G9（plan/13 §1.1）。可調小做分階段。
+const MAX_ID = 1025
 const CACHE = '/tmp/dexcache' // 原始 JSON 快取（可刪；刪後重抓）
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'game', 'data')
 mkdirSync(CACHE, { recursive: true })
@@ -166,6 +167,11 @@ export function getMove(id: number): Move {
   const m = MOVES[id]
   if (!m) throw new Error(\`Unknown move id: \${id}\`)
   return m
+}
+
+/** 安全查招：未知 id 回 undefined（不丟例外）。回放戰報等「不可崩」路徑用（M14.f）。 */
+export function findMove(id: number): Move | undefined {
+  return MOVES[id]
 }
 `
 writeFileSync(`${OUT}/moves.ts`, movesTs)

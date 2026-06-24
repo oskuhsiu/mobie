@@ -1,4 +1,4 @@
-// 資料完整性壓力測試：把全 251 物種 / 招式 / 區域 / 卡 / 相剋表逐筆掃過，
+// 資料完整性壓力測試：把全國圖鑑 1–1025 物種 / 招式 / 區域 / 卡 / 相剋表逐筆掃過，
 // 確保生成資料（species/moves/regions/playerCards）與手寫資料（practiceRegion）皆自洽、
 // 不會在 runtime 才炸（getSpecies/getMove 拋錯、區域引用不存在的物種、相剋倍率越界…）。
 import { describe, it, expect } from 'vitest'
@@ -17,12 +17,12 @@ const ALL_TYPES: TypeName[] = [
 ]
 const TYPE_SET = new Set(ALL_TYPES)
 const STAT_KEYS: (keyof Stats)[] = ['hp', 'atk', 'def', 'spa', 'spd', 'spe']
-const DEX_MAX = 251
+const DEX_MAX = 1025
 const ids = Array.from({ length: DEX_MAX }, (_, i) => i + 1)
 const isPosInt = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0
 
-describe('資料完整性 · SPECIES（全國圖鑑 1–251）', () => {
-  it('每個編號 1–251 都存在、id 自洽、getSpecies 不拋', () => {
+describe('資料完整性 · SPECIES（全國圖鑑 1–1025）', () => {
+  it('每個編號 1–1025 都存在、id 自洽、getSpecies 不拋', () => {
     expect(Object.keys(SPECIES)).toHaveLength(DEX_MAX)
     for (const id of ids) {
       const sp = SPECIES[id]

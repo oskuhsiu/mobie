@@ -14,12 +14,12 @@ export const REGIONS: Region[] = [
     blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。',
     encounters: [
       { speciesId: 191, weight: 4, minLevel: 6, maxLevel: 9 }, // 向日種子
-      { speciesId: 165, weight: 4, minLevel: 7, maxLevel: 10 }, // 芭瓢蟲
-      { speciesId: 43, weight: 4, minLevel: 8, maxLevel: 11 }, // 走路草
-      { speciesId: 44, weight: 3, minLevel: 9, maxLevel: 12 }, // 臭臭花
-      { speciesId: 49, weight: 2, minLevel: 10, maxLevel: 13 }, // 摩魯蛾
-      { speciesId: 127, weight: 2, minLevel: 11, maxLevel: 13 }, // 凱羅斯
-      { speciesId: 251, weight: 1, minLevel: 13, maxLevel: 15 }, // 時拉比
+      { speciesId: 946, weight: 4, minLevel: 7, maxLevel: 10 }, // 納噬草
+      { speciesId: 451, weight: 4, minLevel: 8, maxLevel: 11 }, // 鉗尾蠍
+      { speciesId: 651, weight: 3, minLevel: 9, maxLevel: 12 }, // 胖胖哈力
+      { speciesId: 272, weight: 2, minLevel: 10, maxLevel: 13 }, // 樂天河童
+      { speciesId: 930, weight: 1, minLevel: 11, maxLevel: 13 }, // 奧利瓦
+      { speciesId: 893, weight: 1, minLevel: 13, maxLevel: 15 }, // 薩戮德
     ],
   },
   {
@@ -32,12 +32,12 @@ export const REGIONS: Region[] = [
     blurb: '岩漿翻騰的赤紅山體，火系與烈性Mobie的領域。',
     encounters: [
       { speciesId: 218, weight: 4, minLevel: 12, maxLevel: 15 }, // 熔岩蟲
-      { speciesId: 228, weight: 4, minLevel: 13, maxLevel: 16 }, // 戴魯比
-      { speciesId: 5, weight: 3, minLevel: 14, maxLevel: 17 }, // 火恐龍
-      { speciesId: 126, weight: 2, minLevel: 15, maxLevel: 18 }, // 鴨嘴火獸
-      { speciesId: 38, weight: 2, minLevel: 16, maxLevel: 19 }, // 九尾
-      { speciesId: 59, weight: 1, minLevel: 17, maxLevel: 19 }, // 風速狗
-      { speciesId: 250, weight: 1, minLevel: 19, maxLevel: 21 }, // 鳳王
+      { speciesId: 909, weight: 4, minLevel: 13, maxLevel: 16 }, // 呆火鱷
+      { speciesId: 256, weight: 3, minLevel: 14, maxLevel: 17 }, // 力壯雞
+      { speciesId: 555, weight: 2, minLevel: 15, maxLevel: 18 }, // 達摩狒狒
+      { speciesId: 609, weight: 1, minLevel: 16, maxLevel: 19 }, // 水晶燈火靈
+      { speciesId: 467, weight: 1, minLevel: 17, maxLevel: 19 }, // 鴨嘴炎獸
+      { speciesId: 643, weight: 1, minLevel: 19, maxLevel: 21 }, // 萊希拉姆
     ],
   },
   {
@@ -49,13 +49,13 @@ export const REGIONS: Region[] = [
     icon: '🌊',
     blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。',
     encounters: [
-      { speciesId: 129, weight: 4, minLevel: 12, maxLevel: 15 }, // 鯉魚王
-      { speciesId: 7, weight: 4, minLevel: 13, maxLevel: 16 }, // 傑尼龜
-      { speciesId: 120, weight: 4, minLevel: 14, maxLevel: 17 }, // 海星星
-      { speciesId: 215, weight: 2, minLevel: 15, maxLevel: 18 }, // 狃拉
-      { speciesId: 224, weight: 2, minLevel: 16, maxLevel: 19 }, // 章魚桶
-      { speciesId: 121, weight: 1, minLevel: 17, maxLevel: 19 }, // 寶石海星
-      { speciesId: 245, weight: 1, minLevel: 19, maxLevel: 21 }, // 水君
+      { speciesId: 746, weight: 4, minLevel: 12, maxLevel: 15 }, // 弱丁魚
+      { speciesId: 501, weight: 4, minLevel: 13, maxLevel: 16 }, // 水水獺
+      { speciesId: 458, weight: 4, minLevel: 14, maxLevel: 17 }, // 小球飛魚
+      { speciesId: 124, weight: 2, minLevel: 15, maxLevel: 18 }, // 迷唇姐
+      { speciesId: 199, weight: 2, minLevel: 16, maxLevel: 19 }, // 呆呆王
+      { speciesId: 9, weight: 1, minLevel: 17, maxLevel: 19 }, // 水箭龜
+      { speciesId: 484, weight: 1, minLevel: 19, maxLevel: 21 }, // 帕路奇亞
     ],
   },
   {
@@ -68,12 +68,12 @@ export const REGIONS: Region[] = [
     blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。',
     encounters: [
       { speciesId: 172, weight: 4, minLevel: 16, maxLevel: 19 }, // 皮丘
-      { speciesId: 25, weight: 4, minLevel: 17, maxLevel: 20 }, // 皮卡丘
-      { speciesId: 180, weight: 3, minLevel: 18, maxLevel: 21 }, // 茸茸羊
-      { speciesId: 164, weight: 2, minLevel: 19, maxLevel: 22 }, // 貓頭夜鷹
-      { speciesId: 18, weight: 2, minLevel: 20, maxLevel: 23 }, // 大比鳥
-      { speciesId: 6, weight: 1, minLevel: 21, maxLevel: 23 }, // 噴火龍
-      { speciesId: 250, weight: 1, minLevel: 23, maxLevel: 25 }, // 鳳王
+      { speciesId: 333, weight: 4, minLevel: 17, maxLevel: 20 }, // 青綿鳥
+      { speciesId: 12, weight: 3, minLevel: 18, maxLevel: 21 }, // 巴大蝶
+      { speciesId: 277, weight: 2, minLevel: 19, maxLevel: 22 }, // 大王燕
+      { speciesId: 923, weight: 2, minLevel: 20, maxLevel: 23 }, // 巴布土撥
+      { speciesId: 130, weight: 1, minLevel: 21, maxLevel: 23 }, // 暴鯉龍
+      { speciesId: 717, weight: 1, minLevel: 23, maxLevel: 25 }, // 伊裴爾塔爾
     ],
   },
   {
@@ -86,12 +86,12 @@ export const REGIONS: Region[] = [
     blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。',
     encounters: [
       { speciesId: 194, weight: 4, minLevel: 16, maxLevel: 19 }, // 烏波
-      { speciesId: 56, weight: 4, minLevel: 17, maxLevel: 20 }, // 猴怪
-      { speciesId: 75, weight: 3, minLevel: 18, maxLevel: 21 }, // 隆隆石
-      { speciesId: 195, weight: 2, minLevel: 19, maxLevel: 22 }, // 沼王
-      { speciesId: 107, weight: 2, minLevel: 20, maxLevel: 23 }, // 快拳郎
-      { speciesId: 31, weight: 2, minLevel: 21, maxLevel: 23 }, // 尼多后
-      { speciesId: 248, weight: 1, minLevel: 23, maxLevel: 25 }, // 班基拉斯
+      { speciesId: 304, weight: 4, minLevel: 17, maxLevel: 20 }, // 可可多拉
+      { speciesId: 533, weight: 3, minLevel: 18, maxLevel: 21 }, // 鐵骨土人
+      { speciesId: 297, weight: 2, minLevel: 19, maxLevel: 22 }, // 鐵掌力士
+      { speciesId: 973, weight: 2, minLevel: 20, maxLevel: 23 }, // 纏紅鶴
+      { speciesId: 392, weight: 1, minLevel: 21, maxLevel: 23 }, // 烈焰猴
+      { speciesId: 1007, weight: 1, minLevel: 23, maxLevel: 25 }, // 故勒頓
     ],
   },
   {
@@ -104,12 +104,12 @@ export const REGIONS: Region[] = [
     blurb: '陰森詭譎的廢棄高塔，幽靈、毒與惡系徘徊。',
     encounters: [
       { speciesId: 13, weight: 4, minLevel: 20, maxLevel: 23 }, // 獨角蟲
-      { speciesId: 69, weight: 4, minLevel: 21, maxLevel: 24 }, // 喇叭芽
-      { speciesId: 72, weight: 4, minLevel: 22, maxLevel: 25 }, // 瑪瑙水母
-      { speciesId: 2, weight: 3, minLevel: 23, maxLevel: 26 }, // 妙蛙草
-      { speciesId: 49, weight: 2, minLevel: 24, maxLevel: 27 }, // 摩魯蛾
-      { speciesId: 229, weight: 2, minLevel: 25, maxLevel: 27 }, // 黑魯加
-      { speciesId: 248, weight: 1, minLevel: 27, maxLevel: 29 }, // 班基拉斯
+      { speciesId: 318, weight: 4, minLevel: 21, maxLevel: 24 }, // 利牙魚
+      { speciesId: 302, weight: 3, minLevel: 22, maxLevel: 25 }, // 勾魂眼
+      { speciesId: 342, weight: 2, minLevel: 23, maxLevel: 26 }, // 鐵螯龍蝦
+      { speciesId: 94, weight: 2, minLevel: 24, maxLevel: 27 }, // 耿鬼
+      { speciesId: 911, weight: 1, minLevel: 25, maxLevel: 27 }, // 骨紋巨聲鱷
+      { speciesId: 890, weight: 1, minLevel: 27, maxLevel: 29 }, // 無極汰那
     ],
   },
   {
@@ -121,13 +121,13 @@ export const REGIONS: Region[] = [
     icon: '🧚',
     blurb: '霧氣繚繞的夢幻花原，超能力與妖精系翩翩起舞。',
     encounters: [
-      { speciesId: 174, weight: 4, minLevel: 20, maxLevel: 23 }, // 寶寶丁
-      { speciesId: 132, weight: 4, minLevel: 21, maxLevel: 24 }, // 百變怪
-      { speciesId: 216, weight: 4, minLevel: 22, maxLevel: 25 }, // 熊寶寶
-      { speciesId: 162, weight: 3, minLevel: 23, maxLevel: 26 }, // 大尾立
-      { speciesId: 122, weight: 2, minLevel: 24, maxLevel: 27 }, // 魔牆人偶
-      { speciesId: 65, weight: 2, minLevel: 25, maxLevel: 27 }, // 胡地
-      { speciesId: 249, weight: 1, minLevel: 27, maxLevel: 29 }, // 洛奇亞
+      { speciesId: 298, weight: 4, minLevel: 20, maxLevel: 23 }, // 露力麗
+      { speciesId: 52, weight: 4, minLevel: 21, maxLevel: 24 }, // 喵喵
+      { speciesId: 327, weight: 3, minLevel: 22, maxLevel: 25 }, // 晃晃斑
+      { speciesId: 432, weight: 2, minLevel: 23, maxLevel: 26 }, // 東施喵
+      { speciesId: 521, weight: 2, minLevel: 24, maxLevel: 27 }, // 高傲雉雞
+      { speciesId: 772, weight: 1, minLevel: 25, maxLevel: 27 }, // 屬性：空
+      { speciesId: 493, weight: 1, minLevel: 27, maxLevel: 29 }, // 阿爾宙斯
     ],
   },
   {
@@ -139,13 +139,13 @@ export const REGIONS: Region[] = [
     icon: '🐉',
     blurb: '雲端之上的險峻峰巔，龍、鋼系強敵盤踞的終局試煉。',
     encounters: [
-      { speciesId: 220, weight: 4, minLevel: 26, maxLevel: 29 }, // 小山豬
-      { speciesId: 81, weight: 4, minLevel: 27, maxLevel: 30 }, // 小磁怪
-      { speciesId: 215, weight: 2, minLevel: 28, maxLevel: 31 }, // 狃拉
-      { speciesId: 205, weight: 2, minLevel: 29, maxLevel: 32 }, // 佛烈托斯
-      { speciesId: 212, weight: 2, minLevel: 31, maxLevel: 34 }, // 巨鉗螳螂
-      { speciesId: 131, weight: 1, minLevel: 32, maxLevel: 34 }, // 拉普拉斯
-      { speciesId: 149, weight: 1, minLevel: 34, maxLevel: 36 }, // 快龍
+      { speciesId: 872, weight: 4, minLevel: 26, maxLevel: 29 }, // 雪吞蟲
+      { speciesId: 304, weight: 4, minLevel: 27, maxLevel: 30 }, // 可可多拉
+      { speciesId: 705, weight: 2, minLevel: 28, maxLevel: 31 }, // 黏美兒
+      { speciesId: 437, weight: 2, minLevel: 29, maxLevel: 32 }, // 青銅鐘
+      { speciesId: 473, weight: 1, minLevel: 31, maxLevel: 34 }, // 象牙豬
+      { speciesId: 1023, weight: 1, minLevel: 32, maxLevel: 34 }, // 铁头壳
+      { speciesId: 890, weight: 1, minLevel: 34, maxLevel: 36 }, // 無極汰那
     ],
   },
   {
@@ -157,13 +157,13 @@ export const REGIONS: Region[] = [
     icon: '🪷',
     blurb: '潮間帶與沼澤交錯的濕地，水、草與毒系混居其間。',
     encounters: [
-      { speciesId: 191, weight: 4, minLevel: 14, maxLevel: 17 }, // 向日種子
-      { speciesId: 223, weight: 4, minLevel: 15, maxLevel: 18 }, // 鐵炮魚
-      { speciesId: 72, weight: 4, minLevel: 16, maxLevel: 19 }, // 瑪瑙水母
-      { speciesId: 93, weight: 3, minLevel: 17, maxLevel: 20 }, // 鬼斯通
-      { speciesId: 87, weight: 2, minLevel: 19, maxLevel: 22 }, // 白海獅
-      { speciesId: 34, weight: 2, minLevel: 20, maxLevel: 22 }, // 尼多王
-      { speciesId: 251, weight: 1, minLevel: 22, maxLevel: 24 }, // 時拉比
+      { speciesId: 746, weight: 4, minLevel: 14, maxLevel: 17 }, // 弱丁魚
+      { speciesId: 747, weight: 4, minLevel: 15, maxLevel: 18 }, // 好壞星
+      { speciesId: 188, weight: 4, minLevel: 16, maxLevel: 19 }, // 毽子花
+      { speciesId: 114, weight: 2, minLevel: 17, maxLevel: 20 }, // 蔓藤怪
+      { speciesId: 842, weight: 2, minLevel: 19, maxLevel: 22 }, // 豐蜜龍
+      { speciesId: 389, weight: 1, minLevel: 20, maxLevel: 22 }, // 土台龜
+      { speciesId: 890, weight: 1, minLevel: 22, maxLevel: 24 }, // 無極汰那
     ],
   },
   {
@@ -176,12 +176,12 @@ export const REGIONS: Region[] = [
     blurb: '岩漿滲入地底坑道的灼熱洞窟，火、岩與地面系盤踞。',
     encounters: [
       { speciesId: 194, weight: 4, minLevel: 18, maxLevel: 21 }, // 烏波
-      { speciesId: 155, weight: 4, minLevel: 19, maxLevel: 22 }, // 火球鼠
-      { speciesId: 95, weight: 3, minLevel: 20, maxLevel: 23 }, // 大岩蛇
-      { speciesId: 105, weight: 3, minLevel: 21, maxLevel: 24 }, // 嘎啦嘎啦
-      { speciesId: 139, weight: 2, minLevel: 23, maxLevel: 26 }, // 多刺菊石獸
-      { speciesId: 208, weight: 1, minLevel: 24, maxLevel: 26 }, // 大鋼蛇
-      { speciesId: 250, weight: 1, minLevel: 26, maxLevel: 28 }, // 鳳王
+      { speciesId: 104, weight: 4, minLevel: 19, maxLevel: 22 }, // 卡拉卡拉
+      { speciesId: 525, weight: 3, minLevel: 20, maxLevel: 23 }, // 地幔岩
+      { speciesId: 618, weight: 2, minLevel: 21, maxLevel: 24 }, // 泥巴魚
+      { speciesId: 934, weight: 2, minLevel: 23, maxLevel: 26 }, // 鹽石巨靈
+      { speciesId: 157, weight: 1, minLevel: 24, maxLevel: 26 }, // 火爆獸
+      { speciesId: 643, weight: 1, minLevel: 26, maxLevel: 28 }, // 萊希拉姆
     ],
   },
   {
@@ -194,13 +194,13 @@ export const REGIONS: Region[] = [
     icon: '🌀',
     blurb: '地形變幻莫測的幻象結界，每次踏入都是未知的場域。',
     encounters: [
-      { speciesId: 174, weight: 4, minLevel: 24, maxLevel: 27 }, // 寶寶丁
+      { speciesId: 298, weight: 4, minLevel: 24, maxLevel: 27 }, // 露力麗
       { speciesId: 238, weight: 4, minLevel: 25, maxLevel: 28 }, // 迷唇娃
-      { speciesId: 96, weight: 4, minLevel: 26, maxLevel: 29 }, // 催眠貘
-      { speciesId: 40, weight: 2, minLevel: 27, maxLevel: 30 }, // 胖可丁
-      { speciesId: 36, weight: 2, minLevel: 29, maxLevel: 32 }, // 皮可西
-      { speciesId: 196, weight: 1, minLevel: 30, maxLevel: 32 }, // 太陽伊布
-      { speciesId: 249, weight: 1, minLevel: 32, maxLevel: 34 }, // 洛奇亞
+      { speciesId: 611, weight: 3, minLevel: 26, maxLevel: 29 }, // 斧牙龍
+      { speciesId: 36, weight: 2, minLevel: 27, maxLevel: 30 }, // 皮可西
+      { speciesId: 475, weight: 1, minLevel: 29, maxLevel: 32 }, // 艾路雷朵
+      { speciesId: 1006, weight: 1, minLevel: 30, maxLevel: 32 }, // 鐵武者
+      { speciesId: 890, weight: 1, minLevel: 32, maxLevel: 34 }, // 無極汰那
     ],
   },
 ]
