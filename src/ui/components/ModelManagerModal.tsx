@@ -64,7 +64,7 @@ export function ModelManagerModal({ onClose }: { onClose: () => void }) {
         <div className="modal-card__head">
           <div>
             <div className="h-title" style={{ fontSize: 24 }}>🧩 3D 模型</div>
-            <div className="h-sub">替任一寶可夢匯入本機 GLB；沒匯入的就用官方 artwork 立繪。</div>
+            <div className="h-sub">替任一Mobie匯入本機 GLB；沒匯入的就用官方 artwork 立繪。</div>
           </div>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
@@ -109,7 +109,7 @@ export function ModelManagerModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-          {filtered.length === 0 && <div className="model-empty">找不到符合的寶可夢</div>}
+          {filtered.length === 0 && <div className="model-empty">找不到符合的Mobie</div>}
         </div>
 
         <div className="model-foot">

@@ -22,7 +22,7 @@ export function levelFromExp(exp: number): number {
   return Math.max(1, Math.min(MAX_LEVEL, n))
 }
 
-/** 擊敗一隻 level 寶可夢得到的經驗（依被擊敗者等級；自用平衡值） */
+/** 擊敗一隻 level Mobie得到的經驗（依被擊敗者等級；自用平衡值） */
 export function expYield(defeatedLevel: number): number {
   const L = Math.max(1, Math.floor(defeatedLevel))
   return Math.floor(L * L * 0.8) + L * 2 + 5

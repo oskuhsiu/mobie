@@ -85,7 +85,7 @@ export function CardSelectScreen() {
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
         <div className="col" style={{ gap: 4 }}>
           <div className="eyebrow">Step 2 · 組你的隊伍</div>
-          <div className="h-title" style={{ fontSize: 28 }}>選擇出戰寶可夢</div>
+          <div className="h-title" style={{ fontSize: 28 }}>選擇出戰Mobie</div>
           <div className="h-sub">挑 {TEAM_SIZE} 隻組隊；不熟屬性？按「推薦出戰」幫你挑剋制陣容</div>
         </div>
         <motion.button

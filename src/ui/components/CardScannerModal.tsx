@@ -23,7 +23,7 @@ const REASON_TEXT: Record<CardCodeReason, string> = {
 const MAX_DIM = 640 // 解碼前縮圖上限，顧 iPad 幀率
 const DECODE_INTERVAL_MS = 80 // 解碼節流 ~12fps（相機預覽仍全速）
 
-/** 掃實體卡 QR → 解析校驗 → 反查卡庫 → 加入我的寶可夢。相機不可用時可手動輸入卡碼。 */
+/** 掃實體卡 QR → 解析校驗 → 反查卡庫 → 加入我的Mobie。相機不可用時可手動輸入卡碼。 */
 export function CardScannerModal({ onClose }: { onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -137,7 +137,7 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
         <div className="modal-card__head">
           <div>
             <div className="h-title" style={{ fontSize: 24 }}>📷 掃卡</div>
-            <div className="h-sub">把實體卡的 QR 對準相機；掃到就加入「我的寶可夢」。</div>
+            <div className="h-sub">把實體卡的 QR 對準相機；掃到就加入「我的Mobie」。</div>
           </div>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
@@ -154,7 +154,7 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
                 <>
                   <img className="scan-result__art" src={result.species.artworkUrl} alt={result.species.nameZh} />
                   <div className="scan-result__title">{result.species.nameZh} Lv.{result.card.level}</div>
-                  <div className="scan-result__sub">{result.added ? '已加入我的寶可夢！' : '你已經擁有這張卡了'}</div>
+                  <div className="scan-result__sub">{result.added ? '已加入我的Mobie！' : '你已經擁有這張卡了'}</div>
                 </>
               ) : (
                 <>

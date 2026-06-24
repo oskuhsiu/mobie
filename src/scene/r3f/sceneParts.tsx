@@ -15,7 +15,7 @@ export function StageLights() {
   )
 }
 
-/** 發光地台（每隻寶可夢站一個）。 */
+/** 發光地台（每隻Mobie站一個）。 */
 export function Pedestal({
   position,
   color = '#5b8cff',

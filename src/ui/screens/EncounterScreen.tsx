@@ -42,7 +42,7 @@ export function EncounterScreen() {
           className="col center" style={{ gap: 8 }}
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
         >
-          <div className="eyebrow">對手帶著 {foes.length} 隻寶可夢出現了！</div>
+          <div className="eyebrow">對手帶著 {foes.length} 隻Mobie出現了！</div>
           <div className="h-title" style={{ fontSize: 36 }}>
             {wild.nameZh} <span className="hpbar__lv">Lv.{wild.level}</span>
           </div>

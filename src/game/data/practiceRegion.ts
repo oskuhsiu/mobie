@@ -3,7 +3,7 @@ import type { Region } from '@/game/types'
 /**
  * 競技場（非產生器產生、手動維護；原「練習場」於 M6 模式 contract 重定位）。
  * `mode:'arena'`＝中性地形、無野外意外、不可捕獲、純得經驗——但**保留支援輪盤**（街機手感核心）。
- * 低等級常見寶可夢、刻意「無傳說 boss」，提供低風險刷經驗、把起始隊練強的場地。
+ * 低等級常見Mobie、刻意「無傳說 boss」，提供低風險刷經驗、把起始隊練強的場地。
  * 流程與野外區域完全共用（encounter→cardSelect→battle→result），只在 result 依 mode 決定能否捕獲。
  */
 export const PRACTICE_REGION: Region = {

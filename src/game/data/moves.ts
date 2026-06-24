@@ -1,7 +1,7 @@
 import type { Move } from '@/game/types'
 
 /** 型別主題招式池：18 型 × 3 power tier（弱45 / 中70 / 強95）。
- *  每隻寶可夢依「主屬性 + 種族值總和 tier」對應到其中一招（單一專屬招式）。
+ *  每隻Mobie依「主屬性 + 種族值總和 tier」對應到其中一招（單一專屬招式）。
  *  本檔由 PokéAPI 產生器（scripts/gen_dex）寫出，請勿手改；要改招式請改產生器的 MOVE_SPEC。 */
 export const MOVES: Record<number, Move> = {
   1000: { id: 1000, name: 'Tackle', nameZh: '撞擊', type: 'normal', power: 45, accuracy: 100, category: 'physical' },

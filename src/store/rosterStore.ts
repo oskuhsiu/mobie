@@ -29,7 +29,7 @@ interface RosterState {
   lastResults: ExpResult[]
   /** 最近一場戰後進化（S6，給結算畫面演出），空＝無進化 */
   lastEvolutions: EvolutionEvent[]
-  /** 最近一場勝利新收服的寶可夢（給結算畫面顯示），null=沒收服 */
+  /** 最近一場勝利新收服的Mobie（給結算畫面顯示），null=沒收服 */
   lastCaptured: OwnedUnit | null
   load: () => Promise<void>
   /**

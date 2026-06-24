@@ -1,6 +1,6 @@
 import type { Card, Region } from '@/game/types'
 
-/** 依權重從區域遭遇表抽一隻野生寶可夢，回傳可進 buildBattleMobie 的 Card */
+/** 依權重從區域遭遇表抽一隻野生Mobie，回傳可進 buildBattleMobie 的 Card */
 export function rollEncounter(region: Region, rng: () => number = Math.random): Card {
   const table = region.encounters
   const total = table.reduce((s, e) => s + e.weight, 0)

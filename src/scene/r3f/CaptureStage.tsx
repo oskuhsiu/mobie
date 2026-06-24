@@ -5,7 +5,7 @@ import { Group, Vector3, PerspectiveCamera } from 'three'
 import { StageLights, Pedestal, BlobShadow } from './sceneParts'
 import { MobieVisual } from './MobieVisual'
 
-// 依寬高比自動拉遠相機，確保單體寶可夢在手機直向（aspect 很小）也完整入鏡、兩側不被切。
+// 依寬高比自動拉遠相機，確保單體Mobie在手機直向（aspect 很小）也完整入鏡、兩側不被切。
 const CAP_LOOK_AT = new Vector3(0, 1.0, 0)
 const CAP_VIEW_DIR = new Vector3(0, 1.7, 4.4).sub(CAP_LOOK_AT).normalize()
 const CAP_WANT_HALF_W = 1.4
@@ -34,7 +34,7 @@ interface CaptureStageProps {
   vanish: boolean
 }
 
-/** 收服畫面用的單體 3D 舞台：野生寶可夢（GLB/billboard）站在地台上，收服時縮沉消失。 */
+/** 收服畫面用的單體 3D 舞台：野生Mobie（GLB/billboard）站在地台上，收服時縮沉消失。 */
 export default function CaptureStage({ speciesId, artworkUrl, shiny, vanish }: CaptureStageProps) {
   return (
     <Canvas

@@ -153,7 +153,7 @@ export function playerActsFirst(
   return rng() < 0.5
 }
 
-/** 擊敗野生寶可夢後的捕獲機率（等級越低越好捕），0–1 */
+/** 擊敗野生Mobie後的捕獲機率（等級越低越好捕），0–1 */
 export function captureChance(wild: BattleMobie): number {
   const raw = 0.9 - (wild.level - 8) * 0.03
   return Math.min(0.95, Math.max(0.4, raw))

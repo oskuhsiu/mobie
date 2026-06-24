@@ -29,7 +29,7 @@ export const REGIONS: Region[] = [
     terrains: ['volcanic'],
     gradient: ['#b3361f', '#5c1208'],
     icon: '🌋',
-    blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。',
+    blurb: '岩漿翻騰的赤紅山體，火系與烈性Mobie的領域。',
     encounters: [
       { speciesId: 218, weight: 4, minLevel: 12, maxLevel: 15 }, // 熔岩蟲
       { speciesId: 228, weight: 4, minLevel: 13, maxLevel: 16 }, // 戴魯比

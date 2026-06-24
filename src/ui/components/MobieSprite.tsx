@@ -4,7 +4,7 @@ interface MobieSpriteProps {
   src: string
   alt: string
   shiny?: boolean
-  /** 背面朝向（自家寶可夢看背面）— M1 用官方 artwork，統一正面，僅水平翻轉示意 */
+  /** 背面朝向（自家Mobie看背面）— M1 用官方 artwork，統一正面，僅水平翻轉示意 */
   flip?: boolean
   className?: string
 }

@@ -41,7 +41,7 @@ export function TitleScreen() {
           className="h-title"
           style={{ fontSize: 'clamp(40px, 9vw, 88px)', lineHeight: 1, textAlign: 'center' }}
         >
-          MEZA<span style={{ color: 'var(--accent)' }}>STAR</span>
+          MOB<span style={{ color: 'var(--accent)' }}>IE</span>
           <div style={{ fontSize: 'clamp(14px,2.4vw,20px)', color: 'var(--text-dim)', fontWeight: 700, marginTop: 8 }}>
             掃卡 · 對戰 · 收服
           </div>

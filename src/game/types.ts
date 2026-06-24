@@ -74,7 +74,7 @@ export interface Card {
 }
 
 /**
- * 擁有的寶可夢（canonical，唯一持久化的資料；M1.5f）。
+ * 擁有的Mobie（canonical，唯一持久化的資料；M1.5f）。
  * 派生的戰鬥數值一律由此經 buildBattleMobie 算出，不存中間態。
  */
 export interface OwnedUnit {

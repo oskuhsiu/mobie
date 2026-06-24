@@ -84,7 +84,7 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-/** 新增自製卡：選寶可夢 + 等級 → 產生 cardId 存入卡庫。 */
+/** 新增自製卡：選Mobie + 等級 → 產生 cardId 存入卡庫。 */
 function AddCardPanel({ existing, onDone }: { existing: Card[]; onDone: () => void }) {
   const [q, setQ] = useState('')
   const [level, setLevel] = useState(15)
@@ -109,13 +109,13 @@ function AddCardPanel({ existing, onDone }: { existing: Card[]; onDone: () => vo
 
   return (
     <motion.div className="lib-panel" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-      <input className="model-search" placeholder="搜尋寶可夢名稱/編號…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className="model-search" placeholder="搜尋Mobie名稱/編號…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="row" style={{ gap: 14, alignItems: 'center' }}>
         <label className="lib-level">Lv.
           <input type="number" min={1} max={100} value={level} onChange={(e) => setLevel(Number(e.target.value))} />
         </label>
         <label className="lib-shiny"><input type="checkbox" checked={shiny} onChange={(e) => setShiny(e.target.checked)} /> 異色</label>
-        <span className="lib-hint">點下方寶可夢即新增</span>
+        <span className="lib-hint">點下方Mobie即新增</span>
       </div>
       <div className="lib-matches">
         {matches.map((sp) => (

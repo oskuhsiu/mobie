@@ -1,7 +1,7 @@
 {
-  "name": "Mezastar Clone",
-  "short_name": "Mezastar",
-  "description": "iPad-first Pokémon Mezastar-style battle game (personal use)",
+  "name": "Mobie",
+  "short_name": "Mobie",
+  "description": "Mobie — an iPad-first monster-battler (personal use)",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

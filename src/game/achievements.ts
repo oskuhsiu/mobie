@@ -32,7 +32,7 @@ const STRONG = [59, 62, 68, 130, 142, 149]
 const RARE = [144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251]
 
 export const ACHIEVEMENTS: AchievementDef[] = [
-  { id: 'firstcatch', name: '初次收服', icon: '🎯', desc: '收服第一隻寶可夢', target: 1, progress: (m) => m.stats.captures, reward: { kind: 'egg', label: '新手蛋', speciesPool: STARTERS } },
+  { id: 'firstcatch', name: '初次收服', icon: '🎯', desc: '收服第一隻Mobie', target: 1, progress: (m) => m.stats.captures, reward: { kind: 'egg', label: '新手蛋', speciesPool: STARTERS } },
   { id: 'catch10', name: '收藏家', icon: '🧺', desc: '累計收服 10 隻', target: 10, progress: (m) => m.stats.captures, reward: { kind: 'egg', label: 'common 蛋', speciesPool: COMMON } },
   { id: 'dex25', name: '圖鑑見習', icon: '📘', desc: '圖鑑登錄 25 種', target: 25, progress: (m) => m.registered.length, reward: { kind: 'egg', label: '探索蛋', speciesPool: COMMON } },
   { id: 'dex60', name: '圖鑑達人', icon: '📗', desc: '圖鑑登錄 60 種', target: 60, progress: (m) => m.registered.length, reward: { kind: 'egg', label: '稀有蛋', speciesPool: RARE } },

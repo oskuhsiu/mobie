@@ -585,7 +585,7 @@ export function BattleScreen() {
 
   return (
     <motion.div className="col" style={{ flex: 1, position: 'relative' }} animate={rootShake}>
-      {/* 3D 戰鬥舞台（背景層）：兩隻在場寶可夢 + 地台/光照/相機 */}
+      {/* 3D 戰鬥舞台（背景層）：兩隻在場Mobie + 地台/光照/相機 */}
       <Suspense fallback={null}>
         <BattleStage ref={stageRef} player={player} foe={foe} />
       </Suspense>

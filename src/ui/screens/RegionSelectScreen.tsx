@@ -21,7 +21,7 @@ export function RegionSelectScreen() {
       <div className="col" style={{ gap: 4 }}>
         <div className="eyebrow">Step 1</div>
         <div className="h-title">選擇區域</div>
-        <div className="h-sub">前往不同地帶遭遇野生寶可夢；新手可先去競技場練等</div>
+        <div className="h-sub">前往不同地帶遭遇野生Mobie；新手可先去競技場練等</div>
       </div>
 
       {/* 競技場入口：中性地形、純得經驗、不可捕獲，低風險刷經驗 */}

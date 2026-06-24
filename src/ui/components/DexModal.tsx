@@ -97,7 +97,7 @@ export function DexModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-          {visible.length === 0 && <div className="h-sub" style={{ padding: 20 }}>此篩選下尚無寶可夢</div>}
+          {visible.length === 0 && <div className="h-sub" style={{ padding: 20 }}>此篩選下尚無Mobie</div>}
         </div>
       </motion.div>
     </motion.div>

@@ -133,7 +133,7 @@ for (const type of TYPE_ORDER) {
 const movesTs = `import type { Move } from '@/game/types'
 
 /** 型別主題招式池：18 型 × 3 power tier（弱45 / 中70 / 強95）。
- *  每隻寶可夢依「主屬性 + 種族值總和 tier」對應到其中一招（單一專屬招式）。
+ *  每隻Mobie依「主屬性 + 種族值總和 tier」對應到其中一招（單一專屬招式）。
  *  本檔由 PokéAPI 產生器（scripts/gen_dex）寫出，請勿手改；要改招式請改產生器的 MOVE_SPEC。 */
 export const MOVES: Record<number, Move> = {
 ${moveLines.join('\n')}
@@ -189,7 +189,7 @@ const byId = new Map(dex.map((d) => [d.id, d]))
 // randomTerrain:true 的區，terrains 改當「地形池」，開場由 encounter seed 決定論抽 1 個。
 const REGION_THEMES = [
   { id: 'verdant-forest', name: '常綠森林', gradient: ['#1f6e43', '#0c3a24'], icon: '🌳', blurb: '蟲與草系出沒的蓊鬱林地，新手最佳起點。', types: ['grass', 'bug'], band: [6, 13], terrains: ['grassland'] },
-  { id: 'ember-volcano', name: '灼熱火山', gradient: ['#b3361f', '#5c1208'], icon: '🌋', blurb: '岩漿翻騰的赤紅山體，火系與烈性寶可夢的領域。', types: ['fire'], band: [12, 19], terrains: ['volcanic'] },
+  { id: 'ember-volcano', name: '灼熱火山', gradient: ['#b3361f', '#5c1208'], icon: '🌋', blurb: '岩漿翻騰的赤紅山體，火系與烈性Mobie的領域。', types: ['fire'], band: [12, 19], terrains: ['volcanic'] },
   { id: 'crystal-shore', name: '澄澈水濱', gradient: ['#1b6fb3', '#0a2f5c'], icon: '🌊', blurb: '清澈海灣與冰涼潮間帶，水、冰系悠游其中。', types: ['water', 'ice'], band: [12, 19], terrains: ['coastal'] },
   { id: 'thunder-plateau', name: '雷鳴高原', gradient: ['#caa42a', '#5c4a06'], icon: '⚡', blurb: '雷雲低垂的開闊高地，電系與飛行系翱翔盤旋。', types: ['electric', 'flying'], band: [16, 23], terrains: ['stormfield'] },
   { id: 'rocky-cavern', name: '岩窟洞穴', gradient: ['#7a5a3a', '#33231a'], icon: '🪨', blurb: '崎嶇地底坑道，岩、地面與格鬥系潛伏其中。', types: ['rock', 'ground', 'fighting'], band: [16, 23], terrains: ['cavern'] },

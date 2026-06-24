@@ -1,4 +1,4 @@
-// M10 — 孵化頁。蛋列表 + 進度條 + 來源標籤 + 孵化（蛋裂→定格新寶可夢 + Grade 徽章）。
+// M10 — 孵化頁。蛋列表 + 進度條 + 來源標籤 + 孵化（蛋裂→定格新Mobie + Grade 徽章）。
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useIncubator } from '@/store/incubatorStore'
@@ -39,7 +39,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
         <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {eggs.length === 0 && (
             <div className="h-sub" style={{ padding: 20, textAlign: 'center' }}>
-              還沒有蛋。領取成就獎勵，或在野外收服已擁有的寶可夢（自動轉化為蛋）來獲得！
+              還沒有蛋。領取成就獎勵，或在野外收服已擁有的Mobie（自動轉化為蛋）來獲得！
             </div>
           )}
           {eggs.map((e) => {

@@ -1,9 +1,9 @@
 {
-  "name": "pokemon-mezastar",
+  "name": "mobie",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "iPad-first Pokémon Mezastar-style game (personal use)",
+  "description": "Mobie — an iPad-first monster-battler (personal use)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

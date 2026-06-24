@@ -1,6 +1,6 @@
 // M10 — 抽蛋孵化（Incubator，mz.incubator.v1）。設計真相：plan/10 §5。
 //
-// 用遊玩進度換隨機新寶可夢（**非付費 gacha**），複用 individual 決定論 roll。防線（plan/10 §5.2 寫死）：
+// 用遊玩進度換隨機新Mobie（**非付費 gacha**），複用 individual 決定論 roll。防線（plan/10 §5.2 寫死）：
 //   egg 只存 seed/source/speciesPool/progress——**孵化才生成 OwnedUnit**、不可付費、不可刷池、不可存預生成結果。
 // 進度來源＝有效戰鬥完成數 + 塔層數（不用真實時間/每日/步數，避免手遊體力感）。獨立 slice，與 roster 不同命名空間。
 

@@ -72,7 +72,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
       </motion.div>
 
       <div style={{ position: 'relative', width: 'min(64vw,300px)', height: 'min(64vw,300px)' }}>
-        {/* 野生寶可夢：3D 舞台（GLB/billboard），收服成功時縮沉「進球」 */}
+        {/* 野生Mobie：3D 舞台（GLB/billboard），收服成功時縮沉「進球」 */}
         <Suspense fallback={null}>
           <CaptureStage
             speciesId={wild.speciesId}
@@ -250,7 +250,7 @@ export function ResultScreen() {
 
       {dupConverted && (
         <motion.div className="dup-note" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          🥚 已擁有此寶可夢 → 自動轉化為孵化蛋（前往 🥚 孵化所查看）
+          🥚 已擁有此Mobie → 自動轉化為孵化蛋（前往 🥚 孵化所查看）
         </motion.div>
       )}
 

@@ -230,7 +230,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
                     <tbody>
                       <tr><td>更新時間</td><td>{fmtTime(meta.updatedAt)}</td><td>{fmtTime(pending.meta.updatedAt)}</td></tr>
                       <tr><td>版本</td><td>v{meta.revision}</td><td>v{pending.meta.revision}</td></tr>
-                      <tr><td>寶可夢</td><td>{roster.length}</td><td>{pending.roster.length}</td></tr>
+                      <tr><td>Mobie</td><td>{roster.length}</td><td>{pending.roster.length}</td></tr>
                       <tr><td>卡片</td><td>{cardsCount}</td><td>{pending.cards.length}</td></tr>
                       <tr><td>模型</td><td>{modelCount || '—'}</td><td>{pending.includesModels ? pending.models.length : '不含'}</td></tr>
                     </tbody>
@@ -273,7 +273,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="model-foot">
-          目前進度：{roster.length} 隻寶可夢。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。
+          目前進度：{roster.length} 隻Mobie。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。
         </div>
         {msg && <div className="lib-msg" style={{ marginTop: 8 }}>{msg}</div>}
       </motion.div>

@@ -5,7 +5,7 @@ import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
 import { MobieVisual } from './MobieVisual'
 
-// 一隻在場寶可夢的動畫狀態：全部由 BattleStage 以 imperative 方式寫入、
+// 一隻在場Mobie的動畫狀態：全部由 BattleStage 以 imperative 方式寫入、
 // 在 useFrame 內整合套到 Object3D —— 完全不過 React 頂層 state（效能紅線）。
 export interface MonAnim {
   /** lunge（撲擊）剩餘秒數 */
@@ -50,7 +50,7 @@ interface Combatant3DProps {
   bobPhase: number
 }
 
-/** 場上一隻寶可夢：造型（GLB/billboard）+ 撲擊/受擊/倒下/入場動畫。 */
+/** 場上一隻Mobie：造型（GLB/billboard）+ 撲擊/受擊/倒下/入場動畫。 */
 export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase }: Combatant3DProps) {
   const group = useRef<Group>(null)
 

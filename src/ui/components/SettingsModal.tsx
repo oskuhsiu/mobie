@@ -40,7 +40,7 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
   evolution: {
     icon: '🧬',
     label: '進化',
-    desc: '寶可夢到達進化等級時於戰後進化、變更種族並重算能力值（個體/道具保留，招式仍單一）。',
+    desc: 'Mobie到達進化等級時於戰後進化、變更種族並重算能力值（個體/道具保留，招式仍單一）。',
     available: true,
   },
   tower: { icon: '🗼', label: '連勝塔', desc: '連續戰鬥不回血的長線遠征模式。', available: false },
@@ -107,7 +107,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="model-foot">
-          設定獨立存於 <b>mz.settings.v1</b>，不影響寶可夢存檔。關掉模組＝零殘留，回到純對戰。
+          設定獨立存於 <b>mz.settings.v1</b>，不影響Mobie存檔。關掉模組＝零殘留，回到純對戰。
         </div>
       </motion.div>
     </motion.div>

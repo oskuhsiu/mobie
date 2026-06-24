@@ -9,7 +9,7 @@ import { abilityForType, getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
 
 /**
- * 隊伍養成頁：替每隻寶可夢裝備持有道具（M7）。背包庫存走 mz.itembag.v1（exactly-once 對帳）。
+ * 隊伍養成頁：替每隻Mobie裝備持有道具（M7）。背包庫存走 mz.itembag.v1（exactly-once 對帳）。
  * 道具模組關閉時仍可瀏覽，但會提示去設定開啟才會在戰鬥生效（守可選式掛載）。
  */
 export function TeamModal({ onClose }: { onClose: () => void }) {
