@@ -128,6 +128,7 @@ export const gameMachine = setup({
       on: {
         SELECT_REGION: { target: 'encounter', actions: 'rollFoes' },
         OPEN_TOWER: 'towerSetup',
+        BACK: 'title',
       },
     },
     towerSetup: {

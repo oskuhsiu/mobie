@@ -4,6 +4,7 @@ import type { Region } from '@/game/types'
 import { REGIONS } from '@/game/data/regions'
 import { PRACTICE_REGION } from '@/game/data/practiceRegion'
 import { terrainDefsOf } from '@/game/data/terrains'
+import { ToolsMenu } from '@/ui/components/ToolsMenu'
 
 /** 區域地形提示文案（M8）：隨機地形區標「隨機」，否則列出固定/混合地形 icon+名。 */
 function terrainHint(r: Region): string | null {
@@ -18,10 +19,13 @@ export function RegionSelectScreen() {
 
   return (
     <div className="col" style={{ flex: 1, gap: 18, minHeight: 0 }}>
-      <div className="col" style={{ gap: 4 }}>
-        <div className="eyebrow">Step 1</div>
-        <div className="h-title">選擇區域</div>
-        <div className="h-sub">前往不同地帶遭遇野生Mobie；新手可先去競技場練等</div>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div className="col" style={{ gap: 4 }}>
+          <div className="eyebrow">Step 1</div>
+          <div className="h-title">選擇區域</div>
+          <div className="h-sub">前往不同地帶遭遇野生Mobie；新手可先去競技場練等</div>
+        </div>
+        <button className="btn btn--ghost btn--sm" onClick={() => send({ type: 'BACK' })}>🏠 首頁</button>
       </div>
 
       {/* 競技場入口：中性地形、純得經驗、不可捕獲，低風險刷經驗 */}
@@ -75,6 +79,11 @@ export function RegionSelectScreen() {
             </div>
           </motion.button>
         ))}
+      </div>
+
+      {/* 遊戲中樞的共用工具列：開始遊戲後仍可開隊伍/招式/圖鑑/設定等（修「首頁功能開始後就找不到」） */}
+      <div className="region-tools">
+        <ToolsMenu />
       </div>
     </div>
   )

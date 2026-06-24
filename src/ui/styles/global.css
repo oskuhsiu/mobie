@@ -538,6 +538,7 @@ body {
 /* ============ Region cards ============ */
 .region-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
 @media (min-width: 760px) { .region-grid { grid-template-columns: repeat(3, 1fr); } }
+.region-tools { flex: 0 0 auto; border-top: 1px solid var(--stroke); padding-top: 12px; }
 .region-card {
   position: relative; overflow: hidden;
   border-radius: var(--radius); padding: 22px;
