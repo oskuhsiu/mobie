@@ -22,13 +22,19 @@ function moveIdsOfType(type: Species['types'][number]): number[] {
     .map((m) => m.id)
 }
 
-/** 派生 fallback 學習表：slot0=species.moveId 於 L1；各屬性 tier1/2/3 → L1/16/32（去重、含次屬性）。 */
+/** 變化招 id（由 MOVES 依 effect 派生，不綁 id；M19.f gen_dex 後會被產生檔 learnset 取代）。 */
+const HEAL_MOVE = Object.values(MOVES).find((m) => m.effect?.kind === 'heal')?.id
+const ATK_BUFF_MOVE = Object.values(MOVES).find((m) => m.effect?.kind === 'buff' && m.effect.stat === 'atk')?.id
+const SPA_BUFF_MOVE = Object.values(MOVES).find((m) => m.effect?.kind === 'buff' && m.effect.stat === 'spa')?.id
+
+/** 派生 fallback 學習表：slot0=species.moveId 於 L1；各屬性攻擊招 tier1/2/3 → L1/16/32；
+ *  變化招（M19.d）——每隻於 L20 學「自我再生」、L24 依攻擊取向（物理→劍舞 / 特殊→瞑想）學增益招。 */
 const TIER_LEVELS = [1, 16, 32]
 export function deriveLearnset(species: Species): { level: number; moveId: number }[] {
   const entries: { level: number; moveId: number }[] = []
   const seen = new Set<number>()
-  const push = (level: number, moveId: number) => {
-    if (!MOVES[moveId] || seen.has(moveId)) return
+  const push = (level: number, moveId: number | undefined) => {
+    if (moveId === undefined || !MOVES[moveId] || seen.has(moveId)) return
     seen.add(moveId)
     entries.push({ level, moveId })
   }
@@ -36,6 +42,9 @@ export function deriveLearnset(species: Species): { level: number; moveId: numbe
   for (const type of species.types) {
     moveIdsOfType(type).forEach((id, tier) => push(TIER_LEVELS[tier] ?? 32, id))
   }
+  // 變化招：通用回復 + 依攻防取向的增益招（決定論，給每隻一點戰術深度）。
+  push(20, HEAL_MOVE)
+  push(24, species.baseStats.atk >= species.baseStats.spa ? ATK_BUFF_MOVE : SPA_BUFF_MOVE)
   return entries.sort((a, b) => a.level - b.level || a.moveId - b.moveId)
 }
 

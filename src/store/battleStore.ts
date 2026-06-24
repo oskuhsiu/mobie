@@ -6,6 +6,7 @@ export type { Side }
 
 export type BattlePhase =
   | 'intro' | 'playerChoice' | 'qte' | 'mash'
+  | 'statusQte' // M19.d 變化招：輕量強度 QTE（只影響效果強度、不影響成敗；無 mash）
   | 'switchSelect' | 'defenseQte'
   | 'chainQte' // M9 連鎖：對 eligible 隊友依序跑連續 QTE
   | 'busy' | 'won' | 'lost'

@@ -369,6 +369,9 @@ body {
 .move-slot__meta { display: flex; align-items: center; gap: 8px; }
 .move-slot__cat { font-size: 11px; color: var(--text-dim); }
 .move-slot__stats { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+/* 變化招（M19.d）：虛線左框 + 微金光，與攻擊招區隔 */
+.move-slot--status { border-left-style: dashed; }
+.move-slot--status .move-slot__stats { color: var(--accent); }
 .move-countdown { width: 100%; height: 3px; border-radius: 999px; background: rgba(0,0,0,0.35); overflow: hidden; }
 .move-countdown__bar {
   height: 100%; width: 100%; transform-origin: left center;

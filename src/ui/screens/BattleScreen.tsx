@@ -280,7 +280,7 @@ function MoveSlots({ moves, onPick }: { moves: Move[]; onPick: (slot: number) =>
         {moves.map((mv, i) => (
           <motion.button
             key={i}
-            className="move-slot"
+            className={`move-slot ${mv.category === 'status' ? 'move-slot--status' : ''}`}
             style={{ ['--mv' as string]: typeColor(mv.type) }}
             whileTap={{ scale: 0.96 }}
             onClick={() => { audio.play('select'); pick(i) }}
@@ -289,9 +289,11 @@ function MoveSlots({ moves, onPick }: { moves: Move[]; onPick: (slot: number) =>
             <span className="move-slot__name">{mv.nameZh}</span>
             <span className="move-slot__meta">
               <span className="type-badge" style={{ background: typeColor(mv.type) }}>{TYPE_LABEL_ZH[mv.type]}</span>
-              <span className="move-slot__cat">{mv.category === 'physical' ? '物理' : '特殊'}</span>
+              <span className="move-slot__cat">{mv.category === 'physical' ? '物理' : mv.category === 'special' ? '特殊' : '變化'}</span>
             </span>
-            <span className="move-slot__stats">威力 {mv.power}　命中 {mv.accuracy}</span>
+            {mv.category === 'status'
+              ? <span className="move-slot__stats">✦ {mv.effect?.label ?? '輔助效果'}</span>
+              : <span className="move-slot__stats">威力 {mv.power}　命中 {mv.accuracy}</span>}
           </motion.button>
         ))}
       </div>
@@ -471,6 +473,34 @@ export function BattleScreen() {
         await wait(720)
         store().setBanner(null)
         await wait(120)
+      } else if (e.type === 'statusApplied') {
+        // M19.d 變化招：「使出 X」+ 依效果類型演出（buff 升箭頭 / heal 回血 / terrain 揭示）。
+        const m = monAt(b0, e.side, e.index)
+        const mv = getMove(e.moveId)
+        const prefix = e.side === 'foe' ? '對手的 ' : ''
+        stageRef.current?.lunge(e.side)
+        store().setBanner(`${prefix}${m.nameZh} 使出 ${mv.nameZh}！`)
+        audio.play('select')
+        await wait(540)
+        if (e.effectKind === 'heal' && e.hpAfter != null) {
+          store().setMemberHp(e.side, e.index, e.hpAfter)
+          fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 14, power: 1, kind: 'spark' })
+          audio.play('super')
+          store().setBanner(`✨ ${e.label}　+${e.healAmount} HP`)
+        } else if (e.effectKind === 'buff') {
+          fxRef.current?.burst({ ...FX_POS[e.side], color: '#ffd23f', count: 16, power: 1.2, kind: 'spark' })
+          fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffd23f' })
+          audio.play('super')
+          store().setBanner(`▲ ${e.label}（${e.remaining} 回合）`)
+        } else {
+          fxRef.current?.flash('#7affa0', 0.3)
+          audio.play('super')
+          store().setBanner(`🌿 ${e.label}`)
+        }
+        store().pushLog(`${prefix}${m.nameZh}：${e.label}`)
+        await wait(820)
+        store().setBanner(null)
+        await wait(140)
       } else if (e.type === 'activeChanged') {
         store().setActiveIndex(e.side, e.toIndex)
         stageRef.current?.enter(e.side) // 3D：新一隻落場入場（並清除倒下狀態）
@@ -785,9 +815,14 @@ export function BattleScreen() {
           <motion.div className="col center" style={{ gap: 12, width: '100%' }}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             {/* M19.c 四槽選招：選槽即進 QTE（slotIndex 存進 ref 待解算回合用）。星擊/換人/連鎖另列分離。 */}
+            {/* M19.d：變化招走輕量強度 QTE（statusQte，無 mash）；攻擊招走命中 QTE→mash。 */}
             <MoveSlots
               moves={player.moves}
-              onPick={(slot) => { pendingSlotRef.current = slot; useBattleStore.getState().setPhase('qte') }}
+              onPick={(slot) => {
+                pendingSlotRef.current = slot
+                const isStatus = player.moves[slot]?.category === 'status'
+                useBattleStore.getState().setPhase(isStatus ? 'statusQte' : 'qte')
+              }}
             />
             <div className="row" style={{ gap: 12, justifyContent: 'center' }}>
               <motion.button
@@ -839,6 +874,13 @@ export function BattleScreen() {
         )}
 
         {phase === 'mash' && <MashMeter onDone={onMashDone} />}
+
+        {phase === 'statusQte' && (
+          <TimingBar
+            hint="變化招！抓準時機強化效果（只影響強度、不影響成敗）"
+            onResult={(q) => { void runPlayerTurn(q, 0) }}
+          />
+        )}
 
         {phase === 'defenseQte' && (
           <TimingBar
