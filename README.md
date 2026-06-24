@@ -38,7 +38,7 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
   screen — to see its moves, six stats, individuality, ability and held item.
 - **Terrain** (M8): regions have fixed / mixed / random terrain that scales move power.
 - **Combo chain** (M9) and **per-type battle FX** (M21) for extra arcade punch.
-- **Collection & growth** (M10): evolution, star grade, a 1–251 **dex**, **achievements**, and an
+- **Collection & growth** (M10): evolution, star grade, a 1–1025 **dex**, **achievements**, and an
   **egg incubator**.
 - **Tower run & wild accidents** (M11): an escalating no-heal tower with Ascension difficulty tiers
   (entered from region select), plus wild-only events (rare shiny boss / lucky bonus / supply drop /
@@ -54,7 +54,7 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Tools stay reachable mid-game**: the title's tools row is shared onto the region-select hub, so
   scan / library / team / moves / partner skills / dex / achievements / incubator / models / save /
   settings are available after the game starts, not only from the title.
-- Content: national dex 1–251, 8 themed regions (+ arena), 16 cross-type starter cards.
+- Content: national dex 1–1025 (G1–G9), 16 themed regions (+ arena), 16 cross-type starter cards.
 
 ## Getting started
 
@@ -127,10 +127,10 @@ abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / 
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
 M22 a–e (enhanced-interactivity MVP) are complete** and CDP-verified — **372 Vitest tests**, typecheck,
-and build all green. Content: national dex 1–251, 8 regions (+ arena), 16 starters.
+and build all green. Content: national dex 1–1025, 16 regions (+ arena), 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
-251 species / moves / regions / cards / type-chart entries swept), a **battle-simulation** stress suite
+1025 species / moves / regions / cards / type-chart entries swept), a **battle-simulation** stress suite
 (hundreds of full seeded battles asserting HP bounds, no-NaN, guaranteed termination, and determinism —
 modules off vs all-on), persistence round-trips, and CDP real-play (arena EXP-only win, wild win →
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console

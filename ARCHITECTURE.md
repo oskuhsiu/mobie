@@ -48,7 +48,7 @@ input/      QTE seam (qualityFromPointer / zones)
 **Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Extension modules
 (`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
 which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
-pure is what makes the battle system testable (372 tests) and the animation layer swappable.
+pure is what makes the battle system testable (428 tests) and the animation layer swappable.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
@@ -134,8 +134,10 @@ Optional gameplay systems (held items, team synergy, abilities, chain, evolution
 **not** if/else'd into the core. The core defines fixed **seams (S1–S8)**; a module registers only the
 seams it uses. **Disabled = not registered = zero residue** (the core loop is byte-for-byte M1.x).
 Design source: `plan/09-extension-systems.md` §0; the seam definitions live in `game/ext/seams.ts`.
-`ModuleId` lists only real toggleable modules — `synergy / heldItems / abilities / chain / evolution`
-(seam-registered) plus `partnerSkills` (M17, a display-layer/fieldState gate, not in `MODULE_REGISTRY`).
+`ModuleId` lists toggleable modules — `synergy / heldItems / abilities / chain / combo / evolution`
+(seam-registered; **`combo`** = M12.d 合體技, a chain-upgrade riding an injected `ext.combo` capability) plus
+`partnerSkills` (M17) and `encounterSkills` (M12.e, deterministic foe tags applied as a display-layer foe stat
+patch) — the last two are display-layer/fieldState gates, **not** in `MODULE_REGISTRY`.
 **The tower (M11) is a game *mode* entered from `regionSelect`, not a settings toggle**, so it is not a
 `ModuleId` — an earlier dead "tower" toggle that read "coming soon" was removed.
 
@@ -192,8 +194,23 @@ opening banner.
 `heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models`
 (IndexedDB GLB blobs, M3) · `mz.savemeta.v1` (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mz.settings.v1` (localStorage module toggles, M6) ·
-`mz.itembag.v1` (localStorage item bag, M7). The portable save bundles the roster (so `heldItemId`
-travels with it); the item-bag slice is not yet included in the `.save` (a known follow-up).
+`mz.itembag.v1` (localStorage item bag, M7) · `mz-replays` (IndexedDB, M14 battle replays — canonical
+`encodeReplay` JSON only, `battleId`-deduped, FIFO-capped 50). The portable save bundles the roster (so
+`heldItemId` travels with it); the item-bag slice is not yet included in the `.save` (a known follow-up).
+
+### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
+
+Canonical = a structured JSON log (`ReplayLog`: header with `battleSeed`/`DisplayUnitSnapshot[]` + ordered
+`BattleEvent[]` per turn). **The reducer/engine are untouched** — replay reuses the events the reducer
+already emits. `game/rng.ts` (M14.0; `hashSeed`/`mulberry32`/`makeRng`) gives each battle one seeded RNG
+stream so a recorded log can be re-simulated. `codec.ts` does stable-key-order `encodeReplay` + strict
+`decodeReplay` (classified errors + crc, mirroring `save/bundle.ts`); `KNOWN_EVENT_MAP` is a
+`Record<BattleEvent['type'], true>` so a new event variant **fails to compile** until the codec, the
+`report.ts` projector (one Chinese handler per variant), and `REPLAY_FORMAT_VERSION` + `migrateReplay` are
+all updated — plan/15 §10 coupling-governance made mechanical (M12.d's `comboCast` bumped it to v2).
+`ReplayRecorder` collects turns single-point in `BattleScreen` (gated by `prefs.recordReplays`, default
+off); `ReplayPlayerModal` re-folds the event stream to reconstruct HP/active with a synced text-report
+sidebar. **No `.txt` is persisted** — it's a pure projection generated on export.
 
 ### 7.1 Portable save files (M5 — `game/save/`)
 
@@ -249,11 +266,11 @@ user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the 
 
 ## 11. Testing & verification
 
-- `npm test` (Vitest) — **372 tests.** Domain logic (type chart, individuality, growth, engine,
+- `npm test` (Vitest) — **428 tests.** Domain logic (type chart, individuality, growth, engine,
   reducer incl. turn cap, accidents, recommend, card-code/import, roster sanitize, save meta
   `compareSaves` + bundle round-trip & corruption classification) plus the M6/M7 extension suites
   (ext/settings, synergy, items, abilities, held-item persistence) and the project-wide verification
-  pass: **`data/dataIntegrity.test.ts`** (all 251 species/moves/regions/cards/type-chart swept) and
+  pass: **`data/dataIntegrity.test.ts`** (all 1025 species/moves/regions/cards/type-chart swept) and
   **`battle/simulation.test.ts`** (hundreds of full seeded battles asserting HP bounds / no-NaN /
   always-terminates / determinism, modules off vs all-on).
 - `npm run typecheck` / `npm run build` must stay green.

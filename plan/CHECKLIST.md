@@ -230,49 +230,51 @@
 ## M12 — 戰鬥技能大模組（見 `12`；縱向小樣本一次打穿）
 > 守單招（技能不直接傷害、進化只解鎖技能槽非新攻擊招）、純 reducer（deterministic hook）、只存 canonical skill id、不動 §0.4。
 > **圓桌定：先用小樣本（如初代御三家）縱向打穿全套地基並驗收平衡，再進 M13 橫向鋪內容。**
+> **⚠️ 核心「技能 hook / loadout / 訓練」已由 M19（多招式）+ M17（玩家技能）提前承載**——怪物變化招進招式槽、
+> 玩家技能走帳號級。M12 本里程碑「剩餘」＝合體技 + 對手 profile + 孵化繼承 + fieldState.comboCastEffects 子欄（皆已完成）。
 ### schema / catalog / persistence + `fieldState` 補全（原 M8.0 + 場域統一）
-- [ ] `SkillDef`/`ComboDef`/`EncounterSkillProfile`/`FieldState` 型別 + 手寫 catalog（小樣本）+ `resolveSkillHooks` 純函數 + vitest
-- [ ] OwnedUnit 加 canonical `learnedSkillIds/equippedSkillIds/inheritedSkillIds`（不存派生倍率/cooldown）
-- [ ] `fieldState` 容器補全 4 子欄（terrainEffects/teamStatuses/enemyStatuses/comboCastEffects，各帶 source/expiry）
+- [~] `SkillDef`/`EncounterSkillProfile` → 由 M19 變化招 `Move.effect` + M12.e `encounterProfile` 承載；`ComboDef`/`FieldState` ✅
+- [~] OwnedUnit skill id 欄 → M19 已加 `learnedMoveIds`/`equippedMoveIds`；M12.c 加 egg `inheritedMoveId`（孵化落 learnedMoveIds）
+- [x] `fieldState` 補 `comboCastEffects` 子欄（M12.d；terrainEffects/teamStatuses/enemyStatuses 已於 M8/M19.d 有）
 ### 技能 hook + loadout（原 M8.a，複用 M7 引擎）
-- [ ] S1–S8 掛載技能 deterministic hook（canonical 輸入→effect commands，機率走 reducer RNG）+ 戰前 loadout 套用
-- [ ] 護欄測試：技能無直接傷害（只 statMod/debuff/terrain/heal/conditionRewrite）；個體面板技能區（與特性分區）
+- [~] 已由 M19.b（reducer slotIndex→resolvedMoveId 多招式）+ M19.d（變化招 buff/heal/terrain 寫 fieldState）+ M17 承載
 ### 訓練 / 解鎖（原 M8.b，用 M10 進化槽 + M11 塔 SP）
-- [ ] SP 取得（boss/塔層/里程碑，不刷技能 EXP）+ 技能訓練所 UI（學/裝）+ 進化/節點解鎖第 2 槽
-### 孵化繼承（原 M8.c，擴 M10 孵化）
-- [ ] incubator egg 帶 `inheritedSkillId`（plan/10）+ hatch 落到 `inheritedSkillIds`（種族可學才生效）
-### 合體技（原 M8.d，擴 M9 連鎖 + M8 地形灌注）
-- [ ] `ComboDef` + SUBMIT_CHAIN_RESULT 升級判定（屬性配對/種族/羈絆）+ `usedComboKeys` 每組合每場一次（不回寫 OwnedUnit）
-- [ ] 三類施放效果（灌注地形/全隊增益/敵方弱化）寫 `fieldState` + 演出（FxCanvas/framer/audio）+ vitest
-### 對手技能多樣性（原 M8.e，Encounter Skill Profile）
-- [ ] 生成附 0–2 技能標籤（純反射 hook，AI 仍只提交 ATTACK）+ boss/雙人組宣告合體技
+- [~] 已由 M19.e（招式訓練所 + SP 經濟）+ M17.d（夥伴技能分頁，共用 SP）承載
+### 孵化繼承（原 M8.c，擴 M10 孵化）✅
+- [x] incubator egg 帶 `inheritedMoveId` + hatch 落到 learnedMoveIds（teachableOf 種族可學才生效）；ResultScreen 轉蛋帶 boss 最進階招；IncubatorModal 顯「🧬 蛋招」；+2 vitest
+### 合體技（原 M8.d，擴 M9 連鎖 + M8 地形灌注）✅
+- [x] `ext/combo` ComboDef catalog（元素/御三家配對）+ 純 `matchCombo` + 注入 `ext.combo`；reducer 連鎖後段 `resolveCombo` 升級判定 + `usedComboKeys` 每組合每場一次（暫態不回寫 OwnedUnit）+ ModuleId `combo`
+- [x] 三類施放效果（infuseTerrain/teamBuff/enemyDebuff）寫 fieldState（沿用 M19.d 詞彙）+ 合成大招 performAttack power 倍率 + comboCast event 演出 + 回放 v2 + 16 vitest
+### 對手技能多樣性（原 M8.e，Encounter Skill Profile）✅
+- [x] `encounterProfile` 由 speciesId 決定論抽 0–2 標籤（猛攻/擾亂/堅韌/馭場/合擊）+ 反射被動微調對手 BattleMobie（display 層 prep，AI 仍只 ATTACK）+ MobCard/Encounter 顯標籤 + ModuleId `encounterSkills`（非 seam）+ 3 vitest
 
-## M13 — 內容補完（見 `13`；引擎驗收後橫向鋪）
-- [ ] 內容階段 1：寶可夢 G3(252–386) + 天氣型地形（晴/雨/沙暴/雪/霧/強風）
-- [ ] 內容階段 2：G4–G5(387–649) + 場地型地形（草地/電氣/精神/薄霧）+ 混合地形區
-- [ ] 內容階段 3：G6–G9(650–1025) 補完 + 特殊型地形（花海/沼澤/蒸氣/聖域）+ 隨機地形區
-- [ ] 資料走 PokéAPI、圖走官方 artwork runtime URL（不內建侵權）；每階段重產 gen_dex
+## M13 — 內容補完（見 `13`；引擎驗收後橫向鋪）✅（一次補完 G1–G9 + 全地形）
+- [x] 寶可夢 G3–G9（252–1025）一次補完：gen_dex `MAX_ID 251→1025` 重產 species.ts（1025 隻，zh-Hant/型別/種族值/進化鏈/學習表）
+- [x] 天氣型地形（sunny/rain/fog/strong-winds）+ 場地型（grassy/electric/psychic/misty-field）+ 特殊型（swamp/steam/holy-ground）手寫進 terrains.ts；混合/隨機地形區 M8 已有
+- [x] 5 個新主題區（驕陽草海/季風海岸/精神聖所/太古沼澤/神聖林苑）使新地形實際出現；型別主題區自動納入晚代物種（16 區）
+- [x] 資料走 PokéAPI、圖走官方 artwork runtime URL（不內建侵權）；steam 接合體技灌注；dataIntegrity 1025 掃描 + CDP 驗
+> **注意**：dex 1025 後主 bundle 542→864KB（gzip 162→219KB；純資料，artwork 不入包）——日後可 species 分檔/按需載入（plan/13 §4，follow-up）。
 
-## M14 — 戰鬥回放系統（見 `15`；排在戰鬥機制 M8–M13 之後、改名之前）
+## M14 — 戰鬥回放系統（見 `15`）✅ 完成（Chrome CDP 驗證；回放 v2 含 comboCast）
 > 把一場戰鬥**完全文字化**成可保存 JSON log（事件流 + seed/輸入 header），並用它**完整回放**（複用 BattleScreen 演出）。
 > 圓桌結論 `.claude/agent-chat/session-20260623-164122/conclusion.md`。canonical=結構化 log + 唯讀戰報投影（**非雙向 parser**）。
 ### M14.0 — seeded RNG 地基（必做前置）
-- [ ] 抽 `game/rng.ts`（`hashSeed`/`mulberry32`/`makeRng`），individual.ts 改 import（零行為變動）
-- [ ] store 層 `resolveTurn` 改傳 seeded rng + 開戰生成 battleSeed（runtime，不回寫 OwnedUnit）+ 決定論 vitest 骨架
+- [x] 抽 `game/rng.ts`（`hashSeed`/`mulberry32`/`makeRng`），individual.ts 改 import（零行為變動）
+- [x] store 層 `resolveTurn` 改傳 seeded rng + 開戰生成 battleSeed（runtime，不回寫 OwnedUnit）+ 決定論 vitest 骨架
 ### M14.a — schema + 純 codec
-- [ ] `replay/types.ts`（ReplayLog/Header/DisplayUnitSnapshot/ReplayInput/ReplayTurn；引擎內部 ivs/nature/derived 不進）
-- [ ] `replay/codec.ts`（encode 穩定鍵序 / decode 嚴格 + 分類錯誤 + crc 校驗 / migrate；整檔單一 formatVersion + unknown-event fail-fast）+ vitest round-trip & 壞檔分類
+- [x] `replay/types.ts`（ReplayLog/Header/DisplayUnitSnapshot/ReplayInput/ReplayTurn；引擎內部 ivs/nature/derived 不進）
+- [x] `replay/codec.ts`（encode 穩定鍵序 / decode 嚴格 + 分類錯誤 + crc 校驗 / migrate；整檔單一 formatVersion + unknown-event fail-fast）+ vitest round-trip & 壞檔分類
 ### M14.b — 戰報投影器（「完全文字化」交付物）
-- [ ] `replay/report.ts` `eventToReportLine`（一 variant 一 handler、依 type 分派、直吐中文、未知 variant 回退 `[type]`）+ `logToReport` + 每 handler vitest
+- [x] `replay/report.ts` `eventToReportLine`（一 variant 一 handler、依 type 分派、直吐中文、未知 variant 回退 `[type]`）+ `logToReport` + 每 handler vitest
 ### M14.c — Recorder + 持久化 slice
-- [ ] `store/replayRecorder.ts` 單點錄製（seed+輸入+事件流同時，非事後補）
-- [ ] `store/replayStore.ts` + IndexedDB `mz-replays`（battleId=FNV-1a(seed+snapshot) 去重 + FIFO 上限；**只存 .json、不存 derived .txt**）+ BattleScreen 接 recordTurn/finishRecording
+- [x] `store/replayRecorder.ts` 單點錄製（seed+輸入+事件流同時，非事後補）
+- [x] `store/replayStore.ts` + IndexedDB `mz-replays`（battleId=FNV-1a(seed+snapshot) 去重 + FIFO 上限；**只存 .json、不存 derived .txt**）+ BattleScreen 接 recordTurn/finishRecording
 ### M14.d — 播放器
-- [ ] 抽 BattleScreen event 消費器為可切換來源（live vs replay）+ 回放模式（禁玩家輸入 + 播放/暫停/單步/倍速）+ 文字戰報側欄同步高亮
+- [x] 抽 BattleScreen event 消費器為可切換來源（live vs replay）+ 回放模式（禁玩家輸入 + 播放/暫停/單步/倍速）+ 文字戰報側欄同步高亮
 ### M14.e — 回放清單 + 匯出
-- [ ] Title「🎬 回放」入口 + 清單畫面（region/outcome/時間/雙方）+ `.txt` 戰報匯出（即時投影）+ 壞檔分類 UI
+- [x] Title「🎬 回放」入口 + 清單畫面（region/outcome/時間/雙方）+ `.txt` 戰報匯出（即時投影）+ 壞檔分類 UI
 ### M14.f — 驗收
-- [ ] Chrome CDP：打一場 → 回放清單出現 → 播放與當場一致 → 匯出戰報；typecheck/build/test 全綠
+- [x] Chrome CDP：打一場 → 回放清單出現 → 播放與當場一致 → 匯出戰報；typecheck/build/test 全綠
 > **耦合治理**：M8/M9/M12 等動戰鬥的里程碑，checklist 須含「延伸回放」子項（新 event variant → 加 handler + bump formatVersion + migrate；golden-master 重模擬回歸於 M8 起正式啟用）。
 > **降規格**：不做 i18n 多語抽象層（YAGNI、自用單語）；golden-master 比對 UI 延到 M8（M14 只放單測骨架）。
 
@@ -396,8 +398,8 @@
 - [x] Chrome CDP（SwiftShader）抽驗數型特效正確、零 console error
 ### M21.d — status/aura（併 M19.d 變化招）
 - [x] `aura` 模式（攻方原地上升光暈、無撞擊）+ 掛 `statusApplied`/`heal` event（非 damageApplied）+ buff/heal/terrain 色相微調（不阻塞傷害招全覆蓋）
-### M21.e —（選配）per-type Tone.js 音色
-- [ ] recipe `sound` key 接 audio 引擎擴充音色（火=噪音爆 / 電=高頻 zap / 水=低頻…）
+### M21.e —（選配）per-type Tone.js 音色 ✅
+- [x] typePalette 加 `sound`（18 型→6 音色家族 blast/zap/wave/chime/rustle/airy）；audioEngine `playMoveSound`（專用 fxLead/fxNoise 不打斷 hit/crit）；BattleScreen damageApplied/statusApplied 疊一層材質音；+1 vitest
 
 ## M22 — 增強互動性設定開關（給兒童參與感，預設關；見 `22`）
 > UX 偏好分級開關 `off | lite | arcade`（**預設 off ＝現狀一字不差**），開啟後在目前「零互動/單純 tap」的環節
@@ -418,5 +420,8 @@
 ### M22.e — 設定面板 UI + 收尾 ✅
 - [x] `SettingsModal` 模組清單外加「🕹 互動偏好」三態 selector（關/輕度/機台）+ 兒童向說明
 - [x] 驗收：`mode=off` golden path **無新增 gesture wrapper**（CDP gs:null、零回歸）；lite/arcade CDP 真機演出；typecheck/360 test/build 全綠；simplify 收窄 settings 訂閱 + 快取手勢 rect
-### M22 Backlog（§4，後續子階段）
-- [ ] M22.f 防禦下滑護盾 `defense`（`defenseQte` 疊下滑、仍映射 quality） / M22.g 攻擊節奏變體 `attackInputVariant: 'mash'|'rhythm'`（只在 mode≠off 替換） / M22.h 遭遇撥草 `encounter` / M22.i 孵化摩擦 `hatch` / M22.j 連勝塔開場選路 `tower`（依賴 M11 連勝塔）
+### M22 Backlog（§4，後續子階段）✅
+- [x] M22.f 防禦下滑護盾（`BattleGestures.ShieldSwipe`，swipe→QteQuality，defenseQte 替換 TimingBar）
+- [x] M22.g 攻擊節奏變體 `prefs.attackInputVariant`（mash/rhythm，mash 相位改 RhythmTap→count，SettingsModal 切換）
+- [x] M22.h/i/j 撥草/孵化摩擦/破門：通用 `GestureGate`（一元件三用）gate Encounter/Incubator/TowerSetup；純演出逾時自動推進
+- [x] 純 helpers（rhythmToMashCount/swipeShieldQuality/pathLength/frictionProgress）+12 vitest；皆預設 off 零殘留；CDP 撥草 gate 驗
