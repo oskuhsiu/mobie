@@ -2,7 +2,7 @@
 // 不含任何 UI / 動畫字眼，只吐 domain events，方便單測與「一次算完、畫面慢慢演」。
 // 設計真相：plan/01-architecture、plan/06-battle-reference、第二場 conclusion。
 
-import type { BattleMobie, TypeName, TerrainId } from '@/game/types'
+import type { BattleMobie, Move, TypeName, TerrainId } from '@/game/types'
 import {
   resolveAttack,
   attackQteMultiplier,
@@ -34,6 +34,23 @@ export interface FieldState {
     initial: TerrainId[]
     current: TerrainId[]
   }
+  /**
+   * 隊伍暫態狀態（M19.d 變化招首次填用，plan/12「fieldState」子欄）：玩家隊 / 對手隊各自的
+   * 能力值增益清單。戰鬥內暫態（隨 BattleState，不持久化、不回寫 OwnedUnit）。每回合末遞減 remaining、歸零移除。
+   * 攻擊傷害結算時 reducer 依此算 statusDamageMult 注入（engine 不認識狀態語意）。
+   */
+  teamStatuses: StatusEffect[]
+  enemyStatuses: StatusEffect[]
+}
+
+/** 一個生效中的能力值增益（M19.d 變化招施加）；mult 即硬上限（不疊乘爆表，同 stat 刷新取 max）。 */
+export interface StatusEffect {
+  stat: 'atk' | 'def' | 'spa' | 'spd'
+  mult: number
+  remaining: number
+  /** 來源招式 id（display 演出） */
+  source: number
+  label: string
 }
 
 /** 完整戰鬥狀態（canonical 戰鬥態；派生顯示態由 BattleScreen 自己維護） */
@@ -117,6 +134,23 @@ export type BattleEvent =
   | { type: 'chainOpportunity'; maxHits: number; eligibleIndices: number[] }
   // M9 連鎖：連鎖中第 comboCount 段命中前 emit（display 演連段 FX / 連擊數字）；其傷害仍走 damageApplied。
   | { type: 'chainHit'; comboCount: number; attackerIndex: number }
+  // M19.d 變化招：無傷害的主動戰術招施放（display 演「使出 X」+ 對應效果）。
+  | {
+      type: 'statusApplied'
+      side: Side
+      index: number
+      /** 施放的變化招 id（display 取名/型別） */
+      moveId: number
+      effectKind: 'buff' | 'heal' | 'terrain'
+      label: string
+      /** buff 持續回合（heal/terrain 為 0） */
+      remaining: number
+      /** heal：回復量 + 回復後 HP（display setMemberHp + 演出） */
+      healAmount?: number
+      hpAfter?: number
+      /** terrain：新設定的地形 id（display 更新 TerrainChip） */
+      terrainId?: TerrainId
+    }
 
 /** 統一隨機事件（命中/會心/支援輪盤/球輪盤…）；reducer 隨機點全走它（plan/07） */
 export interface RandomEvent {
@@ -177,7 +211,7 @@ export function createBattleState(
     foe: { members: foeMembers, activeIndex: 0 },
     turn: 1,
     winner: null,
-    field: { terrainEffects: { initial: [...terrains], current: [...terrains] } },
+    field: { terrainEffects: { initial: [...terrains], current: [...terrains] }, teamStatuses: [], enemyStatuses: [] },
     chainGauge: 0,
   }
 }
@@ -219,6 +253,8 @@ function cloneState(state: BattleState): BattleState {
         initial: [...state.field.terrainEffects.initial],
         current: [...state.field.terrainEffects.current],
       },
+      teamStatuses: state.field.teamStatuses.map((s) => ({ ...s })),
+      enemyStatuses: state.field.enemyStatuses.map((s) => ({ ...s })),
     },
     chainGauge: state.chainGauge,
   }
@@ -241,6 +277,27 @@ interface AttackParams {
   damageHooks?: DamageHook[]
   /** 地形倍率解析器（M8，注入）：依攻擊招式屬性回 power 倍率（讀 currentTerrains）；無＝×1 */
   terrainResolve?: (moveType: TypeName) => number
+  /** M19.d：攻擊方隊伍生效中的能力值增益（依招式 category 取攻/特攻 buff）；無＝無增益 */
+  offenseStatuses?: StatusEffect[]
+  /** M19.d：防守方隊伍生效中的能力值增益（依招式 category 取防/特防 buff，減傷）；無＝無增益 */
+  defenseStatuses?: StatusEffect[]
+}
+
+/**
+ * 變化招能力值增益 → 傷害倍率（M19.d）：攻擊方攻/特攻 buff 乘上、防守方防/特防 buff 除下。
+ * 折進既有 damageMult（與 qte/地形同位階），engine 不認識狀態語意（純倍率注入）。
+ */
+function statusDamageMult(
+  category: 'physical' | 'special' | 'status',
+  offense: StatusEffect[],
+  defense: StatusEffect[],
+): number {
+  const offStat = category === 'physical' ? 'atk' : 'spa'
+  const defStat = category === 'physical' ? 'def' : 'spd'
+  let mult = 1
+  for (const s of offense) if (s.stat === offStat) mult *= s.mult
+  for (const s of defense) if (s.stat === defStat) mult /= s.mult
+  return mult
 }
 
 /** 某方當前 active 倒下後的強制換人：依序送下一隻；無人可換則該方落敗、戰鬥結束。 */
@@ -267,11 +324,13 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
   const source = params.source ?? 'attack'
   // M19：選定槽招式（terrain 倍率依此招屬性算）；缺省/超界 fallback slot0/過渡 .move。
   const move = attacker.moves[params.moveIndex ?? 0] ?? attacker.move
+  // M19.d：變化招增益折進 damageMult（攻方攻擊向 buff 乘、守方防禦向 buff 除）。
+  const statusMult = statusDamageMult(move.category, params.offenseStatuses ?? [], params.defenseStatuses ?? [])
 
   const result = resolveAttack(attacker, target, {
     rng: params.rng,
     qteMult: params.qteMult ?? 1,
-    damageMult: params.damageMult ?? 1,
+    damageMult: (params.damageMult ?? 1) * statusMult,
     terrainMult: params.terrainResolve?.(move.type) ?? 1,
     forceCrit: params.forceCrit ?? false,
     damageHooks: params.damageHooks,
@@ -312,6 +371,57 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
   if (result.defenderFainted) {
     events.push({ type: 'memberFainted', side: targetSide, index: targetIndex })
     applyForcedSwitch(w, targetSide, events)
+  }
+}
+
+// ── 變化招（M19.d，plan/17 §1.3）────────────────────────────────
+
+/** 變化招強度 QTE 品質 → 持續回合加成（**只影響回合數不影響成敗**；夾 [MIN,MAX]＝硬上限）。 */
+const STATUS_DURATION_BONUS: Record<QteQuality, number> = { perfect: 1, good: 0, normal: 0, weak: -1 }
+const STATUS_MIN_DURATION = 2
+const STATUS_MAX_DURATION = 6
+/** 變化招回復量 QTE 縮放（夾上限；最差仍回血，不變廢回合）。 */
+const HEAL_QUALITY_SCALE: Record<QteQuality, number> = { perfect: 1.2, good: 1.05, normal: 1, weak: 0.85 }
+
+const statusesForSide = (w: BattleState, side: Side): StatusEffect[] =>
+  side === 'player' ? w.field.teamStatuses : w.field.enemyStatuses
+
+/** 回合末遞減所有狀態 remaining、移除歸零者（純）。 */
+function tickStatuses(list: StatusEffect[]): StatusEffect[] {
+  return list.map((s) => ({ ...s, remaining: s.remaining - 1 })).filter((s) => s.remaining > 0)
+}
+
+/**
+ * 施放變化招（無傷害）：依 effect.kind 寫入 fieldState 暫態 / 回血 / 設地形。
+ * QTE 品質只影響強度（buff 回合數 / heal 量），不影響成敗；buff 同 stat 刷新（取 max mult、不疊乘爆表）。
+ * 純函數（只改 working 複本），emit statusApplied 供 display 演出。
+ */
+function applyStatusMove(w: BattleState, side: Side, move: Move, quality: QteQuality, events: BattleEvent[]): void {
+  const eff = move.effect
+  if (!eff) return
+  const index = w[side].activeIndex
+  const actor = w[side].members[index]
+
+  if (eff.kind === 'buff' && eff.stat && eff.mult) {
+    const list = statusesForSide(w, side)
+    const dur = Math.max(STATUS_MIN_DURATION, Math.min(STATUS_MAX_DURATION, (eff.duration ?? 3) + STATUS_DURATION_BONUS[quality]))
+    const existing = list.find((s) => s.stat === eff.stat)
+    if (existing) {
+      existing.mult = Math.max(existing.mult, eff.mult) // 硬上限：取 max 不疊乘
+      existing.remaining = dur
+    } else {
+      list.push({ stat: eff.stat, mult: eff.mult, remaining: dur, source: move.id, label: eff.label })
+    }
+    events.push({ type: 'statusApplied', side, index, moveId: move.id, effectKind: 'buff', label: eff.label, remaining: dur })
+  } else if (eff.kind === 'heal' && eff.healFrac) {
+    const hpBefore = actor.currentHp
+    const amount = Math.max(1, Math.round(actor.maxHp * eff.healFrac * HEAL_QUALITY_SCALE[quality]))
+    const hpAfter = Math.min(actor.maxHp, hpBefore + amount)
+    actor.currentHp = hpAfter
+    events.push({ type: 'statusApplied', side, index, moveId: move.id, effectKind: 'heal', label: eff.label, remaining: 0, healAmount: hpAfter - hpBefore, hpAfter })
+  } else if (eff.kind === 'terrain' && eff.terrainId) {
+    w.field.terrainEffects.current = [eff.terrainId]
+    events.push({ type: 'statusApplied', side, index, moveId: move.id, effectKind: 'terrain', label: eff.label, remaining: 0, terrainId: eff.terrainId })
   }
 }
 
@@ -439,9 +549,10 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
 
     const playerQte = action.quality ? attackQteMultiplier(action.quality, action.mashCount ?? 0) : 1
     // M19：玩家由 action.slotIndex 選槽（缺省＝slot0）；對手加權選槽（單招回 0、不耗 rng＝既有測試序不變）。
-    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks, terrainResolve, moveIndex: action.slotIndex }
+    // M19.d：注入雙方隊伍狀態增益（performAttack 依招式 category 折進傷害；變化招走 applyStatusMove 不吃此）。
+    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks, terrainResolve, moveIndex: action.slotIndex, offenseStatuses: w.field.teamStatuses, defenseStatuses: w.field.enemyStatuses }
     const foeMoveIndex = chooseOpponentMove(activeOf(w, 'foe'), activeOf(w, 'player'), rng)
-    const foeOpts: AttackParams = { rng, damageHooks, terrainResolve, moveIndex: foeMoveIndex }
+    const foeOpts: AttackParams = { rng, damageHooks, terrainResolve, moveIndex: foeMoveIndex, offenseStatuses: w.field.enemyStatuses, defenseStatuses: w.field.teamStatuses }
 
     const playerFirst = playerActsFirst(activeOf(w, 'player'), activeOf(w, 'foe'), rng)
     const order: Side[] = playerFirst ? ['player', 'foe'] : ['foe', 'player']
@@ -450,23 +561,35 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       player: w.player.activeIndex,
       foe: w.foe.activeIndex,
     }
+    // 星擊永遠是 slot0 攻擊 finisher，不會是變化招（slotIndex undefined）。
+    const slotBySide: Record<Side, number> = { player: starStrike ? 0 : (action.slotIndex ?? 0), foe: foeMoveIndex }
 
     for (const atkSide of order) {
       if (w.winner !== null) break
       if (w[atkSide].activeIndex !== startActive[atkSide]) continue // 原攻擊者已倒並換人
-      performAttack(w, atkSide, atkSide === 'player' ? playerOpts : foeOpts, events)
+      const actor = activeOf(w, atkSide)
+      const move = actor.moves[slotBySide[atkSide]] ?? actor.move
+      // M19.d：變化招（無傷害）走 applyStatusMove；星擊強制走攻擊路徑。
+      if (!starStrike && move.category === 'status' && move.effect) {
+        const q = atkSide === 'player' ? (action.quality ?? 'normal') : 'normal'
+        applyStatusMove(w, atkSide, move, q, events)
+      } else {
+        performAttack(w, atkSide, atkSide === 'player' ? playerOpts : foeOpts, events)
+      }
     }
 
     // 連鎖槽（M9）：連鎖模組開啟時，玩家普攻命中依 QTE 品質累積（不綁隨機）。星擊不續槽（已是 finisher）。
+    // M19.d：變化招不斷鏈、貢獻減半「支援值」（plan/17 §5：不參與傷害，但推進連鎖）。
     if (options.ext?.chain && !starStrike) {
       const playerLanded = events.some(
         (e) => e.type === 'damageApplied' && e.attackerSide === 'player' && !e.missed && e.amount > 0,
       )
-      if (playerLanded) {
-        const q = action.quality ?? 'normal'
-        const gain = options.ext.chain.gainBase * CHAIN_GAIN_BY_QUALITY[q]
-        w.chainGauge = Math.min(options.ext.chain.gaugeFull, w.chainGauge + gain)
-      }
+      const playerStatus = events.some((e) => e.type === 'statusApplied' && e.side === 'player')
+      const q = action.quality ?? 'normal'
+      let gain = 0
+      if (playerLanded) gain = options.ext.chain.gainBase * CHAIN_GAIN_BY_QUALITY[q]
+      else if (playerStatus) gain = options.ext.chain.gainBase * CHAIN_GAIN_BY_QUALITY[q] * 0.5
+      if (gain > 0) w.chainGauge = Math.min(options.ext.chain.gaugeFull, w.chainGauge + gain)
     }
   } else if (action.type === 'SWITCH') {
     // SWITCH —— 只有玩家可主動換人（對手 AI 主動換留待後續）
@@ -522,6 +645,10 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       if (w.winner !== null) break
     }
   }
+
+  // M19.d：變化招增益回合末遞減、歸零移除（暫態，不持久化）。本回合施加者已 +duration，故至少存活到下回合。
+  w.field.teamStatuses = tickStatuses(w.field.teamStatuses)
+  w.field.enemyStatuses = tickStatuses(w.field.enemyStatuses)
 
   // 回合上限：到頂仍未分勝負 → 依剩餘血量比例判定（平手判玩家勝，對自用遊戲友善）。
   // 自然勝負已在上面 performAttack/applyForcedSwitch 設定 winner，這裡只接管「打不完」。

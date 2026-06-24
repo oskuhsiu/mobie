@@ -12,10 +12,12 @@ import { MOVES, getMove } from '@/game/data/moves'
 /** 出戰招式槽上限（plan/17：4 槽，攻擊招＋變化招）。 */
 export const MOVE_SLOT_CAP = 4
 
-/** 某屬性的招式 id（由 MOVES 派生、由弱到強；不綁 id 命名規則）。 */
+/** 某屬性的**攻擊招** id（由 MOVES 派生、由弱到強；不綁 id 命名規則）。
+ *  排除變化招（power 0 / category 'status'，M19.d）——派生 loadout 維持純攻擊招、向後相容；
+ *  變化招由產生檔 learnset（M19.f）或訓練所（M19.e）顯式授予。 */
 function moveIdsOfType(type: Species['types'][number]): number[] {
   return Object.values(MOVES)
-    .filter((m) => m.type === type)
+    .filter((m) => m.type === type && m.power > 0)
     .sort((a, b) => a.power - b.power || a.id - b.id)
     .map((m) => m.id)
 }

@@ -5,7 +5,30 @@ export type TypeName =
   | 'fighting' | 'poison' | 'ground' | 'flying' | 'psychic' | 'bug'
   | 'rock' | 'ghost' | 'dragon' | 'dark' | 'steel' | 'fairy'
 
-export type MoveCategory = 'physical' | 'special'
+export type MoveCategory = 'physical' | 'special' | 'status'
+
+/**
+ * 變化招效果（M19.d，plan/17 §1.3）——無傷害的主動戰術輔助。
+ * canonical move 資料的一部分（住 generated moves.ts）。reducer 依此寫入 fieldState 暫態狀態。
+ * - `buff`：自身/隊伍某能力值倍率（mult＝硬上限，QTE 只影響持續回合不影響成敗）。
+ * - `heal`：即時回復 maxHp 的 healFrac 比例。
+ * - `terrain`：設定場域地形（複用 M8 terrain；寫 field.terrainEffects.current）。
+ */
+export interface MoveEffect {
+  kind: 'buff' | 'heal' | 'terrain'
+  /** buff：作用的能力值（攻/防/特攻/特防；M19.d 自身向，速度/對手 debuff 留後續） */
+  stat?: 'atk' | 'def' | 'spa' | 'spd'
+  /** buff：能力值倍率（>1＝增益；此值即硬上限，不疊乘爆表） */
+  mult?: number
+  /** buff：基礎持續回合（QTE 表現再加成，仍夾上限） */
+  duration?: number
+  /** heal：回復 maxHp 的比例（0–1） */
+  healFrac?: number
+  /** terrain：要設定的地形 id */
+  terrainId?: TerrainId
+  /** 顯示標籤（如「攻擊力上升」） */
+  label: string
+}
 
 /**
  * 地形 id（M8 場域系統，plan/11 §1）——型別住此（共用型別家），
@@ -36,6 +59,8 @@ export interface Move {
   power: number
   accuracy: number // 0–100
   category: MoveCategory
+  /** 變化招效果（M19.d）；攻擊招無此欄（power>0）。category==='status' 時必有。 */
+  effect?: MoveEffect
 }
 
 export interface Species {

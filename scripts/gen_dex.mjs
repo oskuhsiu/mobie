@@ -40,6 +40,17 @@ const MOVE_SPEC = {
 const moveId = (type, tier) => 1000 + typeIndex(type) * 10 + tier
 const bstTier = (bst) => (bst < 380 ? 0 : bst < 480 ? 1 : 2)
 
+// 變化招池（M19.d，plan/17 §1.3）——少量通用、跨型別的非傷害戰術招（id 2000+）。
+// 無威力（power 0、category 'status'），帶 effect 語意；reducer 依 effect 寫 fieldState 暫態。
+// QTE 只影響強度（持續回合/回復量），不影響成敗；mult 即硬上限。型別僅供顯示/地形關聯。
+const STATUS_MOVES = [
+  { id: 2000, name: 'Swords Dance', nameZh: '劍舞', type: 'normal', effect: { kind: 'buff', stat: 'atk', mult: 1.5, duration: 4, label: '攻擊大幅提升' } },
+  { id: 2001, name: 'Iron Defense', nameZh: '鐵壁', type: 'steel', effect: { kind: 'buff', stat: 'def', mult: 1.5, duration: 4, label: '防禦大幅提升' } },
+  { id: 2002, name: 'Calm Mind', nameZh: '瞑想', type: 'psychic', effect: { kind: 'buff', stat: 'spa', mult: 1.5, duration: 4, label: '特攻提升' } },
+  { id: 2003, name: 'Recover', nameZh: '自我再生', type: 'normal', effect: { kind: 'heal', healFrac: 0.4, label: '回復體力' } },
+  { id: 2004, name: 'Grassy Terrain', nameZh: '青草場地', type: 'grass', effect: { kind: 'terrain', terrainId: 'grassland', label: '展開青草場地' } },
+]
+
 // ── 抓取（快取 + 並發 + 重試） ──
 async function getJson(url, cacheFile) {
   const path = `${CACHE}/${cacheFile}`
@@ -130,11 +141,15 @@ for (const type of TYPE_ORDER) {
     moveLines.push(`  ${id}: { id: ${id}, name: '${name}', nameZh: '${nameZh}', type: '${type}', power: ${power}, accuracy: 100, category: '${spec.cat}' },`)
   })
 }
+// 變化招（M19.d）：power 0 / category 'status' / 帶 effect。
+for (const m of STATUS_MOVES) {
+  moveLines.push(`  ${m.id}: { id: ${m.id}, name: '${m.name}', nameZh: '${m.nameZh}', type: '${m.type}', power: 0, accuracy: 100, category: 'status', effect: ${JSON.stringify(m.effect)} },`)
+}
 const movesTs = `import type { Move } from '@/game/types'
 
-/** 型別主題招式池：18 型 × 3 power tier（弱45 / 中70 / 強95）。
- *  每隻Mobie依「主屬性 + 種族值總和 tier」對應到其中一招（單一專屬招式）。
- *  本檔由 PokéAPI 產生器（scripts/gen_dex）寫出，請勿手改；要改招式請改產生器的 MOVE_SPEC。 */
+/** 型別主題招式池：18 型 × 3 power tier（弱45 / 中70 / 強95）＋ 變化招池（M19.d，id 2000+）。
+ *  每隻Mobie依「主屬性 + 種族值總和 tier」對應到其攻擊招；變化招由學習表/訓練所授予。
+ *  本檔由 PokéAPI 產生器（scripts/gen_dex）寫出，請勿手改；要改招式請改產生器的 MOVE_SPEC / STATUS_MOVES。 */
 export const MOVES: Record<number, Move> = {
 ${moveLines.join('\n')}
 }
