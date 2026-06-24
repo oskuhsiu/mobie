@@ -16,6 +16,7 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 import type { Card, OwnedUnit, Stats } from '@/game/types'
 import { SAVE_SCHEMA_VERSION, migrateMeta, type SaveMeta } from './saveMeta'
 import { sanitizeRoster } from '@/game/rosterSanitize'
+import { crc32Bytes } from '@/game/crc32'
 
 const MANIFEST = 'manifest.json'
 const ROSTER = 'roster.json'
@@ -70,28 +71,6 @@ export interface UnpackFail {
 }
 export type UnpackResult = UnpackOk | UnpackFail
 
-// ── crc32（整數值校驗；非加密，只為偵測損毀） ────────────────────────────────
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256)
-  for (let n = 0; n < 256; n++) {
-    let c = n
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
-    t[n] = c >>> 0
-  }
-  return t
-})()
-
-/** 對一串位元組區塊算 crc32 → 8 位 hex。順序敏感，故 pack / unpack 須用相同串接順序。 */
-function crc32(chunks: Uint8Array[]): string {
-  let crc = 0xffffffff
-  for (const chunk of chunks) {
-    for (let i = 0; i < chunk.length; i++) {
-      crc = CRC_TABLE[(crc ^ chunk[i]) & 0xff] ^ (crc >>> 8)
-    }
-  }
-  return ((crc ^ 0xffffffff) >>> 0).toString(16).padStart(8, '0')
-}
-
 /** payload 校驗的固定順序：roster → cards → models(依 speciesId 升冪) 的原始位元組。 */
 function payloadChunks(rosterBytes: Uint8Array, cardsBytes: Uint8Array, models: SaveModel[]): Uint8Array[] {
   const sorted = [...models].sort((a, b) => a.speciesId - b.speciesId)
@@ -112,7 +91,7 @@ export function packSave(slices: SaveSlices): Uint8Array {
     revision: slices.meta.revision,
     includesModels,
     counts: { roster: slices.roster.length, cards: slices.cards.length, models: models.length },
-    checksum: crc32(payloadChunks(rosterBytes, cardsBytes, models)),
+    checksum: crc32Bytes(payloadChunks(rosterBytes, cardsBytes, models)),
   }
 
   const files: Record<string, Uint8Array> = {
@@ -212,7 +191,7 @@ export function unpackSave(bytes: Uint8Array): UnpackResult {
   }
 
   // 校驗 payload（用原始位元組，與 pack 同順序）
-  const expect = crc32(payloadChunks(rosterBytes, cardsBytes, models))
+  const expect = crc32Bytes(payloadChunks(rosterBytes, cardsBytes, models))
   if (expect !== manifest.checksum) {
     return fail('checksum-mismatch', '存檔校驗失敗，檔案可能在下載 / 傳輸中損毀或被竄改。')
   }
