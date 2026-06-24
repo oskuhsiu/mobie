@@ -11,6 +11,7 @@ import {
   type QteQuality,
 } from '@/game/battle/engine'
 import type { ExtBundle, DamageHook } from '@/game/ext/seams'
+import { typeEffectiveness } from '@/game/data/typeChart'
 
 export type Side = 'player' | 'foe'
 
@@ -60,7 +61,7 @@ export interface ChainHit {
 
 /** 玩家本回合的行動 */
 export type BattleAction =
-  | { type: 'ATTACK'; quality?: QteQuality; mashCount?: number; starStrike?: boolean }
+  | { type: 'ATTACK'; quality?: QteQuality; mashCount?: number; starStrike?: boolean; slotIndex?: number }
   | { type: 'SWITCH'; index: number; defenseQuality?: QteQuality }
   // M9 連鎖攻擊：單一 action 回提最多 maxHits 隻的 QTE 宣告；reducer 同步重驗+結算（plan/09 §3.2）。
   | { type: 'SUBMIT_CHAIN_RESULT'; hits: ChainHit[] }
@@ -93,6 +94,8 @@ export type BattleEvent =
       hpBefore: number
       hpAfter: number
       maxHp: number
+      /** M19：本次實際使用的招式 id（display 演該招特效/名稱）；省略＝slot0/舊路徑 */
+      resolvedMoveId?: number
     }
   | { type: 'memberFainted'; side: Side; index: number }
   // 回合末回血（M7 S4 道具/特性 turnEndTrigger 用，如剩飯）；source = 來源 id（道具/特性）
@@ -230,6 +233,8 @@ interface AttackParams {
   forceCrit?: boolean
   /** 攻擊者索引（預設 active；支援補刀時指定待命隊友） */
   attackerIndex?: number
+  /** M19：使用第幾槽招式（0–3，預設 0/slot0）。玩家由 action.slotIndex 帶入、對手由 chooseOpponentMove。 */
+  moveIndex?: number
   /** RandomEvent 來源標記 */
   source?: string
   /** S3 傷害鉤（注入；hook 自行用 attacker 判定是否生效） */
@@ -260,14 +265,17 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
   const targetIndex = w[targetSide].activeIndex
   const hpBefore = target.currentHp
   const source = params.source ?? 'attack'
+  // M19：選定槽招式（terrain 倍率依此招屬性算）；缺省/超界 fallback slot0/過渡 .move。
+  const move = attacker.moves[params.moveIndex ?? 0] ?? attacker.move
 
   const result = resolveAttack(attacker, target, {
     rng: params.rng,
     qteMult: params.qteMult ?? 1,
     damageMult: params.damageMult ?? 1,
-    terrainMult: params.terrainResolve?.(attacker.move.type) ?? 1,
+    terrainMult: params.terrainResolve?.(move.type) ?? 1,
     forceCrit: params.forceCrit ?? false,
     damageHooks: params.damageHooks,
+    moveIndex: params.moveIndex,
   })
 
   // 統一 RandomEvent：命中、會心
@@ -298,12 +306,38 @@ function performAttack(w: BattleState, attackerSide: Side, params: AttackParams,
     hpBefore,
     hpAfter: result.defenderHpAfter,
     maxHp: target.maxHp,
+    resolvedMoveId: result.resolvedMoveId,
   })
 
   if (result.defenderFainted) {
     events.push({ type: 'memberFainted', side: targetSide, index: targetIndex })
     applyForcedSwitch(w, targetSide, events)
   }
+}
+
+// ── 對手選招 AI（M19，plan/17 §1.4）──────────────────────────────
+
+/**
+ * 對手選哪一槽出招（純函式，加權隨機；不新增相位、不引決策樹）。
+ * 權重：剋制（×3 / 雙倍以上）、有效（×2 / 1<eff<2）、普通（×1）、不利（×0.6）、無效（×0.1）；本系再 ×2。
+ * 變化招（power 0，M19.d）給低權重避免對手亂放。**單招直接回 0、不耗 rng**（保既有測試 rng 序）。
+ */
+export function chooseOpponentMove(attacker: BattleMobie, defender: BattleMobie, rng: () => number): number {
+  if (attacker.moves.length <= 1) return 0
+  const weights = attacker.moves.map((mv) => {
+    if (mv.power <= 0) return 0.1 // 變化招：低權
+    const eff = typeEffectiveness(mv.type, defender.types)
+    const effW = eff === 0 ? 0.1 : eff >= 2 ? 3 : eff > 1 ? 2 : eff < 1 ? 0.6 : 1
+    const stab = attacker.types.includes(mv.type) ? 2 : 1
+    return Math.max(0.05, effW * stab)
+  })
+  const total = weights.reduce((a, b) => a + b, 0)
+  let r = rng() * total
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i]
+    if (r <= 0) return i
+  }
+  return weights.length - 1
 }
 
 // ── 連鎖攻擊（M9，plan/09 §3）────────────────────────────────────
@@ -404,8 +438,10 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
     }
 
     const playerQte = action.quality ? attackQteMultiplier(action.quality, action.mashCount ?? 0) : 1
-    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks, terrainResolve }
-    const foeOpts: AttackParams = { rng, damageHooks, terrainResolve }
+    // M19：玩家由 action.slotIndex 選槽（缺省＝slot0）；對手加權選槽（單招回 0、不耗 rng＝既有測試序不變）。
+    const playerOpts: AttackParams = { rng, qteMult: playerQte, damageMult: playerDamageMult, forceCrit: playerForceCrit, damageHooks, terrainResolve, moveIndex: action.slotIndex }
+    const foeMoveIndex = chooseOpponentMove(activeOf(w, 'foe'), activeOf(w, 'player'), rng)
+    const foeOpts: AttackParams = { rng, damageHooks, terrainResolve, moveIndex: foeMoveIndex }
 
     const playerFirst = playerActsFirst(activeOf(w, 'player'), activeOf(w, 'foe'), rng)
     const order: Side[] = playerFirst ? ['player', 'foe'] : ['foe', 'player']

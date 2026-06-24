@@ -44,6 +44,8 @@ export interface AttackOptions {
   forceCrit?: boolean
   /** S3 傷害鉤（plan/09 §0）：傷害結算中段的純倍率（道具 damageHook…）；預設無＝×1。各 hook 自行用 ctx 判定是否生效。 */
   damageHooks?: DamageHook[]
+  /** M19：使用第幾槽招式（0–3，預設 0＝slot0/出生自帶）。超出範圍 fallback 到 attacker.move。 */
+  moveIndex?: number
 }
 
 export interface AttackResult {
@@ -56,6 +58,8 @@ export interface AttackResult {
   crit: boolean
   defenderHpAfter: number
   defenderFainted: boolean
+  /** M19：實際解算所用的招式 id（reducer 寫進 damageApplied event；display 演該招特效） */
+  resolvedMoveId: number
   /** 命中判定的原始亂數（給統一 RandomEvent 用） */
   accuracyRoll: number
   /** 會心判定的原始亂數；未擲到（miss / 無效）時為 -1 */
@@ -78,7 +82,8 @@ export function resolveAttack(
   const qteMult = options.qteMult ?? 1
   const damageMult = options.damageMult ?? 1
   const terrainMult = options.terrainMult ?? 1
-  const move = attacker.move
+  // M19：依 moveIndex 選槽；fallback 到過渡欄 .move（舊路徑/安全網）。
+  const move = attacker.moves[options.moveIndex ?? 0] ?? attacker.move
 
   const effectiveness = typeEffectiveness(move.type, defender.types)
 
@@ -90,6 +95,7 @@ export function resolveAttack(
       damage: 0, effectiveness, effectivenessText: null,
       missed: true, crit: false,
       defenderHpAfter: defender.currentHp, defenderFainted: false,
+      resolvedMoveId: move.id,
       accuracyRoll, critRoll: -1,
     }
   }
@@ -100,6 +106,7 @@ export function resolveAttack(
       damage: 0, effectiveness, effectivenessText: effectivenessLabel(0),
       missed: false, crit: false,
       defenderHpAfter: defender.currentHp, defenderFainted: false,
+      resolvedMoveId: move.id,
       accuracyRoll, critRoll: -1,
     }
   }
@@ -139,6 +146,7 @@ export function resolveAttack(
     crit,
     defenderHpAfter,
     defenderFainted: defenderHpAfter <= 0,
+    resolvedMoveId: move.id,
     accuracyRoll, critRoll,
   }
 }

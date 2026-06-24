@@ -190,7 +190,8 @@ describe('模擬戰鬥壓力測試（大量完整對戰）', () => {
 describe('模擬戰鬥 · 邊界情境', () => {
   it('完全免疫（一般 vs 純幽靈）也必定終局（走 MAX_TURNS 剩餘血量判定）', () => {
     // 強制一隊一般招打純幽靈：傷害恆 0 → 自然不會 KO → 必須靠 timeout 判勝
-    const ghost = (): BattleMobie => buildBattleMobie({ cardId: 'g', speciesId: 92, level: 20 }) // 鬼斯=ghost/poison
+    // M19：必須用「純」幽靈（夢妖 200），否則多招式下雙屬性幽靈會用次屬性招繞過免疫（鬼斯 92=ghost/poison）。
+    const ghost = (): BattleMobie => buildBattleMobie({ cardId: 'g', speciesId: 200, level: 20 }) // 夢妖=純 ghost
     const normalAtk = (): BattleMobie => {
       const m = buildBattleMobie({ cardId: 'n', speciesId: 133, level: 20 }) // 伊布=normal
       return m
