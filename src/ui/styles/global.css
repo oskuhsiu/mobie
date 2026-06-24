@@ -399,6 +399,28 @@ body {
 }
 .gesture-hint--seal { color: #7ad6ff; text-shadow: 0 0 10px rgba(122,214,255,0.9); }
 
+/* 星擊蓄力環 / 節奏脈動（lite 長按 / arcade 節奏） */
+.gesture-surface--star { z-index: 18; }
+.star-charge {
+  position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+  width: 132px; height: 132px; border-radius: 50%;
+  display: grid; place-items: center; pointer-events: none;
+}
+.star-charge__ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(#ffd6ff 0deg, rgba(255,255,255,0.12) 0);
+  -webkit-mask: radial-gradient(transparent 63%, #000 65%);
+  mask: radial-gradient(transparent 63%, #000 65%);
+  box-shadow: 0 0 22px rgba(255,122,224,0.6);
+}
+.star-charge__ring--beat {
+  background: radial-gradient(circle at 50% 38%, rgba(255,175,240,0.6), rgba(145,65,203,0.45) 62%, transparent);
+  -webkit-mask: none; mask: none;
+  transition: transform 0.04s linear;
+}
+.star-charge__star { font-size: 54px; color: #fff; line-height: 1; text-shadow: 0 0 16px #ff7ae0, 0 2px 4px rgba(0,0,0,0.4); }
+.gesture-hint--star { top: 46%; bottom: auto; color: #ffd0ff; text-shadow: 0 0 10px rgba(255,122,224,0.9); }
+
 /* ============ M9 連鎖槽 / 連鎖鈕 / 連段 overlay ============ */
 .chain-gauge__fill { background: linear-gradient(90deg, #2bb6e0, #4dd0c0, #7ae0ff); }
 .chain-gauge--full .star-gauge__icon { color: #7ae0ff; filter: drop-shadow(0 0 6px #7ae0ff); }

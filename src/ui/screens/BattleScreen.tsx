@@ -21,6 +21,8 @@ import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, loo
 import { makeWildEvents } from '@/game/accidents'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
+import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
+import { interactModeOf } from '@/game/settings'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
@@ -338,6 +340,8 @@ export function BattleScreen() {
   // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
   const ext = useSettings((s) => s.ext)
   const prep = useSettings((s) => s.prep)
+  // M22 星擊增強互動 mode（off＝原本單擊即放）。低頻、隨設定變動重算。
+  const starMode = interactModeOf(useSettings((s) => s.settings), 'starStrike')
   // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場/連勝塔不注入＝零意外。
   const wildEvents = useMemo(() => {
     if (context.tower) return undefined // 塔戰無野外意外
@@ -359,6 +363,8 @@ export function BattleScreen() {
   const [lockedIndex, setLockedIndex] = useState<number | null>(null)
   // M9 連鎖：連續 QTE 序列（participants=參與隊友索引、step=目前第幾段、hits=已收集宣告）
   const [chainSeq, setChainSeq] = useState<{ participants: number[]; step: number; hits: ChainHit[] } | null>(null)
+  // M22 星擊增強互動：開啟蓄力/節奏手勢的暫態（off 模式恆 false、不渲染手勢）
+  const [starCharging, setStarCharging] = useState(false)
 
   // 初始化：建出雙方 3 隻隊伍，進場
   useEffect(() => {
@@ -768,9 +774,10 @@ export function BattleScreen() {
       {/* 場域地形徽章（頂部置中常駐；中性/無地形不顯示） */}
       <TerrainChip terrainIds={battle.field.terrainEffects.current} />
 
-      {/* ★ 星擊球：能量滿 + 輪到玩家選招時，於戰鬥區中央大特效顯示；點了即放（不放就點技能槽照常）。 */}
+      {/* ★ 星擊球：能量滿 + 輪到玩家選招時，於戰鬥區中央大特效顯示；點了即放（不放就點技能槽照常）。
+          M22 增強互動：off→點擊即放（原樣）；lite/arcade→點擊改開蓄力/節奏手勢，完成才放招。 */}
       <AnimatePresence>
-        {energy >= 100 && phase === 'playerChoice' && (
+        {energy >= 100 && phase === 'playerChoice' && !starCharging && (
           <motion.button
             className="star-orb"
             initial={{ opacity: 0, scale: 0.4 }}
@@ -778,7 +785,10 @@ export function BattleScreen() {
             exit={{ opacity: 0, scale: 0.4 }}
             transition={{ scale: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.3 } }}
             whileTap={{ scale: 0.9 }}
-            onClick={() => { audio.play('crit'); void runStarStrike() }}
+            onClick={() => {
+              if (starMode === 'off') { audio.play('crit'); void runStarStrike() }
+              else { audio.play('select'); setStarCharging(true) }
+            }}
           >
             <span className="star-orb__ring" />
             <span className="star-orb__star">★</span>
@@ -786,6 +796,16 @@ export function BattleScreen() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* M22 星擊手勢 overlay（lite 長按蓄力 / arcade 節奏點擊）；off 不渲染＝DOM 零新增 wrapper。
+          完成（或逾時）→ 收起手勢 + runStarStrike()（簽名不動、傷害不吃手勢結果）。 */}
+      {starCharging && phase === 'playerChoice' && (
+        starMode === 'arcade' ? (
+          <RhythmTap mode={starMode} onDone={() => { setStarCharging(false); audio.play('crit'); void runStarStrike() }} />
+        ) : (
+          <HoldChargeRing mode={starMode} onCharged={() => { setStarCharging(false); audio.play('crit'); void runStarStrike() }} />
+        )
+      )}
       {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <div className="combat-hud combat-hud--foe">
