@@ -59,6 +59,8 @@ const FX_POS: Record<Side, { nx: number; ny: number }> = {
 // 自用街機節奏取偏寬鬆值，給玩家讀完 4 招的時間；待玩測再調（plan/17 §9）。
 const CHOICE_TIMEOUT_MS = 8000
 const ATTACK_QTE_TIMEOUT_MS = 10000
+// 連打蓄力視窗：原本 950ms 太短（玩測回饋「給的時間超級少」），放寬到 2.8s 讓連點真的衝得起來。
+const MASH_DURATION_MS = 2800
 // 鍵盤「四鍵 / 方向」映射 → 招式槽（plan/17 §1.1）。數字 1–4＝讀序（主），方向鍵＝2×2 順時針面鍵：
 // ↑左上(0) → →右上(1) → ↓右下(3) → ←左下(2)。按下瞬間即選定並進入 QTE（不做游標導覽）。
 const SLOT_KEY_MAP: Record<string, number> = {
@@ -232,7 +234,7 @@ function MashMeter({ onDone }: { onDone: (count: number) => void }) {
       if (doneRef.current) return
       doneRef.current = true
       onDone(countRef.current)
-    }, 950)
+    }, MASH_DURATION_MS)
     return () => clearTimeout(t)
   }, [onDone])
 
@@ -252,6 +254,9 @@ function MashMeter({ onDone }: { onDone: (count: number) => void }) {
       <div className="mash__hint">連打蓄力！瘋狂點擊衝高傷害</div>
       <div className="mash__track"><div ref={barRef} className="mash__fill" style={{ width: '0%' }} /></div>
       <div ref={labelRef} className="mash__tier">蓄力中…</div>
+      <div className="qte__timeout" aria-hidden>
+        <div className="qte__timeout-fill" style={{ animationDuration: `${MASH_DURATION_MS}ms` }} />
+      </div>
     </div>
   )
 }
@@ -1026,43 +1031,53 @@ export function BattleScreen() {
           />
         )}
 
-        {phase === 'qte' && (
-          <TimingBar
-            hint="10秒內點擊任意處，停在正中可造成最大傷害；逾時隨機！"
-            timeoutMs={ATTACK_QTE_TIMEOUT_MS}
-            randomOnTimeout
-            onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }}
-          />
-        )}
-
-        {phase === 'mash' && <MashMeter onDone={onMashDone} />}
-
-        {phase === 'statusQte' && (
-          <TimingBar
-            hint="變化招！抓準時機強化效果（只影響強度、不影響成敗）"
-            onResult={(q) => { void runPlayerTurn(q, 0) }}
-          />
-        )}
-
-        {phase === 'defenseQte' && (
-          <TimingBar
-            hint="換人中！點擊停在正中可大幅減傷！"
-            onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }}
-          />
-        )}
-
-        {phase === 'chainQte' && chainSeq && (
-          <TimingBar
-            key={`chain-${chainSeq.step}`} /* 每段重掛 → 指針動畫重置 */
-            hint={`🔗 連鎖 ${chainSeq.step + 1}/${chainSeq.participants.length}　${battle.player.members[chainSeq.participants[chainSeq.step]].nameZh}！抓準時機連續出擊`}
-            onResult={onChainQteResult}
-          />
-        )}
-
         {(phase === 'busy' || phase === 'intro') && (
           <div className="hpbar__num" style={{ height: 46, display: 'grid', placeItems: 'center' }}>…</div>
         )}
       </div>
+
+      {/* 計時類輸入（QTE / 連打 / 防禦 / 連鎖）抬到戰鬥區中央：原本擠在最底「看不太到、不好點」，
+          改成置中放大的醒目 overlay，正對玩家視線與拇指。MoveSlots（選招選單）維持在底部不動。 */}
+      <AnimatePresence>
+        {(phase === 'qte' || phase === 'mash' || phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
+          <motion.div
+            className="battle-action"
+            initial={{ opacity: 0, y: 14, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.18 }}
+          >
+            {phase === 'qte' && (
+              <TimingBar
+                hint="10秒內點擊任意處，停在正中可造成最大傷害；逾時隨機！"
+                timeoutMs={ATTACK_QTE_TIMEOUT_MS}
+                randomOnTimeout
+                onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }}
+              />
+            )}
+            {phase === 'mash' && <MashMeter onDone={onMashDone} />}
+            {phase === 'statusQte' && (
+              <TimingBar
+                hint="變化招！抓準時機強化效果（只影響強度、不影響成敗）"
+                onResult={(q) => { void runPlayerTurn(q, 0) }}
+              />
+            )}
+            {phase === 'defenseQte' && (
+              <TimingBar
+                hint="換人中！點擊停在正中可大幅減傷！"
+                onResult={(q) => { if (pendingSwitch !== null) runSwitchTurn(pendingSwitch, q) }}
+              />
+            )}
+            {phase === 'chainQte' && chainSeq && (
+              <TimingBar
+                key={`chain-${chainSeq.step}`} /* 每段重掛 → 指針動畫重置 */
+                hint={`🔗 連鎖 ${chainSeq.step + 1}/${chainSeq.participants.length}　${battle.player.members[chainSeq.participants[chainSeq.step]].nameZh}！抓準時機連續出擊`}
+                onResult={onChainQteResult}
+              />
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
       </div>
 
       {/* M16 資訊卡：點 HpPlate/TeamTray 開（自己全顯、對手深度遮罩待 M17 看穿） */}
