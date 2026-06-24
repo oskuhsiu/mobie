@@ -17,7 +17,7 @@ describe('M6.0 settings slice', () => {
   it('migrateSettings 防壞檔：非物件 → 全關', () => {
     expect(migrateSettings(null).modules.heldItems).toBe(false)
     expect(migrateSettings('garbage').modules.synergy).toBe(false)
-    expect(migrateSettings(42).modules.tower).toBe(false)
+    expect(migrateSettings(42).modules.evolution).toBe(false)
   })
 
   it('migrateSettings 只認 true、未知鍵忽略、缺漏補關', () => {
@@ -30,9 +30,9 @@ describe('M6.0 settings slice', () => {
 
   it('setModuleEnabledIn 純函數、不改原物件', () => {
     const a = defaultSettings()
-    const b = setModuleEnabledIn(a, 'tower', true)
-    expect(a.modules.tower).toBe(false)
-    expect(b.modules.tower).toBe(true)
+    const b = setModuleEnabledIn(a, 'evolution', true)
+    expect(a.modules.evolution).toBe(false)
+    expect(b.modules.evolution).toBe(true)
   })
 })
 

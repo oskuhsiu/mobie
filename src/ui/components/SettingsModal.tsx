@@ -50,7 +50,6 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
     desc: 'Mobie到達進化等級時於戰後進化、變更種族並重算能力值（個體/道具保留，招式仍單一）。',
     available: true,
   },
-  tower: { icon: '🗼', label: '連勝塔', desc: '連續戰鬥不回血的長線遠征模式。', available: false },
   partnerSkills: {
     icon: '✨',
     label: '夥伴技能',
