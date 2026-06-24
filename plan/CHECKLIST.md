@@ -328,17 +328,17 @@
 > **分類精準改名，不是一鍵 find-replace。** **改排「先做」（2026-06-24 使用者拍板）**：M19/M16/M11 之前先改名，
 > 新碼天生用對命名、key 遷移趁早（現僅 7 個 key）。M18.e repo 目錄改名由使用者執行（動到工作目錄絕對路徑）。
 > **⚠️ 絕不可改**：`artwork()` helper / gen_dex 的 `raw.githubusercontent.com/PokeAPI/.../pokemon/...` URL、外部服務名 `PokéAPI`、物種 zh-Hant 正典名。
-### M18.a — 程式識別符＋檔名
-- [ ] 型別/函式/元件/變數：`BattlePokemon`→`BattleMobie`、`buildBattlePokemon`→`buildBattleMobie`、`pokemon`→`mobie`（src 約 137 處/32 檔，扣除不可改 URL）
-- [ ] 改檔名 `PokemonSprite.tsx`→`MobieSprite.tsx`、`PokemonVisual.tsx`→`MobieVisual.tsx`（含所有 import 路徑）+ typecheck 綠
-### M18.b — UI 中文＋品牌字串
-- [ ] 「寶可夢」→「Mobie」（約 32 處/24 檔）+ `package.json` name + `index.html` title（Mezastar Clone→Mobie）+ `manifest.webmanifest` name/short_name
-### M18.c — 持久化 key 遷移＋.save 相容
-- [ ] 7 個 key `mz.*`/`mz-*` → `mobie.*`/`mobie-*` + 集中 `migrateKeys()`（先讀新、無則搬舊）；IDB 二選一（搬遷 or 保留舊名）明文記錄
-- [ ] `.save`：bundle/saveMeta manifest 加舊欄位/schemaVersion 識別、匯入舊檔對映舊→新、匯出新格式 + round-trip & 舊檔匯入 vitest
-### M18.d — docs 全域改名
-- [ ] handoff/README/CLAUDE/ARCHITECTURE/plan 的 `pokemon-mezastar`/「寶可夢」品牌字 → mobie/Mobie（PokéAPI 技術引用與物種資料來源照舊）
-### M18.e — repo 目錄改名（最後、單獨）
+### M18.a — 程式識別符＋檔名 ✅
+- [x] 型別/函式/元件/變數：`BattlePokemon`→`BattleMobie`（含 `buildBattlePokemon`→`buildBattleMobie`，73+40 處）。小寫 `pokemon` 僅 gen_dex 的 PokéAPI URL path（不可改）；`poke-card` CSS class 屬內部樣式留後續
+- [x] 改檔名 `PokemonSprite.tsx`→`MobieSprite.tsx`、`PokemonVisual.tsx`→`MobieVisual.tsx`（含所有 import 路徑）+ typecheck 綠
+### M18.b — UI 中文＋品牌字串 ✅
+- [x] 「寶可夢」→「Mobie」（39 處；含產生檔 moves.ts/regions.ts 與 gen_dex.mjs 同步改、不重產）+ `package.json` name + `index.html` title + `manifest.webmanifest` + TitleScreen 主標題 MEZASTAR→MOBIE
+### M18.c — 持久化 key 遷移＋.save 相容 ✅
+- [x] 6 個 localStorage key `mz.*` → `mobie.*` + `game/keyMigration.ts`（純函數冪等，先讀新、無則搬舊、不刪舊當安全網）+ `bootstrap.ts` 最前 import；IDB DB 名 `mz-*` **保留**（純內部/不進 .save/跨 DB 搬遷易孤立，二選一明文記錄）
+- [x] `.save`：經查 bundle.ts **不嵌 key 名**（只存 OwnedUnit/Card + generic 檔名、schemaVersion 不變）→ 舊檔自動相容、無需改格式；+7 keyMigration vitest
+### M18.d — docs 全域改名 ✅
+- [x] CLAUDE/ARCHITECTURE/README/handoff 標題 → mobie、ARCHITECTURE 識別符 BattleMobie、README 介紹/狀態刷新（278 測試）、ATTRIBUTION link；目錄路徑 `cd pokemon-mezastar`/tree root 與 memory slug 保留到 M18.e；PokéAPI/物種正典名照舊；plan/20/14/CHECKLIST 的「改名前後」對照保留舊名
+### M18.e — repo 目錄改名（最後、單獨；**待使用者執行**）
 - [ ] `pokemon-mezastar/` → `mobie/`（本機資料夾 + git remote，使用者執行）+ `npm run dev` 路徑確認 + 既有存檔載入驗證 + 立繪正常（artwork URL 未誤改）
 
 ## M19 — Mobie 多招式制（放寬單招 → 寶可夢式；見 `17`）

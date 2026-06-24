@@ -1,4 +1,4 @@
-# Architecture — pokemon-mezastar
+# Architecture — mobie
 
 iPad-first, personal-use **Pokémon Mezastar-style** game. Web/PWA, runs in iPad Safari
 (iPhone-compatible). This document describes the system's structure and the invariants a
@@ -76,7 +76,7 @@ title → regionSelect → encounter → cardSelect → battle → result
   `playerCards`, scanned QR codes (M2), or imported save files (M5).
 - **`OwnedUnit`** — the **only persisted, canonical** shape (id, speciesId, level, exp, ivs, nature,
   seed, shiny, optional `heldItemId` [M7]). Derived battle numbers are never persisted.
-- **`BattlePokemon`** — fully-resolved battle instance, computed by `stats.buildBattlePokemon(card)`.
+- **`BattleMobie`** — fully-resolved battle instance, computed by `stats.buildBattleMobie(card)`.
   Carries battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the
   abilities module's S1 hook); these are never persisted and are absent when a module is off.
 - **`Region.mode`** — `'arena' | 'wild'` (M6 mode contract, see §3).
@@ -118,7 +118,7 @@ Design source: `plan/09-extension-systems.md` §0; the seam definitions live in 
 
 | Seam | Where it runs | Purity | Used by |
 |---|---|---|---|
-| **S1 `buildUnit`** | after `buildBattlePokemon` (battle init) | `unit → unit` | items (statMod), abilities (statMod + writes `abilityId`) |
+| **S1 `buildUnit`** | after `buildBattleMobie` (battle init) | `unit → unit` | items (statMod), abilities (statMod + writes `abilityId`) |
 | **S2 `preBattleModifiers`** | battle init / team change (once) | `team → NamedModifier[]` | synergy |
 | **S3 `damageHook`** | mid-`resolveAttack` | `ctx → multiplier` | items (life orb / expert belt), abilities (pinch / guard) |
 | **S4 `turnEndTrigger`** | end-of-turn sync phase (before MAX_TURNS judging) | `state → events` | items (leftovers heal → `heal` event) |
@@ -127,7 +127,7 @@ Design source: `plan/09-extension-systems.md` §0; the seam definitions live in 
 **Two injection paths** (assembled in `store/ext.ts`, the only layer that reads `settings`):
 
 - **`ExtBundle`** (S3/S4/S5) is passed to `resolveTurn(…, { rng, ext })`. Built by `assembleExt(settings)`.
-  Hooks read battle-transient `heldItemId`/`abilityId` off the `BattlePokemon` and self-filter — one
+  Hooks read battle-transient `heldItemId`/`abilityId` off the `BattleMobie` and self-filter — one
   static hook per module, no per-unit closures.
 - **`BattlePrep`** (S1/S2) is applied at battle init by `applyBattlePrep(team, prep, withSynergy)`
   (built by `assembleBattlePrep(settings)`). `BattleScreen` applies it to the player team (synergy on)

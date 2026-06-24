@@ -1,7 +1,7 @@
-# pokemon-mezastar
+# mobie
 
-A personal-use, **iPad-first** Pokémon Mezastar-style game. Pick a region → meet wild Pokémon →
-build a 3-mon team → play a turn-based 3v3 battle with touch QTEs → win, gain EXP, and capture the
+**Mobie** (小怪物) — a personal-use, **iPad-first** monster-battler. Pick a region → meet wild Mobie →
+build a 3-mob team → play a turn-based 3v3 battle with touch QTEs → win, gain EXP, and capture the
 boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari (iPhone-compatible).
 
 > This is a hobby project for personal use. It bundles **no copyrighted assets** — artwork is loaded
@@ -22,7 +22,7 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Team-select helper**: per-card "counters N / weak to N" badges vs the whole foe team, plus a
   one-tap "recommend team".
 - **Turn cap** to prevent unwinnable stalemates.
-- **QR cards & library** (M2): scan a card QR (or hand-enter the code) to add Pokémon; browse, import
+- **QR cards & library** (M2): scan a card QR (or hand-enter the code) to add a Mobie; browse, import
   (JSON/CSV), make custom cards, and print QR codes from the in-app library.
 - **3D battle stage** (M3): React-three-fiber stage with user drop-in GLB models (IndexedDB), falling
   back to PokéAPI billboard sprites.
@@ -34,7 +34,7 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Optional extension systems** (M7), all off by default and toggled in the in-app **Settings** panel —
   each is a swappable module hooked onto fixed engine seams, so turning it off leaves zero residue:
   - **Team synergy** — visible team-building bonuses (diverse types / shared type / same generation).
-  - **Held items** — equip one passive item per Pokémon (stat boost / damage boost / end-of-turn heal),
+  - **Held items** — equip one passive item per Mobie (stat boost / damage boost / end-of-turn heal),
     managed in the **Team** screen with its own item bag.
   - **Abilities** — a per-type passive (pinch boost / brawn / speed / mystic / guard) on both sides.
 - Content: national dex 1–251, 8 themed regions (+ arena), 16 cross-type starter cards.
@@ -94,9 +94,10 @@ is the only hand-authored data file.
 ## Status
 
 **M1 + M1.5 (a–h), M2 (QR scan + card library), M3 (R3F 3D stage + GLB drop-in), M5 (portable save
-files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), and M7 (battle-condition
-hook layer: team synergy / held items / abilities + settings UI) are complete** and CDP-verified —
-**194 Vitest tests**, typecheck, and build all green. Content: national dex 1–251, 8 regions (+ arena),
+files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 (battle-condition
+hook layer: synergy / held items / abilities), M8 (field/terrain), M9 (combo chain), and M10
+(evolution / star grade / dex+achievements / egg incubator) are complete** and CDP-verified —
+**278 Vitest tests**, typecheck, and build all green. Content: national dex 1–251, 8 regions (+ arena),
 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
@@ -106,6 +107,7 @@ modules off vs all-on), held-item persistence round-trips, and CDP real-play (ar
 win → capture → roster growth, M7 modules taking effect in battle, all Title modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-**Next:** M8 (field / terrain — introduces a `fieldState` container; terrain multiplies attack power
-after type effectiveness, clamped per type). M4 (MediaPipe motion-control QTE) remains skipped by the
+**Now renaming the project to Mobie (M18, in progress)** — identifiers, UI strings, and localStorage
+keys (`mz.*` → `mobie.*`, with a one-time migration). **Next:** M19 (multi-move learnsets) → M16 (mob
+info card) → M11 (tower / wild accidents). M4 (MediaPipe motion-control QTE) remains skipped by the
 owner. See `plan/CHECKLIST.md` for the milestone breakdown and `handoff.md` for the live working state.

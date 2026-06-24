@@ -1,4 +1,4 @@
-# Handoff — pokemon-mezastar
+# Handoff — mobie
 
 接手者請先讀本檔，再讀 `plan/`（設計真相在那裡，本檔不重複）。專案為 **iPad 為主、自用的 Pokémon Mezastar 風格遊戲**，Web/PWA。
 

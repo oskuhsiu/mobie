@@ -1,4 +1,4 @@
-# CLAUDE.md — pokemon-mezastar
+# CLAUDE.md — mobie
 
 **Read [`ARCHITECTURE.md`](ARCHITECTURE.md) first**, then [`handoff.md`](handoff.md) for the current
 working state. Design rationale and milestones live in [`plan/`](plan/) — treat those as the source of
