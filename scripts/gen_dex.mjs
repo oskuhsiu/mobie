@@ -271,6 +271,12 @@ const REGION_THEMES = [
   { id: 'volcanic-cavern', name: '火山岩窟', gradient: ['#8a3a1f', '#2e1208'], icon: '⛰️', blurb: '岩漿滲入地底坑道的灼熱洞窟，火、岩與地面系盤踞。', types: ['fire', 'rock', 'ground'], band: [18, 26], terrains: ['volcanic', 'cavern'] },
   // 隨機地形區（M8.b）：開場從地形池決定論抽 1 個
   { id: 'mirage-realm', name: '幻象之境', gradient: ['#5b3a8a', '#1a1030'], icon: '🌀', blurb: '地形變幻莫測的幻象結界，每次踏入都是未知的場域。', types: ['psychic', 'ghost', 'dragon', 'fairy'], band: [24, 32], randomTerrain: true, terrains: ['mystic', 'haunt', 'dragons-peak', 'sandstorm', 'snowfield', 'flowerfield'] },
+  // ── M13 內容階段：天氣/場地/特殊型地形主題新區（自動納入全 9 世代物種） ──
+  { id: 'sunlit-savanna', name: '驕陽草海', gradient: ['#c98a1f', '#6e4a0a'], icon: '☀️', blurb: '烈日炙烤的金黃草海，火與一般系在晴空下精神抖擻。', types: ['fire', 'ground', 'normal'], band: [22, 30], terrains: ['sunny'] },
+  { id: 'monsoon-coast', name: '季風海岸', gradient: ['#1c5a7a', '#0a2433'], icon: '🌧️', blurb: '暴雨傾盆的灰藍海岸，水系與飛行系乘風破浪。', types: ['water', 'flying'], band: [22, 30], terrains: ['rain'] },
+  { id: 'psy-sanctum', name: '精神聖所', gradient: ['#8a3a8a', '#2e1030'], icon: '🔮', blurb: '靈力充盈的精神場域，超能力與妖精系在此覺醒。', types: ['psychic', 'fairy'], band: [26, 34], terrains: ['psychic-field'] },
+  { id: 'primal-swamp', name: '太古沼澤', gradient: ['#3a5a2a', '#16240e'], icon: '🪻', blurb: '瘴氣瀰漫的太古濕沼，毒、地面與水系蟄伏淤泥。', types: ['poison', 'ground', 'water'], band: [24, 32], terrains: ['swamp'] },
+  { id: 'sacred-grove', name: '神聖林苑', gradient: ['#caa42a', '#4a3a0a'], icon: '✨', blurb: '聖光普照的神域林苑，妖精、超能力與鋼系受其庇佑。', types: ['fairy', 'psychic', 'steel'], band: [28, 36], terrains: ['holy-ground'] },
 ]
 const weightOf = (bst) => (bst < 350 ? 4 : bst < 430 ? 3 : bst < 510 ? 2 : 1)
 const regionBlocks = REGION_THEMES.map((r) => {

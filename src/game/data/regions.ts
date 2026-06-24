@@ -1,6 +1,6 @@
 import type { Region } from '@/game/types'
 
-/** 11 個主題化區域（含混合/隨機地形區），等級帶遞增、覆蓋全 18 型；
+/** 16 個主題化區域（含混合/隨機地形區），等級帶遞增、覆蓋全 18 型；
  *  遭遇表由產生器從 dex 篩出（每區末項為高等 boss）；地形＝M8 場域系統。
  *  請勿手改，改請改產生器的 REGION_THEMES。 */
 export const REGIONS: Region[] = [
@@ -201,6 +201,96 @@ export const REGIONS: Region[] = [
       { speciesId: 475, weight: 1, minLevel: 29, maxLevel: 32 }, // 艾路雷朵
       { speciesId: 1006, weight: 1, minLevel: 30, maxLevel: 32 }, // 鐵武者
       { speciesId: 890, weight: 1, minLevel: 32, maxLevel: 34 }, // 無極汰那
+    ],
+  },
+  {
+    id: 'sunlit-savanna',
+    name: '驕陽草海',
+    mode: 'wild',
+    terrains: ['sunny'],
+    gradient: ['#c98a1f', '#6e4a0a'],
+    icon: '☀️',
+    blurb: '烈日炙烤的金黃草海，火與一般系在晴空下精神抖擻。',
+    encounters: [
+      { speciesId: 298, weight: 4, minLevel: 22, maxLevel: 25 }, // 露力麗
+      { speciesId: 443, weight: 4, minLevel: 23, maxLevel: 26 }, // 圓陸鯊
+      { speciesId: 327, weight: 3, minLevel: 24, maxLevel: 27 }, // 晃晃斑
+      { speciesId: 40, weight: 2, minLevel: 25, maxLevel: 28 }, // 胖可丁
+      { speciesId: 521, weight: 2, minLevel: 27, maxLevel: 30 }, // 高傲雉雞
+      { speciesId: 851, weight: 1, minLevel: 28, maxLevel: 30 }, // 焚焰蚣
+      { speciesId: 493, weight: 1, minLevel: 30, maxLevel: 32 }, // 阿爾宙斯
+    ],
+  },
+  {
+    id: 'monsoon-coast',
+    name: '季風海岸',
+    mode: 'wild',
+    terrains: ['rain'],
+    gradient: ['#1c5a7a', '#0a2433'],
+    icon: '🌧️',
+    blurb: '暴雨傾盆的灰藍海岸，水系與飛行系乘風破浪。',
+    encounters: [
+      { speciesId: 746, weight: 4, minLevel: 22, maxLevel: 25 }, // 弱丁魚
+      { speciesId: 258, weight: 4, minLevel: 23, maxLevel: 26 }, // 水躍魚
+      { speciesId: 822, weight: 3, minLevel: 24, maxLevel: 27 }, // 藍鴉
+      { speciesId: 22, weight: 2, minLevel: 25, maxLevel: 28 }, // 大嘴雀
+      { speciesId: 834, weight: 2, minLevel: 27, maxLevel: 30 }, // 暴噬龜
+      { speciesId: 365, weight: 1, minLevel: 28, maxLevel: 30 }, // 帝牙海獅
+      { speciesId: 717, weight: 1, minLevel: 30, maxLevel: 32 }, // 伊裴爾塔爾
+    ],
+  },
+  {
+    id: 'psy-sanctum',
+    name: '精神聖所',
+    mode: 'wild',
+    terrains: ['psychic-field'],
+    gradient: ['#8a3a8a', '#2e1030'],
+    icon: '🔮',
+    blurb: '靈力充盈的精神場域，超能力與妖精系在此覺醒。',
+    encounters: [
+      { speciesId: 298, weight: 4, minLevel: 26, maxLevel: 29 }, // 露力麗
+      { speciesId: 436, weight: 4, minLevel: 27, maxLevel: 30 }, // 銅鏡怪
+      { speciesId: 575, weight: 3, minLevel: 28, maxLevel: 31 }, // 哥德小童
+      { speciesId: 876, weight: 2, minLevel: 29, maxLevel: 32 }, // 愛管侍
+      { speciesId: 959, weight: 2, minLevel: 31, maxLevel: 34 }, // 巨鍛匠
+      { speciesId: 481, weight: 1, minLevel: 32, maxLevel: 34 }, // 艾姆利多
+      { speciesId: 792, weight: 1, minLevel: 34, maxLevel: 36 }, // 露奈雅拉
+    ],
+  },
+  {
+    id: 'primal-swamp',
+    name: '太古沼澤',
+    mode: 'wild',
+    terrains: ['swamp'],
+    gradient: ['#3a5a2a', '#16240e'],
+    icon: '🪻',
+    blurb: '瘴氣瀰漫的太古濕沼，毒、地面與水系蟄伏淤泥。',
+    encounters: [
+      { speciesId: 746, weight: 4, minLevel: 24, maxLevel: 27 }, // 弱丁魚
+      { speciesId: 322, weight: 4, minLevel: 25, maxLevel: 28 }, // 呆火駝
+      { speciesId: 111, weight: 4, minLevel: 26, maxLevel: 29 }, // 獨角犀牛
+      { speciesId: 117, weight: 2, minLevel: 27, maxLevel: 30 }, // 海刺龍
+      { speciesId: 945, weight: 2, minLevel: 29, maxLevel: 32 }, // 塗標客
+      { speciesId: 134, weight: 1, minLevel: 30, maxLevel: 32 }, // 水伊布
+      { speciesId: 890, weight: 1, minLevel: 32, maxLevel: 34 }, // 無極汰那
+    ],
+  },
+  {
+    id: 'sacred-grove',
+    name: '神聖林苑',
+    mode: 'wild',
+    terrains: ['holy-ground'],
+    gradient: ['#caa42a', '#4a3a0a'],
+    icon: '✨',
+    blurb: '聖光普照的神域林苑，妖精、超能力與鋼系受其庇佑。',
+    encounters: [
+      { speciesId: 298, weight: 4, minLevel: 28, maxLevel: 31 }, // 露力麗
+      { speciesId: 439, weight: 4, minLevel: 29, maxLevel: 32 }, // 魔尼尼
+      { speciesId: 184, weight: 3, minLevel: 30, maxLevel: 33 }, // 瑪力露麗
+      { speciesId: 956, weight: 2, minLevel: 31, maxLevel: 34 }, // 超能艷鴕
+      { speciesId: 282, weight: 1, minLevel: 33, maxLevel: 36 }, // 沙奈朵
+      { speciesId: 990, weight: 1, minLevel: 34, maxLevel: 36 }, // 鐵轍跡
+      { speciesId: 792, weight: 1, minLevel: 36, maxLevel: 38 }, // 露奈雅拉
     ],
   },
 ]
