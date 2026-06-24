@@ -342,6 +342,41 @@ body {
 .combo-overlay__num { font-size: clamp(46px, 11vw, 84px); font-weight: 900; color: #7ae0ff; }
 .combo-overlay__label { font-size: 16px; font-weight: 800; letter-spacing: 0.28em; color: #cdf6ff; }
 
+/* ============ M19.c 四槽選招（選槽即開打） ============ */
+.move-choice { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.move-grid { width: 100%; display: grid; gap: 10px; }
+.move-slot {
+  position: relative;
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 11px 14px 10px; min-height: 78px;
+  border-radius: 14px; text-align: left;
+  background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.04));
+  border: 1px solid var(--stroke);
+  border-left: 4px solid var(--mv, var(--stroke));
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  transition: filter 0.12s ease, transform 0.08s ease, box-shadow 0.15s ease;
+}
+.move-slot:hover { filter: brightness(1.12); box-shadow: 0 6px 22px rgba(0,0,0,0.42); }
+.move-slot:active { transform: translateY(1px) scale(0.985); }
+.move-slot__key {
+  position: absolute; top: 8px; right: 9px;
+  width: 18px; height: 18px; border-radius: 6px;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; color: var(--text-dim);
+  background: rgba(0,0,0,0.35); border: 1px solid var(--stroke);
+}
+.move-slot__name { font-size: 16px; font-weight: 800; letter-spacing: 0.01em; padding-right: 22px; }
+.move-slot__meta { display: flex; align-items: center; gap: 8px; }
+.move-slot__cat { font-size: 11px; color: var(--text-dim); }
+.move-slot__stats { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.move-countdown { width: 100%; height: 3px; border-radius: 999px; background: rgba(0,0,0,0.35); overflow: hidden; }
+.move-countdown__bar {
+  height: 100%; width: 100%; transform-origin: left center;
+  background: linear-gradient(90deg, var(--accent), #ff5161);
+  animation-name: move-countdown-deplete; animation-timing-function: linear; animation-fill-mode: forwards;
+}
+@keyframes move-countdown-deplete { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
 /* ============ M10 進化演出 overlay ============ */
 .evo-overlay {
   position: absolute; inset: 0; z-index: 20; cursor: pointer;

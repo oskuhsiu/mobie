@@ -14,13 +14,14 @@ import {
   type SupportOutcome,
 } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
-import type { BattleMobie, TerrainId } from '@/game/types'
+import type { BattleMobie, Move, TerrainId } from '@/game/types'
+import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf } from '@/game/data/terrains'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
-import { TYPE_HEX } from '@/ui/typeMeta'
+import { TYPE_HEX, TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
@@ -46,6 +47,15 @@ const hpToneClass = (frac: number, prefix: string) =>
 const FX_POS: Record<Side, { nx: number; ny: number }> = {
   foe: { nx: 0.72, ny: 0.22 },
   player: { nx: 0.3, ny: 0.62 },
+}
+// M19.c 選招逾時（plan/17 §1.1「逾時自動 slot0、不停頓」）：到時自動以出生自帶招（slot0）出擊。
+// 自用街機節奏取偏寬鬆值，給玩家讀完 4 招的時間；待玩測再調（plan/17 §9）。
+const CHOICE_TIMEOUT_MS = 8000
+// 鍵盤「四鍵 / 方向」映射 → 招式槽（plan/17 §1.1）。數字 1–4＝讀序（主），方向鍵＝2×2 順時針面鍵：
+// ↑左上(0) → →右上(1) → ↓右下(3) → ←左下(2)。按下瞬間即選定並進入 QTE（不做游標導覽）。
+const SLOT_KEY_MAP: Record<string, number> = {
+  '1': 0, '2': 1, '3': 2, '4': 3,
+  ArrowUp: 0, ArrowRight: 1, ArrowDown: 3, ArrowLeft: 2,
 }
 
 /** 浮傷數字：3D 場景之上的 DOM 疊層，依 FX_POS 對齊在受擊方上方。 */
@@ -229,6 +239,73 @@ function MashMeter({ onDone }: { onDone: (count: number) => void }) {
   )
 }
 
+/**
+ * M19.c 四槽「選槽即開打」：點槽（或按 1–4 / 方向鍵）即選定該招並立即進入 QTE，不做巢狀選單，
+ * 維持 Mezastar 流暢打擊感。逾時（CHOICE_TIMEOUT_MS）自動以 slot0 出擊、不停頓。
+ * 攻擊招走命中 QTE（M19.c）；變化招（power 0，M19.d）目前資料不存在，故一律走命中 QTE。
+ * 倒數條走純 CSS animation（不過 React state / rAF，守效能紅線）。
+ */
+function MoveSlots({ moves, onPick }: { moves: Move[]; onPick: (slot: number) => void }) {
+  // 用 ref 鎖「已選定」：避免逾時與玩家輸入競合、或重複觸發兩次出招。
+  const pickedRef = useRef(false)
+  const pick = useCallback((slot: number) => {
+    if (pickedRef.current) return
+    if (slot < 0 || slot >= moves.length) return
+    pickedRef.current = true
+    onPick(slot)
+  }, [moves.length, onPick])
+
+  // 逾時自動 slot0（plan/17 §1.1）。
+  useEffect(() => {
+    pickedRef.current = false
+    const t = setTimeout(() => pick(0), CHOICE_TIMEOUT_MS)
+    return () => clearTimeout(t)
+  }, [pick])
+
+  // 四鍵 / 方向鍵映射（plan/17 §1.1）。只在本面板掛載期間監聽。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const slot = SLOT_KEY_MAP[e.key]
+      if (slot === undefined || slot >= moves.length) return
+      e.preventDefault()
+      pick(slot)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [moves.length, pick])
+
+  return (
+    <div className="move-choice">
+      <div className="move-grid" style={{ gridTemplateColumns: moves.length <= 1 ? '1fr' : 'repeat(2, 1fr)' }}>
+        {moves.map((mv, i) => (
+          <motion.button
+            key={i}
+            className="move-slot"
+            style={{ ['--mv' as string]: typeColor(mv.type) }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => { audio.play('select'); pick(i) }}
+          >
+            <span className="move-slot__key">{i + 1}</span>
+            <span className="move-slot__name">{mv.nameZh}</span>
+            <span className="move-slot__meta">
+              <span className="type-badge" style={{ background: typeColor(mv.type) }}>{TYPE_LABEL_ZH[mv.type]}</span>
+              <span className="move-slot__cat">{mv.category === 'physical' ? '物理' : '特殊'}</span>
+            </span>
+            <span className="move-slot__stats">威力 {mv.power}　命中 {mv.accuracy}</span>
+          </motion.button>
+        ))}
+      </div>
+      {/* 倒數條（CSS 動畫驅動，純展示；逾時時 pick(0)）。key 重掛＝每進選招重置動畫。 */}
+      <div className="move-countdown" aria-hidden>
+        <div
+          className="move-countdown__bar"
+          style={{ animationDuration: `${CHOICE_TIMEOUT_MS}ms` }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function BattleScreen() {
   const { context, send } = useGame()
   const battle = useBattleStore((s) => s.battle)
@@ -252,6 +329,8 @@ export function BattleScreen() {
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
   const pendingQualityRef = useRef<QteQuality>('normal')
+  // M19.c 選定的招式槽（選槽→qte→mash 相位間存活）；逾時/缺省＝slot0。
+  const pendingSlotRef = useRef(0)
   // 防濫用：剛換下的那隻，下一個換人不能立刻換回（一回合後解鎖）
   const [lockedIndex, setLockedIndex] = useState<number | null>(null)
   // M9 連鎖：連續 QTE 序列（participants=參與隊友索引、step=目前第幾段、hits=已收集宣告）
@@ -323,9 +402,11 @@ export function BattleScreen() {
       if (e.type === 'damageApplied') {
         const atk = monAt(b0, e.attackerSide, e.attackerIndex)
         const def = monAt(b0, e.targetSide, e.targetIndex)
+        // M19：實際出招由 reducer 寫進 resolvedMoveId（多招式下對手也會用非 slot0 招）；缺省回 slot0。
+        const usedMove = e.resolvedMoveId != null ? getMove(e.resolvedMoveId) : atk.move
         const atkPrefix = e.attackerSide === 'foe' ? '對手的 ' : ''
         stageRef.current?.lunge(e.attackerSide) // 3D：出手方撲擊
-        store().setBanner(`${atkPrefix}${atk.nameZh} 使出 ${atk.move.nameZh}！`)
+        store().setBanner(`${atkPrefix}${atk.nameZh} 使出 ${usedMove.nameZh}！`)
         audio.play('attack')
         await wait(440)
 
@@ -337,7 +418,7 @@ export function BattleScreen() {
         // 粒子 / 螢幕震動（不過 React state）
         if (!e.missed && e.amount > 0) {
           const pos = FX_POS[e.targetSide]
-          const color = TYPE_HEX[atk.move.type]
+          const color = TYPE_HEX[usedMove.type]
           const strong = e.crit || e.effectiveness >= 2
           fxRef.current?.burst({ ...pos, color, count: strong ? 24 : 16, power: strong ? 1.4 : 1 })
           if (e.crit) {
@@ -457,7 +538,9 @@ export function BattleScreen() {
     if (!b0) return
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount }, { ext, terrainMultiplier: resolveTerrainMult })
+    // M19.c：玩家選定的招式槽（缺省/逾時＝slot0）。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
+    const slotIndex = pendingSlotRef.current
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount, slotIndex }, { ext, terrainMultiplier: resolveTerrainMult })
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -699,45 +782,45 @@ export function BattleScreen() {
         </div>
 
         {phase === 'playerChoice' && (
-          <motion.div className="row" style={{ gap: 12, justifyContent: 'center' }}
+          <motion.div className="col center" style={{ gap: 12, width: '100%' }}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <motion.button
-              className="btn" style={{ fontSize: 19, padding: '16px 36px' }}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => { audio.play('select'); useBattleStore.getState().setPhase('qte') }}
-            >
-              ⚔ 攻擊　<span style={{ fontSize: 14, opacity: 0.8 }}>{player.move.nameZh}</span>
-            </motion.button>
-            <motion.button
-              className="btn btn--ghost" style={{ fontSize: 18, padding: '16px 26px' }}
-              whileTap={switchable ? { scale: 0.96 } : undefined}
-              disabled={!switchable}
-              onClick={() => { audio.play('select'); useBattleStore.getState().setPhase('switchSelect') }}
-            >
-              🔄 換人
-            </motion.button>
-            {energy >= 100 && (
+            {/* M19.c 四槽選招：選槽即進 QTE（slotIndex 存進 ref 待解算回合用）。星擊/換人/連鎖另列分離。 */}
+            <MoveSlots
+              moves={player.moves}
+              onPick={(slot) => { pendingSlotRef.current = slot; useBattleStore.getState().setPhase('qte') }}
+            />
+            <div className="row" style={{ gap: 12, justifyContent: 'center' }}>
               <motion.button
-                className="btn btn--star" style={{ fontSize: 18, padding: '16px 24px' }}
-                initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
-                transition={{ duration: 1.1, repeat: Infinity }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => { audio.play('select'); void runStarStrike() }}
+                className="btn btn--ghost" style={{ fontSize: 16, padding: '12px 22px' }}
+                whileTap={switchable ? { scale: 0.96 } : undefined}
+                disabled={!switchable}
+                onClick={() => { audio.play('select'); useBattleStore.getState().setPhase('switchSelect') }}
               >
-                ★ 星擊
+                🔄 換人
               </motion.button>
-            )}
-            {chainReady && (
-              <motion.button
-                className="btn btn--chain" style={{ fontSize: 18, padding: '16px 24px' }}
-                initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
-                transition={{ duration: 1.1, repeat: Infinity }}
-                whileTap={{ scale: 0.95 }}
-                onClick={startChain}
-              >
-                🔗 連鎖
-              </motion.button>
-            )}
+              {energy >= 100 && (
+                <motion.button
+                  className="btn btn--star" style={{ fontSize: 16, padding: '12px 22px' }}
+                  initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { audio.play('select'); void runStarStrike() }}
+                >
+                  ★ 星擊
+                </motion.button>
+              )}
+              {chainReady && (
+                <motion.button
+                  className="btn btn--chain" style={{ fontSize: 16, padding: '12px 22px' }}
+                  initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={startChain}
+                >
+                  🔗 連鎖
+                </motion.button>
+              )}
+            </div>
           </motion.div>
         )}
 
