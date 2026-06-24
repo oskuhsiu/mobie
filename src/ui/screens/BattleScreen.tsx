@@ -1037,7 +1037,8 @@ export function BattleScreen() {
       </div>
 
       {/* 計時類輸入（QTE / 連打 / 防禦 / 連鎖）抬到戰鬥區中央：原本擠在最底「看不太到、不好點」，
-          改成置中放大的醒目 overlay，正對玩家視線與拇指。MoveSlots（選招選單）維持在底部不動。 */}
+          改成置中放大的醒目面板，正對玩家視線與拇指。MoveSlots（選招選單）維持在底部不動。 */}
+      <div className="battle-action-layer">
       <AnimatePresence>
         {(phase === 'qte' || phase === 'mash' || phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
           <motion.div
@@ -1078,6 +1079,7 @@ export function BattleScreen() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
       </div>
 
       {/* M16 資訊卡：點 HpPlate/TeamTray 開（自己全顯、對手深度遮罩待 M17 看穿） */}

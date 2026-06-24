@@ -309,14 +309,17 @@ body {
 .mash__fill { height: 100%; width: 0; border-radius: 999px; transition: width 0.05s linear; }
 .mash__tier { font-size: 15px; font-weight: 900; letter-spacing: 0.06em; min-height: 1.2em; }
 
-/* 計時類輸入置中 overlay：把 QTE / 連打抬到戰鬥區中央（原本在最底不好看不好點）。
-   半透明面板 + 模糊底，醒目且大；pointer-events 預設 auto，點擊區即整塊面板。 */
+/* 計時類輸入置中：把 QTE / 連打抬到戰鬥區中央（原本在最底不好看不好點）。
+   用撐滿的 flex 置中「層」定位，而非 transform——否則 framer-motion 的 scale/opacity
+   入場 transform 會蓋掉 translate(-50%,-50%) 置中位移，導致面板右偏溢出。 */
+.battle-action-layer {
+  position: absolute; inset: 0; z-index: 18;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; /* 空白處不擋 3D/HUD，互動只在面板上 */
+}
 .battle-action {
-  position: absolute;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
+  pointer-events: auto;
   width: min(94%, 600px);
-  z-index: 18;
   display: flex; flex-direction: column; align-items: center;
   padding: 14px 16px 18px;
   border-radius: 22px;
