@@ -357,9 +357,9 @@
 ### M19.d — 變化招（status move）✅
 - [x] 變化招池（gen_dex id 2000+：劍舞/鐵壁/瞑想/自我再生/青草場地，重產只動 moves.ts）+ `Move.effect`（buff/heal/terrain）+ 輕量強度 `statusQte`（**QTE 只影響強度〔buff 回合數/heal 量〕不影響成敗、mult=硬上限不疊乘**）+ reducer `applyStatusMove`/`statusDamageMult`（攻方乘/守方除）寫 `FieldState.teamStatuses/enemyStatuses`（plan/12 子欄首填）+ 回合末 `tickStatuses` 過期 + `statusApplied` event；`deriveLearnset` L20/24 派生變化招、MoveSlots 顯效果標籤、playEvents 演出
 - [x] 連鎖規則：變化招不斷鏈、貢獻減半支援值（推進 chainGauge < 攻擊招）+ 9 vitest（無傷害/buff提升傷害/守方減傷/QTE只影響回合數/硬上限/到期/heal/terrain/連鎖支援值）；CDP（Lv.30 小火龍 loadout 自然含瞑想/自我再生→statusQte→「▲特攻提升4回合」、零 error）。**合體技需≥1攻擊招留 M12**
-### M19.e — 招式訓練所 + SP 經濟
-- [ ] `mobie.skillpoints.v1`（與 M17 共用）+ boss/塔給 SP + 招式訓練所「📖 招式」分頁（學/憶/忘/調 loadout，與 Partner 分池）
-- [ ] 升級自動領悟（學習表≤等級→`learnedMoveIds`）+ `moveLearned` event 提示
+### M19.e — 招式訓練所 + SP 經濟 ✅
+- [x] `mobie.skillpoints.v1`（`skillPointsStore`，帳號級，與 M17 共用、UI 分池）+ boss SP 獎勵（ResultScreen：野外 boss 2+lv/10、競技場 1；塔 SP 預留 M11）+ 招式訓練所「📖 招式」modal（學新招花 SP〔teachable 未學、依威力 tier 計價〕/ 調出戰 loadout〔點切換、上限 4 至少留 1〕，與 Partner 分池）；rosterStore `learnMove`/`setEquippedMoves`、learnset `effectiveLearnedMoves`/`newlyLearned`/`teachableNotLearned`
+- [x] 升級自動領悟（`grantBattleExp` 同種族 union learnedMoveIds + `lastMoveLearns` 追蹤）+ 7 vitest；CDP（Lv.20 妙蛙種子→招式所→學瞑想 SP10→8、loadout 上限 4 強制、零 error）。**「憶/忘」併入 loadout 點切換；moveLearned 結算提示 UI 留 follow-up**
 ### M19.f — gen_dex 學習表產生 + 平衡
 - [ ] gen_dex 抓 PokéAPI level-up learnset 降維映射到精簡招式池（+變化招池）、重產 species.ts/moves.ts（向後相容 slot0）
 - [ ] `simulation.test.ts` 納入多招式 + AI 選招壓力（HP 邊界/無 NaN/終局/決定論）+ Chrome CDP 全 loop

@@ -67,7 +67,7 @@ export function MoveTrainerModal({ onClose }: { onClose: () => void }) {
   }
 
   const learn = async (u: OwnedUnit, moveId: number, cost: number) => {
-    if (sp < cost || !spend(cost)) { audio.play('defeat'); return }
+    if (!spend(cost)) { audio.play('defeat'); return } // spend 自帶餘額檢查、不足不扣
     await learnMove(u.id, moveId)
     audio.play('super')
   }
