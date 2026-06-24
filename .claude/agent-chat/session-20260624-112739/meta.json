@@ -1,0 +1,22 @@
+{
+  "topic": "mobie 戰鬥技能特效系統設計（簡單低成本版）：每招都要有特效，先做簡單特效（依屬性或傷害類別給不同形態）。核心問題：(1) 特效該以什麼為 key——屬性 type / 傷害類別 physical-special-status / 個別招式？(2) FxCanvas 是否擴充原語（目前只有 burst/ring/flash）？(3) 特效資料表怎麼組織？(4) 與既有粒子+Tone.js 音效如何整合？(5) 變化招(M19.d)特效如何預留？(6) 開發切分。硬約束：純 reducer 不含動畫字眼、高頻值只走 ref/rAF/Zustand、特效須程序化生成不內建侵權資產。",
+  "agents": [
+    "claude",
+    "gemini",
+    "codex",
+    "mistral"
+  ],
+  "order": [
+    "claude",
+    "gemini",
+    "codex",
+    "mistral"
+  ],
+  "mode": "round-robin",
+  "max_rounds": 4,
+  "poll": 5,
+  "claude_seat": "session",
+  "created": "2026-06-24T11:27:39+08:00",
+  "session_dir": "/Users/apple/Projects/games/mobie/.claude/agent-chat/session-20260624-112739",
+  "models": {}
+}

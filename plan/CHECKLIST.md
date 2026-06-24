@@ -354,9 +354,9 @@
 ### M19.c — 戰鬥 UI 選招 ✅
 - [x] BattleScreen 四槽「選槽即開打」（`MoveSlots`：招名/屬性/物理特殊/威力命中/鍵位；點槽即進 QTE）+ 方向/四鍵映射（數字 1–4、方向鍵 2×2 順時針）+ 逾時 8s slot0（CSS 倒數條，不過 React state）+ 攻擊招命中 QTE；星擊/換人/連鎖移次要列分離
 - [x] `playEvents` 用 `resolvedMoveId` 解析實際出招名/特效色（修對手多招式顯示 slot0 錯招缺口）；`runPlayerTurn` 帶 `slotIndex`；Chrome CDP 驗證（四槽渲染/選槽即開打/槽1 噴射火焰 82 傷害/「使出 噴射火焰」banner/數字鍵 2 觸發 QTE/零 console error）。**MobCard 顯 4 招留 M16（MobCard 屬 M16.a）**
-### M19.d — 變化招（status move）
-- [ ] 變化招池 + 輕量強度 QTE（**只影響幅度不影響成敗**、硬上限）+ 複用 S1/S3/S4 effect 寫 `fieldState`
-- [ ] 連鎖規則：變化招不斷鏈/貢獻支援值、合體技需鏈中≥1 攻擊招 + vitest（效果/上限/鏈不爆傷）
+### M19.d — 變化招（status move）✅
+- [x] 變化招池（gen_dex id 2000+：劍舞/鐵壁/瞑想/自我再生/青草場地，重產只動 moves.ts）+ `Move.effect`（buff/heal/terrain）+ 輕量強度 `statusQte`（**QTE 只影響強度〔buff 回合數/heal 量〕不影響成敗、mult=硬上限不疊乘**）+ reducer `applyStatusMove`/`statusDamageMult`（攻方乘/守方除）寫 `FieldState.teamStatuses/enemyStatuses`（plan/12 子欄首填）+ 回合末 `tickStatuses` 過期 + `statusApplied` event；`deriveLearnset` L20/24 派生變化招、MoveSlots 顯效果標籤、playEvents 演出
+- [x] 連鎖規則：變化招不斷鏈、貢獻減半支援值（推進 chainGauge < 攻擊招）+ 9 vitest（無傷害/buff提升傷害/守方減傷/QTE只影響回合數/硬上限/到期/heal/terrain/連鎖支援值）；CDP（Lv.30 小火龍 loadout 自然含瞑想/自我再生→statusQte→「▲特攻提升4回合」、零 error）。**合體技需≥1攻擊招留 M12**
 ### M19.e — 招式訓練所 + SP 經濟
 - [ ] `mobie.skillpoints.v1`（與 M17 共用）+ boss/塔給 SP + 招式訓練所「📖 招式」分頁（學/憶/忘/調 loadout，與 Partner 分池）
 - [ ] 升級自動領悟（學習表≤等級→`learnedMoveIds`）+ `moveLearned` event 提示
@@ -380,3 +380,22 @@
 - [ ] `scripts/gen_dq.mjs`（Woodus 優先，比照 gen_dex 快取/並發/重試）→ 重產 `dqMonsters.ts`（產生檔、不寫圖片 URL）+ 資料完整性測試 + 模擬壓力納入 DQ
 ### M20.f —（選）DQ 獨有
 - [ ] 吸收=回血耐性檔 / 系統族專剋 / MP 資源 / DQ 系列地形
+
+## M21 — 戰鬥技能特效系統（簡單低成本、非電影級；見 `21`）
+> 每個技能都要有特效（使用者需求）。**特效 = `type 材質 × category 投放` 正交組合**，宣告式純資料表，
+> FxCanvas 擴一個 `travel` 原語，演出全留 display 層（reducer/event 不動，從 resolvedMoveId→type/category 反查）。
+> 不做個別招式特效（ROI 低）；不開 fxPresets（正交即 preset）；override 逃生口收窄（不能改 mode）、初期空表。
+> 守純 reducer / 高頻值 ref-rAF / 程序化零侵權資產。四方圓桌：`.claude/agent-chat/session-20260624-112739/conclusion.md`。
+### M21.a — FxCanvas `travel` + `burst.shape` + helper 跑通
+- [ ] FxCanvas 加 `travel` 原語（單一 rAF item 自畫 core+trail、抵達觸發一次 impact burst；`onArrive` 為 enum 旗標非 callback）+ `burst` 擴 `shape:'dot'|'streak'|'shard'`（kind 既有保留）
+- [ ] `scene/fx/fxCatalog.ts` 骨架（`FxRecipe`/`ClassDelivery`/`MoveFxOverride` 型別 + 三 classDelivery + 預設 palette）+ 純合成 `resolveFx(type,category,moveId)` + display 層 `playMoveFx`；vitest（三層合成/override 收窄/預設 fallback）
+### M21.b — 18 型 typePalette + BattleScreen 接線
+- [ ] 18 型 `typePalette` 逐型上色（對齊 `TYPE_HEX`/`--t-*`）+ 形狀指派（火 shard 上衝 / 水 dot 下墜 / 電 streak…）
+- [ ] `BattleScreen.playEvents` 的 `damageApplied` 改用 `playMoveFx` 取代現有直驅 `burst`（crit/super 金星 spark+ring+flash 疊加其上不取代）
+### M21.c — physical/special 投放差異 + 逃生口落地
+- [ ] impact（近戰定點）vs travel（遠程拋射）手感打磨；`moveFxOverrides` schema + 合成路徑落地（空表）
+- [ ] Chrome CDP（SwiftShader）抽驗數型特效正確、零 console error
+### M21.d — status/aura（併 M19.d 變化招）
+- [ ] `aura` 模式（攻方原地上升光暈、無撞擊）+ 掛 `statusApplied`/`heal` event（非 damageApplied）+ buff/heal/terrain 色相微調（不阻塞傷害招全覆蓋）
+### M21.e —（選配）per-type Tone.js 音色
+- [ ] recipe `sound` key 接 audio 引擎擴充音色（火=噪音爆 / 電=高頻 zap / 水=低頻…）

@@ -1,0 +1,3 @@
+我同意往這收，但建議把 schema 裡的 `Partial<FxRecipe & {delivery}>` 再收窄一點，避免 override 變成後門：`moveFxOverrides` 只允許 `paletteAccent?`, `intensity?`, `durationScale?`, `sound?`, `deliveryTweak?`，其中 `deliveryTweak` 只能調 `speed/arc/scale`，不能改 `mode`。另外 `FxRecipe.palette: string[]` 可以改名 `colors` 或 `palette` 都行，但 `particleShape` 應該放 typePalette，`ring/flash/mode` 放 classDelivery，這樣責任邊界清楚。開發切分我會先做 `travel` + `playMoveFx()` + 三個 class delivery 跑通，再補 18 type palette，M19.d 的 status/aura 最後接，不要讓變化招阻塞傷害招全覆蓋。
+
+STATUS: AGREE
