@@ -18,7 +18,7 @@ M14（戰鬥回放整段）、M21.e（per-type 音色）、M22.f–j（增強互
 - 哪些做了 / 沒做：`plan/CHECKLIST.md`　·　對戰常識查證：`plan/06-battle-reference.md`
 - 決策脈絡：`.claude/agent-chat/*/conclusion.md`　·　智財宣告：`ATTRIBUTION.md`
 
-## 最近完成（本 session，已 commit；待 push）
+## 最近完成（本 session，已 push origin/main：14 commits `ce96720..bb9a316`）
 1. **M14 戰鬥回放整段**：抽 `game/rng.ts`（seeded RNG，BattleScreen 整場單一 stream）→ `game/replay/{types,codec,report}`
    （canonical JSON log + 穩定鍵序 encode/分類錯誤 decode/crc + 中文戰報投影器，KNOWN_EVENT_MAP 綁 BattleEvent union
    做耦合治理）→ `store/replayRecorder` + IDB `mz-replays`（去重 + FIFO 50）→ `ReplayPlayerModal`（折疊事件重建 HP/active
