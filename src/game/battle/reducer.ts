@@ -134,6 +134,19 @@ export type BattleEvent =
   | { type: 'chainOpportunity'; maxHits: number; eligibleIndices: number[] }
   // M9 連鎖：連鎖中第 comboCount 段命中前 emit（display 演連段 FX / 連擊數字）；其傷害仍走 damageApplied。
   | { type: 'chainHit'; comboCount: number; attackerIndex: number }
+  // M11 野外意外（wild-only，由注入的 wildEvents hook 觸發；reducer 不認識「野外」語意）。
+  // terrainShift＝戰中地形突變（改 field.current）；intrusion＝亂入野生一次性非致命削血。
+  | {
+      type: 'wildAccident'
+      kind: 'terrainShift' | 'intrusion'
+      /** terrainShift：新地形 id */
+      terrainId?: TerrainId
+      /** intrusion：受擊方 / index / 削血量 / 之後 HP */
+      side?: Side
+      index?: number
+      amount?: number
+      hpAfter?: number
+    }
   // M19.d 變化招：無傷害的主動戰術招施放（display 演「使出 X」+ 對應效果）。
   | {
       type: 'statusApplied'
@@ -188,6 +201,12 @@ export interface TurnOptions {
    * 預設不傳＝無地形＝×1（既有測試不動）。
    */
   terrainMultiplier?: (moveType: TypeName, terrainIds: TerrainId[]) => number
+  /**
+   * M11 野外意外（wild-only，注入；reducer 不認識「野外」語意）：每回合呼叫一次，
+   * 依機率觸發意外、就地改 working state（地形突變/亂入削血）並回報 events。
+   * 預設不傳＝無意外（既有測試/競技場不動）。意外的機率/地形池/效果全住注入的 hook（game/accidents.ts）。
+   */
+  wildEvents?: (ctx: { state: BattleState; rng: () => number }) => BattleEvent[]
 }
 
 export interface TurnResult {
@@ -644,6 +663,12 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       events.push(...trigger({ state: w, rng }))
       if (w.winner !== null) break
     }
+  }
+
+  // M11 野外意外（wild-only，注入 hook）：每回合一次依機率觸發地形突變/亂入削血（就地改 working state）。
+  // 未注入＝無意外（競技場/既有測試不動）。intrusion 為非致命削血（hook 保證留 ≥1 HP，不引強制換）。
+  if (w.winner === null && options.wildEvents) {
+    events.push(...options.wildEvents({ state: w, rng }))
   }
 
   // M19.d：變化招增益回合末遞減、歸零移除（暫態，不持久化）。本回合施加者已 +duration，故至少存活到下回合。

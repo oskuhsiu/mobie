@@ -2,6 +2,7 @@ import { setup, assign } from 'xstate'
 import type { Card } from '@/game/types'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { rollEncounterTeam } from '@/game/encounter'
+import { maybeRareBoss } from '@/game/accidents'
 
 export type Outcome = 'win' | 'lose'
 
@@ -50,7 +51,9 @@ export const gameMachine = setup({
     rollFoes: assign(({ event }) => {
       if (event.type !== 'SELECT_REGION') return {}
       const region = lookupRegion(event.regionId)
-      return { regionId: event.regionId, foeTeam: rollEncounterTeam(region, TEAM_SIZE) }
+      // M11 稀有閃光 boss（wild-only，機率）：升 boss 為異色 + 高 IV
+      const foeTeam = maybeRareBoss(rollEncounterTeam(region, TEAM_SIZE), region, Math.random)
+      return { regionId: event.regionId, foeTeam }
     }),
     pickTeam: assign(({ event }) => {
       if (event.type !== 'SELECT_TEAM') return {}
@@ -70,7 +73,8 @@ export const gameMachine = setup({
     rerollFoes: assign(({ context }) => {
       if (!context.regionId) return {}
       const region = lookupRegion(context.regionId)
-      return { foeTeam: rollEncounterTeam(region, TEAM_SIZE), playerTeam: [], outcome: null, captured: false }
+      const foeTeam = maybeRareBoss(rollEncounterTeam(region, TEAM_SIZE), region, Math.random)
+      return { foeTeam, playerTeam: [], outcome: null, captured: false }
     }),
   },
 }).createMachine({
