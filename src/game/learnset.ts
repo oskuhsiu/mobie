@@ -6,7 +6,7 @@
 // 學習表來源優先序：`species.learnset`（gen_dex M19.f emit）＞ 由屬性招式池**派生**（fallback，
 // 讓 M19.a 在 gen_dex 之前即可運作、且全 251 種皆有合理 loadout）。派生規則見 deriveLearnset。
 
-import type { Move, Species } from '@/game/types'
+import type { Move, OwnedUnit, Species } from '@/game/types'
 import { MOVES, getMove } from '@/game/data/moves'
 
 /** 出戰招式槽上限（plan/17：4 槽，攻擊招＋變化招）。 */
@@ -91,4 +91,28 @@ export function resolveEquippedMoves(
   const ids = source.filter((id) => MOVES[id]).slice(0, MOVE_SLOT_CAP)
   const finalIds = ids.length > 0 ? ids : [species.moveId]
   return finalIds.map(getMove)
+}
+
+// ── M19.e 招式訓練所 / 升級領悟 ──────────────────────────────────
+
+/**
+ * 一隻單位「目前已學會」的招式池（canonical learnedMoveIds 優先；缺省＝依等級派生領悟）。
+ * learnedMoveIds 物化後存「完整已學集」（含等級領悟 + 訓練習得），升級時由 grantBattleExp union 維護。
+ */
+export function effectiveLearnedMoves(unit: Pick<OwnedUnit, 'learnedMoveIds' | 'level'>, species: Species): number[] {
+  if (unit.learnedMoveIds && unit.learnedMoveIds.length > 0) return unit.learnedMoveIds
+  return learnedAtLevel(species, unit.level)
+}
+
+/** 升級後新領悟的招（learnedAtLevel 差集，fromLevel→toLevel）；給 moveLearned 提示。 */
+export function newlyLearned(species: Species, fromLevel: number, toLevel: number): number[] {
+  if (toLevel <= fromLevel) return []
+  const before = new Set(learnedAtLevel(species, fromLevel))
+  return learnedAtLevel(species, toLevel).filter((id) => !before.has(id))
+}
+
+/** 該單位「可學但尚未學」的招（teachable ∖ 已學；訓練所學招清單）。 */
+export function teachableNotLearned(unit: Pick<OwnedUnit, 'learnedMoveIds' | 'level'>, species: Species): number[] {
+  const learned = new Set(effectiveLearnedMoves(unit, species))
+  return teachableOf(species).filter((id) => !learned.has(id) && MOVES[id])
 }

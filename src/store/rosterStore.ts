@@ -2,10 +2,19 @@ import { create } from 'zustand'
 import type { Card, OwnedUnit } from '@/game/types'
 import type { PostGrowthHook } from '@/game/ext/seams'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
+import { getSpecies } from '@/game/data/species'
 import { applyExp, createOwnedUnit, expYield, type ExpResult } from '@/game/growth'
+import { effectiveLearnedMoves, newlyLearned, MOVE_SLOT_CAP } from '@/game/learnset'
+import { MOVES } from '@/game/data/moves'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { LocalStorageAdapter, type PersistenceAdapter } from '@/game/persistence'
 import { bumpSaveMeta } from '@/game/save/saveMeta'
+
+/** 一隻於本場戰後升級新領悟的招（M19.e，給結算「學會新招」提示）。 */
+export interface MoveLearnEvent {
+  unitId: string
+  moveIds: number[]
+}
 
 /** 一隻於本場戰後進化（S6 postGrowth）的紀錄，給結算畫面演出。 */
 export interface EvolutionEvent {
@@ -29,6 +38,8 @@ interface RosterState {
   lastResults: ExpResult[]
   /** 最近一場戰後進化（S6，給結算畫面演出），空＝無進化 */
   lastEvolutions: EvolutionEvent[]
+  /** 最近一場升級新領悟的招（M19.e，給結算「學會新招」提示），空＝無 */
+  lastMoveLearns: MoveLearnEvent[]
   /** 最近一場勝利新收服的Mobie（給結算畫面顯示），null=沒收服 */
   lastCaptured: OwnedUnit | null
   load: () => Promise<void>
@@ -44,6 +55,10 @@ interface RosterState {
   addUnit: (unit: OwnedUnit) => Promise<OwnedUnit | null>
   /** 裝備/卸下持有道具（itemId=undefined 卸下），回傳原本裝備的 itemId（給背包對帳）；存檔。 */
   setHeldItem: (unitId: string, itemId: string | undefined) => Promise<string | undefined>
+  /** M19.e 訓練所學招：把 moveId 併入該單位 canonical learnedMoveIds（物化完整已學集）；存檔。回 true=新學會。 */
+  learnMove: (unitId: string, moveId: number) => Promise<boolean>
+  /** M19.e 調整出戰 loadout：設 equippedMoveIds（過濾⊆已學∪slot0、截≤4、保證非空）；存檔。 */
+  setEquippedMoves: (unitId: string, moveIds: number[]) => Promise<void>
   /** 匯入存檔：整批取代 roster（已 sanitize），存檔。meta 由匯入流程的 adoptMeta 設定，故此處不 bump。 */
   replaceAll: (units: OwnedUnit[]) => Promise<void>
   clearResults: () => void
@@ -54,6 +69,7 @@ export const useRoster = create<RosterState>((set, get) => ({
   loaded: false,
   lastResults: [],
   lastEvolutions: [],
+  lastMoveLearns: [],
   lastCaptured: null,
 
   load: async () => {
@@ -77,6 +93,7 @@ export const useRoster = create<RosterState>((set, get) => ({
     const ids = new Set(unitIds)
     const results: ExpResult[] = []
     const evolutions: EvolutionEvent[] = []
+    const moveLearns: MoveLearnEvent[] = []
     const roster = get().roster.map((u) => {
       if (!ids.has(u.id)) return u
       const r = applyExp(u, gained)
@@ -85,11 +102,20 @@ export const useRoster = create<RosterState>((set, get) => ({
       for (const hook of postGrowth) grown = hook(grown)
       if (grown.speciesId !== r.unit.speciesId) {
         evolutions.push({ unitId: grown.id, fromSpecies: r.unit.speciesId, toSpecies: grown.speciesId, atLevel: grown.level })
+      } else if (grown.level > r.fromLevel) {
+        // M19.e 升級領悟（同種族）：算新領悟招；learnedMoveIds 已物化者 union 維護「完整已學集」
+        const learned = newlyLearned(getSpecies(grown.speciesId), r.fromLevel, grown.level)
+        if (learned.length > 0) {
+          moveLearns.push({ unitId: grown.id, moveIds: learned })
+          if (grown.learnedMoveIds && grown.learnedMoveIds.length > 0) {
+            grown = { ...grown, learnedMoveIds: [...new Set([...grown.learnedMoveIds, ...learned])] }
+          }
+        }
       }
       results.push({ ...r, unit: grown })
       return grown
     })
-    set({ roster, lastResults: results, lastEvolutions: evolutions })
+    set({ roster, lastResults: results, lastEvolutions: evolutions, lastMoveLearns: moveLearns })
     await adapter.saveRoster(roster)
     bumpSaveMeta(Date.now()) // 進度推進 → 存檔變新（供匯出/匯入新舊判斷）
     return results
@@ -135,11 +161,43 @@ export const useRoster = create<RosterState>((set, get) => ({
     return prev
   },
 
+  learnMove: async (unitId, moveId) => {
+    if (!MOVES[moveId]) return false
+    let learnedNew = false
+    const roster = get().roster.map((u) => {
+      if (u.id !== unitId) return u
+      const species = getSpecies(u.speciesId)
+      const current = effectiveLearnedMoves(u, species) // 物化完整已學集（含等級領悟）
+      if (current.includes(moveId)) return u // 已會＝no-op
+      learnedNew = true
+      return { ...u, learnedMoveIds: [...new Set([...current, moveId])] }
+    })
+    if (!learnedNew) return false
+    set({ roster })
+    await adapter.saveRoster(roster)
+    bumpSaveMeta(Date.now())
+    return true
+  },
+
+  setEquippedMoves: async (unitId, moveIds) => {
+    const roster = get().roster.map((u) => {
+      if (u.id !== unitId) return u
+      const species = getSpecies(u.speciesId)
+      const allow = new Set<number>([...effectiveLearnedMoves(u, species), species.moveId])
+      const equipped = [...new Set(moveIds.filter((id) => allow.has(id) && MOVES[id]))].slice(0, MOVE_SLOT_CAP)
+      const finalEquipped = equipped.length > 0 ? equipped : [species.moveId] // 保證非空（至少 slot0）
+      return { ...u, equippedMoveIds: finalEquipped }
+    })
+    set({ roster })
+    await adapter.saveRoster(roster)
+    bumpSaveMeta(Date.now())
+  },
+
   replaceAll: async (units) => {
     const clean = sanitizeRoster(units)
-    set({ roster: clean, lastResults: [], lastEvolutions: [], lastCaptured: null })
+    set({ roster: clean, lastResults: [], lastEvolutions: [], lastMoveLearns: [], lastCaptured: null })
     await adapter.saveRoster(clean)
   },
 
-  clearResults: () => set({ lastResults: [], lastEvolutions: [], lastCaptured: null }),
+  clearResults: () => set({ lastResults: [], lastEvolutions: [], lastMoveLearns: [], lastCaptured: null }),
 }))
