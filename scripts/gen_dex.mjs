@@ -83,7 +83,15 @@ async function fetchOne(id) {
   const zh = sp.names.find((n) => n.language.name === 'zh-hant')
     || sp.names.find((n) => n.language.name === 'zh-hans')
   const nameZh = zh ? zh.name : cap(pk.name)
-  return { id, name: cap(pk.name), nameZh, types, baseStats, evoChainUrl: sp.evolution_chain?.url ?? null }
+  // M19.f：真實升級級數（去重升序，>1）作為學習表「節奏」；降維映射到我們的精簡招式池。
+  const levelSet = new Set()
+  for (const m of pk.moves) {
+    for (const v of m.version_group_details) {
+      if (v.move_learn_method.name === 'level-up' && v.level_learned_at > 1) levelSet.add(v.level_learned_at)
+    }
+  }
+  const levelUpLevels = [...levelSet].sort((a, b) => a - b)
+  return { id, name: cap(pk.name), nameZh, types, baseStats, levelUpLevels, evoChainUrl: sp.evolution_chain?.url ?? null }
 }
 
 // ── 進化鏈解析（M10）──
@@ -163,6 +171,42 @@ export function getMove(id: number): Move {
 writeFileSync(`${OUT}/moves.ts`, movesTs)
 console.log(`寫出 moves.ts（${moveLines.length} 招）`)
 
+// ── 學習表 / teachable 降維映射（M19.f）──
+// 變化招 id（由 STATUS_MOVES 依 effect 派生，不綁 id）。
+const HEAL_ID = STATUS_MOVES.find((m) => m.effect.kind === 'heal').id
+const ATK_BUFF_ID = STATUS_MOVES.find((m) => m.effect.kind === 'buff' && m.effect.stat === 'atk').id
+const SPA_BUFF_ID = STATUS_MOVES.find((m) => m.effect.kind === 'buff' && m.effect.stat === 'spa').id
+const ALL_STATUS_IDS = STATUS_MOVES.map((m) => m.id)
+
+/** 取該種族真實升級級數的第 p 分位（lv 升序）；無資料用 fallback。 */
+function levelAt(levels, p, fallback) {
+  if (!levels || levels.length === 0) return fallback
+  return levels[Math.min(levels.length - 1, Math.floor(p * levels.length))]
+}
+
+/** 學習表：slot0@L1 + 各屬性 3 tier 攻擊招（依真實升級節奏分位）+ 變化招（回復 + 攻防取向增益）。 */
+function buildLearnset(d, slot0) {
+  const lv = d.levelUpLevels
+  const entries = new Map() // moveId → 最低 level
+  const add = (level, id) => { if (!entries.has(id) || level < entries.get(id)) entries.set(id, level) }
+  add(1, slot0)
+  const tierLevels = [levelAt(lv, 0.1, 8), levelAt(lv, 0.45, 20), levelAt(lv, 0.8, 36)]
+  for (const t of d.types) for (let tier = 0; tier < 3; tier++) add(tierLevels[tier], moveId(t, tier))
+  add(levelAt(lv, 0.4, 18), HEAL_ID)
+  add(levelAt(lv, 0.7, 30), d.baseStats.atk >= d.baseStats.spa ? ATK_BUFF_ID : SPA_BUFF_ID)
+  return [...entries.entries()]
+    .map(([mid, level]) => ({ level, moveId: mid }))
+    .sort((a, b) => a.level - b.level || a.moveId - b.moveId)
+}
+
+/** 可學清單（招式機/教學）：該種族屬性的全 tier 攻擊招 + 全變化招。 */
+function buildTeachable(d) {
+  const ids = new Set()
+  for (const t of d.types) for (let tier = 0; tier < 3; tier++) ids.add(moveId(t, tier))
+  for (const id of ALL_STATUS_IDS) ids.add(id)
+  return [...ids].sort((a, b) => a - b)
+}
+
 // ── 產生 species.ts ──
 const bstOf = (b) => b.hp + b.atk + b.def + b.spa + b.spd + b.spe
 const specLines = dex.map((d) => {
@@ -171,10 +215,14 @@ const specLines = dex.map((d) => {
   const typesStr = d.types.map((t) => `'${t}'`).join(', ')
   const evo = evoMap.get(d.id)
   const evoStr = evo ? `\n    evolvesTo: ${evo.to}, evolveLevel: ${evo.level},` : ''
+  const learnsetStr = buildLearnset(d, mid).map((e) => `{ level: ${e.level}, moveId: ${e.moveId} }`).join(', ')
+  const teachStr = buildTeachable(d).join(', ')
   return `  ${d.id}: {\n` +
     `    id: ${d.id}, name: '${d.name}', nameZh: '${d.nameZh}', types: [${typesStr}],\n` +
     `    baseStats: { hp: ${b.hp}, atk: ${b.atk}, def: ${b.def}, spa: ${b.spa}, spd: ${b.spd}, spe: ${b.spe} },\n` +
     `    moveId: ${mid}, artworkUrl: artwork(${d.id}),${evoStr}\n` +
+    `    learnset: [${learnsetStr}],\n` +
+    `    teachableMoveIds: [${teachStr}],\n` +
     `  },`
 }).join('\n')
 const speciesTs = `import type { Species } from '@/game/types'
@@ -184,7 +232,8 @@ const artwork = (id: number) =>
 
 /** 全國圖鑑 1–${MAX_ID}（第一、二世代），由 PokéAPI 產生器寫出。
  *  屬性/種族值/中文名來自 PokéAPI（zh-Hant）；artwork 走官方 raw URL，runtime 載入、不內建。
- *  moveId 依主屬性 + 種族值總和 tier 決定論指派（見 moves.ts）。請勿手改，改請改產生器。 */
+ *  moveId 依主屬性 + 種族值總和 tier 決定論指派（見 moves.ts）。
+ *  learnset/teachableMoveIds（M19.f）：以 PokéAPI 真實升級節奏降維映射到精簡招式池 + 變化招。請勿手改，改請改產生器。 */
 export const SPECIES: Record<number, Species> = {
 ${specLines}
 }

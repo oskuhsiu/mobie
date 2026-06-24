@@ -116,7 +116,8 @@ function playBattle(seedStr: string, foeCards: Card[], playerCards: Card[], with
       action = { type: 'ATTACK', starStrike: true }
       starStrikes++
     } else {
-      action = { type: 'ATTACK', quality: QUALITIES[Math.floor(rng() * 4)], mashCount: Math.floor(rng() * 25) }
+      // M19：玩家也隨機選槽（多招式 + 變化招路徑都納入壓力；reducer 對超界槽 fallback slot0）
+      action = { type: 'ATTACK', quality: QUALITIES[Math.floor(rng() * 4)], mashCount: Math.floor(rng() * 25), slotIndex: Math.floor(rng() * 4) }
     }
 
     const { nextState, events } = resolveTurn(state, action, { rng, ext, terrainMultiplier: resolveTerrainMult })

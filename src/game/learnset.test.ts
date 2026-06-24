@@ -26,8 +26,12 @@ describe('learnset 派生與解析（M19.a）', () => {
     expect(new Set(ls.map((e) => e.moveId)).size).toBe(ls.length)
   })
 
-  it('learnsetOf：無 species.learnset 時回派生表', () => {
-    expect(learnsetOf(pika)).toEqual(deriveLearnset(pika))
+  it('learnsetOf：有 species.learnset（M19.f 產生檔）優先；無則回派生表', () => {
+    // 產生檔現已 emit learnset → 優先用之
+    expect(learnsetOf(pika)).toEqual(pika.learnset)
+    // 剝掉 learnset 的種族 → fallback 派生表（向後相容、舊存檔安全網）
+    const stripped = { ...pika, learnset: undefined }
+    expect(learnsetOf(stripped)).toEqual(deriveLearnset(stripped))
   })
 
   it('autoEquip：slot0 固定第一、截上限 ≤4、皆相異', () => {
