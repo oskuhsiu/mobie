@@ -6,6 +6,7 @@ import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
+import { useSkillPoints } from '@/store/skillPointsStore'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
@@ -199,6 +200,12 @@ export function ResultScreen() {
     grantedRef.current = true
     // 圖鑑/成就：勝利依 mode 計數；進化在 grant 完成（lastEvolutions 寫入）後登錄
     if (isWin) useMeta.getState().recordWin(canCaptureIn(context.regionId) ? 'wild' : 'arena')
+    // M19.e SP 經濟：勝利給技能點（野外 boss 依等級多給、競技場固定 1）；供招式訓練所/夥伴技能（M17）共用
+    if (isWin) {
+      const bossLevel = context.foeTeam[context.foeTeam.length - 1]?.level ?? 1
+      const spReward = canCaptureIn(context.regionId) ? Math.max(1, 2 + Math.floor(bossLevel / 10)) : 1
+      useSkillPoints.getState().add(spReward)
+    }
     // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
     useIncubator.getState().advance(isWin ? 2 : 1)
     void grantBattleExp(

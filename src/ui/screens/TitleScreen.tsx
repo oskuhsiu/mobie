@@ -14,11 +14,12 @@ const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').t
 const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
 const SettingsModal = lazy(() => import('@/ui/components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
 const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ default: m.TeamModal })))
+const MoveTrainerModal = lazy(() => import('@/ui/components/MoveTrainerModal').then((m) => ({ default: m.MoveTrainerModal })))
 const DexModal = lazy(() => import('@/ui/components/DexModal').then((m) => ({ default: m.DexModal })))
 const AchievementsModal = lazy(() => import('@/ui/components/AchievementsModal').then((m) => ({ default: m.AchievementsModal })))
 const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then((m) => ({ default: m.IncubatorModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'dex' | 'achievements' | 'incubator'
+type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'dex' | 'achievements' | 'incubator'
 
 export function TitleScreen() {
   const { send } = useGame()
@@ -75,7 +76,8 @@ export function TitleScreen() {
         <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('team')}>🎒 隊伍</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📖 圖鑑</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📚 圖鑑</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
           🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
         </button>
@@ -95,6 +97,7 @@ export function TitleScreen() {
           {overlay === 'save' && <SaveManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'settings' && <SettingsModal onClose={() => setOverlay('none')} />}
           {overlay === 'team' && <TeamModal onClose={() => setOverlay('none')} />}
+          {overlay === 'moves' && <MoveTrainerModal onClose={() => setOverlay('none')} />}
           {overlay === 'dex' && <DexModal onClose={() => setOverlay('none')} />}
           {overlay === 'achievements' && <AchievementsModal onClose={() => setOverlay('none')} />}
           {overlay === 'incubator' && <IncubatorModal onClose={() => setOverlay('none')} />}

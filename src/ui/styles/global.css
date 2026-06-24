@@ -796,6 +796,27 @@ body {
 .item-chip--on { border-color: var(--accent); background: rgba(255,210,63,0.12); }
 .item-chip:disabled { opacity: 0.4; cursor: not-allowed; }
 .item-chip__count { font-size: 11px; color: var(--text-dim); }
+
+/* ============ M19.e 招式訓練所 ============ */
+.sp-badge {
+  display: inline-flex; align-items: center; padding: 5px 12px; font-weight: 800; font-size: 14px;
+  border-radius: 999px; color: var(--accent);
+  background: rgba(255,210,63,0.12); border: 1px solid rgba(255,210,63,0.4);
+}
+.trainer-sec { width: 100%; font-size: 12px; color: var(--text-dim); margin: 8px 0 2px; }
+.move-chip-row { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+.move-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 6px 11px; border-radius: 12px; cursor: pointer; min-width: 96px;
+  background: var(--panel); border: 1px solid var(--stroke); border-left: 4px solid var(--mv, var(--stroke)); color: var(--text);
+}
+.move-chip:active { transform: scale(0.97); }
+.move-chip--status { border-left-style: dashed; }
+.move-chip--equipped { border-color: var(--accent); background: rgba(255,210,63,0.14); }
+.move-chip--learnable { border-style: dashed; opacity: 0.95; }
+.move-chip__name { font-weight: 800; font-size: 13px; }
+.move-chip__sub { font-size: 11px; color: var(--text-dim); }
+.move-chip__cost { font-size: 11px; font-weight: 800; color: var(--accent); margin-top: 1px; }
 .synergy-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .synergy-tag {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; font-size: 12px; font-weight: 700;
