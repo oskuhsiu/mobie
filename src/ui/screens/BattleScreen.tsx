@@ -755,6 +755,25 @@ export function BattleScreen() {
       <div className="col battle-fg" style={{ flex: 1, position: 'relative', zIndex: 10 }}>
       {/* 場域地形徽章（頂部置中常駐；中性/無地形不顯示） */}
       <TerrainChip terrainIds={battle.field.terrainEffects.current} />
+
+      {/* ★ 星擊球：能量滿 + 輪到玩家選招時，於戰鬥區中央大特效顯示；點了即放（不放就點技能槽照常）。 */}
+      <AnimatePresence>
+        {energy >= 100 && phase === 'playerChoice' && (
+          <motion.button
+            className="star-orb"
+            initial={{ opacity: 0, scale: 0.4 }}
+            animate={{ opacity: 1, scale: [1, 1.08, 1] }}
+            exit={{ opacity: 0, scale: 0.4 }}
+            transition={{ scale: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.3 } }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => { audio.play('crit'); void runStarStrike() }}
+          >
+            <span className="star-orb__ring" />
+            <span className="star-orb__star">★</span>
+            <span className="star-orb__label">星擊發動</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
       {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <div className="combat-hud combat-hud--foe">
@@ -883,17 +902,7 @@ export function BattleScreen() {
               >
                 🔄 換人
               </motion.button>
-              {energy >= 100 && (
-                <motion.button
-                  className="btn btn--star" style={{ fontSize: 16, padding: '12px 22px' }}
-                  initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
-                  transition={{ duration: 1.1, repeat: Infinity }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => { audio.play('select'); void runStarStrike() }}
-                >
-                  ★ 星擊
-                </motion.button>
-              )}
+              {/* 星擊不在此列：能量滿時改在戰鬥區大特效顯示（見下方 StarStrikeOrb），點了即放。 */}
               {chainReady && (
                 <motion.button
                   className="btn btn--chain" style={{ fontSize: 16, padding: '12px 22px' }}

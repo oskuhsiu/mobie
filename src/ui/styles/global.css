@@ -324,6 +324,28 @@ body {
   background: linear-gradient(180deg, #ff9af0, #9141cb); color: #fff;
   box-shadow: 0 0 20px rgba(255,122,224,0.6);
 }
+/* ★ 星擊球：能量滿時於戰鬥區中央的大特效施放點（不在技能列） */
+.star-orb {
+  position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 14; cursor: pointer;
+  width: 116px; height: 116px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 38%, rgba(255,175,240,0.95), rgba(145,65,203,0.88) 62%, rgba(145,65,203,0.25));
+  box-shadow: 0 0 30px 8px rgba(255,122,224,0.7), 0 0 64px 18px rgba(145,65,203,0.5);
+  border: 2px solid rgba(255,214,255,0.9);
+}
+.star-orb__ring {
+  position: absolute; inset: -11px; border-radius: 50%;
+  border: 2px dashed rgba(255,214,255,0.7);
+  animation: star-orb-spin 4s linear infinite;
+}
+@keyframes star-orb-spin { to { transform: rotate(360deg); } }
+.star-orb__star { font-size: 52px; color: #fff; line-height: 1; text-shadow: 0 0 16px #ff7ae0, 0 2px 4px rgba(0,0,0,0.4); }
+.star-orb__label {
+  position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%);
+  font-size: 14px; font-weight: 900; letter-spacing: 0.1em; color: #ffd0ff; white-space: nowrap;
+  text-shadow: 0 0 10px rgba(255,122,224,0.9);
+}
 
 /* ============ M9 連鎖槽 / 連鎖鈕 / 連段 overlay ============ */
 .chain-gauge__fill { background: linear-gradient(90deg, #2bb6e0, #4dd0c0, #7ae0ff); }
