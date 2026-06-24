@@ -53,6 +53,7 @@ const FX_POS: Record<Side, { nx: number; ny: number }> = {
 // M19.c 選招逾時（plan/17 §1.1「逾時自動 slot0、不停頓」）：到時自動以出生自帶招（slot0）出擊。
 // 自用街機節奏取偏寬鬆值，給玩家讀完 4 招的時間；待玩測再調（plan/17 §9）。
 const CHOICE_TIMEOUT_MS = 8000
+const ATTACK_QTE_TIMEOUT_MS = 10000
 // 鍵盤「四鍵 / 方向」映射 → 招式槽（plan/17 §1.1）。數字 1–4＝讀序（主），方向鍵＝2×2 順時針面鍵：
 // ↑左上(0) → →右上(1) → ↓右下(3) → ←左下(2)。按下瞬間即選定並進入 QTE（不做游標導覽）。
 const SLOT_KEY_MAP: Record<string, number> = {
@@ -931,7 +932,12 @@ export function BattleScreen() {
         )}
 
         {phase === 'qte' && (
-          <TimingBar onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }} />
+          <TimingBar
+            hint="10秒內點擊任意處，停在正中可造成最大傷害；逾時隨機！"
+            timeoutMs={ATTACK_QTE_TIMEOUT_MS}
+            randomOnTimeout
+            onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }}
+          />
         )}
 
         {phase === 'mash' && <MashMeter onDone={onMashDone} />}

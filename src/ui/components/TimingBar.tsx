@@ -10,18 +10,27 @@ import type { QteQuality } from '@/game/battle/engine'
 export function TimingBar({
   onResult,
   hint = '點擊任意處，停在正中可造成最大傷害！',
+  timeoutMs,
+  randomOnTimeout = false,
 }: {
   onResult: (q: QteQuality) => void
   /** 提示語（攻擊/防禦模式不同） */
   hint?: string
+  /** 逾時毫秒數；未提供則不自動結算。 */
+  timeoutMs?: number
+  /** 逾時時改用隨機停點，而不是目前指針位置。 */
+  randomOnTimeout?: boolean
 }) {
   const pointerRef = useRef<HTMLDivElement>(null)
   const posRef = useRef(0) // 0..1
   const doneRef = useRef(false)
+  const onResultRef = useRef(onResult)
+  onResultRef.current = onResult
 
   useEffect(() => {
     doneRef.current = false
     let raf = 0
+    let timeout = 0
     let start = 0
     const period = 1100 // ms 來回一趟
 
@@ -36,13 +45,24 @@ export function TimingBar({
       if (!doneRef.current) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+    if (timeoutMs && timeoutMs > 0) {
+      timeout = window.setTimeout(() => {
+        if (doneRef.current) return
+        doneRef.current = true
+        const pointer = randomOnTimeout ? Math.random() : posRef.current
+        onResultRef.current(qualityFromPointer(pointer))
+      }, timeoutMs)
+    }
+    return () => {
+      cancelAnimationFrame(raf)
+      if (timeout) window.clearTimeout(timeout)
+    }
+  }, [randomOnTimeout, timeoutMs])
 
   const stop = () => {
     if (doneRef.current) return
     doneRef.current = true
-    onResult(qualityFromPointer(posRef.current))
+    onResultRef.current(qualityFromPointer(posRef.current))
   }
 
   // 由外而內畫命中帶（最寬先畫）
@@ -67,6 +87,14 @@ export function TimingBar({
         <div className="qte__center" />
         <div ref={pointerRef} className="qte__pointer" style={{ left: '0%' }} />
       </div>
+      {timeoutMs && timeoutMs > 0 && (
+        <div className="qte__timeout" aria-hidden>
+          <div
+            className="qte__timeout-fill"
+            style={{ animationDuration: `${timeoutMs}ms` }}
+          />
+        </div>
+      )}
     </div>
   )
 }
