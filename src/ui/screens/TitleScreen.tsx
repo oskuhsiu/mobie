@@ -6,6 +6,10 @@ import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { claimableCount } from '@/game/achievements'
 import { isHatchable } from '@/game/incubator'
+import { detectDeviceLabel } from '@/ui/deviceLabel'
+
+// 裝置每個 session 不變，模組載入時算一次即可
+const DEVICE_LABEL = detectDeviceLabel()
 
 // Title 工具 overlay 較重（jsqr/qrcode/three），lazy 載入避免拖慢開場
 const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
@@ -37,7 +41,7 @@ export function TitleScreen() {
         className="col"
         style={{ alignItems: 'center', gap: 10 }}
       >
-        <div className="eyebrow">Personal Arcade · iPad</div>
+        <div className="eyebrow">Personal Arcade · {DEVICE_LABEL}</div>
         <div
           className="h-title"
           style={{ fontSize: 'clamp(40px, 9vw, 88px)', lineHeight: 1, textAlign: 'center' }}
