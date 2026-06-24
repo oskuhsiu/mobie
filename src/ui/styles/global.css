@@ -1107,3 +1107,11 @@ body {
 .gesture-gate__fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #f97316); transition: width 0.08s linear; }
 
 .interact-seg--sub .interact-seg__btn { padding: 8px 6px; }
+
+/* ============ M12.e 對手技能標籤 ============ */
+.mobcard-tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
+.enc-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px;
+  background: rgba(255,210,63,0.14); border: 1px solid var(--accent); color: var(--accent);
+}

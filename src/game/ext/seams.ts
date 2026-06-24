@@ -33,7 +33,7 @@ export type SeamId =
  * 加油走 fieldState），不在 MODULE_REGISTRY；此 id 僅供設定頁開關 + UI gating。
  * （連勝塔是 RegionSelect 進入的遊戲模式、非可選掛載模組，故不列入此處。）
  */
-export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'partnerSkills' | 'combo'
+export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'partnerSkills' | 'combo' | 'encounterSkills'
 
 // ── 各縫的純能力簽章 ────────────────────────────────────────────
 

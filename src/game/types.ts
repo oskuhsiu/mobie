@@ -164,6 +164,8 @@ export interface BattleMobie {
   heldItemId?: string
   /** 特性 id（M7 戰鬥暫態，由 species 主屬性決定論指派；不持久化） */
   abilityId?: string
+  /** M12.e 對手技能標籤（戰鬥暫態，僅對手隊由 encounter profile 指派；display 顯示 + 已套用反射被動；不持久化） */
+  encounterTags?: string[]
 }
 
 export interface Region {

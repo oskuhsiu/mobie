@@ -62,6 +62,12 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
     desc: '訓練師自己的帳號級戰術工具：戰鬥中「🔍 看穿」對手底細、「📣 訓練師加油」灌注全隊士氣。在「夥伴技能」頁花 SP 解鎖。',
     available: true,
   },
+  encounterSkills: {
+    icon: '🃏',
+    label: '對手技能標籤',
+    desc: '野生對手依物種帶 0–2 個被動標籤（猛攻／擾亂／堅韌／馭場／合擊），微調其能力值並在遭遇/資訊卡顯示；對手 AI 仍只普通攻擊。',
+    available: true,
+  },
 }
 
 /**

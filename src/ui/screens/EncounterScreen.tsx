@@ -15,6 +15,7 @@ import { MobCard } from '@/ui/components/MobCard'
 import { GestureGate } from '@/ui/components/GestureGate'
 import { useSettings } from '@/store/settingsStore'
 import { interactModeOf } from '@/game/settings'
+import { rollEncounterProfile, applyProfileToMon, ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { audio } from '@/audio/audioEngine'
 
 export function EncounterScreen() {
@@ -23,9 +24,14 @@ export function EncounterScreen() {
   const grassOn = useSettings((s) => interactModeOf(s.settings, 'encounter') !== 'off')
   const [grassGate, setGrassGate] = useState(false)
   const engage = () => { if (grassOn) setGrassGate(true); else send({ type: 'ENGAGE' }) }
+  // M12.e 對手技能標籤：模組開啟才指派（display）。
+  const encOn = useSettings((s) => s.settings.modules.encounterSkills)
   const foes = useMemo(
-    () => context.foeTeam.map(buildBattleMobie),
-    [context.foeTeam],
+    () => {
+      const built = context.foeTeam.map(buildBattleMobie)
+      return encOn ? built.map((m, i) => applyProfileToMon(m, rollEncounterProfile(m.speciesId, i === built.length - 1))) : built
+    },
+    [context.foeTeam, encOn],
   )
   // M16：點對手開資訊卡（對手＝基本面，深度遮罩待 M17 看穿）
   const [cardMon, setCardMon] = useState<BattleMobie | null>(null)
@@ -91,6 +97,14 @@ export function EncounterScreen() {
             {wild.nameZh} <span className="hpbar__lv">Lv.{wild.level}</span>
           </div>
           <TypeBadges types={wild.types} />
+          {wild.encounterTags && wild.encounterTags.length > 0 && (
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+              {wild.encounterTags.map((t) => {
+                const meta = ENCOUNTER_TAG_META[t as EncounterTag]
+                return meta ? <span key={t} className="enc-tag" title={meta.desc}>{meta.icon} {meta.label}</span> : null
+              })}
+            </div>
+          )}
           <IndividualInfo mon={wild} detailed />
           <button className="btn btn--ghost btn--sm" onClick={() => openCard(wild)}>ⓘ 查看資訊卡</button>
           {/* 對手隊伍縮圖（最後一隻為 boss）；點開資訊卡 */}

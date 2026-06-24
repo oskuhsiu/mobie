@@ -20,6 +20,7 @@ import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
 import { makeWildEvents } from '@/game/accidents'
 import { makeRng } from '@/game/rng'
+import { rollEncounterProfile, applyProfileToMon } from '@/game/encounterProfile'
 import { ReplayRecorder } from '@/store/replayRecorder'
 import type { ReplayInput, DisplayUnitSnapshot } from '@/game/replay/types'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
@@ -418,7 +419,12 @@ export function BattleScreen() {
     setPartnerUsed([]) // M17：每場一次預算重置
     // 戰前縫：S1 道具/特性 statMod（兩方）+ S2 羈絆（只玩家隊）。全關＝原封不動。
     const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattleMobie), prep, true)
-    const { team: foes } = applyBattlePrep(context.foeTeam.map(buildBattleMobie), prep, false)
+    const prepped = applyBattlePrep(context.foeTeam.map(buildBattleMobie), prep, false)
+    // M12.e 對手技能標籤（display 層 prep，只動對手隊）：依物種決定論指派 0–2 標籤 + 反射被動微調。
+    // 模組關＝不指派＝零殘留。末位視為 boss（較可能宣告合擊）。
+    const foes = useSettings.getState().settings.modules.encounterSkills
+      ? prepped.team.map((m, i) => applyProfileToMon(m, rollEncounterProfile(m.speciesId, i === prepped.team.length - 1)))
+      : prepped.team
     // 場域地形（M8）：依 region.mode/terrains/randomTerrain 解析；隨機地形以 foe 隊伍 cardId 當 seed
     // 決定論抽（同一場遭遇穩定、不隨 re-render 變動）。arena/無地形＝空＝中性。
     const region = context.regionId ? lookupRegion(context.regionId) : null
