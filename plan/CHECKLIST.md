@@ -345,13 +345,13 @@
 > **放寬 CLAUDE.md 單招硬約束**為多招式（≤4）。身分由星擊 finisher 承載。怪物 buff（原 M17）下放成變化招。
 > 守純 reducer（slotIndex 進、resolvedMoveId 出、單回合單 ATTACK）、canonical 只加兩 id 陣列、被動效果歸特性。
 > 四方 agent-chat 收斂：`.claude/agent-chat/session-20260624-012214/conclusion.md`。建議在 M17 前或並行。
-### M19.a — 資料模型 + 向後相容
-- [ ] `OwnedUnit` 加 canonical `learnedMoveIds`/`equippedMoveIds`；`Species` 加 `learnset`/`teachableMoveIds`（+選 `eggMoveIds`）；`BattlePokemon.move`→`moves[]`
-- [ ] load lazy 遷移（既有單招→slot0）+ `sanitizeRoster` 只留合法 moveId/截上限 + vitest（遷移/合法性/上限）。先手寫小樣本 learnset
-### M19.b — reducer/engine 多招式（additive）
-- [ ] ATTACK 加 `slotIndex`、`performAttack`/`resolveAttack`/`AttackParams` 吃 `moveIndex`、`resolvedMoveId` 寫 `damageApplied` event、loadout snapshot
-- [ ] 純函式 `chooseOpponentMove(state, rng)` 加權選 slot（剋制×3/本系×2，不新增相位）+ vitest（選槽/重驗/AI 決定論/向後相容預設 slot0）
-### M19.c — 戰鬥 UI 選招
+### M19.a — 資料模型 + 向後相容 ✅
+- [x] `OwnedUnit` 加 canonical `learnedMoveIds`/`equippedMoveIds`；`Species` 加 `learnset?`/`teachableMoveIds?`/`eggMoveIds?`；`BattleMobie.moves[]`（保留 `move`=slot0 過渡，M19.b 已用 moves）；`Card` 加 equippedMoveIds 橋接
+- [x] `game/learnset.ts`（派生 fallback／產生檔優先／autoEquip ≤4／resolveEquippedMoves）；舊單位/野生**無 equippedMoveIds → 依等級自動裝備**（零遷移寫入、slot0=species.moveId 故行為不變）；`sanitizeRoster` 合法池過濾/equipped⊆learned/截上限；+11 vitest
+### M19.b — reducer/engine 多招式（additive）✅
+- [x] ATTACK 加 `slotIndex`、`AttackOptions`/`AttackParams` 吃 `moveIndex`、`resolveAttack` 回 `resolvedMoveId` 寫 `damageApplied` event（loadout 由 buildBattleMobie snapshot 進 moves[]、戰中不可變）
+- [x] 純函式 `chooseOpponentMove(attacker,defender,rng)` 加權選 slot（剋制×3/有效×2/不利×0.6/無效×0.1、本系×2、變化招低權；**單招回 0 不耗 rng**＝既有測試序不變）+ 5 vitest（選槽路由/向後相容 slot0/AI 不耗 rng/決定論/加權偏好剋制）
+### M19.c — 戰鬥 UI 選招（⏸ 暫停於此，待使用者玩測/做 M18.e 後續做）
 - [ ] BattleScreen 四槽「選槽即開打」（方向/四鍵映射、逾時 slot0）+ 攻擊招命中 QTE；星擊分離；MobCard 顯 4 招 + Chrome CDP
 ### M19.d — 變化招（status move）
 - [ ] 變化招池 + 輕量強度 QTE（**只影響幅度不影響成敗**、硬上限）+ 複用 S1/S3/S4 effect 寫 `fieldState`

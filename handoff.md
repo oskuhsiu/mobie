@@ -167,12 +167,15 @@
 - `input/qte.ts`（`qualityFromPointer` seam）。
 - `ui/`：screens（Title[**含 ⚙️設定/🎒隊伍 入口**]/RegionSelect[**含競技場入口 + M8 地形提示膠囊**]/Encounter/CardSelect[對手條+剋弱徽章+推薦+**羈絆 tag**]/Battle[**resolveTurn 傳 ext+terrainMultiplier、applyBattlePrep 套 prep、特性/道具徽章、heal 演出、M8 開場地形揭示 + 常駐 TerrainChip**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗，依 `canCaptureIn` 分流**]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo/**SettingsModal/TeamModal**）、`styles/global.css`。
 
-## 5. 下一步（M1–M10 + M18 改名完成；執行序：✅M18 → ▶M19 多招式 → M16 資訊卡 → M11）
-M1–M10 完成並 CDP 驗證；**M18 全面改名 → Mobie（a–d）完成並 CDP 驗證（278 測試全綠）**。**2026-06-24 使用者拍板執行序：先改名（M18）**——影響後期所有資料命名，現在程式碼/key 最少改名成本最低，M19/M16/M11 新碼天生用對命名。
+## 5. 下一步（✅M18 改名 + ✅M19.a/b 引擎核心完成；⏸ 暫停於 M19.c UI，待玩測/M18.e）
+M1–M10 完成並 CDP 驗證；**M18 全面改名 → Mobie（a–d）完成並 CDP 驗證**；**M19 多招式 a/b（資料模型 + reducer/engine additive）完成，294 測試全綠**。**2026-06-24 使用者拍板執行序：先改名（M18）→ M19 → M16 → M11**。
+- **⏸ 暫停點（使用者選擇）**：M19 引擎核心（a/b）已落地、戰鬥行為**零改變**（player 仍用 slot0；**對手已會用多招** via chooseOpponentMove）。使用者先玩測 + 做 M18.e，再續 M19.c。
+  - **▶ 續做 M19.c（戰鬥 UI 選招）**：BattleScreen 四槽「選槽即開打」（方向/四鍵映射、逾時 slot0、攻擊招命中 QTE、星擊分離）+ MobCard 顯 4 招（MobCard 屬 M16）。dispatch `{ type:'ATTACK', slotIndex }`（引擎已備）。再 d 變化招 → e 招式訓練所+SP → f gen_dex learnset。
+- **✅ M19.a/b 已落地**：`OwnedUnit` 加 `learnedMoveIds`/`equippedMoveIds`、`Species` 加 `learnset?`/`teachableMoveIds?`/`eggMoveIds?`、`BattleMobie.moves[]`（保留 `move`=slot0 過渡）、`Card.equippedMoveIds` 橋接；`game/learnset.ts`（派生 fallback／autoEquip ≤4／resolveEquippedMoves，**舊存檔/野生無 equippedMoveIds → 依等級自動裝備、零遷移寫入**）；engine `moveIndex`/`resolvedMoveId`、reducer ATTACK `slotIndex`、`chooseOpponentMove`（單招回 0 不耗 rng）。+16 vitest。**simulation 免疫測試改用純 ghost（夢妖 200）**——多招式下雙屬性會用次屬性招繞過免疫（正確）。
 - **✅ Phase 0**：拆 `plan/16` 為三檔（`16` M16 / `19` M17 / `20` M18）、建 `ATTRIBUTION.md`（PokéAPI/Pokémon 智財宣告）、執行序更新。
 - **✅ M18 改名（a–d 完成；e 待使用者）**：`BattlePokemon`→`BattleMobie` 等識別符 + `PokemonSprite/Visual` 檔名 + UI「寶可夢」/品牌字 → Mobie + TitleScreen「MOBIE」；**localStorage `mz.*`→`mobie.*` + `game/keyMigration.ts`（冪等、不刪舊）+ `src/bootstrap.ts` 最前 import**；**IDB DB 名 `mz-*` 保留**（純內部/不進 .save/跨 DB 搬遷易孤立，二選一明文記錄）；`.save` 不嵌 key 名故舊檔自動相容。**CDP 驗證**：標題=MOBIE、舊 `mz.roster.v2` 遷移到新 key（rosterLen=1=cdp-seed 而非預設 16 隻＝**證明遷移在 store 載入前跑、roster 不掉**）、savemeta 遷移、零 console error。
   - **⚠️ M18.e 待使用者**：repo 目錄 `pokemon-mezastar/`→`mobie/` + git remote（動工作目錄絕對路徑，需本機執行）。handoff §7 `cd pokemon-mezastar` / plan/01 tree root / memory slug `pokemon-mezastar-project` **刻意保留**至 M18.e 完成前。
-- **▶ 下一步 M19 多招式（`plan/17`）**：`OwnedUnit` 加 `learnedMoveIds`/`equippedMoveIds`、`Species` 加 learnset/teachable、`BattleMobie.move`→`moves[]`；ATTACK 加 `slotIndex`、reducer additive（resolvedMoveId 出）、`chooseOpponentMove` 純函式；變化招走 S1/S3/S4 寫 fieldState；星擊=身分。**絕不可改 artwork URL 的 `PokeAPI`/`/pokemon/` 與物種正典名**（`dataIntegrity.test.ts` 有斷言）。
+- **絕不可改 artwork URL 的 `PokeAPI`/`/pokemon/` 與物種正典名**（`dataIntegrity.test.ts` 有斷言）；變化招（M19.d）走 S1/S3/S4 寫 fieldState；星擊 finisher=身分。
 - **守地基不變式**：純 reducer（ext/terrain/slotIndex 是注入，resolvedMoveId 由 reducer 算，不寫死語意）、只存 canonical roster（itemBag/settings 另命名空間、field 是戰鬥暫態）、可選掛載（預設全關、關掉零殘留）、**多招式街機（M19：每回合單一 ATTACK action 不開新相位；道具/特性/地形/連鎖本身不引新攻擊招、招式由 M19 學習表管理；被動效果歸特性不入招式槽）**、高頻值只走 ref/rAF/Zustand。
 - **M7/M8 收尾 follow-up（不阻塞、可順手）**：氣勢披帶需 post-damage 縫（改 engine）、威嚇需 onSwitchIn 縫（改 reducer 換人段）；M11 地形突變（terrainShift 改 `field.terrainEffects.current`）會用到 M8 已備的 current/initial 分流。
 
