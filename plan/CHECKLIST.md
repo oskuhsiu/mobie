@@ -399,3 +399,25 @@
 - [ ] `aura` 模式（攻方原地上升光暈、無撞擊）+ 掛 `statusApplied`/`heal` event（非 damageApplied）+ buff/heal/terrain 色相微調（不阻塞傷害招全覆蓋）
 ### M21.e —（選配）per-type Tone.js 音色
 - [ ] recipe `sound` key 接 audio 引擎擴充音色（火=噪音爆 / 電=高頻 zap / 水=低頻…）
+
+## M22 — 增強互動性設定開關（給兒童參與感，預設關；見 `22`）
+> UX 偏好分級開關 `off | lite | arcade`（**預設 off ＝現狀一字不差**），開啟後在目前「零互動/單純 tap」的環節
+> 疊上不同身體動作手勢（畫圈/長按/節奏/下滑）。**手勢只輸出離散純量或純演出，pure reducer / 效能紅線 / 設定 slice 全不破。**
+> MVP 只做**捕獲 + 星擊**兩個情緒峰值（其餘列 backlog）。**Q1 裁定：既有攻擊 MashMeter 不動**（守 off=現狀一字不差）。
+> 四方圓桌：`.claude/agent-chat/session-20260624-132835/conclusion.md`。
+### M22.a — 設定地基（純函式，零 UI）
+- [ ] `game/settings.ts` 加 `prefs.enhancedInteractivity`（`InteractMode`/`InteractSurface` 型別 + `defaultPrefs` + `migrateSettings` 向後相容〔缺欄→off、surfaces 預設填滿〕 + `setInteractModeIn`）+ selector `isEnhancedSurfaceEnabled`/`interactModeOf` + `INTENSITY_BY_MODE` 常數；vitest（migrate 缺欄/壞檔、selector off→false、surfaces 預設）
+- [ ] `settingsStore` 暴露 `setInteractMode`；`prefs` **不入** ext/prep/postGrowth（非戰鬥注入）
+### M22.b — 純手勢層 `src/input/gestures/`
+- [ ] `swipeFromPointer`/`circleProgress`/`holdCharge`/`rhythmTaps` 純函式（比照 `input/qte.ts` 契約、輸出單一純量）+ vitest（邊界/逾時/部分進度/決定論）；**與 M4 體感同源**（日後 MediaPipe 餵同樣序列）
+### M22.c — 捕獲 surface（MVP-1，純顯示層）
+- [ ] `WinView` 接 selector：off 不變；lite=`SwipeThrow` 丟球；arcade=`SwipeThrow`+`CircleSeal` 畫圈封印
+- [ ] **`caught`（Math.random 預先決定）一字不動**；「再搏一下」純演出寬限（UI 標娛樂性、不改機率）；安全退場；高頻值 ref/rAF/DOM；**回歸測試 lite/arcade 捕獲率==off**；CDP 真機演出
+### M22.d — 星擊 surface（MVP-2，純顯示層）
+- [ ] star-orb 接 selector：off 不變（單擊）；lite=`HoldChargeRing` 長按蓄力環；arcade=`RhythmTap` 節奏三連點（**不沿用攻擊連打**）
+- [ ] `runStarStrike` 簽名不動（傷害不吃手勢、蓄力只影響 FX 強度）；中斷/逾時安全退場；CDP 真機演出
+### M22.e — 設定面板 UI + 收尾
+- [ ] `SettingsModal` 模組清單外加「🕹 互動偏好」三態 selector（關/輕度/機台）+ 兒童向說明
+- [ ] 驗收：`mode=off` golden path 截圖**無新增 wrapper**（零回歸）；lite/arcade 逾時/取消/多指/低 FPS **只 dispatch 一次**；typecheck/test/build 全綠
+### M22 Backlog（§4，後續子階段）
+- [ ] M22.f 防禦下滑護盾 `defense`（`defenseQte` 疊下滑、仍映射 quality） / M22.g 攻擊節奏變體 `attackInputVariant: 'mash'|'rhythm'`（只在 mode≠off 替換） / M22.h 遭遇撥草 `encounter` / M22.i 孵化摩擦 `hatch` / M22.j 連勝塔開場選路 `tower`（依賴 M11 連勝塔）

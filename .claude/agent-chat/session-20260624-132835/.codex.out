@@ -1,0 +1,2 @@
+我同意這版結論，可以收斂。唯一要補進 plan/22 的是驗收準則：`mode=off` 跑既有 golden path 戰鬥/捕獲截圖或流程測試，DOM 不應出現新增互動 wrapper；`mode=lite/arcade` 則測手勢逾時、取消、多指誤觸、低 FPS 下仍只 dispatch 一次 completion action。另建議 `surfaces` 預設值在 migration 後即使 mode 是 off 也先填完整，避免未來新增 surface 時出現 undefined gating；component 入口統一用 `isEnhancedSurfaceEnabled(settings, 'capture')` 這類 selector，別讓各頁自己判斷 mode/surface。  
+STATUS: AGREE
