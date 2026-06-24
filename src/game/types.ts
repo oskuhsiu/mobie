@@ -44,7 +44,16 @@ export interface Species {
   nameZh: string
   types: TypeName[] // 1–2 屬性
   baseStats: Stats
-  moveId: number // M1：單一專屬招式
+  moveId: number // slot0／出生自帶招（M1 單招＝此；M19 多招式仍以此為 slot0，向後相容）
+  /**
+   * 種族學習表（M19，plan/17 §2）：等級→招的領悟表。
+   * **產生檔由 gen_dex（M19.f）emit；缺省時 `learnset.ts` 由屬性招式池決定論派生**（fallback）。
+   */
+  learnset?: { level: number; moveId: number }[]
+  /** 招式機 / 教學可學清單（M19）。缺省時由屬性招式池派生。 */
+  teachableMoveIds?: number[]
+  /** 蛋招池（M19；M10 孵化繼承來源，可選）。 */
+  eggMoveIds?: number[]
   /** PokéAPI 官方 artwork（billboard / 立繪用），runtime 載入 */
   artworkUrl: string
   /**
@@ -71,6 +80,8 @@ export interface Card {
   shiny?: boolean
   /** 持有道具 id（M7，從 OwnedUnit 帶進戰鬥；未裝備則無） */
   heldItemId?: string
+  /** 出戰裝備招式 id（M19，從 OwnedUnit 帶進戰鬥；缺省＝由種族學習表依等級自動裝備） */
+  equippedMoveIds?: number[]
 }
 
 /**
@@ -88,6 +99,13 @@ export interface OwnedUnit {
   shiny: boolean
   /** 持有道具 id（M7，canonical；未裝備則無） */
   heldItemId?: string
+  /**
+   * 已學會的招式庫（M19，canonical，隨 roster 序列化、含 .save）。來源：領悟/學習/繼承/出生。
+   * 缺省（舊存檔）＝由種族學習表依等級派生（buildBattleMobie/sanitize 容錯）。
+   */
+  learnedMoveIds?: number[]
+  /** 出戰裝備（≤4，canonical；M19）。slot0 慣例＝出生自帶招。缺省＝依等級自動裝備。 */
+  equippedMoveIds?: number[]
 }
 
 /** 進入戰鬥的實例：最終數值已由 buildBattleMobie 算好 */
@@ -104,6 +122,12 @@ export interface BattleMobie {
   spa: number
   spd: number
   spe: number
+  /**
+   * 出戰招式 loadout（M19，≤4；slot0＝出生自帶）。由 equippedMoveIds 解析；
+   * 缺省（舊單位/野生）＝由種族學習表依等級自動裝備。
+   */
+  moves: Move[]
+  /** @deprecated M19.b 過渡：＝moves[0]/slot0；engine/reducer 仍讀此，待切到 moves[slotIndex] 後移除 */
   move: Move
   artworkUrl: string
   shiny: boolean

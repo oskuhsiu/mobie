@@ -3,6 +3,8 @@
 
 import type { Card, OwnedUnit, Stats } from '@/game/types'
 import { rollIndividual } from '@/game/individual'
+import { getSpecies } from '@/game/data/species'
+import { autoEquip, learnedAtLevel } from '@/game/learnset'
 
 export const MAX_LEVEL = 100
 
@@ -72,6 +74,8 @@ export function createOwnedUnit(
         spe: card.ivs.spe ?? ind.ivs.spe,
       }
     : ind.ivs
+  // M19：出生即依種族學習表填 canonical 招式（learned=等級已領悟全集、equipped=自動 loadout ≤4）。
+  const species = getSpecies(speciesId)
   return {
     id: seed,
     speciesId,
@@ -81,6 +85,8 @@ export function createOwnedUnit(
     nature: card?.nature ?? ind.nature,
     seed,
     shiny: card?.shiny ?? ind.shiny,
+    learnedMoveIds: learnedAtLevel(species, level),
+    equippedMoveIds: autoEquip(species, level),
   }
 }
 
@@ -94,5 +100,7 @@ export function ownedToCard(u: OwnedUnit): Card {
     nature: u.nature,
     shiny: u.shiny,
     heldItemId: u.heldItemId,
+    // M19：帶 canonical 出戰 loadout；缺省（舊存檔）→ buildBattleMobie 依等級自動裝備。
+    equippedMoveIds: u.equippedMoveIds,
   }
 }

@@ -1,6 +1,6 @@
 import type { BattleMobie, Card, Stats } from '@/game/types'
 import { getSpecies } from '@/game/data/species'
-import { getMove } from '@/game/data/moves'
+import { resolveEquippedMoves } from '@/game/learnset'
 import { rollIndividual, natureMultiplier } from '@/game/individual'
 
 /** 本傳 HP 公式（忽略 EV，HP 不受性格影響） */
@@ -20,9 +20,11 @@ function otherStat(base: number, ivVal: number, level: number, natureMult: numbe
  */
 export function buildBattleMobie(card: Card): BattleMobie {
   const species = getSpecies(card.speciesId)
-  const move = getMove(species.moveId)
   const { baseStats: b } = species
   const lv = card.level
+  // M19：解析出戰 loadout（≤4）。缺省 equippedMoveIds（舊單位/野生）→ 依等級自動裝備。
+  // slot0＝species.moveId 故 moves[0] 等同 M1 單招，戰鬥行為向後相容。
+  const moves = resolveEquippedMoves(card.equippedMoveIds, species, lv)
 
   const ind = rollIndividual(card.cardId)
   const ivOf = (k: keyof Stats): number => card.ivs?.[k] ?? ind.ivs[k]
@@ -46,7 +48,8 @@ export function buildBattleMobie(card: Card): BattleMobie {
     spa: otherStat(b.spa, ivs.spa, lv, natureMultiplier(nature, 'spa')),
     spd: otherStat(b.spd, ivs.spd, lv, natureMultiplier(nature, 'spd')),
     spe: otherStat(b.spe, ivs.spe, lv, natureMultiplier(nature, 'spe')),
-    move,
+    moves,
+    move: moves[0], // @deprecated 過渡：engine/reducer 仍讀 .move（=slot0），M19.b 切到 moves[slotIndex]
     artworkUrl: species.artworkUrl,
     shiny: card.shiny ?? ind.shiny,
     ivs,

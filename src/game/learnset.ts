@@ -1,0 +1,83 @@
+// M19 — 多招式制的學習表與招式解析（plan/17 §2–3）。
+//
+// 怪物招式系統的純邏輯層：種族學習表（領悟）、可學清單（teachable）、自動裝備（出生/野生）、
+// id→Move 解析。**全純函數、決定論、可測。** canonical 只存 id 陣列（OwnedUnit），此處不持久化。
+//
+// 學習表來源優先序：`species.learnset`（gen_dex M19.f emit）＞ 由屬性招式池**派生**（fallback，
+// 讓 M19.a 在 gen_dex 之前即可運作、且全 251 種皆有合理 loadout）。派生規則見 deriveLearnset。
+
+import type { Move, Species } from '@/game/types'
+import { MOVES, getMove } from '@/game/data/moves'
+
+/** 出戰招式槽上限（plan/17：4 槽，攻擊招＋變化招）。 */
+export const MOVE_SLOT_CAP = 4
+
+/** 某屬性的招式 id（由 MOVES 派生、由弱到強；不綁 id 命名規則）。 */
+function moveIdsOfType(type: Species['types'][number]): number[] {
+  return Object.values(MOVES)
+    .filter((m) => m.type === type)
+    .sort((a, b) => a.power - b.power || a.id - b.id)
+    .map((m) => m.id)
+}
+
+/** 派生 fallback 學習表：slot0=species.moveId 於 L1；各屬性 tier1/2/3 → L1/16/32（去重、含次屬性）。 */
+const TIER_LEVELS = [1, 16, 32]
+export function deriveLearnset(species: Species): { level: number; moveId: number }[] {
+  const entries: { level: number; moveId: number }[] = []
+  const seen = new Set<number>()
+  const push = (level: number, moveId: number) => {
+    if (!MOVES[moveId] || seen.has(moveId)) return
+    seen.add(moveId)
+    entries.push({ level, moveId })
+  }
+  push(1, species.moveId) // 出生自帶＝slot0
+  for (const type of species.types) {
+    moveIdsOfType(type).forEach((id, tier) => push(TIER_LEVELS[tier] ?? 32, id))
+  }
+  return entries.sort((a, b) => a.level - b.level || a.moveId - b.moveId)
+}
+
+/** 該種族有效學習表（產生檔優先，否則派生）。 */
+export function learnsetOf(species: Species): { level: number; moveId: number }[] {
+  return species.learnset && species.learnset.length > 0 ? species.learnset : deriveLearnset(species)
+}
+
+/** 該種族可學招式清單（teachable；產生檔優先，否則＝派生學習表全集）。 */
+export function teachableOf(species: Species): number[] {
+  if (species.teachableMoveIds && species.teachableMoveIds.length > 0) return species.teachableMoveIds
+  return [...new Set(learnsetOf(species).map((e) => e.moveId))]
+}
+
+/** 等級已可領悟的全部招（learnedMoveIds 預設；含 slot0）。 */
+export function learnedAtLevel(species: Species, level: number): number[] {
+  const ids = learnsetOf(species)
+    .filter((e) => e.level <= level)
+    .map((e) => e.moveId)
+  return ids.includes(species.moveId) ? [...new Set(ids)] : [species.moveId, ...new Set(ids)]
+}
+
+/**
+ * 自動出戰 loadout（≤4，寶可夢式「最近領悟」優先）：slot0＝出生自帶固定第一，
+ * 其餘取較晚領悟（高階）填滿到上限。用於野生 foe 與舊存檔單位的 fallback。
+ */
+export function autoEquip(species: Species, level: number): number[] {
+  const learned = learnedAtLevel(species, level)
+  const rest = learned.filter((id) => id !== species.moveId).reverse() // 高 level/高 power 在後 → 反轉取最近
+  return [species.moveId, ...rest].slice(0, MOVE_SLOT_CAP)
+}
+
+/**
+ * 解析裝備 id → Move[]（過濾非法、截上限、保證非空＝至少 slot0）。
+ * `equippedMoveIds` 缺省/空 → 用 autoEquip(level)（舊單位/野生 fallback）。
+ */
+export function resolveEquippedMoves(
+  equippedMoveIds: number[] | undefined,
+  species: Species,
+  level: number,
+): Move[] {
+  const source =
+    equippedMoveIds && equippedMoveIds.length > 0 ? equippedMoveIds : autoEquip(species, level)
+  const ids = source.filter((id) => MOVES[id]).slice(0, MOVE_SLOT_CAP)
+  const finalIds = ids.length > 0 ? ids : [species.moveId]
+  return finalIds.map(getMove)
+}
