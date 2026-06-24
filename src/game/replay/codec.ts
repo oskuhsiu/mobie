@@ -23,6 +23,7 @@ const KNOWN_EVENT_MAP: Record<BattleEvent['type'], true> = {
   random: true,
   chainOpportunity: true,
   chainHit: true,
+  comboCast: true,
   wildAccident: true,
   statusApplied: true,
 }
@@ -75,7 +76,11 @@ export function encodeReplay(log: ReplayLog): string {
 }
 
 // ── migrate ───────────────────────────────────────────────────────────
-/** 純版本升級（vN → 目前版）。目前只有 v1，無實際遷移；未來加 event variant 在此補。 */
+/**
+ * 純版本升級（vN → 目前版）。v1→v2（M12.d comboCast）為**純加法** event variant：
+ * 舊 v1 紀錄不含 comboCast、結構不變，故無需轉換、直接相容（decoder 已放行 formatVersion≤目前版）。
+ * 未來若有破壞性 schema 變更，在此依 log.header.formatVersion 補實際遷移。
+ */
 export function migrateReplay(log: ReplayLog): ReplayLog {
   return log
 }

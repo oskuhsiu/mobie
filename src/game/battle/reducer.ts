@@ -11,6 +11,7 @@ import {
   type QteQuality,
 } from '@/game/battle/engine'
 import type { ExtBundle, DamageHook } from '@/game/ext/seams'
+import type { ComboDef, ComboRules } from '@/game/ext/combo'
 import { typeEffectiveness } from '@/game/data/typeChart'
 
 export type Side = 'player' | 'foe'
@@ -41,6 +42,11 @@ export interface FieldState {
    */
   teamStatuses: StatusEffect[]
   enemyStatuses: StatusEffect[]
+  /**
+   * 合體技施放標記（M12.d，plan/12 §6）：純供 UI / 戰報顯示「本場灌注了哪個合體效果、剩幾回合」。
+   * 實際數值效果已寫進 terrainEffects/teamStatuses/enemyStatuses；本欄只是展示標記，回合末遞減。
+   */
+  comboCastEffects: ComboCastMark[]
 }
 
 /** 一個生效中的能力值增益（M19.d 變化招施加）；mult 即硬上限（不疊乘爆表，同 stat 刷新取 max）。 */
@@ -51,6 +57,14 @@ export interface StatusEffect {
   /** 來源招式 id（display 演出） */
   source: number
   label: string
+}
+
+/** 合體技施放的展示標記（M12.d）：純顯示用（label/icon/剩餘回合），無數值語意。 */
+export interface ComboCastMark {
+  key: string
+  label: string
+  icon: string
+  remaining: number
 }
 
 /** 完整戰鬥狀態（canonical 戰鬥態；派生顯示態由 BattleScreen 自己維護） */
@@ -68,6 +82,11 @@ export interface BattleState {
    * 戰鬥內暫態（隨 BattleState，不持久化）。連鎖模組關閉（ext.chain undefined）＝恆 0、不累積＝零殘留。
    */
   chainGauge: number
+  /**
+   * M12.d 合體技：本場已施放過的合體 key（每組合每場一次限流）。戰鬥內暫態，不回寫 OwnedUnit。
+   * 合體模組關閉（ext.combo undefined）＝永不 push＝恆空＝零殘留。
+   */
+  usedComboKeys: string[]
 }
 
 /** 一次連鎖出擊的「玩家宣告」：哪隻、QTE 品質（非權威傷害；reducer 重驗存活/目標後才結算）。 */
@@ -134,6 +153,16 @@ export type BattleEvent =
   | { type: 'chainOpportunity'; maxHits: number; eligibleIndices: number[] }
   // M9 連鎖：連鎖中第 comboCount 段命中前 emit（display 演連段 FX / 連擊數字）；其傷害仍走 damageApplied。
   | { type: 'chainHit'; comboCount: number; attackerIndex: number }
+  // M12.d 合體技：連鎖升級成合體大招時 emit（display 演合束→大招→場域特效）；合成傷害仍走 damageApplied。
+  | {
+      type: 'comboCast'
+      key: string
+      name: string
+      icon: string
+      castKind: 'infuseTerrain' | 'teamBuff' | 'enemyDebuff'
+      label: string
+      remaining: number
+    }
   // M11 野外意外（wild-only，由注入的 wildEvents hook 觸發；reducer 不認識「野外」語意）。
   // terrainShift＝戰中地形突變（改 field.current）；intrusion＝亂入野生一次性非致命削血。
   | {
@@ -230,8 +259,9 @@ export function createBattleState(
     foe: { members: foeMembers, activeIndex: 0 },
     turn: 1,
     winner: null,
-    field: { terrainEffects: { initial: [...terrains], current: [...terrains] }, teamStatuses: [], enemyStatuses: [] },
+    field: { terrainEffects: { initial: [...terrains], current: [...terrains] }, teamStatuses: [], enemyStatuses: [], comboCastEffects: [] },
     chainGauge: 0,
+    usedComboKeys: [],
   }
 }
 
@@ -274,8 +304,10 @@ function cloneState(state: BattleState): BattleState {
       },
       teamStatuses: state.field.teamStatuses.map((s) => ({ ...s })),
       enemyStatuses: state.field.enemyStatuses.map((s) => ({ ...s })),
+      comboCastEffects: (state.field.comboCastEffects ?? []).map((s) => ({ ...s })),
     },
     chainGauge: state.chainGauge,
+    usedComboKeys: [...(state.usedComboKeys ?? [])],
   }
 }
 
@@ -405,10 +437,11 @@ const HEAL_QUALITY_SCALE: Record<QteQuality, number> = { perfect: 1.2, good: 1.0
 const statusesForSide = (w: BattleState, side: Side): StatusEffect[] =>
   side === 'player' ? w.field.teamStatuses : w.field.enemyStatuses
 
-/** 回合末遞減所有狀態 remaining、移除歸零者（純）。 */
-function tickStatuses(list: StatusEffect[]): StatusEffect[] {
+/** 回合末遞減所有「remaining」型項 remaining、移除歸零者（純）。供 statuses + comboCastEffects 共用。 */
+function tickRemaining<T extends { remaining: number }>(list: T[]): T[] {
   return list.map((s) => ({ ...s, remaining: s.remaining - 1 })).filter((s) => s.remaining > 0)
 }
+const tickStatuses = tickRemaining<StatusEffect>
 
 /**
  * 把一筆能力值增益併入 status 清單（純函數，回新清單）：同 stat 取 max mult + max remaining
@@ -532,6 +565,55 @@ function resolvePlayerChain(
       w,
       'player',
       { ...base, attackerIndex: hit.attackerIndex, qteMult: attackQteMultiplier(hit.quality), source: `chain-${combo}` },
+      events,
+    )
+  }
+}
+
+// ── 合體技（M12.d，plan/12 §4）─────────────────────────────────
+
+/**
+ * 套用合體施放效果到 fieldState（沿用 M19.d 既有詞彙：terrain / teamStatuses / enemyStatuses）+
+ * 記展示標記 + emit comboCast。reducer 不認識「哪些配對能合體」（match 注入），只套用通用效果。
+ */
+function applyComboCast(w: BattleState, def: ComboDef, events: BattleEvent[]): void {
+  const c = def.cast
+  if (c.kind === 'infuseTerrain') {
+    w.field.terrainEffects.current = [c.terrainId]
+  } else if (c.kind === 'teamBuff') {
+    w.field.teamStatuses = upsertStatus(w.field.teamStatuses, { stat: c.stat, mult: c.mult, remaining: c.turns, source: -1, label: def.name })
+  } else {
+    w.field.enemyStatuses = upsertStatus(w.field.enemyStatuses, { stat: c.stat, mult: c.mult, remaining: c.turns, source: -1, label: def.name })
+  }
+  w.field.comboCastEffects = [...w.field.comboCastEffects, { key: def.id, label: def.name, icon: def.icon, remaining: c.turns }]
+  events.push({ type: 'comboCast', key: def.id, name: def.name, icon: def.icon, castKind: c.kind, label: def.name, remaining: c.turns })
+}
+
+/**
+ * 合體技：連鎖提交後，若參與隊友（存活、去重）符合某未用過的 ComboDef → 施放效果 + 合成大招。
+ * 每組合每場一次（usedComboKeys）。守不變式：match 注入（reducer 不認識配對規則）、
+ * 直接傷害透過既有 performAttack 灌 power 倍率（合成大招族允許）、目標已倒/已換則只施放不打。
+ */
+function resolveCombo(w: BattleState, hits: ChainHit[], base: AttackParams, combo: ComboRules, events: BattleEvent[]): void {
+  const seen = new Set<number>()
+  const participants: BattleMobie[] = []
+  let leaderIndex = -1
+  for (const h of hits) {
+    const m = w.player.members[h.attackerIndex]
+    if (!m || m.currentHp <= 0 || seen.has(h.attackerIndex)) continue
+    seen.add(h.attackerIndex)
+    participants.push(m)
+    if (leaderIndex === -1) leaderIndex = h.attackerIndex
+  }
+  const def = combo.match(participants, w.usedComboKeys)
+  if (!def) return
+  w.usedComboKeys.push(def.id)
+  applyComboCast(w, def, events) // 先施放效果（comboCast 演出），其增益亦惠及隨後的合成大招
+  if (w.winner === null && leaderIndex >= 0 && w.player.members[leaderIndex].currentHp > 0) {
+    performAttack(
+      w,
+      'player',
+      { ...base, attackerIndex: leaderIndex, damageMult: def.power, source: `combo-${def.id}`, offenseStatuses: w.field.teamStatuses, defenseStatuses: w.field.enemyStatuses },
       events,
     )
   }
@@ -667,6 +749,8 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
         // 玩家較慢且 active 領銜者已被敵先手 KO → 連鎖發不出（§0.4 B，不開特例）
         if (w.player.activeIndex !== startActive.player) continue
         resolvePlayerChain(w, action.hits, opts, maxHits, events)
+        // M12.d 合體技：連鎖升級判定（合體模組開啟才注入；關閉＝不升級＝零殘留）。
+        if (options.ext?.combo) resolveCombo(w, action.hits, opts, options.ext.combo, events)
       }
     }
 
@@ -693,6 +777,8 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
   // M19.d：變化招增益回合末遞減、歸零移除（暫態，不持久化）。本回合施加者已 +duration，故至少存活到下回合。
   w.field.teamStatuses = tickStatuses(w.field.teamStatuses)
   w.field.enemyStatuses = tickStatuses(w.field.enemyStatuses)
+  // M12.d 合體施放展示標記同步遞減（純顯示，數值效果已在 teamStatuses/terrain 自行到期）。
+  w.field.comboCastEffects = tickRemaining(w.field.comboCastEffects)
 
   // 回合上限：到頂仍未分勝負 → 依剩餘血量比例判定（平手判玩家勝，對自用遊戲友善）。
   // 自然勝負已在上面 performAttack/applyForcedSwitch 設定 winner，這裡只接管「打不完」。

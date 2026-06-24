@@ -44,6 +44,12 @@ const MODULE_META: Record<ModuleId, ModuleMeta> = {
     desc: '普攻命中累積連鎖槽，集滿可發動連鎖：最多 3 隻隊友依序連續出擊（吃速度、目標倒下即截斷）。',
     available: true,
   },
+  combo: {
+    icon: '✨',
+    label: '合體技',
+    desc: '連鎖時若參與隊友符合配對（如火＋水）→ 升級成合體大招＋施放效果（灌注地形／全隊增益／敵方弱化），每組合每場一次。需搭配「連鎖攻擊」。',
+    available: true,
+  },
   evolution: {
     icon: '🧬',
     label: '進化',

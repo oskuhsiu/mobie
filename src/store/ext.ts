@@ -17,6 +17,7 @@ import { SYNERGY_MODULE } from '@/game/ext/synergy'
 import { HELD_ITEMS_MODULE } from '@/game/ext/items'
 import { ABILITIES_MODULE } from '@/game/ext/abilities'
 import { CHAIN_MODULE } from '@/game/ext/chain'
+import { COMBO_MODULE } from '@/game/ext/combo'
 import { EVOLUTION_MODULE } from '@/game/ext/evolution'
 
 /**
@@ -24,7 +25,7 @@ import { EVOLUTION_MODULE } from '@/game/ext/evolution'
  * 特性 S1·S3；M9+ 再 push 連鎖/進化/塔）。關閉的模組由 assembleExt/assembleBattlePrep
  * 依 settings 過濾掉＝零殘留。
  */
-export const MODULE_REGISTRY: ExtensionModule[] = [SYNERGY_MODULE, HELD_ITEMS_MODULE, ABILITIES_MODULE, CHAIN_MODULE, EVOLUTION_MODULE]
+export const MODULE_REGISTRY: ExtensionModule[] = [SYNERGY_MODULE, HELD_ITEMS_MODULE, ABILITIES_MODULE, CHAIN_MODULE, COMBO_MODULE, EVOLUTION_MODULE]
 
 /**
  * 戰前縫（S1 buildUnit / S2 preBattleModifiers）的注入包。
@@ -55,6 +56,7 @@ export function assembleExt(
     if (m.seams.damageHook) bundle.damageHooks.push(m.seams.damageHook)
     if (m.seams.turnEndTrigger) bundle.turnEndTriggers.push(m.seams.turnEndTrigger)
     if (m.seams.chainResolve) bundle.chain = m.seams.chainResolve // 連鎖目前最多一個模組提供
+    if (m.seams.combo) bundle.combo = m.seams.combo // M12.d 合體（連鎖升級）
   }
   return bundle
 }

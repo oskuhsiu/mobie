@@ -83,7 +83,7 @@ describe('replay codec — 分類錯誤', () => {
 
   it('unknown-event：含未知 event variant', () => {
     const obj = JSON.parse(encodeReplay(sampleLog()))
-    obj.turns[0].events.push({ type: 'comboCast', foo: 1 })
+    obj.turns[0].events.push({ type: 'bogusFutureEvent', foo: 1 })
     const res = decodeReplay(JSON.stringify(obj))
     expect(res).toMatchObject({ ok: false, error: 'unknown-event' })
   })

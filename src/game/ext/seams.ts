@@ -12,6 +12,7 @@
 import type { BattleMobie, OwnedUnit } from '@/game/types'
 // 型別循環（seams ↔ reducer）皆為 import type，編譯期抹除、無 runtime 相依。
 import type { BattleState, BattleEvent } from '@/game/battle/reducer'
+import type { ComboRules } from '@/game/ext/combo'
 
 /** 八個擴充縫的識別碼（對照 plan/09 §0.1）。 */
 export type SeamId =
@@ -32,7 +33,7 @@ export type SeamId =
  * 加油走 fieldState），不在 MODULE_REGISTRY；此 id 僅供設定頁開關 + UI gating。
  * （連勝塔是 RegionSelect 進入的遊戲模式、非可選掛載模組，故不列入此處。）
  */
-export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'partnerSkills'
+export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'partnerSkills' | 'combo'
 
 // ── 各縫的純能力簽章 ────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ export interface ModuleSeams {
   damageHook?: DamageHook // S3
   turnEndTrigger?: TurnEndTrigger // S4
   chainResolve?: ChainRules // S5
+  combo?: ComboRules // S5b：合體技（M12.d，連鎖升級變體；reducer 在連鎖後段消費 ext.combo）
   postGrowth?: PostGrowthHook // S6
   /** S7：宣告本模組會掛載的平行子狀態名（流程層處理，不走 ExtBundle） */
   gameMode?: string
@@ -122,6 +124,8 @@ export interface ExtBundle {
   damageHooks: DamageHook[] // S3
   turnEndTriggers: TurnEndTrigger[] // S4
   chain?: ChainRules // S5（undefined = 連鎖關閉）
+  /** M12.d 合體技（連鎖升級變體；undefined = 合體關閉、連鎖不升級）。 */
+  combo?: ComboRules
 }
 
 /** 空能力包：不傳 ext 或全模組關閉時用。 */

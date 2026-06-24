@@ -5,8 +5,9 @@
 import type { BattleEvent } from '@/game/battle/reducer'
 import type { QteQuality } from '@/game/battle/engine'
 
-/** 整檔單一版本號；新增 event variant → bump + 寫 migrate（plan/15 §2 版本化規則）。 */
-export const REPLAY_FORMAT_VERSION = 1
+/** 整檔單一版本號；新增 event variant → bump + 寫 migrate（plan/15 §2 版本化規則）。
+ *  v2（M12.d）：新增 comboCast event variant。 */
+export const REPLAY_FORMAT_VERSION = 2
 
 /** 回放只需「畫面/FX 分派」要的穩定欄位（不含引擎內部 ivs/nature/derived）。 */
 export interface DisplayUnitSnapshot {

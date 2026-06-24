@@ -68,7 +68,11 @@ describe('report — 逐 handler 投影中文', () => {
   })
 
   it('未知 variant 安全回退 [type]', () => {
-    expect(line({ type: 'comboCast' } as unknown as BattleEvent)).toBe('[comboCast]')
+    expect(line({ type: 'bogusFutureEvent' } as unknown as BattleEvent)).toBe('[bogusFutureEvent]')
+  })
+
+  it('comboCast：合體技投影（M12.d）', () => {
+    expect(line({ type: 'comboCast', key: 'steam-burst', name: '蒸氣爆破', icon: '♨️', castKind: 'enemyDebuff', label: '蒸氣爆破', remaining: 3 })).toContain('合體技「蒸氣爆破」')
   })
 
   it('未知 resolvedMoveId 不丟例外、回退招式#id（回放不可崩）', () => {

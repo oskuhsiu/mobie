@@ -81,6 +81,11 @@ function renderChainHit(ev: Extract<BattleEvent, { type: 'chainHit' }>): string 
   return `連鎖第 ${ev.comboCount} 段！`
 }
 
+function renderComboCast(ev: Extract<BattleEvent, { type: 'comboCast' }>): string {
+  const effect = ev.castKind === 'infuseTerrain' ? '灌注場域地形' : ev.castKind === 'teamBuff' ? '全隊增益' : '弱化敵方'
+  return `${ev.icon} 合體技「${ev.name}」發動！${effect}（${ev.remaining} 回合）`
+}
+
 function renderWild(ev: Extract<BattleEvent, { type: 'wildAccident' }>, ctx: ReportCtx): string {
   if (ev.kind === 'terrainShift') return `野外突變！地形改變了`
   const who = ev.side != null && ev.index != null ? ctx.nameOf(ev.side, ev.index) : '場上一隻 Mobie'
@@ -107,6 +112,7 @@ export function eventToReportLine(ev: BattleEvent, ctx: ReportCtx): string | nul
     case 'random': return renderRandom(ev)
     case 'chainOpportunity': return renderChainOpp(ev)
     case 'chainHit': return renderChainHit(ev)
+    case 'comboCast': return renderComboCast(ev)
     case 'wildAccident': return renderWild(ev, ctx)
     case 'statusApplied': return renderStatus(ev, ctx)
     default: return `[${(ev as { type: string }).type}]` // 未知 variant 安全回退

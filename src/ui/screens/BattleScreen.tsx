@@ -682,6 +682,19 @@ export function BattleScreen() {
         fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 12, power: 1.2, kind: 'spark' })
         audio.play('select')
         await wait(180)
+      } else if (e.type === 'comboCast') {
+        // M12.d 合體技：合束→大招閃光→場域特效（其合成傷害仍走緊接的 damageApplied）
+        store().setBanner(`${e.icon} 合體技「${e.name}」！`)
+        const eff = e.castKind === 'infuseTerrain' ? '灌注場域' : e.castKind === 'teamBuff' ? '全隊增益' : '弱化敵方'
+        store().pushLog(`${e.icon} 合體技「${e.name}」發動：${eff}（${e.remaining} 回合）`)
+        audio.play('crit')
+        fxRef.current?.flash('#ffe14a', 0.6)
+        fxRef.current?.ring({ ...FX_POS.player, color: '#ffe14a' })
+        fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 30, power: 1.8, kind: 'spark' })
+        rootShake.start({ x: [0, -16, 14, -10, 0], transition: { duration: 0.42 } })
+        await wait(760)
+        store().setBanner(null)
+        await wait(140)
       }
       // 其餘 random（accuracy/crit）：UI 不另演，已併入 damageApplied
       // battleEnded（自然勝負）：迴圈結束後依 nextState.winner 設 phase

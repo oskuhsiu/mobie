@@ -12,7 +12,7 @@ import type { ModuleId } from '@/game/ext/seams'
 export const SETTINGS_SCHEMA_VERSION = 1
 
 /** 全部延伸模組 id（設定頁逐一列出；新增模組時補這裡） */
-export const MODULE_IDS: ModuleId[] = ['synergy', 'heldItems', 'abilities', 'chain', 'evolution', 'partnerSkills']
+export const MODULE_IDS: ModuleId[] = ['synergy', 'heldItems', 'abilities', 'chain', 'combo', 'evolution', 'partnerSkills']
 
 // ── M22 增強互動性（UX 偏好，非戰鬥模組）。設計真相：plan/22。 ────────────────────
 // 與 modules 不同：不註冊任何 S1–S8 seam、不碰 reducer/engine，只在 display 層替換/疊加互動
