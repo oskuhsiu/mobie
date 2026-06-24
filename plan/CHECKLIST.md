@@ -215,14 +215,13 @@
 > **已知 follow-up（不阻塞）**：完整 `pendingCaptures` 斷線復原 transaction（自用單機簡化）；meta/itembag 尚未進 .save 匯出；進化/孵化的技能槽接點待 M12；塔來源 egg 待 M11。
 
 ## M11 — 模式 · 長線 · 野外意外（見 `09`/`11`）
-### 連勝塔 / 遠征（原 M6.e；依賴 M6 模式 contract、給 M12 技能 SP）
-- [ ] `RunState` 獨立 slice（`mz.run.v1`，只參照 roster id；防火牆：暫態不逆寫 OwnedUnit）
-- [ ] `generateRunMap(seed)` 決定論節點（battle/elite/event/campfire/shop/boss）+ 分支選路
-- [ ] XState `tower` 平行子模式 + RegionSelect 入口；run 內合成載入（OwnedUnit+runModifiers+runHp→BattleUnit）
-- [ ] run 結算才寫回 roster（EXP/道具/捕獲/進化）
-### 難度修飾 Ascension（原 M6.j，依附連勝塔）
-- [ ] 拆兩條：靜態敵強化（enemyHpMulti/levelBonus）pre-bake 進 encounter/buildUnit；回合修飾（Fate/healReduced）走 ext
-- [ ] tower ascension 選擇器（meta `ascensionUnlocked` 解鎖階級）+ run 內生效修飾 tag；嚴守 §0.4 不新增戰鬥規則
+### 連勝塔 / 遠征（原 M6.e；依賴 M6 模式 contract、給 M12 技能 SP）✅（耐久連勝梯版）
+- [x] `runStore`（`mobie.run.v1`，bestFloor + ascensionUnlocked meta；run 防火牆：進行中 run 住 XState context 暫態、不逆寫 OwnedUnit）；`game/tower.ts` `towerFoeTeam`（決定論 escalating foe，boss 樓用強敵池）/`floorReward`/`towerExpMult`
+- [x] gameMachine `tower` context + OPEN_TOWER/START_TOWER/TOWER_CONTINUE/TOWER_QUIT + `towerSetup` state + RegionSelect 🗼入口；`TowerSetupScreen`（選隊+難度階）；BattleScreen 塔戰視為中性場（無地形/野外意外）
+- [x] run 結算走既有 ResultScreen：勝→towerExpMult 經驗 + floorReward SP + recordFloor + boss 清關解鎖下一階；TowerView（無捕獲）+ ⬆下一層/🏳結束遠征。**簡化：耐久連勝梯（連續 escalating + 難度階 + 深度獎勵），完整 roguelike 地圖節點（商店/營火/分支）留日後擴充**
+### 難度修飾 Ascension（原 M6.j，依附連勝塔）✅（靜態 levelBonus 版）
+- [x] 靜態敵強化（`ASCENSIONS` levelBonus pre-bake 進 `towerFoeTeam` 等級）；tower ascension 選擇器（`runStore.ascensionUnlocked` 解鎖階級、鎖階顯 🔒）；嚴守 §0.4 不新增戰鬥規則。**回合修飾（Fate/healReduced）走 ext 留日後**
+- [x] CDP（dev）：開塔→選隊+難度→第1層突破(+EXP)→攻向第2層→第2層突破→結束遠征→回區域、零 console error
 ### 野外意外 ×5（原 M7.c，wild-only，走 RandomEvent）✅
 - [x] 亂入野生（一次性**非致命**削血、不新增第 4 隻 unit）／地形突變（改 field.current）——`game/accidents.ts` `makeWildEvents` 注入 reducer `wildEvents` hook（守純 reducer/不引強制換）；BattleScreen wild 區注入 + `wildAccident` event 演出
 - [x] 天降補給（**開場前**三選一 SP/經驗×1.5/捕獲加成 modal，絕不戰鬥中途）／稀有閃光 boss（`maybeRareBoss` encounter flag→異色+高IV→高 Grade）／幸運加碼（`rollEncounterAccidents` 自動 expMult）；`accidentStore` per-battle reward 旗標；ResultScreen 套 expMult/captureMult；+11 vitest；CDP（dev）全 5 意外驗、零 error
