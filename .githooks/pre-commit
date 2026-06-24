@@ -1,0 +1,6 @@
+#!/bin/sh
+# 每次 commit 自動升 patch 版號，並把更新後的 package.json/package-lock.json 納入本次 commit。
+# 啟用方式：git config core.hooksPath .githooks（npm install 的 prepare script 會自動設定）。
+root=$(git rev-parse --show-toplevel)
+node "$root/scripts/bump-version.mjs" >/dev/null || exit 1
+git -C "$root" add package.json package-lock.json

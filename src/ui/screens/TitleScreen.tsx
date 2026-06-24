@@ -19,7 +19,7 @@ export function TitleScreen() {
         className="col"
         style={{ alignItems: 'center', gap: 10 }}
       >
-        <div className="eyebrow">Personal Arcade · {DEVICE_LABEL}</div>
+        <div className="eyebrow">Personal Arcade · {DEVICE_LABEL} · v{__APP_VERSION__}</div>
         <div
           className="h-title"
           style={{ fontSize: 'clamp(40px, 9vw, 88px)', lineHeight: 1, textAlign: 'center' }}
