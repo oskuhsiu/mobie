@@ -74,12 +74,11 @@ describe('M17 isPartnerSkillLearned / learnedPartnerSkills', () => {
 })
 
 describe('M17 playerSkillsStore（mobie.playerskills.v1，不掛 OwnedUnit）', () => {
-  it('learn 冪等、has 反映狀態', () => {
+  it('learn 冪等（重複解鎖不重覆加）', () => {
     const store = usePlayerSkills.getState()
     store.learn('rally')
     store.learn('rally') // 重複不重覆加
     expect(usePlayerSkills.getState().learnedSkillIds.filter((x) => x === 'rally')).toEqual(['rally'])
-    expect(usePlayerSkills.getState().has('rally')).toBe(true)
-    expect(usePlayerSkills.getState().has('nope')).toBe(false)
+    expect(usePlayerSkills.getState().learnedSkillIds.includes('nope')).toBe(false)
   })
 })

@@ -39,8 +39,6 @@ interface PlayerSkillsStore {
   learnedSkillIds: string[]
   /** 解鎖一個玩家技能（冪等；SP 扣款由呼叫端先做）。 */
   learn: (id: string) => void
-  /** 是否已花 SP 解鎖（不含起始技能；起始與否由 catalog isPartnerSkillLearned 判定）。 */
-  has: (id: string) => boolean
 }
 
 export const usePlayerSkills = create<PlayerSkillsStore>((set, get) => ({
@@ -52,6 +50,4 @@ export const usePlayerSkills = create<PlayerSkillsStore>((set, get) => ({
     set({ learnedSkillIds })
     save(learnedSkillIds)
   },
-
-  has: (id) => get().learnedSkillIds.includes(id),
 }))

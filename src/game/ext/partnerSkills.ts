@@ -13,6 +13,7 @@
 // 本檔為「catalog」（手寫非產生檔），純資料 + 純函式，可單測。零直接傷害（護欄見 partnerSkills.test.ts）。
 
 import type { StatusEffect } from '@/game/battle/reducer'
+import { createLookup } from '@/game/ext/statPatch'
 
 export type PartnerSkillId = string
 
@@ -73,15 +74,12 @@ export const PARTNER_SKILLS: PartnerSkillDef[] = [
 /** 起始（cost 0）技能 id：開啟模組即預設可用、不需 SP。 */
 export const STARTER_PARTNER_SKILL_IDS: PartnerSkillId[] = PARTNER_SKILLS.filter((s) => s.cost === 0).map((s) => s.id)
 
-const BY_ID: Record<string, PartnerSkillDef> = Object.fromEntries(PARTNER_SKILLS.map((s) => [s.id, s]))
-
-export function getPartnerSkill(id: string | undefined): PartnerSkillDef | undefined {
-  return id ? BY_ID[id] : undefined
-}
+/** id → def 的 O(1) 查表（共用 statPatch.createLookup，同 items/abilities/terrains 慣例）。 */
+export const getPartnerSkill = createLookup(PARTNER_SKILLS)
 
 /** 某技能是否「已習得」＝起始技能（cost 0）或已花 SP 解鎖（在 learnedIds 內）。 */
 export function isPartnerSkillLearned(id: PartnerSkillId, learnedIds: readonly string[]): boolean {
-  const def = BY_ID[id]
+  const def = getPartnerSkill(id)
   if (!def) return false
   return def.cost === 0 || learnedIds.includes(id)
 }
