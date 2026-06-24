@@ -1115,3 +1115,6 @@ body {
   font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px;
   background: rgba(255,210,63,0.14); border: 1px solid var(--accent); color: var(--accent);
 }
+
+/* M12.c 蛋招繼承顯示 */
+.egg-row__inherit { font-size: 11px; font-weight: 700; color: #9be7a0; margin-top: 3px; }

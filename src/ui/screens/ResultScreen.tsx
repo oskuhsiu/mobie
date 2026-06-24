@@ -334,8 +334,9 @@ export function ResultScreen() {
         useMeta.getState().recordCapture(boss.speciesId, bp.shiny)
         const already = useRoster.getState().roster.some((u) => u.speciesId === boss.speciesId)
         if (already) {
-          // 已擁有 → 轉成孵化蛋（不重複塞同種，絕不刪既有個體）
-          useIncubator.getState().addDuplicateEgg(boss.speciesId, `${bp.nameZh} 蛋`)
+          // 已擁有 → 轉成孵化蛋（不重複塞同種，絕不刪既有個體）；M12.c 帶父母最進階的招當蛋招繼承
+          const inheritedMoveId = bp.moves.length > 1 ? bp.moves[bp.moves.length - 1].id : undefined
+          useIncubator.getState().addDuplicateEgg(boss.speciesId, `${bp.nameZh} 蛋`, inheritedMoveId)
           setDupConverted(true)
         } else {
           void captureUnit(boss) // 新種：加入並存檔到隊伍

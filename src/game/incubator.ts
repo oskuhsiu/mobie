@@ -7,6 +7,8 @@
 import type { OwnedUnit } from '@/game/types'
 import { createOwnedUnit } from '@/game/growth'
 import { hashSeed } from '@/game/individual'
+import { getSpecies } from '@/game/data/species'
+import { teachableOf } from '@/game/learnset'
 
 export const INCUBATOR_SCHEMA_VERSION = 1
 const KEY = 'mobie.incubator.v1'
@@ -24,6 +26,8 @@ export interface Egg {
   requiredProgress: number
   /** 顯示用來源標籤（如「新手蛋」）。 */
   label: string
+  /** M12.c 蛋招繼承（plan/12 §3）：父母傳的一個招 id；孵化時若該種族可學且未習得才落入 learnedMoveIds。 */
+  inheritedMoveId?: number
 }
 
 export interface IncubatorState {
@@ -45,11 +49,12 @@ export function defaultIncubator(): IncubatorState {
 /** 新增一顆蛋（純函數，決定論 id/seed）。speciesPool 過濾後為空則不新增（回原 state）。 */
 export function addEgg(
   state: IncubatorState,
-  spec: { source: EggSource; speciesPool: number[]; label: string },
+  spec: { source: EggSource; speciesPool: number[]; label: string; inheritedMoveId?: number },
 ): IncubatorState {
   const pool = spec.speciesPool.filter((id) => Number.isInteger(id) && id > 0)
   if (pool.length === 0) return state
   const id = `egg-${state.nextId}`
+  const inherited = Number.isInteger(spec.inheritedMoveId) && (spec.inheritedMoveId as number) > 0 ? spec.inheritedMoveId : undefined
   const egg: Egg = {
     id,
     seed: `${id}-${spec.source}`,
@@ -58,6 +63,7 @@ export function addEgg(
     progress: 0,
     requiredProgress: REQUIRED[spec.source],
     label: spec.label,
+    ...(inherited ? { inheritedMoveId: inherited } : {}),
   }
   return { ...state, eggs: [...state.eggs, egg], nextId: state.nextId + 1 }
 }
@@ -79,7 +85,12 @@ export const isHatchable = (e: Egg): boolean => e.progress >= e.requiredProgress
  */
 export function hatchEgg(egg: Egg): OwnedUnit {
   const speciesId = egg.speciesPool[hashSeed(egg.seed) % egg.speciesPool.length]
-  return createOwnedUnit(egg.seed, speciesId, HATCH_LEVEL)
+  const unit = createOwnedUnit(egg.seed, speciesId, HATCH_LEVEL)
+  // M12.c 蛋招繼承：父母傳的招若該種族可學（teachable）且尚未習得 → 加入 learnedMoveIds（可學庫，不繞 loadout 上限）。
+  if (egg.inheritedMoveId && teachableOf(getSpecies(speciesId)).includes(egg.inheritedMoveId) && !unit.learnedMoveIds?.includes(egg.inheritedMoveId)) {
+    return { ...unit, learnedMoveIds: [...(unit.learnedMoveIds ?? []), egg.inheritedMoveId] }
+  }
+  return unit
 }
 
 // ── 遷移 / 持久化（薄）──

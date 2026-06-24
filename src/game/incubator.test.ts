@@ -77,3 +77,34 @@ describe('M10 孵化 — migrate 防壞檔', () => {
     expect(m.nextId).toBe(9)
   })
 })
+
+// ── M12.c 蛋招繼承 ───────────────────────────────────────────────
+import { teachableOf } from './learnset'
+import { getSpecies } from './data/species'
+
+describe('M12.c 蛋招繼承', () => {
+  it('addEgg 帶 inheritedMoveId → 存進蛋；非法值不存', () => {
+    let s = addEgg(defaultIncubator(), { source: 'duplicate', speciesPool: [1], label: 'x', inheritedMoveId: 2000 })
+    expect(s.eggs[0].inheritedMoveId).toBe(2000)
+    s = addEgg(s, { source: 'duplicate', speciesPool: [1], label: 'y', inheritedMoveId: -5 })
+    expect(s.eggs[1].inheritedMoveId).toBeUndefined()
+    s = addEgg(s, { source: 'duplicate', speciesPool: [1], label: 'z' })
+    expect(s.eggs[2].inheritedMoveId).toBeUndefined()
+  })
+
+  it('hatch：可學的蛋招落入 learnedMoveIds；不可學的不落', () => {
+    const teach = teachableOf(getSpecies(1))
+    expect(teach.length).toBeGreaterThan(0)
+    const learnable = teach[teach.length - 1] // 取一個高階可學招（孵化等級多半還沒學會）
+    const eggOk = { id: 'egg-1', seed: 'egg-1-duplicate', source: 'duplicate' as const, speciesPool: [1], progress: 8, requiredProgress: 8, label: 'x', inheritedMoveId: learnable }
+    const u = hatchEgg(eggOk)
+    expect(u.speciesId).toBe(1)
+    expect(u.learnedMoveIds).toContain(learnable)
+
+    // 不可學的招（用一個不在 teachable 池的大 id）→ 不落
+    const bogus = 9_999_999
+    expect(teach.includes(bogus)).toBe(false)
+    const eggBad = { ...eggOk, seed: 'egg-2-duplicate', inheritedMoveId: bogus }
+    expect(hatchEgg(eggBad).learnedMoveIds).not.toContain(bogus)
+  })
+})

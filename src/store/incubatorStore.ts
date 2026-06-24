@@ -19,8 +19,9 @@ interface IncubatorStore {
   load: () => void
   /** 成就獎勵 → 蛋（plan/10 §3.3 發獎 action 的副作用入口）。 */
   addRewardEgg: (reward: AchievementReward) => void
-  /** 重複捕獲轉化（overflow policy）→ 同種蛋；絕不刪既有個體（plan/10 §5.3.1）。 */
-  addDuplicateEgg: (speciesId: number, label?: string) => void
+  /** 重複捕獲轉化（overflow policy）→ 同種蛋；絕不刪既有個體（plan/10 §5.3.1）。
+   *  inheritedMoveId（M12.c）＝父母傳的蛋招，孵化時若該種族可學才生效。 */
+  addDuplicateEgg: (speciesId: number, label?: string, inheritedMoveId?: number) => void
   /** 每場有效戰鬥完成 → 推進所有蛋的孵化進度。 */
   advance: (amount: number) => void
   /** 孵化一顆蛋（達進度才可）：產 OwnedUnit 入 roster + 登錄圖鑑，移除該蛋。回傳孵出個體。 */
@@ -40,8 +41,8 @@ export const useIncubator = create<IncubatorStore>((set, get) => {
       persist(addEgg(get().state, { source: 'achievement', speciesPool: reward.speciesPool, label: reward.label }))
     },
 
-    addDuplicateEgg: (speciesId, label = '重複轉化蛋') => {
-      persist(addEgg(get().state, { source: 'duplicate', speciesPool: [speciesId], label }))
+    addDuplicateEgg: (speciesId, label = '重複轉化蛋', inheritedMoveId) => {
+      persist(addEgg(get().state, { source: 'duplicate', speciesPool: [speciesId], label, inheritedMoveId }))
     },
 
     advance: (amount) => {

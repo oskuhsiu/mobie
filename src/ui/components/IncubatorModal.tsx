@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useIncubator } from '@/store/incubatorStore'
 import { isHatchable, type Egg } from '@/game/incubator'
 import { getSpecies } from '@/game/data/species'
+import { findMove } from '@/game/data/moves'
 import { GradeBadge } from '@/ui/components/GradeBadge'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { GestureGate } from '@/ui/components/GestureGate'
@@ -62,6 +63,9 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="egg-row__track"><div className="egg-row__fill" style={{ width: `${pct}%` }} /></div>
                   <div className="egg-row__prog">{e.progress} / {e.requiredProgress}</div>
+                  {e.inheritedMoveId && findMove(e.inheritedMoveId) && (
+                    <div className="egg-row__inherit">🧬 蛋招：{findMove(e.inheritedMoveId)!.nameZh}</div>
+                  )}
                 </div>
                 <button className="btn btn--sm" disabled={!ready} onClick={() => ready && onHatchClick(e.id)}>
                   {ready ? '孵化' : '培育中'}
