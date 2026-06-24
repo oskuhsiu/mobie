@@ -19,11 +19,12 @@ const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').t
 const SettingsModal = lazy(() => import('@/ui/components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
 const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ default: m.TeamModal })))
 const MoveTrainerModal = lazy(() => import('@/ui/components/MoveTrainerModal').then((m) => ({ default: m.MoveTrainerModal })))
+const PartnerSkillModal = lazy(() => import('@/ui/components/PartnerSkillModal').then((m) => ({ default: m.PartnerSkillModal })))
 const DexModal = lazy(() => import('@/ui/components/DexModal').then((m) => ({ default: m.DexModal })))
 const AchievementsModal = lazy(() => import('@/ui/components/AchievementsModal').then((m) => ({ default: m.AchievementsModal })))
 const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then((m) => ({ default: m.IncubatorModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'dex' | 'achievements' | 'incubator'
+type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator'
 
 export function TitleScreen() {
   const { send } = useGame()
@@ -81,6 +82,7 @@ export function TitleScreen() {
         <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('team')}>🎒 隊伍</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
+        <button className="btn btn--ghost btn--sm" onClick={() => open('partner')}>✨ 夥伴技能</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📚 圖鑑</button>
         <button className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
           🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
@@ -102,6 +104,7 @@ export function TitleScreen() {
           {overlay === 'settings' && <SettingsModal onClose={() => setOverlay('none')} />}
           {overlay === 'team' && <TeamModal onClose={() => setOverlay('none')} />}
           {overlay === 'moves' && <MoveTrainerModal onClose={() => setOverlay('none')} />}
+          {overlay === 'partner' && <PartnerSkillModal onClose={() => setOverlay('none')} />}
           {overlay === 'dex' && <DexModal onClose={() => setOverlay('none')} />}
           {overlay === 'achievements' && <AchievementsModal onClose={() => setOverlay('none')} />}
           {overlay === 'incubator' && <IncubatorModal onClose={() => setOverlay('none')} />}
