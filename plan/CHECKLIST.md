@@ -297,15 +297,15 @@
 ## M16 — Mobie 資訊卡（檢視自己＋對手；見 `16`）
 > 修「戰鬥中看不到自己夥伴的型別/技能/數值」痛點。**純 UI／顯示層，不動 reducer/engine/持久化。**
 > 自己一律全顯；對手基本面（名稱/型別/Lv）顯示、深度（招式/數值/IV 星級）遮罩 → 留給 M17 看穿揭露。
-### M16.a — MobCard 元件
-- [ ] `ui/components/MobCard.tsx`（吃 `BattlePokemon`+`revealed`；複用 `.modal-backdrop`/`.modal-card`/`TypeBadges`/`IndividualInfo`/`PokemonSprite`/`getItem`/`getAbility`）
-- [ ] **新**：招式 row（名稱+型別+物理/特殊+威力+命中）＋ 六維 mini-bar CSS；先在 Encounter 接一個開啟點驗證
-### M16.b — 戰鬥中接線（核心修復）
-- [ ] 點自己 `HpPlate` → 自己全卡；點對手 `HpPlate`/`TeamTray` 成員 → 對手卡（遮罩占位「🔍 看穿後揭露」）
-- [ ] `battleStore` 加 `revealedFoes`（M17 用；M16 先放空 set，對手 `revealed` 恆 false）
-### M16.c — CardSelect / Encounter 接線
-- [ ] CardSelect 點自己 `poke-card` → 全卡、點 `foe-strip__mon` → 對手卡（保留既有點選出戰手感，開卡走 ⓘ/長按）
-- [ ] Chrome CDP：各畫面開卡零 console error；typecheck/test/build 全綠
+### M16.a — MobCard 元件 ✅
+- [x] `ui/components/MobCard.tsx`（吃 `BattleMobie`+`owner`+`revealed`；複用 `.modal-backdrop`/`.modal-card`/`TypeBadges`/`IndividualInfo`/`MobieSprite`/`getItem`/`getAbility`）
+- [x] 招式 loadout row（名稱+型別+物理/特殊/變化+威力+命中，變化招顯效果）＋ 六維 mini-bar CSS；Encounter 接「ⓘ 查看資訊卡」/對手縮圖開卡驗證
+### M16.b — 戰鬥中接線（核心修復）✅
+- [x] 點自己 `HpPlate`/`TeamTray` → 自己全卡；點對手 `HpPlate`/`TeamTray` 成員 → 對手卡（基本面顯示、深度遮罩占位「🔍 看穿後揭露」）
+- [x] `battleStore` 加 `revealedFoes`（M17 用；M16 恆空，對手 `revealed`=revealedFoes.includes＝恆 false）+ `revealFoe`（M17 看穿用，exactly-once）
+### M16.c — CardSelect / Encounter 接線 ✅
+- [x] CardSelect 自己 `poke-card` ⓘ 角標（stopPropagation 不觸發選取）→ 全卡、`foe-strip__mon` → 對手卡（保留點選出戰手感）；Encounter 領頭/縮圖開卡
+- [x] Chrome CDP：Encounter/CardSelect/Battle 三開啟點開卡零 console error（自己全顯招式/六維/IV/特性道具、對手基本面+深度遮罩）；typecheck/310 test/build 全綠
 
 ## M17 — Partner 技能系（**修訂：純玩家/訓練師技能**；見 `19`）
 > **⚠️ 範圍修訂（2026-06-24）**：M17 = **玩家本人(訓練師)帳號級技能**（看穿/全隊支援/丟道具），**不掛 OwnedUnit**、無 per-creature 上限。
