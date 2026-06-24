@@ -1,4 +1,4 @@
-// M7 — 持有道具背包（itembag slice，mz.itembag.v1）。設計真相：plan/09 §1.2。
+// M7 — 持有道具背包（itembag slice，mobie.itembag.v1）。設計真相：plan/09 §1.2。
 //
 // 背包只存「擁有數量」Record<itemId, number>，是獨立 save 命名空間（不塞進 OwnedUnit，
 // 不違反「只存 canonical roster」——roster 的 canonical 是 OwnedUnit.heldItemId，背包是另一 slice）。
@@ -8,7 +8,7 @@ import { create } from 'zustand'
 import { ITEMS } from '@/game/ext/items'
 import { useRoster } from '@/store/rosterStore'
 
-const KEY = 'mz.itembag.v1'
+const KEY = 'mobie.itembag.v1'
 
 type Bag = Record<string, number>
 

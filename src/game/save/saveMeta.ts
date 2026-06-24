@@ -21,7 +21,7 @@ export interface SaveMeta {
   revision: number
 }
 
-const KEY = 'mz.savemeta.v1'
+const KEY = 'mobie.savemeta.v1'
 
 function hasLS(): boolean {
   return typeof localStorage !== 'undefined'

@@ -8,7 +8,7 @@
 // （守「reducer/engine 不動」硬約束），待日後補 post-damage 縫再加。
 //
 // 道具表是手寫非產生檔（如 practiceRegion）：不抓 PokéAPI、icon 用 emoji，零侵權。
-// 背包庫存（擁有數量）放獨立 save slice mz.itembag.v1（store/bagStore.ts），不塞進 OwnedUnit。
+// 背包庫存（擁有數量）放獨立 save slice mobie.itembag.v1（store/bagStore.ts），不塞進 OwnedUnit。
 
 import type { BattleMobie } from '@/game/types'
 import type {
@@ -102,5 +102,5 @@ const itemTurnEnd: TurnEndTrigger = ({ state }) => {
 export const HELD_ITEMS_MODULE: ExtensionModule = {
   id: 'heldItems',
   seams: { buildUnit: itemBuildUnit, damageHook: itemDamage, turnEndTrigger: itemTurnEnd },
-  ownsSaveSlices: ['mz.itembag.v1'],
+  ownsSaveSlices: ['mobie.itembag.v1'],
 }

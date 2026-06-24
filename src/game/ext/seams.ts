@@ -104,7 +104,7 @@ export interface ModuleSeams {
 export interface ExtensionModule {
   id: ModuleId
   seams: ModuleSeams
-  /** S8：它獨佔的存檔命名空間（如 'mz.itembag.v1'） */
+  /** S8：它獨佔的存檔命名空間（如 'mobie.itembag.v1'） */
   ownsSaveSlices?: string[]
 }
 

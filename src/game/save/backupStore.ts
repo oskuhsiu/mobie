@@ -4,6 +4,7 @@
 
 import type { SaveMeta } from './saveMeta'
 
+// M18.c：IDB DB 名刻意保留舊前綴 `mz-`（不隨品牌改名遷移）。詳見 game/keyMigration.ts / plan/20。
 const DB_NAME = 'mz-save-backup'
 const DB_VERSION = 1
 const STORE = 'backup'

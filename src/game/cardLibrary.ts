@@ -6,6 +6,8 @@ import { bumpSaveMeta } from '@/game/save/saveMeta'
 // 首次存取時用 PLAYER_CARDS 種子（讓自製 DEV-* 卡碼開箱即可掃到）。
 // 純 I/O glue；卡碼/匯入解析見 cardCode.ts / cardsImport.ts。
 
+// M18.c：IDB DB 名刻意保留舊前綴 `mz-`（不隨品牌改名遷移）——純內部、不面向品牌、不進 .save，
+// 跨 DB 搬遷 blob 成本高且易孤立既有資料。詳見 game/keyMigration.ts / plan/20。
 const DB_NAME = 'mz-cards'
 const DB_VERSION = 1
 const STORE = 'cards'

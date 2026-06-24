@@ -1,4 +1,4 @@
-// M10 — 圖鑑/成就 meta store（mz.meta.v1）。在 canonical 事件點（看到/收服/勝利/進化）更新 meta，
+// M10 — 圖鑑/成就 meta store（mobie.meta.v1）。在 canonical 事件點（看到/收服/勝利/進化）更新 meta，
 // 獨立 store、**不寫 roster**（plan/10 §3.2）。claim 走明確 action（exactly-once、防重領）。
 
 import { create } from 'zustand'

@@ -1,4 +1,4 @@
-// M10 — 圖鑑 / 成就 meta slice（mz.meta.v1）。設計真相：plan/10 §3。
+// M10 — 圖鑑 / 成就 meta slice（mobie.meta.v1）。設計真相：plan/10 §3。
 //
 // 獨立命名空間（與 roster 無關），**不違反「只存 canonical OwnedUnit」**——meta 是另一 slice（S8）。
 // 三層語義避免雙真相（plan/10 §3.2）：
@@ -10,7 +10,7 @@
 import type { OwnedUnit } from '@/game/types'
 
 export const META_SCHEMA_VERSION = 1
-const KEY = 'mz.meta.v1'
+const KEY = 'mobie.meta.v1'
 
 export interface MetaStats {
   captures: number // 累計收服數

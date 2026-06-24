@@ -1,4 +1,4 @@
-// M10 — 抽蛋孵化（Incubator，mz.incubator.v1）。設計真相：plan/10 §5。
+// M10 — 抽蛋孵化（Incubator，mobie.incubator.v1）。設計真相：plan/10 §5。
 //
 // 用遊玩進度換隨機新Mobie（**非付費 gacha**），複用 individual 決定論 roll。防線（plan/10 §5.2 寫死）：
 //   egg 只存 seed/source/speciesPool/progress——**孵化才生成 OwnedUnit**、不可付費、不可刷池、不可存預生成結果。
@@ -9,7 +9,7 @@ import { createOwnedUnit } from '@/game/growth'
 import { hashSeed } from '@/game/individual'
 
 export const INCUBATOR_SCHEMA_VERSION = 1
-const KEY = 'mz.incubator.v1'
+const KEY = 'mobie.incubator.v1'
 
 export type EggSource = 'achievement' | 'duplicate' | 'tower'
 

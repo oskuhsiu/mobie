@@ -1,6 +1,6 @@
-// M6.0 — 設定存檔 slice（mz.settings.v1）。設計真相：plan/09 §0.3。
+// M6.0 — 設定存檔 slice（mobie.settings.v1）。設計真相：plan/09 §0.3。
 //
-// 獨立命名空間（與 roster `mz.roster.v2` 不同）：延伸系統「逐一開關」住這裡，**預設全關**＝
+// 獨立命名空間（與 roster `mobie.roster.v2` 不同）：延伸系統「逐一開關」住這裡，**預設全關**＝
 // 新玩家拿到純 M1.x 體驗。不違反「只存 canonical roster」——該不變式約束的是 roster 序列化，
 // 模組自有 slice 是另一命名空間（plan/09 §0.3）。
 //
@@ -20,7 +20,7 @@ export interface GameSettings {
   modules: Record<ModuleId, boolean>
 }
 
-const KEY = 'mz.settings.v1'
+const KEY = 'mobie.settings.v1'
 
 function hasLS(): boolean {
   return typeof localStorage !== 'undefined'

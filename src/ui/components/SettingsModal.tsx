@@ -107,7 +107,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="model-foot">
-          設定獨立存於 <b>mz.settings.v1</b>，不影響Mobie存檔。關掉模組＝零殘留，回到純對戰。
+          設定獨立存於 <b>mobie.settings.v1</b>，不影響Mobie存檔。關掉模組＝零殘留，回到純對戰。
         </div>
       </motion.div>
     </motion.div>

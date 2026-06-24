@@ -1,4 +1,4 @@
-// M10 — 孵化 store（mz.incubator.v1）。獨立 slice；孵化才產 canonical OwnedUnit（一次性、決定論）。
+// M10 — 孵化 store（mobie.incubator.v1）。獨立 slice；孵化才產 canonical OwnedUnit（一次性、決定論）。
 // 來源：成就領取（addRewardEgg）/ 重複捕獲轉化（addDuplicateEgg）/ 塔（M11，留 source）。
 // 進度：每場戰鬥推進（advance）。孵化＝移蛋 + 入 roster + 登錄圖鑑。
 

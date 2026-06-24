@@ -1,4 +1,4 @@
-// M6.0 — 設定 store：載入 mz.settings.v1、暴露逐系統開關，並把「已啟用模組」組成 ext 注入戰鬥。
+// M6.0 — 設定 store：載入 mobie.settings.v1、暴露逐系統開關，並把「已啟用模組」組成 ext 注入戰鬥。
 // BattleScreen 讀 `ext` 傳給 resolveTurn；M6 註冊表為空＝ext 為 EMPTY_EXT＝零行為改變。
 // 切換模組時同步寫回 localStorage 並重組 ext（低頻事件，走一般 state）。
 
