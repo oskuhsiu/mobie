@@ -19,6 +19,7 @@ import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
 import { makeWildEvents } from '@/game/accidents'
+import { makeRng } from '@/game/rng'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { TimingBar } from '@/ui/components/TimingBar'
@@ -364,6 +365,10 @@ export function BattleScreen() {
   const stageRef = useRef<StageHandle>(null)
   const rootShake = useAnimationControls()
   const initedRef = useRef(false)
+  // M14.0：開戰時生成 battleSeed + 建一條 mulberry32 stream，整場 resolveTurn 共用持續推進
+  // （取代各回合預設 Math.random）。同 seed + 同輸入 → 同事件流，為回放重模擬鋪地基。
+  const battleSeedRef = useRef('')
+  const battleRngRef = useRef<() => number>(Math.random)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
@@ -391,6 +396,10 @@ export function BattleScreen() {
     // 決定論抽（同一場遭遇穩定、不隨 re-render 變動）。arena/無地形＝空＝中性。
     const region = context.regionId ? lookupRegion(context.regionId) : null
     const terrainSeed = context.foeTeam.map((c) => c.cardId).join('|')
+    // M14.0：本場 rng 種子＝雙方 cardId + 開戰時刻（每場唯一、可寫入回放 header 供重模擬）。
+    const battleSeed = `${context.playerTeam.map((c) => c.cardId).join('|')}#${terrainSeed}#${Date.now()}`
+    battleSeedRef.current = battleSeed
+    battleRngRef.current = makeRng(battleSeed)
     // 連勝塔（M11）視為中性場：無地形（也無野外意外，見 wildEvents memo）
     const terrains = context.tower || !region ? [] : resolveBattleTerrains(region, terrainSeed)
     const terrainDefs = terrainDefsOf(terrains)
@@ -648,7 +657,7 @@ export function BattleScreen() {
 
     // M19.c：玩家選定的招式槽（缺省/逾時＝slot0）。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
     const slotIndex = pendingSlotRef.current
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount, slotIndex }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', quality, mashCount, slotIndex }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
 
@@ -677,7 +686,7 @@ export function BattleScreen() {
     await wait(620)
     fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
-    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const { nextState, events } = resolveTurn(b0, { type: 'ATTACK', starStrike: true }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState)
     store().setBanner(null)
@@ -697,7 +706,7 @@ export function BattleScreen() {
     setPendingSwitch(null)
     store().setPhase('busy')
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const { nextState, events } = resolveTurn(b0, { type: 'SWITCH', index, defenseQuality }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState)
 
@@ -718,7 +727,7 @@ export function BattleScreen() {
     fxRef.current?.flash('#7ae0ff', 0.4)
     await wait(420)
 
-    const { nextState, events } = resolveTurn(b0, { type: 'SUBMIT_CHAIN_RESULT', hits }, { ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+    const { nextState, events } = resolveTurn(b0, { type: 'SUBMIT_CHAIN_RESULT', hits }, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     await playEvents(b0, events)
     store().setBattle(nextState)
     await wait(180)

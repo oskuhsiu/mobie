@@ -3,6 +3,10 @@
 // 不做 EV（見 plan/07）。
 
 import type { Stats, NatureId } from '@/game/types'
+// M14.0：hashSeed/mulberry32 已抽到共用 game/rng.ts；此處 re-export 維持既有 import 點不變。
+import { hashSeed, mulberry32 } from '@/game/rng'
+
+export { hashSeed, mulberry32 }
 
 export const IV_MAX = 31
 export const IV_TOTAL_MAX = IV_MAX * 6 // 186
@@ -49,27 +53,6 @@ export function natureMultiplier(id: NatureId, stat: keyof Stats): number {
   if (stat === n.up) return 1.1
   if (stat === n.down) return 0.9
   return 1
-}
-
-// ── 決定論 seeded RNG ──────────────────────────────────────────
-// （M14.0 規劃抽出 game/rng.ts 共用；此處先匯出供 M8 地形/隨機抽沿用同一 hash。）
-export function hashSeed(str: string): number {
-  let h = 2166136261 >>> 0
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return h >>> 0
-}
-
-export function mulberry32(seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
 }
 
 export interface Individual {
