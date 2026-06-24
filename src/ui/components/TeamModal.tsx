@@ -6,6 +6,10 @@ import { useSettings } from '@/store/settingsStore'
 import { getSpecies } from '@/game/data/species'
 import { ITEMS, getItem } from '@/game/ext/items'
 import { abilityForType, getAbility } from '@/game/ext/abilities'
+import { buildBattleMobie } from '@/game/stats'
+import { ownedToCard } from '@/game/growth'
+import { MobCard } from '@/ui/components/MobCard'
+import type { BattleMobie, OwnedUnit } from '@/game/types'
 import { audio } from '@/audio/audioEngine'
 
 /**
@@ -19,6 +23,8 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const itemsOn = useSettings((s) => s.settings.modules.heldItems)
   const abilitiesOn = useSettings((s) => s.settings.modules.abilities)
   const [openId, setOpenId] = useState<string | null>(null)
+  // 點 Mobie 開資訊卡（M16）：用 owner 全顯模式檢視招式/六維/個體/特性/道具。
+  const [detail, setDetail] = useState<BattleMobie | null>(null)
   // 哪些相關模組未開（提示去設定開啟）
   const offModules = [!itemsOn && '持有道具', !abilitiesOn && '特性'].filter(Boolean) as string[]
 
@@ -28,7 +34,16 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
     setOpenId(null)
   }
 
+  // 由 canonical OwnedUnit 建出檢視用 BattleMobie；補上依屬性決定論的特性 id 供卡片顯示。
+  const openDetail = (u: OwnedUnit) => {
+    const mon = buildBattleMobie(ownedToCard(u))
+    mon.abilityId = abilityForType(getSpecies(u.speciesId).types[0])
+    audio.play('select')
+    setDetail(mon)
+  }
+
   return (
+    <>
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         className="modal-card"
@@ -60,16 +75,18 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
             return (
               <div key={u.id} className="col" style={{ gap: 0 }}>
                 <div className="team-row">
-                  <div className="team-row__art">
-                    <img src={sp.artworkUrl} alt={sp.nameZh} />
-                  </div>
-                  <div className="team-row__info">
-                    <div className="team-row__name">{sp.nameZh} <span className="hpbar__lv">Lv.{u.level}</span></div>
-                    <div className="team-row__sub">
-                      {ability && <span className="team-row__ability" title={ability.desc}>特性：{ability.icon} {ability.name}</span>}
-                      <span>道具：{held ? `${held.icon} ${held.name}` : '未裝備'}</span>
+                  <button className="team-row__main" onClick={() => openDetail(u)} title="看資訊卡">
+                    <div className="team-row__art">
+                      <img src={sp.artworkUrl} alt={sp.nameZh} />
                     </div>
-                  </div>
+                    <div className="team-row__info">
+                      <div className="team-row__name">{sp.nameZh} <span className="hpbar__lv">Lv.{u.level}</span> <span className="team-row__info-hint">ℹ️ 詳情</span></div>
+                      <div className="team-row__sub">
+                        {ability && <span className="team-row__ability" title={ability.desc}>特性：{ability.icon} {ability.name}</span>}
+                        <span>道具：{held ? `${held.icon} ${held.name}` : '未裝備'}</span>
+                      </div>
+                    </div>
+                  </button>
                   <button
                     className="team-row__item-btn"
                     onClick={() => { audio.play('select'); setOpenId(open ? null : u.id) }}
@@ -117,9 +134,16 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="model-foot">
-          道具效果：強化能力值（S1）/ 提升傷害（S3）/ 回合末回血（S4）。背包存於 mobie.itembag.v1。
+          點 Mobie 看資訊卡（招式 / 六維 / 個體）。道具效果：強化能力值（S1）/ 提升傷害（S3）/ 回合末回血（S4）。
         </div>
       </motion.div>
     </motion.div>
+
+    {/* M16 資訊卡：自己的 Mobie 一律全顯（招式/數值/個體/特性/道具）。
+        置於 backdrop 之外的 sibling，避免點 MobCard 背景冒泡關掉整個隊伍頁。 */}
+    <AnimatePresence>
+      {detail && <MobCard mon={detail} owner revealed onClose={() => setDetail(null)} />}
+    </AnimatePresence>
+    </>
   )
 }
