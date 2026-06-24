@@ -1,6 +1,10 @@
 // M6.0 — 設定 slice + assembleExt（plan/09 §0.3）。純判斷邏輯單測。
 import { describe, it, expect } from 'vitest'
-import { defaultSettings, migrateSettings, setModuleEnabledIn, MODULE_IDS } from '@/game/settings'
+import {
+  defaultSettings, migrateSettings, setModuleEnabledIn, MODULE_IDS,
+  defaultPrefs, migratePrefs, setInteractModeIn, isEnhancedSurfaceEnabled, interactModeOf,
+  INTERACT_SURFACES, INTENSITY_BY_MODE,
+} from '@/game/settings'
 import { assembleExt } from '@/store/ext'
 import { EMPTY_EXT, type ExtensionModule } from '@/game/ext/seams'
 
@@ -29,6 +33,70 @@ describe('M6.0 settings slice', () => {
     const b = setModuleEnabledIn(a, 'tower', true)
     expect(a.modules.tower).toBe(false)
     expect(b.modules.tower).toBe(true)
+  })
+})
+
+describe('M22 增強互動性偏好（prefs）', () => {
+  it('預設 mode=off（現狀一字不差）、surfaces 全填滿 true', () => {
+    const p = defaultPrefs()
+    expect(p.enhancedInteractivity.mode).toBe('off')
+    for (const id of INTERACT_SURFACES) expect(p.enhancedInteractivity.surfaces[id]).toBe(true)
+  })
+
+  it('defaultSettings 含 prefs（向後相容欄位）', () => {
+    expect(defaultSettings().prefs.enhancedInteractivity.mode).toBe('off')
+  })
+
+  it('migrateSettings 舊存檔無 prefs → 補預設（off + surfaces 全 true）', () => {
+    const s = migrateSettings({ modules: { chain: true } })
+    expect(s.modules.chain).toBe(true)
+    expect(s.prefs.enhancedInteractivity.mode).toBe('off')
+    expect(s.prefs.enhancedInteractivity.surfaces.capture).toBe(true)
+  })
+
+  it('migratePrefs 防壞檔 / 未知 mode → off；只認 lite/arcade', () => {
+    expect(migratePrefs(null).enhancedInteractivity.mode).toBe('off')
+    expect(migratePrefs({ enhancedInteractivity: { mode: 'bogus' } }).enhancedInteractivity.mode).toBe('off')
+    expect(migratePrefs({ enhancedInteractivity: { mode: 'lite' } }).enhancedInteractivity.mode).toBe('lite')
+    expect(migratePrefs({ enhancedInteractivity: { mode: 'arcade' } }).enhancedInteractivity.mode).toBe('arcade')
+  })
+
+  it('migratePrefs surfaces 只認顯式 false 才關，缺漏維持 true', () => {
+    const s = migratePrefs({ enhancedInteractivity: { mode: 'arcade', surfaces: { capture: false, bogus: 'x' } } })
+    expect(s.enhancedInteractivity.surfaces.capture).toBe(false) // 顯式 false → 關
+    expect(s.enhancedInteractivity.surfaces.starStrike).toBe(true) // 缺漏 → 維持預設 true
+    expect('bogus' in s.enhancedInteractivity.surfaces).toBe(false) // 未知鍵不滲入
+  })
+
+  it('setInteractModeIn 純函數、不改原物件、surfaces 不動', () => {
+    const a = defaultSettings()
+    const b = setInteractModeIn(a, 'arcade')
+    expect(a.prefs.enhancedInteractivity.mode).toBe('off')
+    expect(b.prefs.enhancedInteractivity.mode).toBe('arcade')
+    expect(b.prefs.enhancedInteractivity.surfaces).toEqual(a.prefs.enhancedInteractivity.surfaces)
+  })
+
+  it('isEnhancedSurfaceEnabled：off → 一律 false（零回歸）', () => {
+    const s = defaultSettings()
+    for (const id of INTERACT_SURFACES) expect(isEnhancedSurfaceEnabled(s, id)).toBe(false)
+  })
+
+  it('isEnhancedSurfaceEnabled：mode≠off 且 surface 開 → true；surface 關 → false', () => {
+    const lite = setInteractModeIn(defaultSettings(), 'lite')
+    expect(isEnhancedSurfaceEnabled(lite, 'capture')).toBe(true)
+    const off1 = { ...lite, prefs: { enhancedInteractivity: { mode: 'lite' as const, surfaces: { ...lite.prefs.enhancedInteractivity.surfaces, capture: false } } } }
+    expect(isEnhancedSurfaceEnabled(off1, 'capture')).toBe(false)
+  })
+
+  it('interactModeOf：啟用回該 mode，否則 off', () => {
+    expect(interactModeOf(defaultSettings(), 'starStrike')).toBe('off')
+    expect(interactModeOf(setInteractModeIn(defaultSettings(), 'arcade'), 'starStrike')).toBe('arcade')
+  })
+
+  it('INTENSITY_BY_MODE：arcade 比 lite 更高頻（拍數多、判定窗窄、目標弧度大）', () => {
+    expect(INTENSITY_BY_MODE.arcade.rhythmBeats).toBeGreaterThan(INTENSITY_BY_MODE.lite.rhythmBeats)
+    expect(INTENSITY_BY_MODE.arcade.rhythmWindowMs).toBeLessThan(INTENSITY_BY_MODE.lite.rhythmWindowMs)
+    expect(INTENSITY_BY_MODE.arcade.circleTargetRad).toBeGreaterThan(INTENSITY_BY_MODE.lite.circleTargetRad)
   })
 })
 

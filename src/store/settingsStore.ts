@@ -7,7 +7,9 @@ import {
   loadSettings,
   saveSettings,
   setModuleEnabledIn,
+  setInteractModeIn,
   type GameSettings,
+  type InteractMode,
 } from '@/game/settings'
 import type { ModuleId, ExtBundle, PostGrowthHook } from '@/game/ext/seams'
 import { assembleExt, assembleBattlePrep, assemblePostGrowth, type BattlePrep } from '@/store/ext'
@@ -21,6 +23,8 @@ interface SettingsStore {
   /** 由 settings 組好的戰後縫（S6 進化；模組關閉時為 []） */
   postGrowth: PostGrowthHook[]
   setModuleEnabled: (id: ModuleId, on: boolean) => void
+  /** M22 增強互動性 mode（UX 偏好，不參與 ext/prep/postGrowth 注入；低頻、走一般 state） */
+  setInteractMode: (mode: InteractMode) => void
 }
 
 export const useSettings = create<SettingsStore>((set, get) => {
@@ -34,6 +38,12 @@ export const useSettings = create<SettingsStore>((set, get) => {
       const next = setModuleEnabledIn(get().settings, id, on)
       saveSettings(next)
       set({ settings: next, ext: assembleExt(next), prep: assembleBattlePrep(next), postGrowth: assemblePostGrowth(next) })
+    },
+    setInteractMode: (mode) => {
+      // prefs 不參與戰鬥注入 → 不重組 ext/prep/postGrowth，只更新 settings + 寫回 localStorage。
+      const next = setInteractModeIn(get().settings, mode)
+      saveSettings(next)
+      set({ settings: next })
     },
   }
 })

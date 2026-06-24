@@ -14,10 +14,53 @@ export const SETTINGS_SCHEMA_VERSION = 1
 /** 全部延伸模組 id（設定頁逐一列出；新增模組時補這裡） */
 export const MODULE_IDS: ModuleId[] = ['synergy', 'heldItems', 'abilities', 'chain', 'evolution', 'tower']
 
+// ── M22 增強互動性（UX 偏好，非戰鬥模組）。設計真相：plan/22。 ────────────────────
+// 與 modules 不同：不註冊任何 S1–S8 seam、不碰 reducer/engine，只在 display 層替換/疊加互動
+// component。故住獨立的 `prefs` 欄（避免被當戰鬥模組、避免污染 MODULE_IDS）。預設 off＝現狀一字不差。
+
+/** 可疊加手勢的互動環節（情緒峰值優先）。MVP 只實作 capture/starStrike，其餘為 backlog 佔位。 */
+export type InteractSurface = 'capture' | 'starStrike' | 'defense' | 'encounter' | 'hatch' | 'tower'
+export const INTERACT_SURFACES: InteractSurface[] = ['capture', 'starStrike', 'defense', 'encounter', 'hatch', 'tower']
+
+/** off＝零互動（現狀）；lite＝直覺單一手勢；arcade＝機台式高頻手勢。 */
+export type InteractMode = 'off' | 'lite' | 'arcade'
+
+export interface GamePrefs {
+  enhancedInteractivity: {
+    mode: InteractMode
+    /** 即使 off 也預設填滿 true，避免日後 undefined gating；mode 開啟後才實際生效。 */
+    surfaces: Record<InteractSurface, boolean>
+  }
+}
+
 export interface GameSettings {
   schemaVersion: number
   /** 逐系統開關，預設全 false */
   modules: Record<ModuleId, boolean>
+  /** M22 UX 偏好（不參與 ext/prep/postGrowth 注入） */
+  prefs: GamePrefs
+}
+
+/**
+ * 各 mode 的手勢強度常數（閾值/速度/拍數），由 mode 派生、不做使用者滑桿（plan/22 §1.2）。
+ * 角度單位 rad；時間單位 ms；速度單位 normalized-units/ms（座標已正規化到 0..1）。
+ */
+export const INTENSITY_BY_MODE: Record<Exclude<InteractMode, 'off'>, {
+  /** 星擊長按蓄力：填滿環所需毫秒 */
+  holdChargeMs: number
+  /** 星擊節奏：需準確命中的拍數 */
+  rhythmBeats: number
+  /** 星擊節奏：每拍判定窗（ms，越小越難） */
+  rhythmWindowMs: number
+  /** 星擊節奏：拍間隔（ms） */
+  rhythmIntervalMs: number
+  /** 捕獲畫圈封印：累積到 1.0 所需總旋轉弧度（rad） */
+  circleTargetRad: number
+  /** 捕獲丟球：判定為有效甩動的最小速度（normalized-units/ms） */
+  swipeMinSpeed: number
+}> = {
+  lite: { holdChargeMs: 850, rhythmBeats: 1, rhythmWindowMs: 240, rhythmIntervalMs: 600, circleTargetRad: Math.PI * 2, swipeMinSpeed: 0.0008 },
+  arcade: { holdChargeMs: 1200, rhythmBeats: 3, rhythmWindowMs: 170, rhythmIntervalMs: 520, circleTargetRad: Math.PI * 6, swipeMinSpeed: 0.001 },
 }
 
 const KEY = 'mobie.settings.v1'
@@ -32,8 +75,38 @@ function allOff(): Record<ModuleId, boolean> {
   return m
 }
 
+function allSurfacesOn(): Record<InteractSurface, boolean> {
+  const s = {} as Record<InteractSurface, boolean>
+  for (const id of INTERACT_SURFACES) s[id] = true
+  return s
+}
+
+/** M22 UX 偏好預設：mode='off'（現狀一字不差）、surfaces 全 true（待 mode 開啟才生效）。 */
+export function defaultPrefs(): GamePrefs {
+  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() } }
+}
+
 export function defaultSettings(): GameSettings {
-  return { schemaVersion: SETTINGS_SCHEMA_VERSION, modules: allOff() }
+  return { schemaVersion: SETTINGS_SCHEMA_VERSION, modules: allOff(), prefs: defaultPrefs() }
+}
+
+/** 把任意外來物正規化成合法 GamePrefs（遷移 / 防壞檔 / 缺欄補預設）。純函數，可測。 */
+export function migratePrefs(raw: unknown): GamePrefs {
+  const base = defaultPrefs()
+  if (!raw || typeof raw !== 'object') return base
+  const ei = (raw as Record<string, unknown>).enhancedInteractivity
+  if (!ei || typeof ei !== 'object') return base
+  const e = ei as Record<string, unknown>
+  const mode: InteractMode = e.mode === 'lite' || e.mode === 'arcade' ? e.mode : 'off'
+  const surfaces = allSurfacesOn()
+  const s = e.surfaces
+  if (s && typeof s === 'object') {
+    for (const id of INTERACT_SURFACES) {
+      // 只認顯式 false 才關；其餘（缺漏/未知）維持預設 true
+      if ((s as Record<string, unknown>)[id] === false) surfaces[id] = false
+    }
+  }
+  return { enhancedInteractivity: { mode, surfaces } }
 }
 
 /** 把任意外來物正規化成合法 GameSettings（遷移 / 防壞檔）。純函數，可測。 */
@@ -52,12 +125,35 @@ export function migrateSettings(raw: unknown): GameSettings {
   return {
     schemaVersion: typeof o.schemaVersion === 'number' ? o.schemaVersion : base.schemaVersion,
     modules,
+    prefs: migratePrefs(o.prefs),
   }
 }
 
 /** 純函數：回傳把某模組設成 on/off 後的新設定（不碰 localStorage，方便測試）。 */
 export function setModuleEnabledIn(settings: GameSettings, id: ModuleId, on: boolean): GameSettings {
   return { ...settings, modules: { ...settings.modules, [id]: on } }
+}
+
+/** 純函數：回傳把增強互動 mode 設成新值後的設定（surfaces 不動）。 */
+export function setInteractModeIn(settings: GameSettings, mode: InteractMode): GameSettings {
+  return {
+    ...settings,
+    prefs: { ...settings.prefs, enhancedInteractivity: { ...settings.prefs.enhancedInteractivity, mode } },
+  }
+}
+
+/**
+ * 統一 selector（plan/22 §1.3）：某互動環節是否啟用增強手勢＝mode≠off 且該 surface 開著。
+ * 各頁一律用此判斷，別自行檢查 mode/surface。
+ */
+export function isEnhancedSurfaceEnabled(settings: GameSettings, surface: InteractSurface): boolean {
+  const ei = settings.prefs.enhancedInteractivity
+  return ei.mode !== 'off' && ei.surfaces[surface] === true
+}
+
+/** 回某 surface 的當前互動 mode；surface 關閉或全域 off → 'off'。供 component 取強度常數。 */
+export function interactModeOf(settings: GameSettings, surface: InteractSurface): InteractMode {
+  return isEnhancedSurfaceEnabled(settings, surface) ? settings.prefs.enhancedInteractivity.mode : 'off'
 }
 
 export function loadSettings(): GameSettings {

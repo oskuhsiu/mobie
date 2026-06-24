@@ -5,7 +5,7 @@
 ---
 
 ## 1. 現況一句話
-**M1.x + M2/M3/M5–M11 + M18/M19/M16 全部完成並 Chrome CDP 驗證**（329 測試 / typecheck / build 全綠）。
+**M1.x + M2/M3/M5–M11 + M18/M19/M16/M21 全部完成並 Chrome CDP 驗證**（332 測試 / typecheck / build 全綠）。
 > **全專案實際案例驗證（2026-06-23）**：①**資料完整性**（全 251 物種/招式/8 區+競技場/起始卡/相剋表逐筆掃過，14 測試）②**模擬戰鬥壓力**（324 場完整對戰＝9 區×18 seed×模組關/開，每步驗 HP 邊界/無 NaN/必定終局/決定論，5 測試）③**道具持久化全鏈路**（ownedToCard→build→sanitize→.save 往返，6 測試）④**CDP 真機**（競技場勝→純經驗不捕獲、野外勝→收服 boss roster 16→17、M7 三模組戰鬥生效、4 個 Title modal 開啟皆零 console error）。結論：M1–M7 功能與資料正確、可正常遊玩。
 - **M1.x**（M1 + M1.5 a–h）：3v3 戰鬥、換人＋防禦 QTE、FxCanvas 粒子、Tone.js 音效、個體差異、成長＋持久化、意外機制、星擊 Finisher。
 - **M3（R3F 3D 場景 + 造型層）**：`scene/r3f/` 的 `BattleStage`（地台/光照/相機/ContactShadows，lazy 載入 three）、`PokemonVisual`（①IndexedDB drop-in GLB → ②PokéAPI billboard，正規化+ErrorBoundary）、`Combatant3D`（撲擊/受擊/倒下/入場走 useFrame/ref，imperative `StageHandle`，守效能紅線）、`CaptureStage`（收服 3D）、`ModelManagerModal`（GLB 匯入 UI）。注入測試方塊 GLB 端對端驗證渲染。
@@ -17,7 +17,7 @@
 - **M9（連鎖攻擊 Combo 基底）**：見下方 2026-06-24 M9 註記。連鎖槽（`BattleState.chainGauge` 暫態）滿 → `chainOpportunity` → `SUBMIT_CHAIN_RESULT` 單一 action（reducer 重驗存活/目標、吃速度、倒下截斷）；複用 M6 S5 注入 + `performAttack`，純 reducer/單招不變式不破。
 - **M10（養成·收集·孵化）**：見下方 2026-06-24 M10 註記。進化（S6 postGrowth 改 speciesId、個體保留、單招）/ 星級 Grade（純派生零 buff）/ 圖鑑成就（`mz.meta.v1` 三層語義、registered 單調進化不倒退）/ 抽蛋孵化（`mz.incubator.v1` egg 只存 seed/pool/progress、決定論孵化）。各自 S8 命名空間、不碰 roster canonical；CDP 14/14 全過。
 - **M11（模式·長線·野外意外）**：見下方 2026-06-24 M11 註記。野外意外 ×5（稀有閃光 boss / 幸運加碼 / 天降補給 / 地形突變 / 亂入野生）+ 連勝塔耐久連勝梯 + Ascension 靜態難度階；塔 run 住 XState context 暫態，持久層只存 `mobie.run.v1` meta（bestFloor/ascensionUnlocked），塔戰無捕獲/地形/野外意外，通層給 EXP/SP。
-- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：稀疏初始配招（使用者已拍板排 M11 後），或 M21 戰鬥技能特效 / M22 增強互動性，或 M4（MediaPipe 體感，使用者目前略過）。M20 DQ 來源已棄置（無官方 API）。**
+- 多個里程碑畫面都經 **三/四方 agent-chat 設計審查**（P0/P1 已落地，conclusion 在各 session）。**下一步：M22 增強互動性，或 M17 Partner 技能系，或稀疏初始配招；M4（MediaPipe 體感）使用者目前略過。M20 DQ 來源已棄置（無官方 API）。**
 
 > **M5 可攜存檔（2026-06-23，已完成 Chrome CDP 驗證）**：使用者要求**不要後端伺服器，用自己的雲端空間**——打包成 `<profileName>.save`(zip) → 自己丟 Google Drive/其他 → 下載放回 → 解析判斷新舊 → 同意才覆蓋。
 > 故砍掉 `08-cloud-sync.md` 的 `CloudSyncAdapter`/`SyncCoordinator`/自動 pull-push（**零後端/零 secret/零 vendor**）。檔案結構：`src/game/save/`＝`saveMeta.ts`(mz.savemeta.v1 信封中繼+純 `compareSaves`)、`bundle.ts`(fflate zip 純打包/解包+crc32 校驗+分類錯誤)、`saveIO.ts`(store I/O 接線+`navigator.share`/下載+匯入套用)、`backupStore.ts`(IDB `mz-save-backup` 覆蓋前自動備份單槽)；UI＝`SaveManagerModal`(Title「☁️ 存檔」入口，lazy，含 fflate 不進主 bundle)。
@@ -143,7 +143,7 @@
 > - **CLAUDE.md 已更新**：Hard constraints 新增「Move system is now MULTI-MOVE」條目，明載單招放寬、`plan/17` 為現行真相（舊 plan 的「單招」字眼歷史化）。
 > - **實際完成順序（2026-06-24 使用者拍板「先改名」覆蓋舊序）**：**M18 改名（a–d）→ M19 多招式 → M16 資訊卡 → M11 模式長線**。M17（plan/19）順位其後；~~M20（依賴 M19）~~ ⛔ **已棄置（無官方 API）**。改名提前理由：影響後期所有資料命名，當時程式碼/key 最少（7 個）成本最低，新碼天生用對命名。**附帶**：已建 `ATTRIBUTION.md`（PokéAPI/Pokémon 智財宣告）。M18.e repo 目錄改名由使用者執行。
 
-> commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。目前 typecheck/build/test（329）全綠。
+> commit 節奏：使用者要求**每個小階段自動 commit**（見 memory `auto-commit-per-stage`）。每步驗證綠燈即 commit。目前 typecheck/build/test（332）全綠。
 
 ## 2. 真相來源（不要重抄，直接讀）
 - **系統架構/分層/資料流/不變式**：`ARCHITECTURE.md`（先讀這份）；硬性約束摘要：`CLAUDE.md`；跑法：`README.md`
@@ -160,7 +160,7 @@
 - 反安裝說明（含機器原有套件勿動）：`uninstall.txt`
 
 ## 3. 程式地圖（里程碑歷史見 `git log`）
-完整里程碑歷史在 `git log`（M1 → M1.5a–h → M2 → M3 → M5 → M6–M11 → M18/M19/M16，每小階段一 commit、訊息為 Conventional 中文）。本節只列接手常碰的點；完整分層/資料流見 `ARCHITECTURE.md`。
+完整里程碑歷史在 `git log`（M1 → M1.5a–h → M2 → M3 → M5 → M6–M11 → M18/M19/M16 → M21，每小階段一 commit、訊息為 Conventional 中文）。本節只列接手常碰的點；完整分層/資料流見 `ARCHITECTURE.md`。
 - `game/types.ts` 型別（含 `Region.mode:'arena'|'wild'`、**`Region.terrains?`/`randomTerrain?`、`TerrainId` 型別 M8**）；`game/data/`（typeChart 相剋表+測試、species/moves/regions/playerCards **產生檔**、**`practiceRegion.ts`（競技場，手動維護）**、**`terrains.ts`（M8 地形表+`terrainMultiplier`/`resolveTerrainMult`/`rollRandomTerrain`/`resolveBattleTerrains`/`terrainDefsOf`，手動維護）**、`regionLookup.ts`＝`lookupRegion`/`canCaptureIn`）；`game/stats.ts` 能力值；`game/encounter.ts`（`rollEncounter`/`rollEncounterTeam`）；`game/recommend.ts`（選隊評分+推薦）；`game/individual.ts`（含匯出 `hashSeed`）/`growth.ts`/`persistence.ts`/**`settings.ts`**（個體/成長/roster 持久化/設定 slice）；**`game/accidents.ts`（M11 wild-only 意外純邏輯）/`game/tower.ts`（M11 連勝塔 foe/reward/Ascension 純邏輯）**。
 - **`game/ext/seams.ts`（M6 擴充縫 S1–S8 + ExtBundle + ExtensionModule）**；**M7 模組：`game/ext/synergy.ts`（S2 羈絆 computeSynergy）/`items.ts`（S1/S3/S4 道具 ItemDef）/`abilities.ts`（S1/S3 特性 + abilityForType）/`statPatch.ts`（共用 scale/applyStatMod/createLookup）**；`game/battle/engine.ts`（`resolveAttack` + QTE/防禦/球倍率 + **S3 damageHook** + **M8 terrainMult**）；**`game/battle/reducer.ts`（3v3 純 reducer，`resolveTurn(state, action, {rng, ext, terrainMultiplier, wildEvents})` + **S4 turnEndTrigger** + `heal` event + `MAX_TURNS` + **M8 `BattleState.field`（FieldState.terrainEffects）** + M11 `wildAccident` event）**；`game/machine/gameMachine.ts`（XState 流程，`lookupRegion` + M11 `tower` context / `towerSetup`）。
 - `store/battleStore.ts`（Zustand display）；`store/rosterStore.ts`（持久 roster：`grantBattleExp`/`captureUnit`/**`setHeldItem`**）；**`store/bagStore.ts`（`mz.itembag.v1` 背包 + equip 對帳）**；**`store/ext.ts`（`assembleExt`/`assembleBattlePrep`/`applyBattlePrep` + `MODULE_REGISTRY`）/`store/settingsStore.ts`（組 ext+prep，BattleScreen 消費）**；**`store/accidentStore.ts`（M11 per-battle exp/capture flags）/`store/runStore.ts`（M11 `mobie.run.v1` bestFloor + ascensionUnlocked）**。
@@ -168,9 +168,9 @@
 - `input/qte.ts`（`qualityFromPointer` seam）。
 - `ui/`：screens（Title[**含 ⚙️設定/🎒隊伍 入口**]/RegionSelect[**含競技場入口 + M8 地形提示膠囊 + M11 🗼連勝塔入口**]/Encounter[**M11 rareBoss/lucky/supply**]/CardSelect[對手條+剋弱徽章+推薦+**羈絆 tag**]/Battle[**resolveTurn 傳 ext+terrainMultiplier+wildEvents、applyBattlePrep 套 prep、特性/道具徽章、heal 演出、M8 開場地形揭示 + 常駐 TerrainChip；塔戰中性場**]/Result[**WinView 捕獲 vs ArenaWinView 純經驗 vs TowerView 無捕獲，依 `canCaptureIn`/tower 分流**]/TowerSetup[選 3 隻 + Ascension]）、components（HpBar/TypeBadge/PokemonSprite/TimingBar/IndividualInfo/**SettingsModal/TeamModal**）、`styles/global.css`。
 
-## 5. 下一步（✅M18+M19+M16+M11 全完成；▶ 稀疏初始配招）
-M1–M11 完成並 CDP 驗證；**M18 改名 + M19 多招式制（a–f）+ M16 資訊卡（a–c）+ M11 野外意外×5/連勝塔/Ascension 完成，329 測試全綠**。**執行序 M18 → M19 → M16 → M11 已收束**（M21 戰鬥特效、M22 增強互動性是後續新設計，不在已完成目標內）。
-- **✅ 目標完成（/goal 完成 m19/m16/m11）**：M19✅ M16✅ M11野外意外✅ M11連勝塔/Ascension✅。
+## 5. 下一步（✅M18+M19+M16+M11+M21 全完成；▶ M22 / M17 / 稀疏初始配招）
+M1–M11 完成並 CDP 驗證；**M18 改名 + M19 多招式制（a–f）+ M16 資訊卡（a–c）+ M11 野外意外×5/連勝塔/Ascension + M21 戰鬥技能特效完成，332 測試全綠**。**執行序 M18 → M19 → M16 → M11 → M21 已收束**（M22 增強互動性、M17 Partner 技能系、稀疏初始配招是後續目標）。
+- **✅ 目標完成（/goal 完成 m19/m16/m11；M21 已 commit）**：M19✅ M16✅ M11野外意外✅ M11連勝塔/Ascension✅ M21✅。
 - **⏳ 稀疏初始配招（使用者 2026-06-24 拍板，排 M11 連勝塔之後做）**：把 `autoEquip`（依等級補滿 4）改 `rollInitialLoadout(species,level,seed)` 種子決定論——每隻至少 1 招、**排除星擊 finisher（已天然）+ 威力95 強招**、招數=等級基底(如 1+floor(lv/15))+稀有加成(2招10%/3招1%/4招0.1%)，靠訓練補滿。只動 initial loadout，不碰戰鬥核心。詳見 memory `mobie-sparse-initial-loadout`。
 - **✅ M11 連勝塔 / Ascension（2026-06-24，CDP 驗證）**：`game/tower.ts`（純）——`towerFoeTeam` 決定論生成 3v3 escalating foe、每 5 層 boss 強敵池、`ASCENSIONS` 靜態 `levelBonus`、`floorReward` SP、`towerExpMult` 經驗倍率；`runStore` 持久 `mobie.run.v1` 只存 bestFloor + ascensionUnlocked，進行中 run 住 `gameMachine` context（不逆寫 OwnedUnit）。流程：RegionSelect 🗼入口 → `TowerSetupScreen` 選 3 隻 + 難度階 → 塔戰中性場（無地形/野外意外/捕獲）→ Result `TowerView` 通層給 EXP/SP、boss 層解鎖下一 Ascension、可續攻或結束遠征。+8 vitest。**CDP（dev）**：開塔→選隊+難度→第 1 層突破(+EXP)→攻第 2 層→第 2 層突破→結束遠征→回區域，零 console error。**簡化**：本版是耐久連勝梯；完整 roguelike 地圖節點（商店/營火/分支）留日後擴充。
 - **✅ M11 野外意外×5（2026-06-24，CDP 驗證）**：`game/accidents.ts`（純）——`maybeRareBoss`（wild boss 機率異色+高IV，接 gameMachine rollFoes）/ `rollEncounterAccidents`（決定論 luckyExpMult + supply 三選一）/ `makeWildEvents`（戰中注入 reducer `wildEvents` hook：terrainShift 改 field.current、intrusion 非致命削血）；reducer 加 `wildAccident` event + `TurnOptions.wildEvents`（守純 reducer/不引強制換）；`accidentStore`（per-battle expMult/captureMult 暫態）；BattleScreen wild 注入+演出、EncounterScreen rareBoss/lucky banner+補給 modal、ResultScreen 套 expMult/captureMult。+11 vitest。**CDP（dev server）**：幸運加碼×1.5/稀有閃光 boss/天降補給/亂入野生(-4) 全驗、零 error。
@@ -180,10 +180,10 @@ M1–M11 完成並 CDP 驗證；**M18 改名 + M19 多招式制（a–f）+ M16 
 - **✅ M19.d 變化招（2026-06-24，CDP 驗證）**：`Move.effect`（buff/heal/terrain，住 generated moves.ts；gen_dex 加變化招池 id 2000+ 劍舞/鐵壁/瞑想/自我再生/青草場地，重產只動 moves.ts）；reducer `FieldState` 加 `teamStatuses/enemyStatuses`（plan/12 子欄首填）、`applyStatusMove`、`statusDamageMult`（攻方乘/守方除折進傷害）、攻擊迴圈分流變化招、回合末 `tickStatuses` 遞減過期、`statusApplied` event；**QTE 只影響強度（buff 回合數/heal 量）不影響成敗、mult=硬上限（同 stat 取 max 不疊乘）**；連鎖：變化招不斷鏈、貢獻減半支援值。`deriveLearnset` 每隻 L20 學自我再生、L24 依攻防取向學劍舞/瞑想（派生 fallback、M19.f 前 stand-in）→ 高等 mob autoEquip 自然帶。UI：MoveSlots 變化招顯效果標籤（✦虛線左框）、`statusQte` 相位（輕量強度、無 mash）、playEvents statusApplied 演出。+9 vitest。**CDP**：Lv.30 小火龍 loadout 自然含瞑想/自我再生→選瞑想→statusQte→「使出 瞑想」+「▲特攻提升(4回合)」、零 console error。
 - **✅ M19.c 戰鬥 UI 選招（2026-06-24，CDP 驗證）**：`BattleScreen` playerChoice 單一攻擊鈕 → **四槽 `MoveSlots`**（招名/屬性 badge/物理特殊/威力命中/鍵位 1–4；**點槽即進 QTE**＝選槽即開打）；換人/星擊/連鎖移**次要列分離**。鍵盤**四鍵 1–4 + 方向鍵 2×2 順時針**；**逾時 8s 自動 slot0**（CSS 倒數條）。`playEvents` 用 `e.resolvedMoveId` 顯實際出招名/特效色（修對手多招顯 slot0 錯招）。**MobCard 顯 4 招留 M16。**
 
-> **M21 戰鬥技能特效（2026-06-24，已設計尚未實作；plan/21）**：使用者要求「每個技能都要有特效，先做簡單的（火系一個/物理一個/水系一個…）增加打擊感、非電影級」。四方 agent-chat（Claude/gemini/codex/mistral）3 輪全體 agree：`.claude/agent-chat/session-20260624-112739/conclusion.md`。
-> **定案**：特效 = **`Move.type`（材質：色/形/音）× `Move.category`（投放：軌跡/目標/ring/flash）正交組合**（兩欄皆既有，**零 reducer/資料 schema 變更**）；不做個別招式特效（ROI 低）、不開 fxPresets 具名表（正交即 preset）。新檔 `src/scene/fx/fxCatalog.ts`＝宣告式純資料表 `typePalette`⊕`classDelivery`⊕`moveFxOverrides`（逃生口收窄、不能改 mode、初期空）。
-> **FxCanvas** 由 burst/ring/flash 擴成**四原語**（加 `travel`＝單一 rAF item 自畫 core+trail、抵達觸發一次 impact burst；burst 加 `shape` dot/streak/shard）。**整合**：display 層 helper `playMoveFx(recipe,fromPos,toPos)` 直驅原語+audio（**否決 Zustand FxCommand 佇列**）；`BattleScreen.playEvents` 的 `damageApplied` 從 `resolvedMoveId→type/category` 反查、取代現有直驅 burst；crit/super 金星疊加其上不取代。reducer/event 不動、高頻值仍 ref/rAF、程序化零侵權資產。
-> **變化招（M19.d）**走 `aura` 模式（攻方原地上升光暈、掛 statusApplied/heal event）已預留。**切分 M21.a–e**（a FxCanvas travel+shape+helper / b 18 型 palette+接線 / c physical-special 投放差異+逃生口 / d status-aura 併 M19.d / e 選配 per-type 音色）見 CHECKLIST M21。
+> **M21 戰鬥技能特效（2026-06-24，已完成；plan/21）**：使用者要求「每個技能都要有特效，先做簡單的（火系一個/物理一個/水系一個…）增加打擊感、非電影級」。四方 agent-chat（Claude/gemini/codex/mistral）3 輪全體 agree：`.claude/agent-chat/session-20260624-112739/conclusion.md`。
+> **落地**：特效 = **`Move.type`（材質：色/形）× `Move.category`（投放：impact/travel/aura/ring/flash）正交組合**，**零 reducer/資料 schema 變更**；不做個別招式特效、不開 fxPresets 具名表。新檔 `src/scene/fx/fxCatalog.ts`＝宣告式純資料表 `typePalette`（18 型色/形）⊕`classDelivery`（physical impact / special travel / status aura）⊕`moveFxOverrides`（逃生口收窄、不能改 mode、初期空），`resolveFx` 純合成、`playMoveFx` 直驅 display 原語。
+> **FxCanvas** 由 burst/ring/flash 擴成四原語：新增 `travel`（單一 rAF item 自畫 core+trail、抵達觸發 impact burst/ring）與 `burst.shape: dot|streak|shard`；`travel` 會傳遞 recipe `count`，強擊 `count:24` 有效。`BattleScreen.playEvents` 的 `damageApplied` 從 `resolvedMoveId→type/category` 反查並播放，**special/travel 先發射 projectile，等抵達 delay 後才更新 HP/浮字/震動/受擊反應/音效**，避免傷害早於命中特效；crit/super 金星 spark/ring/flash 疊加其上不取代。`statusApplied` 走 `aura` 模式（攻方原地上升光暈）。
+> **已完成範圍**：CHECKLIST M21.a–d 勾完；M21.e per-type Tone.js 音色仍選配未做。+3 vitest（`src/scene/fx/fxCatalog.test.ts`）覆蓋 18 型 fallback、category delivery、travel delay/count 與 aura 位置。**驗證**：`npm run typecheck`、`npm test -- src/scene/fx/fxCatalog.test.ts`、`npm test`（332）、`npm run build` 全綠；Chrome CDP SwiftShader 抽驗 special move FX canvas 非空、零新增 runtime error。
 >
 > **M22 增強互動性設定開關（2026-06-24，已設計尚未實作；plan/22）**：使用者要求「設定打開『增強互動性』後多出操作（如集氣連點）給兒童參與感，不要只有點一下又點一下」。四方 agent-chat（Claude/gemini/codex/mistral）3 輪全體 agree：`.claude/agent-chat/session-20260624-132835/conclusion.md`。
 > **定案**：新增 **UX 偏好分級開關**（非戰鬥模組）`prefs.enhancedInteractivity.mode: 'off'|'lite'|'arcade'`，住 `mobie.settings.v1` 的新 `prefs` 欄（**不塞 modules**、不註冊 seam），**預設 off ＝現狀一字不差**。定調：增強互動＝「**輸入形式多樣化**」非「更多次點擊」（攻擊連打/防禦下滑/捕獲畫圈/星擊長按·節奏＝四種肌肉記憶）。
