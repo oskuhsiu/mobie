@@ -22,8 +22,9 @@ import { makeWildEvents } from '@/game/accidents'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
+import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
-import { TYPE_HEX, TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
+import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
@@ -434,6 +435,20 @@ export function BattleScreen() {
         audio.play('attack')
         await wait(440)
 
+        const pos = FX_POS[e.targetSide]
+        const recipe = resolveFx(usedMove)
+        const strong = e.crit || e.effectiveness >= 2
+        let impactDelayMs = 0
+        if (!e.missed && e.amount > 0) {
+          impactDelayMs = playMoveFx(
+            fxRef.current,
+            strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
+            FX_POS[e.attackerSide],
+            pos,
+          )
+        }
+        if (impactDelayMs > 0) await wait(impactDelayMs)
+
         store().setMemberHp(e.targetSide, e.targetIndex, e.hpAfter)
         store().showHit({
           target: e.targetSide, amount: e.amount,
@@ -441,16 +456,12 @@ export function BattleScreen() {
         })
         // 粒子 / 螢幕震動（不過 React state）
         if (!e.missed && e.amount > 0) {
-          const pos = FX_POS[e.targetSide]
-          const color = TYPE_HEX[usedMove.type]
-          const strong = e.crit || e.effectiveness >= 2
-          fxRef.current?.burst({ ...pos, color, count: strong ? 24 : 16, power: strong ? 1.4 : 1 })
           if (e.crit) {
             fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
             fxRef.current?.ring({ ...pos, color: '#ffd23f' })
             fxRef.current?.flash('#ffffff', 0.45)
           } else if (e.effectiveness >= 2) {
-            fxRef.current?.ring({ ...pos, color })
+            fxRef.current?.ring({ ...pos, color: recipe.accent })
           }
           const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
           rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
@@ -499,23 +510,21 @@ export function BattleScreen() {
         // M19.d 變化招：「使出 X」+ 依效果類型演出（buff 升箭頭 / heal 回血 / terrain 揭示）。
         const m = monAt(b0, e.side, e.index)
         const mv = getMove(e.moveId)
+        const recipe = resolveFx(mv)
         const prefix = e.side === 'foe' ? '對手的 ' : ''
         stageRef.current?.lunge(e.side)
         store().setBanner(`${prefix}${m.nameZh} 使出 ${mv.nameZh}！`)
         audio.play('select')
         await wait(540)
+        playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
         if (e.effectKind === 'heal' && e.hpAfter != null) {
           store().setMemberHp(e.side, e.index, e.hpAfter)
-          fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 14, power: 1, kind: 'spark' })
           audio.play('super')
           store().setBanner(`✨ ${e.label}　+${e.healAmount} HP`)
         } else if (e.effectKind === 'buff') {
-          fxRef.current?.burst({ ...FX_POS[e.side], color: '#ffd23f', count: 16, power: 1.2, kind: 'spark' })
-          fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffd23f' })
           audio.play('super')
           store().setBanner(`▲ ${e.label}（${e.remaining} 回合）`)
         } else {
-          fxRef.current?.flash('#7affa0', 0.3)
           audio.play('super')
           store().setBanner(`🌿 ${e.label}`)
         }

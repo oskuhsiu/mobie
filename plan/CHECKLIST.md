@@ -386,16 +386,16 @@
 > 不做個別招式特效（ROI 低）；不開 fxPresets（正交即 preset）；override 逃生口收窄（不能改 mode）、初期空表。
 > 守純 reducer / 高頻值 ref-rAF / 程序化零侵權資產。四方圓桌：`.claude/agent-chat/session-20260624-112739/conclusion.md`。
 ### M21.a — FxCanvas `travel` + `burst.shape` + helper 跑通
-- [ ] FxCanvas 加 `travel` 原語（單一 rAF item 自畫 core+trail、抵達觸發一次 impact burst；`onArrive` 為 enum 旗標非 callback）+ `burst` 擴 `shape:'dot'|'streak'|'shard'`（kind 既有保留）
-- [ ] `scene/fx/fxCatalog.ts` 骨架（`FxRecipe`/`ClassDelivery`/`MoveFxOverride` 型別 + 三 classDelivery + 預設 palette）+ 純合成 `resolveFx(type,category,moveId)` + display 層 `playMoveFx`；vitest（三層合成/override 收窄/預設 fallback）
+- [x] FxCanvas 加 `travel` 原語（單一 rAF item 自畫 core+trail、抵達觸發一次 impact burst；`onArrive` 為 enum 旗標非 callback）+ `burst` 擴 `shape:'dot'|'streak'|'shard'`（kind 既有保留）
+- [x] `scene/fx/fxCatalog.ts` 骨架（`FxRecipe`/`ClassDelivery`/`MoveFxOverride` 型別 + 三 classDelivery + 預設 palette）+ 純合成 `resolveFx(type,category,moveId)` + display 層 `playMoveFx`；vitest（三層合成/override 收窄/預設 fallback）
 ### M21.b — 18 型 typePalette + BattleScreen 接線
-- [ ] 18 型 `typePalette` 逐型上色（對齊 `TYPE_HEX`/`--t-*`）+ 形狀指派（火 shard 上衝 / 水 dot 下墜 / 電 streak…）
-- [ ] `BattleScreen.playEvents` 的 `damageApplied` 改用 `playMoveFx` 取代現有直驅 `burst`（crit/super 金星 spark+ring+flash 疊加其上不取代）
+- [x] 18 型 `typePalette` 逐型上色（對齊 `TYPE_HEX`/`--t-*`）+ 形狀指派（火 shard 上衝 / 水 dot 下墜 / 電 streak…）
+- [x] `BattleScreen.playEvents` 的 `damageApplied` 改用 `playMoveFx` 取代現有直驅 `burst`（crit/super 金星 spark+ring+flash 疊加其上不取代）
 ### M21.c — physical/special 投放差異 + 逃生口落地
-- [ ] impact（近戰定點）vs travel（遠程拋射）手感打磨；`moveFxOverrides` schema + 合成路徑落地（空表）
-- [ ] Chrome CDP（SwiftShader）抽驗數型特效正確、零 console error
+- [x] impact（近戰定點）vs travel（遠程拋射）手感打磨；`moveFxOverrides` schema + 合成路徑落地（空表）
+- [x] Chrome CDP（SwiftShader）抽驗數型特效正確、零 console error
 ### M21.d — status/aura（併 M19.d 變化招）
-- [ ] `aura` 模式（攻方原地上升光暈、無撞擊）+ 掛 `statusApplied`/`heal` event（非 damageApplied）+ buff/heal/terrain 色相微調（不阻塞傷害招全覆蓋）
+- [x] `aura` 模式（攻方原地上升光暈、無撞擊）+ 掛 `statusApplied`/`heal` event（非 damageApplied）+ buff/heal/terrain 色相微調（不阻塞傷害招全覆蓋）
 ### M21.e —（選配）per-type Tone.js 音色
 - [ ] recipe `sound` key 接 audio 引擎擴充音色（火=噪音爆 / 電=高頻 zap / 水=低頻…）
 
