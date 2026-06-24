@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { EvolutionEvent } from '@/store/rosterStore'
 import { getSpecies } from '@/game/data/species'
-import { PokemonSprite } from '@/ui/components/PokemonSprite'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 import { audio } from '@/audio/audioEngine'
 
 type Phase = 'morph' | 'revealed'
@@ -59,7 +59,7 @@ export function EvolutionOverlay({ evolutions, onDone }: {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.7, repeat: 1 }}
             >
-              <PokemonSprite src={from.artworkUrl} alt={from.nameZh} />
+              <MobieSprite src={from.artworkUrl} alt={from.nameZh} />
             </motion.div>
           ) : (
             <motion.div
@@ -68,7 +68,7 @@ export function EvolutionOverlay({ evolutions, onDone }: {
               animate={{ opacity: 1, scale: 1, filter: 'brightness(1)' }}
               transition={{ type: 'spring', stiffness: 150, damping: 13 }}
             >
-              <PokemonSprite src={to.artworkUrl} alt={to.nameZh} />
+              <MobieSprite src={to.artworkUrl} alt={to.nameZh} />
             </motion.div>
           )}
         </AnimatePresence>

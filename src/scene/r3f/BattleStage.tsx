@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { ContactShadows } from '@react-three/drei'
 import { Vector3, PerspectiveCamera } from 'three'
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { Combatant3D, makeAnim, LUNGE_DUR, SHAKE_DUR, ENTER_DUR, type MonAnim } from './Combatant3D'
@@ -27,8 +27,8 @@ export interface StageHandle {
 }
 
 interface BattleStageProps {
-  player: BattlePokemon
-  foe: BattlePokemon
+  player: BattleMobie
+  foe: BattleMobie
 }
 
 // 取景目標與「target→相機」方向（沿用原本的俯角構圖，只動距離）。

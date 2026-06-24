@@ -10,7 +10,7 @@ import type { Species, Stats } from '@/game/types'
 
 export type Grade = 1 | 2 | 3 | 4 | 5 | 6
 
-/** Grade 派生只需個體值 + 異色旗標——OwnedUnit / BattlePokemon 皆滿足。 */
+/** Grade 派生只需個體值 + 異色旗標——OwnedUnit / BattleMobie 皆滿足。 */
 export interface GradeInput {
   ivs: Stats
   shiny: boolean

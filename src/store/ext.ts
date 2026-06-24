@@ -11,7 +11,7 @@ import {
   type PostGrowthHook,
   type NamedModifier,
 } from '@/game/ext/seams'
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import type { GameSettings } from '@/game/settings'
 import { SYNERGY_MODULE } from '@/game/ext/synergy'
 import { HELD_ITEMS_MODULE } from '@/game/ext/items'
@@ -28,7 +28,7 @@ export const MODULE_REGISTRY: ExtensionModule[] = [SYNERGY_MODULE, HELD_ITEMS_MO
 
 /**
  * 戰前縫（S1 buildUnit / S2 preBattleModifiers）的注入包。
- * 與 ExtBundle（戰中 S3/S4/S5，住 reducer）分流——戰前縫由 buildBattlePokemon 後的初始化呼叫點消費。
+ * 與 ExtBundle（戰中 S3/S4/S5，住 reducer）分流——戰前縫由 buildBattleMobie 後的初始化呼叫點消費。
  */
 export interface BattlePrep {
   /** S1：建構 BattleUnit 後的能力值 patch（道具/特性 statMod），逐一 fold */
@@ -76,7 +76,7 @@ export function assemblePostGrowth(
 
 /**
  * 組出戰前縫的注入包（S1 buildUnit / S2 preBattleModifiers）給戰鬥初始化呼叫點消費。
- * 同樣依 settings 過濾已啟用模組；全關＝EMPTY_PREP＝buildBattlePokemon 結果原封不動。
+ * 同樣依 settings 過濾已啟用模組；全關＝EMPTY_PREP＝buildBattleMobie 結果原封不動。
  */
 export function assembleBattlePrep(
   settings: GameSettings,
@@ -94,17 +94,17 @@ export function assembleBattlePrep(
 }
 
 /**
- * 把戰前縫套到一隊已 build 好的 BattlePokemon 上（純函數，戰鬥初始化時呼叫一次）：
+ * 把戰前縫套到一隊已 build 好的 BattleMobie 上（純函數，戰鬥初始化時呼叫一次）：
  *   ① S1 buildUnitHooks（道具/特性 statMod）逐隻 fold
  *   ② 若 withSynergy，再算 S2 preBattleHooks（羈絆）modifier、套到每隻
  * 回傳 patch 後的隊伍與生效 modifier（供 UI 開場 banner / tag 回顯）。
  * 羈絆只給玩家隊（withSynergy=true）；野生對手只吃 S1（特性 statMod），不吃羈絆。
  */
 export function applyBattlePrep(
-  team: BattlePokemon[],
+  team: BattleMobie[],
   prep: BattlePrep,
   withSynergy: boolean,
-): { team: BattlePokemon[]; modifiers: NamedModifier[] } {
+): { team: BattleMobie[]; modifiers: NamedModifier[] } {
   let out = team.map((u) => prep.buildUnitHooks.reduce((acc, h) => h(acc), u))
   let modifiers: NamedModifier[] = []
   if (withSynergy && prep.preBattleHooks.length > 0) {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BattlePokemon, TerrainId } from '@/game/types'
+import type { BattleMobie, TerrainId } from '@/game/types'
 import { createBattleState, type BattleState, type Side, type SupportOutcome } from '@/game/battle/reducer'
 
 export type { Side }
@@ -38,7 +38,7 @@ interface BattleUiState {
   /** M9 連鎖連段數 overlay（null=不顯示；連鎖中各段 chainHit 設定） */
   combo: number | null
 
-  init: (playerMembers: BattlePokemon[], foeMembers: BattlePokemon[], terrains?: TerrainId[]) => void
+  init: (playerMembers: BattleMobie[], foeMembers: BattleMobie[], terrains?: TerrainId[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
   setBattle: (battle: BattleState) => void
   /** 單隻 HP（觸發血條 tween） */

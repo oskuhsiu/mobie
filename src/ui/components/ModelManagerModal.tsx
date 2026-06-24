@@ -7,7 +7,7 @@ import { audio } from '@/audio/audioEngine'
 /**
  * 3D 模型管理：把本機 GLB drop-in 對應到某 speciesId（存進 IndexedDB）。
  * repo 不內建/不散布任何模型——這只是把「使用者自己的檔案」存進「使用者自己的瀏覽器」。
- * 戰鬥場景 PokemonVisual 會優先用這裡匯入的 GLB，沒有才退回 artwork billboard。
+ * 戰鬥場景 MobieVisual 會優先用這裡匯入的 GLB，沒有才退回 artwork billboard。
  */
 export function ModelManagerModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState('')

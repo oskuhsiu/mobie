@@ -1,6 +1,6 @@
 import type { Card, Region } from '@/game/types'
 
-/** 依權重從區域遭遇表抽一隻野生寶可夢，回傳可進 buildBattlePokemon 的 Card */
+/** 依權重從區域遭遇表抽一隻野生寶可夢，回傳可進 buildBattleMobie 的 Card */
 export function rollEncounter(region: Region, rng: () => number = Math.random): Card {
   const table = region.encounters
   const total = table.reduce((s, e) => s + e.weight, 0)
@@ -14,7 +14,7 @@ export function rollEncounter(region: Region, rng: () => number = Math.random): 
     }
   }
   const level = picked.minLevel + Math.floor(rng() * (picked.maxLevel - picked.minLevel + 1))
-  // 個體（IV/性格/異色）由 buildBattlePokemon 依 cardId 決定論 roll；加 rng 後綴讓同種同階也有不同個體
+  // 個體（IV/性格/異色）由 buildBattleMobie 依 cardId 決定論 roll；加 rng 後綴讓同種同階也有不同個體
   const tag = Math.floor(rng() * 1e6).toString(36)
   return {
     cardId: `WILD-${picked.speciesId}-${level}-${tag}`,

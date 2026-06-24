@@ -5,7 +5,7 @@ import { useIncubator } from '@/store/incubatorStore'
 import { isHatchable, type Egg } from '@/game/incubator'
 import { getSpecies } from '@/game/data/species'
 import { GradeBadge } from '@/ui/components/GradeBadge'
-import { PokemonSprite } from '@/ui/components/PokemonSprite'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 import { audio } from '@/audio/audioEngine'
 import type { OwnedUnit } from '@/game/types'
 
@@ -75,7 +75,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
                   initial={{ scale: 0.4, opacity: 0, filter: 'brightness(5)' }}
                   animate={{ scale: 1, opacity: 1, filter: 'brightness(1)' }}
                   transition={{ type: 'spring', stiffness: 150, damping: 13 }}>
-                  <PokemonSprite src={sp.artworkUrl} alt={sp.nameZh} shiny={hatched.shiny} />
+                  <MobieSprite src={sp.artworkUrl} alt={sp.nameZh} shiny={hatched.shiny} />
                 </motion.div>
                 <div className="hatch-reveal__caption">
                   孵出了 <b>{sp.nameZh}</b>！　<GradeBadge indiv={hatched} speciesId={hatched.speciesId} />

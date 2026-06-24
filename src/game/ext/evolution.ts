@@ -1,7 +1,7 @@
 // M10 — 進化（Evolution，S6 postGrowth）。設計真相：plan/09 §4、plan/14（M10）。
 //
 // 等級達 species.evolveLevel → 改 OwnedUnit.speciesId（**個體欄位全保留**：IV/EXP/nature/seed/shiny/heldItemId
-// 不變，只換種族＝新 base stats/artwork，由 buildBattlePokemon 重算）。守 plan/09 §4.3：
+// 不變，只換種族＝新 base stats/artwork，由 buildBattleMobie 重算）。守 plan/09 §4.3：
 //   ① 只改 canonical speciesId（仍只存 canonical）。
 //   ② 招式維持單一專屬（進化不解鎖新招——moveId 由 species 決定，換種族自然換招但仍是單招）。
 //   ③ 可連跳多階（一場打到 level 36 的綿綿可一次 → 鐵殼 → 巴大蝶）。

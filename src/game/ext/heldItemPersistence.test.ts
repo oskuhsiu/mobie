@@ -1,12 +1,12 @@
 // M7 資料正確性：持有道具的「canonical 持久化全鏈路」——
-//   OwnedUnit.heldItemId → ownedToCard → buildBattlePokemon（帶進戰鬥暫態）
+//   OwnedUnit.heldItemId → ownedToCard → buildBattleMobie（帶進戰鬥暫態）
 //   → sanitizeRoster（載入防護：保留已知、丟棄未知）
 //   → packSave/unpackSave（.save 匯出匯入逐欄一致）
 // 確保裝備的道具不會在存檔往返 / 載入清理 / 進戰鬥時遺失或被竄改。
 import { describe, it, expect } from 'vitest'
 import type { OwnedUnit } from '@/game/types'
 import { createOwnedUnit, ownedToCard } from '@/game/growth'
-import { buildBattlePokemon } from '@/game/stats'
+import { buildBattleMobie } from '@/game/stats'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { packSave, unpackSave, type SaveSlices } from '@/game/save/bundle'
 import { SAVE_SCHEMA_VERSION } from '@/game/save/saveMeta'
@@ -18,18 +18,18 @@ const withItem = (id: string, speciesId: number, heldItemId?: string): OwnedUnit
 })
 
 describe('M7 持有道具持久化 · 建構鏈路', () => {
-  it('ownedToCard 帶 heldItemId、buildBattlePokemon 落到戰鬥暫態', () => {
+  it('ownedToCard 帶 heldItemId、buildBattleMobie 落到戰鬥暫態', () => {
     const u = withItem('u1', 1, 'lifeorb')
     const card = ownedToCard(u)
     expect(card.heldItemId).toBe('lifeorb')
-    expect(buildBattlePokemon(card).heldItemId).toBe('lifeorb')
+    expect(buildBattleMobie(card).heldItemId).toBe('lifeorb')
   })
 
   it('未裝備：heldItemId 全程為 undefined（不無中生有）', () => {
     const u = withItem('u2', 4)
     expect(u.heldItemId).toBeUndefined()
     expect(ownedToCard(u).heldItemId).toBeUndefined()
-    expect(buildBattlePokemon(ownedToCard(u)).heldItemId).toBeUndefined()
+    expect(buildBattleMobie(ownedToCard(u)).heldItemId).toBeUndefined()
   })
 })
 

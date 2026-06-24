@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
-import { buildBattlePokemon } from '@/game/stats'
+import { buildBattleMobie } from '@/game/stats'
 import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { useRoster } from '@/store/rosterStore'
@@ -10,7 +10,7 @@ import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
 import { canCaptureIn } from '@/game/data/regionLookup'
-import { PokemonSprite } from '@/ui/components/PokemonSprite'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
@@ -38,7 +38,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
   // 捕獲對象＝對手隊伍末隻（boss）
   const wild = useMemo(() => {
     const boss = context.foeTeam[context.foeTeam.length - 1]
-    return boss ? buildBattlePokemon(boss) : null
+    return boss ? buildBattleMobie(boss) : null
   }, [context.foeTeam])
   // 捕獲球輪盤：轉出球種 → 套捕獲率係數
   const ball = useRef(getBall(rollBall()))
@@ -135,7 +135,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
 function LoseView() {
   const { context } = useGame()
   const player = useMemo(
-    () => (context.playerTeam[0] ? buildBattlePokemon(context.playerTeam[0]) : null),
+    () => (context.playerTeam[0] ? buildBattleMobie(context.playerTeam[0]) : null),
     [context.playerTeam],
   )
   return (
@@ -145,7 +145,7 @@ function LoseView() {
       {player && (
         <motion.div style={{ width: 'min(48vw,200px)', height: 'min(48vw,200px)', filter: 'grayscale(0.7)' }}
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 0.7, y: 0 }}>
-          <PokemonSprite src={player.artworkUrl} alt={player.nameZh} flip />
+          <MobieSprite src={player.artworkUrl} alt={player.nameZh} flip />
         </motion.div>
       )}
       <div className="h-title" style={{ fontSize: 30 }}>你被擊敗了…</div>
@@ -158,7 +158,7 @@ function LoseView() {
 function ArenaWinView() {
   const { context } = useGame()
   const lead = useMemo(
-    () => (context.playerTeam[0] ? buildBattlePokemon(context.playerTeam[0]) : null),
+    () => (context.playerTeam[0] ? buildBattleMobie(context.playerTeam[0]) : null),
     [context.playerTeam],
   )
   useEffect(() => { audio.play('victory') }, [])
@@ -170,7 +170,7 @@ function ArenaWinView() {
         <motion.div style={{ width: 'min(52vw,220px)', height: 'min(52vw,220px)' }}
           initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 140, damping: 13 }}>
-          <PokemonSprite src={lead.artworkUrl} alt={lead.nameZh} />
+          <MobieSprite src={lead.artworkUrl} alt={lead.nameZh} />
         </motion.div>
       )}
       <div className="h-title" style={{ fontSize: 28 }}>漂亮的一戰！</div>
@@ -223,7 +223,7 @@ export function ResultScreen() {
     if (ok) {
       const boss = context.foeTeam[context.foeTeam.length - 1]
       if (boss) {
-        const bp = buildBattlePokemon(boss)
+        const bp = buildBattleMobie(boss)
         // 圖鑑一律登錄（registered + captures，異色另計）——不論保留或轉蛋
         useMeta.getState().recordCapture(boss.speciesId, bp.shiny)
         const already = useRoster.getState().roster.some((u) => u.speciesId === boss.speciesId)

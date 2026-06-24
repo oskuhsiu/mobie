@@ -7,14 +7,14 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { normalizeObject } from '@/scene/models/normalize'
 import { useModelUrl } from '@/scene/models/useModelUrl'
 
-interface PokemonVisualProps {
+interface MobieVisualProps {
   speciesId: number
   artworkUrl: string
   shiny?: boolean
 }
 
 /** ①使用者 drop-in GLB（IndexedDB）→ ②billboard（PokéAPI artwork 貼圖平面，永遠面向相機）。 */
-export function PokemonVisual({ speciesId, artworkUrl, shiny }: PokemonVisualProps) {
+export function MobieVisual({ speciesId, artworkUrl, shiny }: MobieVisualProps) {
   const modelUrl = useModelUrl(speciesId)
   // 還在查 IndexedDB：先不決定，避免閃一下 billboard 再換 GLB
   if (modelUrl === undefined) return null

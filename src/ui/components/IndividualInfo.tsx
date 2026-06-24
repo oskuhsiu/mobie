@@ -1,4 +1,4 @@
-import type { BattlePokemon, Stats } from '@/game/types'
+import type { BattleMobie, Stats } from '@/game/types'
 import { ivStars, getNature, IV_MAX } from '@/game/individual'
 import { GradeBadge } from '@/ui/components/GradeBadge'
 
@@ -15,7 +15,7 @@ const ivColor = (v: number) =>
   v >= 26 ? 'var(--good)' : v <= 5 ? '#5fa8ff' : 'var(--text)'
 
 /** 個體資訊：星級 + 性格（加紅減藍）；detailed 時另顯 0–31 六項（debug） */
-export function IndividualInfo({ mon, detailed = false }: { mon: BattlePokemon; detailed?: boolean }) {
+export function IndividualInfo({ mon, detailed = false }: { mon: BattleMobie; detailed?: boolean }) {
   const stars = ivStars(mon.ivs)
   const nat = getNature(mon.nature)
   return (

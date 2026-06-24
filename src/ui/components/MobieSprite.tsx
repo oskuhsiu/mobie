@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-interface PokemonSpriteProps {
+interface MobieSpriteProps {
   src: string
   alt: string
   shiny?: boolean
@@ -9,7 +9,7 @@ interface PokemonSpriteProps {
   className?: string
 }
 
-export function PokemonSprite({ src, alt, shiny, flip, className }: PokemonSpriteProps) {
+export function MobieSprite({ src, alt, shiny, flip, className }: MobieSpriteProps) {
   const [loaded, setLoaded] = useState(false)
 
   return (

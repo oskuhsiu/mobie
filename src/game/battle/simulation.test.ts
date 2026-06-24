@@ -2,8 +2,8 @@
 // 每一步驗證戰鬥不變式（HP 邊界 / 無 NaN / activeIndex 合法 / 必定終局），
 // 並交叉驗證「模組全關（純 M1.x）」與「M7 三模組全開」皆不會炸、結果決定論。
 import { describe, it, expect } from 'vitest'
-import type { BattlePokemon, Card, Region } from '@/game/types'
-import { buildBattlePokemon } from '@/game/stats'
+import type { BattleMobie, Card, Region } from '@/game/types'
+import { buildBattleMobie } from '@/game/stats'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { REGIONS } from '@/game/data/regions'
 import { PRACTICE_REGION } from '@/game/data/practiceRegion'
@@ -91,8 +91,8 @@ function playBattle(seedStr: string, foeCards: Card[], playerCards: Card[], with
   const prep = assembleBattlePrep(settings)
   const ext = assembleExt(settings)
 
-  const { team: players } = applyBattlePrep(playerCards.map(buildBattlePokemon), prep, true)
-  const { team: foes } = applyBattlePrep(foeCards.map(buildBattlePokemon), prep, false)
+  const { team: players } = applyBattlePrep(playerCards.map(buildBattleMobie), prep, true)
+  const { team: foes } = applyBattlePrep(foeCards.map(buildBattleMobie), prep, false)
 
   const terrains = region ? resolveBattleTerrains(region, seedStr) : []
   let state = createBattleState(players, foes, terrains)
@@ -190,9 +190,9 @@ describe('模擬戰鬥壓力測試（大量完整對戰）', () => {
 describe('模擬戰鬥 · 邊界情境', () => {
   it('完全免疫（一般 vs 純幽靈）也必定終局（走 MAX_TURNS 剩餘血量判定）', () => {
     // 強制一隊一般招打純幽靈：傷害恆 0 → 自然不會 KO → 必須靠 timeout 判勝
-    const ghost = (): BattlePokemon => buildBattlePokemon({ cardId: 'g', speciesId: 92, level: 20 }) // 鬼斯=ghost/poison
-    const normalAtk = (): BattlePokemon => {
-      const m = buildBattlePokemon({ cardId: 'n', speciesId: 133, level: 20 }) // 伊布=normal
+    const ghost = (): BattleMobie => buildBattleMobie({ cardId: 'g', speciesId: 92, level: 20 }) // 鬼斯=ghost/poison
+    const normalAtk = (): BattleMobie => {
+      const m = buildBattleMobie({ cardId: 'n', speciesId: 133, level: 20 }) // 伊布=normal
       return m
     }
     // 玩家 3 隻一般、對手 3 隻幽靈
@@ -214,8 +214,8 @@ describe('模擬戰鬥 · 邊界情境', () => {
   it('一拳必殺：極高傷一回合內可推進到終局而不破不變式', () => {
     const rng = makeRng('ohko')
     // 高等打低等，星擊 ×3 必會心 → 快速 KO
-    const players = [buildBattlePokemon({ cardId: 'p', speciesId: 6, level: 60 })] // 噴火龍
-    const foes = [buildBattlePokemon({ cardId: 'f', speciesId: 10, level: 3 })] // 綠毛蟲
+    const players = [buildBattleMobie({ cardId: 'p', speciesId: 6, level: 60 })] // 噴火龍
+    const foes = [buildBattleMobie({ cardId: 'f', speciesId: 10, level: 3 })] // 綠毛蟲
     let state = createBattleState(players, foes)
     let guard = 0
     while (state.winner === null && guard < 40) {

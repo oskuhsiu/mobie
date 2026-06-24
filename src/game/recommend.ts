@@ -1,7 +1,7 @@
 // 選隊輔助：評估手牌對「對手整隊」的屬性攻防適配度，給不熟相剋的玩家明確建議。
 // 純函數、無 UI；CardSelectScreen 用來標示剋制/弱勢與一鍵推薦最佳 3 隻。
 
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import { typeEffectiveness } from '@/game/data/typeChart'
 
 export interface Matchup {
@@ -14,7 +14,7 @@ export interface Matchup {
 }
 
 /** 評估一張卡對「對手全隊」的攻防適配度 */
-export function scoreCardVsFoes(card: BattlePokemon, foes: BattlePokemon[]): Matchup {
+export function scoreCardVsFoes(card: BattleMobie, foes: BattleMobie[]): Matchup {
   let offense = 0
   let risk = 0
   let counters = 0
@@ -35,8 +35,8 @@ export function scoreCardVsFoes(card: BattlePokemon, foes: BattlePokemon[]): Mat
 
 /** 從手牌挑出最佳出戰陣容（回傳 cardId 陣列，依評分高→低，長度最多 size） */
 export function recommendTeamIds(
-  entries: Array<{ id: string; mon: BattlePokemon }>,
-  foes: BattlePokemon[],
+  entries: Array<{ id: string; mon: BattleMobie }>,
+  foes: BattleMobie[],
   size: number,
 ): string[] {
   return entries

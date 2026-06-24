@@ -6,16 +6,16 @@
 //
 // 本檔只放「定義」（型別 + 空包）。各縫的實際 wiring 隨其模組所屬里程碑落地：
 //   S3/S4/S5 由 reducer/engine 消費（resolveTurn 吃 ExtBundle）——M6 已接（預設空＝零行為改變）。
-//   S1/S2/S6 由 buildBattlePokemon / 戰鬥初始化 / rosterStore.grantBattleExp（applyExp 之後）各自呼叫點消費——M7/M10 接。
+//   S1/S2/S6 由 buildBattleMobie / 戰鬥初始化 / rosterStore.grantBattleExp（applyExp 之後）各自呼叫點消費——M7/M10 接。
 //   S7 gameMode 走 XState 流程層、S8 saveSlice 走 persistence 命名空間——M11 接。
 
-import type { BattlePokemon, OwnedUnit } from '@/game/types'
+import type { BattleMobie, OwnedUnit } from '@/game/types'
 // 型別循環（seams ↔ reducer）皆為 import type，編譯期抹除、無 runtime 相依。
 import type { BattleState, BattleEvent } from '@/game/battle/reducer'
 
 /** 八個擴充縫的識別碼（對照 plan/09 §0.1）。 */
 export type SeamId =
-  | 'buildUnit' // S1：stats.buildBattlePokemon 算完能力值後（純 patch）
+  | 'buildUnit' // S1：stats.buildBattleMobie 算完能力值後（純 patch）
   | 'preBattleModifiers' // S2：戰鬥初始化 / 編隊變更（單次，純 team→modifiers）
   | 'damageHook' // S3：engine.resolveAttack 傷害結算中段（純倍率）
   | 'turnEndTrigger' // S4：reducer 回合末同步段（純 state→state，timeout 前）
@@ -34,7 +34,7 @@ export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolut
 // ── 各縫的純能力簽章 ────────────────────────────────────────────
 
 /** S1：建構 BattleUnit 後的能力值 patch（道具 statMod / 講究頭巾…）。 */
-export type BuildUnitHook = (unit: BattlePokemon) => BattlePokemon
+export type BuildUnitHook = (unit: BattleMobie) => BattleMobie
 
 /** 具名修飾（羈絆 / run relic…）：必帶 label/source/icon 供 UI 回顯（禁隱形加成）。 */
 export interface NamedModifier {
@@ -42,16 +42,16 @@ export interface NamedModifier {
   source: string
   icon: string
   /** 套到 BattleUnit 的純 patch（M7 羈絆/道具填實作） */
-  apply?: (unit: BattlePokemon) => BattlePokemon
+  apply?: (unit: BattleMobie) => BattleMobie
 }
 
 /** S2：由出戰隊伍算出全隊修飾（戰鬥初始化 / 編隊變更單次呼叫；換 active 不重算）。 */
-export type PreBattleHook = (team: BattlePokemon[]) => NamedModifier[]
+export type PreBattleHook = (team: BattleMobie[]) => NamedModifier[]
 
 /** S3 的上下文：engine 側、與 side 無關（道具 hook 自行用 attacker 判定是否生效）。 */
 export interface DamageHookContext {
-  attacker: BattlePokemon
-  defender: BattlePokemon
+  attacker: BattleMobie
+  defender: BattleMobie
   /** 屬性相剋總倍率（達人帶「對剋制目標 ×1.2」之類條件用） */
   effectiveness: number
 }

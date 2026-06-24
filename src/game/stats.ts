@@ -1,4 +1,4 @@
-import type { BattlePokemon, Card, Stats } from '@/game/types'
+import type { BattleMobie, Card, Stats } from '@/game/types'
 import { getSpecies } from '@/game/data/species'
 import { getMove } from '@/game/data/moves'
 import { rollIndividual, natureMultiplier } from '@/game/individual'
@@ -18,7 +18,7 @@ function otherStat(base: number, ivVal: number, level: number, natureMult: numbe
  * 由卡片（或野生資料）建出進入戰鬥的實例，最終數值一次算好。
  * 個體（IV/性格/異色）由 cardId 決定論 roll；card 若顯式給 ivs/shiny 則覆寫。
  */
-export function buildBattlePokemon(card: Card): BattlePokemon {
+export function buildBattleMobie(card: Card): BattleMobie {
   const species = getSpecies(card.speciesId)
   const move = getMove(species.moveId)
   const { baseStats: b } = species

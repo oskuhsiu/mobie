@@ -1,9 +1,9 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Group } from 'three'
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
-import { PokemonVisual } from './PokemonVisual'
+import { MobieVisual } from './MobieVisual'
 
 // 一隻在場寶可夢的動畫狀態：全部由 BattleStage 以 imperative 方式寫入、
 // 在 useFrame 內整合套到 Object3D —— 完全不過 React 頂層 state（效能紅線）。
@@ -39,7 +39,7 @@ const easeOutBack = (p: number) => {
 
 interface Combatant3DProps {
   side: Side
-  mon: BattlePokemon
+  mon: BattleMobie
   anim: MonAnim
   base: [number, number, number]
   /** 朝對手的 lunge 位移向量（x,z），由 BattleStage 依站位給 */
@@ -101,10 +101,10 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase }
     g.scale.setScalar(scale)
   })
 
-  // PokemonVisual 自我保護（內含造型載入失敗的邊界），此處無須再外包。
+  // MobieVisual 自我保護（內含造型載入失敗的邊界），此處無須再外包。
   return (
     <group ref={group} position={base}>
-      <PokemonVisual speciesId={mon.speciesId} artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
+      <MobieVisual speciesId={mon.speciesId} artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
     </group>
   )
 }

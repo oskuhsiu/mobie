@@ -4,7 +4,7 @@
 // （NamedModifier，必帶 label/source/icon 供 UI 回顯，禁隱形加成），在戰鬥初始化 / 編隊變更時
 // **單次**呼叫拍板成扁平靜態加成注入；戰鬥內換 active 不重算（避免撞「HP 跨換人持續」不變式）。
 
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import type { ExtensionModule, NamedModifier, PreBattleHook } from '@/game/ext/seams'
 import { scale } from '@/game/ext/statPatch'
 
@@ -13,20 +13,20 @@ export interface SynergyRule {
   label: string
   icon: string
   /** 是否成立（看整隊） */
-  test: (team: BattlePokemon[]) => boolean
+  test: (team: BattleMobie[]) => boolean
   /** 成立時加到每隻身上的具名修飾 */
   modifier: NamedModifier
 }
 
 /** 隊伍涵蓋的不同屬性數。 */
-function distinctTypeCount(team: BattlePokemon[]): number {
+function distinctTypeCount(team: BattleMobie[]): number {
   const set = new Set<string>()
   for (const m of team) for (const t of m.types) set.add(t)
   return set.size
 }
 
 /** 是否有「某個屬性被 ≥2 隻共同持有」。 */
-function hasSharedType(team: BattlePokemon[]): boolean {
+function hasSharedType(team: BattleMobie[]): boolean {
   const count = new Map<string, number>()
   for (const m of team) for (const t of new Set(m.types)) count.set(t, (count.get(t) ?? 0) + 1)
   for (const n of count.values()) if (n >= 2) return true
@@ -37,7 +37,7 @@ function hasSharedType(team: BattlePokemon[]): boolean {
 const genOf = (speciesId: number) => (speciesId <= 151 ? 1 : 2)
 
 /** 全隊同世代（且至少 2 隻才有意義）。 */
-function sameGeneration(team: BattlePokemon[]): boolean {
+function sameGeneration(team: BattleMobie[]): boolean {
   if (team.length < 2) return false
   const g = genOf(team[0].speciesId)
   return team.every((m) => genOf(m.speciesId) === g)
@@ -91,7 +91,7 @@ export const SYNERGY_RULES: SynergyRule[] = [
  * 純函數：由出戰隊伍算出生效的羈絆修飾（plan/09 §2.2）。
  * 回傳已成立規則的 modifier 陣列（含 label/source/icon），供注入與 UI 回顯。
  */
-export function computeSynergy(team: BattlePokemon[]): NamedModifier[] {
+export function computeSynergy(team: BattleMobie[]): NamedModifier[] {
   const out: NamedModifier[] = []
   for (const rule of SYNERGY_RULES) if (rule.test(team)) out.push(rule.modifier)
   return out

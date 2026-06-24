@@ -159,7 +159,7 @@ body {
 }
 .hp-plate__num { font-size: 11px; color: var(--text-dim); margin-top: 3px; text-align: right; font-variant-numeric: tabular-nums; }
 
-/* ============ Pokemon sprite ============ */
+/* ============ Mobie sprite ============ */
 .sprite { position: relative; display: grid; place-items: center; }
 .sprite__img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 16px 18px rgba(0,0,0,0.45)); }
 .sprite__skeleton {

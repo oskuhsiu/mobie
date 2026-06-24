@@ -1,5 +1,5 @@
 // 成長（M1.5f）：Medium Fast n^3 經驗曲線、戰勝得 EXP、升級重算。
-// 只動 canonical 的 level/exp；能力值由 buildBattlePokemon 依新 level 重算（不存派生）。
+// 只動 canonical 的 level/exp；能力值由 buildBattleMobie 依新 level 重算（不存派生）。
 
 import type { Card, OwnedUnit, Stats } from '@/game/types'
 import { rollIndividual } from '@/game/individual'
@@ -52,7 +52,7 @@ export function applyExp(unit: OwnedUnit, gained: number): ExpResult {
 
 /**
  * 由 seed 建一隻 OwnedUnit（個體決定論 roll，exp 對齊起始等級）。
- * `card` 顯式給的 ivs/nature/shiny 會覆寫 seed roll（與 buildBattlePokemon 一致），
+ * `card` 顯式給的 ivs/nature/shiny 會覆寫 seed roll（與 buildBattleMobie 一致），
  * 讓掃描/自製卡上標的異色等屬性能落到 canonical 存檔，而非被 seed roll 蓋掉。
  */
 export function createOwnedUnit(
@@ -84,7 +84,7 @@ export function createOwnedUnit(
   }
 }
 
-/** OwnedUnit → 進戰鬥用 Card（帶 canonical 個體，buildBattlePokemon 不再 roll） */
+/** OwnedUnit → 進戰鬥用 Card（帶 canonical 個體，buildBattleMobie 不再 roll） */
 export function ownedToCard(u: OwnedUnit): Card {
   return {
     cardId: u.id,

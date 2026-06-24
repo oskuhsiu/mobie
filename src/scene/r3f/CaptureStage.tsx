@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows } from '@react-three/drei'
 import { Group, Vector3, PerspectiveCamera } from 'three'
 import { StageLights, Pedestal, BlobShadow } from './sceneParts'
-import { PokemonVisual } from './PokemonVisual'
+import { MobieVisual } from './MobieVisual'
 
 // 依寬高比自動拉遠相機，確保單體寶可夢在手機直向（aspect 很小）也完整入鏡、兩側不被切。
 const CAP_LOOK_AT = new Vector3(0, 1.0, 0)
@@ -70,7 +70,7 @@ function CaptureMon({ speciesId, artworkUrl, shiny, vanish }: CaptureStageProps)
 
   return (
     <group ref={group}>
-      <PokemonVisual speciesId={speciesId} artworkUrl={artworkUrl} shiny={shiny} />
+      <MobieVisual speciesId={speciesId} artworkUrl={artworkUrl} shiny={shiny} />
     </group>
   )
 }

@@ -1,16 +1,16 @@
 import { motion } from 'framer-motion'
 import { useEffect, useMemo } from 'react'
 import { useGame } from '@/app/GameProvider'
-import { buildBattlePokemon } from '@/game/stats'
+import { buildBattleMobie } from '@/game/stats'
 import { useMeta } from '@/store/metaStore'
-import { PokemonSprite } from '@/ui/components/PokemonSprite'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
   const foes = useMemo(
-    () => context.foeTeam.map(buildBattlePokemon),
+    () => context.foeTeam.map(buildBattleMobie),
     [context.foeTeam],
   )
   // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）
@@ -35,7 +35,7 @@ export function EncounterScreen() {
           style={{ width: 'min(60vw, 300px)', height: 'min(60vw, 300px)', position: 'relative' }}
         >
           <div className="platform" />
-          <PokemonSprite src={wild.artworkUrl} alt={wild.nameZh} shiny={wild.shiny} />
+          <MobieSprite src={wild.artworkUrl} alt={wild.nameZh} shiny={wild.shiny} />
         </motion.div>
 
         <motion.div

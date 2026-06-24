@@ -96,7 +96,7 @@ export const useRoster = create<RosterState>((set, get) => ({
   },
 
   captureUnit: async (card) => {
-    // seed = cardId，與 buildBattlePokemon 對野生卡的決定論個體一致 → 收服後個體不變
+    // seed = cardId，與 buildBattleMobie 對野生卡的決定論個體一致 → 收服後個體不變
     // card 顯式給的 ivs/nature/shiny（自製/掃描卡）會覆寫 seed roll
     const unit = createOwnedUnit(card.cardId, card.speciesId, card.level, card)
     // 去重：同 id（同一次遭遇）不重複加入

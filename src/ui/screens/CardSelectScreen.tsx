@@ -5,23 +5,23 @@ import { TEAM_SIZE } from '@/game/machine/gameMachine'
 import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
 import { ownedToCard } from '@/game/growth'
-import { buildBattlePokemon } from '@/game/stats'
+import { buildBattleMobie } from '@/game/stats'
 import { scoreCardVsFoes, recommendTeamIds, type Matchup } from '@/game/recommend'
 import { audio } from '@/audio/audioEngine'
-import { PokemonSprite } from '@/ui/components/PokemonSprite'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
 
 export function CardSelectScreen() {
   const { context, send } = useGame()
   // 對手全隊（不只第一隻）：建議要考慮整隊相剋
-  const foes = useMemo(() => context.foeTeam.map(buildBattlePokemon), [context.foeTeam])
+  const foes = useMemo(() => context.foeTeam.map(buildBattleMobie), [context.foeTeam])
 
   const roster = useRoster((s) => s.roster)
   const cards = useMemo(
     () => roster.map((u) => {
       const card = ownedToCard(u)
-      return { card, mon: buildBattlePokemon(card) }
+      return { card, mon: buildBattleMobie(card) }
     }),
     [roster],
   )
@@ -151,7 +151,7 @@ export function CardSelectScreen() {
                 )}
               </AnimatePresence>
               <div className="poke-card__art">
-                <PokemonSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} />
+                <MobieSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} />
               </div>
               <div className="poke-card__name">{mon.nameZh}</div>
               <div className="poke-card__types"><TypeBadges types={mon.types} /></div>

@@ -4,7 +4,7 @@ import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
 import { useSettings } from '@/store/settingsStore'
 import { applyBattlePrep } from '@/store/ext'
-import { buildBattlePokemon } from '@/game/stats'
+import { buildBattleMobie } from '@/game/stats'
 import {
   resolveTurn,
   chainEligible,
@@ -14,7 +14,7 @@ import {
   type SupportOutcome,
 } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
-import type { BattlePokemon, TerrainId } from '@/game/types'
+import type { BattleMobie, TerrainId } from '@/game/types'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf } from '@/game/data/terrains'
 import { TimingBar } from '@/ui/components/TimingBar'
@@ -90,7 +90,7 @@ function TerrainChip({ terrainIds }: { terrainIds: TerrainId[] }) {
 
 /** 底部常駐隊伍 tray：每隻一顆 HP pip，倒下灰階、在場高亮 */
 function TeamTray({ members, activeIndex, align }: {
-  members: BattlePokemon[]; activeIndex: number; align: 'start' | 'end'
+  members: BattleMobie[]; activeIndex: number; align: 'start' | 'end'
 }) {
   return (
     <div className="tray" style={{ justifyContent: align === 'end' ? 'flex-end' : 'flex-start' }}>
@@ -114,7 +114,7 @@ function TeamTray({ members, activeIndex, align }: {
 }
 
 /** 緊貼立繪的精簡 HP 牌：名稱 + Lv + 血條（自家顯示數字）。放在角色同側，避免看錯誰的血。 */
-function HpPlate({ mon, owner, label }: { mon: BattlePokemon; owner: boolean; label: string }) {
+function HpPlate({ mon, owner, label }: { mon: BattleMobie; owner: boolean; label: string }) {
   const ratio = Math.max(0, mon.currentHp) / mon.maxHp
   const tone = hpToneClass(ratio, 'hpbar__fill')
   const item = getItem(mon.heldItemId)
@@ -144,7 +144,7 @@ function HpPlate({ mon, owner, label }: { mon: BattlePokemon; owner: boolean; la
 
 /** 換人面板：選一個未倒下、非在場、未鎖的隊友換上 */
 function SwitchPanel({ members, activeIndex, lockedIndex, onPick, onCancel }: {
-  members: BattlePokemon[]
+  members: BattleMobie[]
   activeIndex: number
   lockedIndex: number | null
   onPick: (i: number) => void
@@ -262,8 +262,8 @@ export function BattleScreen() {
     if (initedRef.current || context.playerTeam.length === 0 || context.foeTeam.length === 0) return
     initedRef.current = true
     // 戰前縫：S1 道具/特性 statMod（兩方）+ S2 羈絆（只玩家隊）。全關＝原封不動。
-    const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattlePokemon), prep, true)
-    const { team: foes } = applyBattlePrep(context.foeTeam.map(buildBattlePokemon), prep, false)
+    const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattleMobie), prep, true)
+    const { team: foes } = applyBattlePrep(context.foeTeam.map(buildBattleMobie), prep, false)
     // 場域地形（M8）：依 region.mode/terrains/randomTerrain 解析；隨機地形以 foe 隊伍 cardId 當 seed
     // 決定論抽（同一場遭遇穩定、不隨 re-render 變動）。arena/無地形＝空＝中性。
     const region = context.regionId ? lookupRegion(context.regionId) : null

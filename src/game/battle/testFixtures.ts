@@ -1,12 +1,12 @@
 // 共用測試夾具：engine / reducer / accidents 測試共用的 move()/mon() 工廠。
-import type { BattlePokemon, Move, TypeName } from '@/game/types'
+import type { BattleMobie, Move, TypeName } from '@/game/types'
 
 export function move(type: TypeName, power = 50, accuracy = 100): Move {
   return { id: 1, name: 'Test', nameZh: '測', type, power, accuracy, category: 'physical' }
 }
 
-export function mon(over: Partial<BattlePokemon> = {}): BattlePokemon {
-  const merged: BattlePokemon = {
+export function mon(over: Partial<BattleMobie> = {}): BattleMobie {
+  const merged: BattleMobie = {
     speciesId: 0, name: 'Mon', nameZh: '怪', types: ['normal'], level: 10,
     maxHp: 100, currentHp: 100, atk: 50, def: 50, spa: 50, spd: 50, spe: 50,
     artworkUrl: '', shiny: false, move: move('normal'),

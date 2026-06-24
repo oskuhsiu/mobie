@@ -75,7 +75,7 @@ export interface Card {
 
 /**
  * 擁有的寶可夢（canonical，唯一持久化的資料；M1.5f）。
- * 派生的戰鬥數值一律由此經 buildBattlePokemon 算出，不存中間態。
+ * 派生的戰鬥數值一律由此經 buildBattleMobie 算出，不存中間態。
  */
 export interface OwnedUnit {
   id: string
@@ -90,8 +90,8 @@ export interface OwnedUnit {
   heldItemId?: string
 }
 
-/** 進入戰鬥的實例：最終數值已由 buildBattlePokemon 算好 */
-export interface BattlePokemon {
+/** 進入戰鬥的實例：最終數值已由 buildBattleMobie 算好 */
+export interface BattleMobie {
   speciesId: number
   name: string
   nameZh: string

@@ -2,7 +2,7 @@
 // 不含任何 UI / 動畫字眼，只吐 domain events，方便單測與「一次算完、畫面慢慢演」。
 // 設計真相：plan/01-architecture、plan/06-battle-reference、第二場 conclusion。
 
-import type { BattlePokemon, TypeName, TerrainId } from '@/game/types'
+import type { BattleMobie, TypeName, TerrainId } from '@/game/types'
 import {
   resolveAttack,
   attackQteMultiplier,
@@ -16,7 +16,7 @@ export type Side = 'player' | 'foe'
 
 /** 一方的隊伍：最多 3 隻 + 目前在場的索引（HP 跨換人持續、不自動回復） */
 export interface BattleSide {
-  members: BattlePokemon[]
+  members: BattleMobie[]
   activeIndex: number
 }
 
@@ -165,8 +165,8 @@ export interface TurnResult {
  * `terrains`＝開場地形 id（M8，由 setup 依 region 解析；省略＝中性無地形＝行為等同 M1.x）。
  */
 export function createBattleState(
-  playerMembers: BattlePokemon[],
-  foeMembers: BattlePokemon[],
+  playerMembers: BattleMobie[],
+  foeMembers: BattleMobie[],
   terrains: TerrainId[] = [],
 ): BattleState {
   return {
@@ -181,7 +181,7 @@ export function createBattleState(
 
 const other = (side: Side): Side => (side === 'player' ? 'foe' : 'player')
 
-const activeOf = (state: BattleState, side: Side): BattlePokemon =>
+const activeOf = (state: BattleState, side: Side): BattleMobie =>
   state[side].members[state[side].activeIndex]
 
 const unitId = (side: Side, index: number): string => `${side}:${index}`

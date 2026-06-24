@@ -10,7 +10,7 @@
 // 道具表是手寫非產生檔（如 practiceRegion）：不抓 PokéAPI、icon 用 emoji，零侵權。
 // 背包庫存（擁有數量）放獨立 save slice mz.itembag.v1（store/bagStore.ts），不塞進 OwnedUnit。
 
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import type {
   BuildUnitHook,
   DamageHook,
@@ -50,10 +50,10 @@ export const ITEMS: ItemDef[] = [
 /** 查道具定義（未知 / 未給 id → undefined）。 */
 export const getItem = createLookup(ITEMS)
 
-// ── 縫實作（讀 BattlePokemon 上的暫態 heldItemId 自行分流；無道具＝中性）──────────
+// ── 縫實作（讀 BattleMobie 上的暫態 heldItemId 自行分流；無道具＝中性）──────────
 
 /** S1：建構後套 statMod 道具的能力值倍率。 */
-const itemBuildUnit: BuildUnitHook = (unit: BattlePokemon) => {
+const itemBuildUnit: BuildUnitHook = (unit: BattleMobie) => {
   const def = getItem(unit.heldItemId)
   if (!def || def.kind !== 'statMod') return unit
   return applyStatMod(unit, def.params)

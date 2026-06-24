@@ -1,4 +1,4 @@
-import type { BattlePokemon } from '@/game/types'
+import type { BattleMobie } from '@/game/types'
 import { effectivenessLabel, typeEffectiveness } from '@/game/data/typeChart'
 import type { DamageHook } from '@/game/ext/seams'
 
@@ -70,8 +70,8 @@ const CRIT_MULT = 1.5
  * 傷害公式：本傳簡化版 × STAB × 屬性相剋 × 暴擊 × 隨機(0.85–1) × QTE。
  */
 export function resolveAttack(
-  attacker: BattlePokemon,
-  defender: BattlePokemon,
+  attacker: BattleMobie,
+  defender: BattleMobie,
   options: AttackOptions = {},
 ): AttackResult {
   const rng = options.rng ?? Math.random
@@ -145,8 +145,8 @@ export function resolveAttack(
 
 /** 先手判定：速度高者先攻，相同則隨機 */
 export function playerActsFirst(
-  player: BattlePokemon,
-  foe: BattlePokemon,
+  player: BattleMobie,
+  foe: BattleMobie,
   rng: () => number = Math.random,
 ): boolean {
   if (player.spe !== foe.spe) return player.spe > foe.spe
@@ -154,12 +154,12 @@ export function playerActsFirst(
 }
 
 /** 擊敗野生寶可夢後的捕獲機率（等級越低越好捕），0–1 */
-export function captureChance(wild: BattlePokemon): number {
+export function captureChance(wild: BattleMobie): number {
   const raw = 0.9 - (wild.level - 8) * 0.03
   return Math.min(0.95, Math.max(0.4, raw))
 }
 
-export function attemptCapture(wild: BattlePokemon, rng: () => number = Math.random): boolean {
+export function attemptCapture(wild: BattleMobie, rng: () => number = Math.random): boolean {
   return rng() < captureChance(wild)
 }
 
@@ -185,7 +185,7 @@ export function rollBall(rng: () => number = Math.random): BallId {
 }
 
 /** 套球種係數後的捕獲機率（封頂 0.98） */
-export function captureChanceWithBall(wild: BattlePokemon, ballMult: number): number {
+export function captureChanceWithBall(wild: BattleMobie, ballMult: number): number {
   return Math.min(0.98, captureChance(wild) * ballMult)
 }
 

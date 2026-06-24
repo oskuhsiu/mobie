@@ -2,12 +2,12 @@
 // （種族被動 vs 可學主動）。本里程碑以「依主屬性決定論指派」的手寫表給每隻一個特性——
 // 不改 generated species.ts、不連網（同 practiceRegion 的手寫慣例），日後可換成 per-species 表。
 //
-// 閘控設計：abilityId 由本模組的 S1 buildUnit hook 寫到 BattlePokemon（只在模組啟用、經 prep
-// 套到對戰雙方）；buildBattlePokemon 本身不設 abilityId。故關閉模組＝沒有 abilityId＝S3 找不到特性。
+// 閘控設計：abilityId 由本模組的 S1 buildUnit hook 寫到 BattleMobie（只在模組啟用、經 prep
+// 套到對戰雙方）；buildBattleMobie 本身不設 abilityId。故關閉模組＝沒有 abilityId＝S3 找不到特性。
 // 與道具同類「加法疊加」（靠數值池上限控平衡，不做來源攔截）。
 // onSwitchIn（如威嚇，需在換人解析步驟內結算）需動 reducer，本里程碑刻意延後。
 
-import type { BattlePokemon, TypeName } from '@/game/types'
+import type { BattleMobie, TypeName } from '@/game/types'
 import type { BuildUnitHook, DamageHook, ExtensionModule } from '@/game/ext/seams'
 import { applyStatMod, createLookup } from '@/game/ext/statPatch'
 
@@ -58,9 +58,9 @@ export function abilityForType(primary: TypeName): string {
 // ── 縫實作 ──────────────────────────────────────────────────────
 
 /** S1：寫入 abilityId（依主屬性）＋套 statMod 型特性的能力值倍率。兩方皆過此 hook。 */
-const abilityBuildUnit: BuildUnitHook = (unit: BattlePokemon) => {
+const abilityBuildUnit: BuildUnitHook = (unit: BattleMobie) => {
   const id = abilityForType(unit.types[0])
-  const withId: BattlePokemon = { ...unit, abilityId: id }
+  const withId: BattleMobie = { ...unit, abilityId: id }
   const def = getAbility(id)
   return def?.kind === 'statMod' ? applyStatMod(withId, def.params) : withId
 }
@@ -81,7 +81,7 @@ const abilityDamage: DamageHook = (ctx) => {
 
 /**
  * 特性模組：S1（寫 abilityId + statMod）/ S3（pinch + guard）。複用道具引擎、分語義。
- * 停用＝不收這兩縫、BattlePokemon 無 abilityId＝回到無特性的 M1.x 戰鬥。
+ * 停用＝不收這兩縫、BattleMobie 無 abilityId＝回到無特性的 M1.x 戰鬥。
  */
 export const ABILITIES_MODULE: ExtensionModule = {
   id: 'abilities',
