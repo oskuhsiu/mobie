@@ -38,6 +38,8 @@ interface BattleUiState {
   chain: number
   /** M9 連鎖連段數 overlay（null=不顯示；連鎖中各段 chainHit 設定） */
   combo: number | null
+  /** M16/M17：已看穿的對手隊員 index（MobCard 對手深度揭露）；M16 恆空，M17 看穿鈕 add。 */
+  revealedFoes: number[]
 
   init: (playerMembers: BattleMobie[], foeMembers: BattleMobie[], terrains?: TerrainId[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
@@ -55,6 +57,8 @@ interface BattleUiState {
   resetEnergy: () => void
   /** M9 連鎖連段 overlay（null 清除） */
   setCombo: (n: number | null) => void
+  /** M17 看穿：標記某對手 index 已揭露（M16 不呼叫；exactly-once 去重）。 */
+  revealFoe: (index: number) => void
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
@@ -72,13 +76,14 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   energy: 0,
   chain: 0,
   combo: null,
+  revealedFoes: [],
 
   init: (playerMembers, foeMembers, terrains) =>
     set({
       battle: createBattleState(playerMembers, foeMembers, terrains),
       phase: 'intro', log: [], banner: null,
       hitFx: null, fxCounter: 0, captured: null,
-      support: null, energy: 0, chain: 0, combo: null,
+      support: null, energy: 0, chain: 0, combo: null, revealedFoes: [],
     }),
 
   setBattle: (battle) => set({ battle }),
@@ -109,6 +114,7 @@ export const useBattleStore = create<BattleUiState>((set) => ({
     }),
   resetEnergy: () => set({ energy: 0 }),
   setCombo: (combo) => set({ combo }),
+  revealFoe: (index) => set((s) => (s.revealedFoes.includes(index) ? {} : { revealedFoes: [...s.revealedFoes, index] })),
 
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null }),

@@ -8,14 +8,18 @@ import { ownedToCard } from '@/game/growth'
 import { buildBattleMobie } from '@/game/stats'
 import { scoreCardVsFoes, recommendTeamIds, type Matchup } from '@/game/recommend'
 import { audio } from '@/audio/audioEngine'
+import type { BattleMobie } from '@/game/types'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
+import { MobCard } from '@/ui/components/MobCard'
 
 export function CardSelectScreen() {
   const { context, send } = useGame()
   // 對手全隊（不只第一隻）：建議要考慮整隊相剋
   const foes = useMemo(() => context.foeTeam.map(buildBattleMobie), [context.foeTeam])
+  // M16：資訊卡（自己卡 owner 全顯、對手卡基本面+深度遮罩）
+  const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean } | null>(null)
 
   const roster = useRoster((s) => s.roster)
   const cards = useMemo(
@@ -102,14 +106,15 @@ export function CardSelectScreen() {
         <span className="foe-strip__label">對手</span>
         <div className="foe-strip__list scroll">
           {foes.map((f, i) => (
-            <div
+            <button
               key={i}
               className={`foe-strip__mon ${i === foes.length - 1 ? 'foe-strip__mon--boss' : ''}`}
-              title={`${f.nameZh} Lv.${f.level}`}
+              title={`${f.nameZh} Lv.${f.level}（看資訊卡）`}
+              onClick={() => { audio.play('select'); setCardView({ mon: f, owner: false }) }}
             >
               <img src={f.artworkUrl} alt={f.nameZh} />
               <div className="foe-strip__types"><TypeBadges types={f.types} /></div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -140,6 +145,13 @@ export function CardSelectScreen() {
                 )}
               </div>
               {isRec && <span className="poke-card__rec">⭐ 推薦</span>}
+              {/* ⓘ 開資訊卡（stopPropagation 不觸發選取，保留出戰手感） */}
+              <span
+                className="poke-card__info"
+                role="button"
+                title="查看資訊卡"
+                onClick={(e) => { e.stopPropagation(); audio.play('select'); setCardView({ mon, owner: true }) }}
+              >ⓘ</span>
               <AnimatePresence>
                 {isPicked && (
                   <motion.span
@@ -180,6 +192,12 @@ export function CardSelectScreen() {
       >
         ⚔ 出戰　<span style={{ fontSize: 14, opacity: 0.85 }}>{picked.length}/{TEAM_SIZE}</span>
       </motion.button>
+
+      <AnimatePresence>
+        {cardView && (
+          <MobCard mon={cardView.mon} owner={cardView.owner} revealed={false} onClose={() => setCardView(null)} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

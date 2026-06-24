@@ -489,6 +489,14 @@ body {
 .poke-card__name { font-weight: 800; font-size: 16px; }
 .poke-card__types { display: flex; gap: 6px; }
 .poke-card__lv { position: absolute; top: 10px; left: 12px; font-size: 12px; font-weight: 800; color: var(--text-dim); }
+/* M16 ⓘ 開資訊卡角標（右上，stopPropagation 不觸發選取） */
+.poke-card__info {
+  position: absolute; top: 6px; right: 8px; z-index: 3;
+  width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center;
+  font-size: 14px; font-weight: 800; color: var(--text);
+  background: rgba(0,0,0,0.4); border: 1px solid var(--stroke); cursor: pointer;
+}
+.poke-card__info:active { transform: scale(0.9); }
 .poke-card--picked {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent), var(--shadow);

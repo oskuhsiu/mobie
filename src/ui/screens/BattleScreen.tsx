@@ -19,6 +19,7 @@ import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf } from '@/game/data/terrains'
 import { TimingBar } from '@/ui/components/TimingBar'
+import { MobCard } from '@/ui/components/MobCard'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
 import { TYPE_HEX, TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
@@ -98,9 +99,9 @@ function TerrainChip({ terrainIds }: { terrainIds: TerrainId[] }) {
   )
 }
 
-/** 底部常駐隊伍 tray：每隻一顆 HP pip，倒下灰階、在場高亮 */
-function TeamTray({ members, activeIndex, align }: {
-  members: BattleMobie[]; activeIndex: number; align: 'start' | 'end'
+/** 底部常駐隊伍 tray：每隻一顆 HP pip，倒下灰階、在場高亮。點 pip 開該隻資訊卡（M16）。 */
+function TeamTray({ members, activeIndex, align, onPick }: {
+  members: BattleMobie[]; activeIndex: number; align: 'start' | 'end'; onPick?: (index: number) => void
 }) {
   return (
     <div className="tray" style={{ justifyContent: align === 'end' ? 'flex-end' : 'flex-start' }}>
@@ -109,28 +110,35 @@ function TeamTray({ members, activeIndex, align }: {
         const fainted = m.currentHp <= 0
         const tone = hpToneClass(frac, 'tray__fill')
         return (
-          <div
+          <button
             key={i}
             className={`tray__pip ${i === activeIndex ? 'tray__pip--active' : ''} ${fainted ? 'tray__pip--out' : ''}`}
-            title={m.nameZh}
+            title={`${m.nameZh}（看資訊卡）`}
+            onClick={() => onPick?.(i)}
           >
             <div className={`tray__fill ${tone}`} style={{ width: `${frac * 100}%` }} />
             {fainted && <span className="tray__x">✕</span>}
-          </div>
+          </button>
         )
       })}
     </div>
   )
 }
 
-/** 緊貼立繪的精簡 HP 牌：名稱 + Lv + 血條（自家顯示數字）。放在角色同側，避免看錯誰的血。 */
-function HpPlate({ mon, owner, label }: { mon: BattleMobie; owner: boolean; label: string }) {
+/** 緊貼立繪的精簡 HP 牌：名稱 + Lv + 血條（自家顯示數字）。放在角色同側，避免看錯誰的血。點開資訊卡（M16）。 */
+function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boolean; label: string; onOpen?: () => void }) {
   const ratio = Math.max(0, mon.currentHp) / mon.maxHp
   const tone = hpToneClass(ratio, 'hpbar__fill')
   const item = getItem(mon.heldItemId)
   const ability = getAbility(mon.abilityId)
   return (
-    <div className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}>
+    <div
+      className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      style={{ cursor: 'pointer' }}
+    >
       <div className="hp-plate__top">
         <span className="hp-plate__name">{label}</span>
         <span className="hpbar__lv">Lv.{mon.level}</span>
@@ -318,6 +326,9 @@ export function BattleScreen() {
   const energy = useBattleStore((s) => s.energy)
   const combo = useBattleStore((s) => s.combo)
   const log = useBattleStore((s) => s.log)
+  const revealedFoes = useBattleStore((s) => s.revealedFoes)
+  // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
+  const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean; foeIndex: number } | null>(null)
   // 已啟用模組組成的注入能力包（plan/09 §0）：ext=戰中縫（S3/S4/S5）、prep=戰前縫（S1/S2）。
   // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
   const ext = useSettings((s) => s.ext)
@@ -712,8 +723,10 @@ export function BattleScreen() {
       {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <div className="combat-hud combat-hud--foe">
-          <HpPlate mon={foe} owner={false} label={`對手的 ${foe.nameZh}`} />
-          <TeamTray members={battle.foe.members} activeIndex={battle.foe.activeIndex} align="end" />
+          <HpPlate mon={foe} owner={false} label={`對手的 ${foe.nameZh}`}
+            onOpen={() => setCardView({ mon: foe, owner: false, foeIndex: battle.foe.activeIndex })} />
+          <TeamTray members={battle.foe.members} activeIndex={battle.foe.activeIndex} align="end"
+            onPick={(i) => setCardView({ mon: battle.foe.members[i], owner: false, foeIndex: i })} />
         </div>
       </div>
 
@@ -772,8 +785,10 @@ export function BattleScreen() {
       {/* 我方：HP 牌與隊伍狀態（畫面下方左側），marginTop:auto 把後段推到底部 */}
       <div className="row" style={{ justifyContent: 'flex-start', marginTop: 'auto' }}>
         <div className="combat-hud combat-hud--player">
-          <HpPlate mon={player} owner label={player.nameZh} />
-          <TeamTray members={battle.player.members} activeIndex={battle.player.activeIndex} align="start" />
+          <HpPlate mon={player} owner label={player.nameZh}
+            onOpen={() => setCardView({ mon: player, owner: true, foeIndex: -1 })} />
+          <TeamTray members={battle.player.members} activeIndex={battle.player.activeIndex} align="start"
+            onPick={(i) => setCardView({ mon: battle.player.members[i], owner: true, foeIndex: -1 })} />
         </div>
       </div>
 
@@ -902,6 +917,18 @@ export function BattleScreen() {
         )}
       </div>
       </div>
+
+      {/* M16 資訊卡：點 HpPlate/TeamTray 開（自己全顯、對手深度遮罩待 M17 看穿） */}
+      <AnimatePresence>
+        {cardView && (
+          <MobCard
+            mon={cardView.mon}
+            owner={cardView.owner}
+            revealed={cardView.owner ? true : revealedFoes.includes(cardView.foeIndex)}
+            onClose={() => setCardView(null)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }
