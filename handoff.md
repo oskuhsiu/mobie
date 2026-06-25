@@ -30,6 +30,7 @@ M14（戰鬥回放整段）、M21.e（per-type 音色）、M22.f–j（增強互
 4. **M21.e** per-type 音色（6 音色家族）；**M22.f–j** 防禦下滑/攻擊節奏/撥草/孵化/破門（皆 prefs，預設 off 零殘留）。
 
 ## 下一步（擇一，皆非阻塞）
+- **EXT 強化系列（新，四方圓桌收斂）**：`plan/EXT.0` 強化報告＝下一輪 13 項（遊戲性/視覺/操作性）優先級分層；細拆 `plan/EXT.1`（局內爽感 B1+C1+C3+B4+C2，純 display 先做）→ `EXT.2` 星擊電影化 → `EXT.3` 地形視覺化 → `EXT.4` 狀態異常 module（唯一動 reducer）→ `EXT.5` 養成 meta。結論 `.claude/agent-chat/session-20260625-092816/`。
 - **稀疏初始配招**（使用者已拍板、最小改動）：`autoEquip`→`rollInitialLoadout`。詳見 memory `mobie-sparse-initial-loadout`。
 - **bundle 分檔**：dex 1025 後主 bundle 864KB（gzip 219KB）——species.ts 可按需/分檔載入（plan/13 §4 已記）。
 - **M18.e** repo 目錄 + git remote 改名 `pokemon-mezastar`→`mobie`（**待使用者本機執行**）。

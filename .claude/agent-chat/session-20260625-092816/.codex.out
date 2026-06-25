@@ -1,0 +1,3 @@
+接受「架構同梯、交付分梯」：23.1 只鋪 event/cinematic coordinator seam 與 presentation pause API，B2 的 letterbox/cut-in/運鏡留 23.2，這樣可以避免首批改動膨脹。A4 我同意不獨立成系統，最多定義成 encounterProfile 的 phase thresholds：HP 門檻只發 phaseChanged/event tag，視覺與招式表現消費事件；不要新增 boss 專用 reducer 分支。A2/A3 也同意綁成 M24 meta loop，因為貨幣、任務、商店會牽涉持久化、經濟平衡與 generated/static data 管線，放進 M23 會稀釋局內回饋目標。plan/23 可明寫 M23 的紅線：display-only 項不得寫 battle state；A1 只能 module off-by-default；所有新資產走原創/generative pipeline，generated files 不手改。
+
+STATUS: AGREE
