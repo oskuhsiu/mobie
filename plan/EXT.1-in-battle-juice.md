@@ -1,5 +1,7 @@
 # EXT.1 — 局內爽感（打擊感 ＋ Haptics ＋ Sprite 動態 ＋ 引導）
 
+> **狀態：✅ 已完成（2026-06-30，typecheck/443 test/build 全綠 + CDP 驗收）。** 落地細節見 `plan/CHECKLIST.md` EXT 段。
+
 > 上層真相＝[`EXT.0`](EXT.0-enhancement-report.md)（分層、紅線、agent-chat 結論）。本檔只展開 EXT.1 的落地。
 > **範圍**：B1 打擊感、C1 Haptics、C3 圖示/音效優先、B4 Sprite 動態＋轉場＋修 4 置中 overlay、C2 脈衝引導、
 > 並在此鋪 **`cinematicCoordinator`** 演出協調 seam（供 [`EXT.2`](EXT.2-star-strike-cinematic.md) 接）。

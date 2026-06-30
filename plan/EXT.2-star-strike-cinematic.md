@@ -1,5 +1,7 @@
 # EXT.2 — 星擊電影化
 
+> **狀態：✅ 已完成（2026-06-30，typecheck/443 test/build 全綠 + CDP 驗收）。** 落地細節見 `plan/CHECKLIST.md` EXT 段。
+
 > 上層真相＝[`EXT.0`](EXT.0-enhancement-report.md)。依賴＝[`EXT.1`](EXT.1-in-battle-juice.md) 的 `cinematicCoordinator`（§6）。
 > **範圍**：B2——把星擊 finisher（情緒峰值）從「單擊放招＋orb 特效」升級成 **letterbox ＋ 慢動作 ＋ 運鏡 ＋ 全螢幕 cut-in**。
 > **一句話**：Mezastar 風格的核心賣點是終極技的儀式感；本檔讓星擊變成兒童的記憶點，全程純 display、`runStarStrike` 簽名不動。

@@ -5,11 +5,14 @@
 本檔不重抄這些，過時就刪。專案＝iPad 為主、自用的 Pokémon Mezastar 風格遊戲，Web/PWA。
 
 ## 現況
-**M0–M22 全部完成**並 Chrome CDP 驗證；版號 v0.1.19。內容＝全國圖鑑 1–1025（G1–G9）、16 主題野外區 +
-競技場 + 連勝塔、16 起始卡。下一輪主路線＝**EXT 強化系列**（`plan/EXT.0`，尚未動工）。
+**M0–M22 全部完成**＋ **EXT.1（局內爽感）/ EXT.2（星擊電影化）完成**並 Chrome CDP 驗證；版號 v0.1.27。
+內容＝全國圖鑑 1–1025（G1–G9）、16 主題野外區 + 競技場 + 連勝塔、16 起始卡。
+下一輪主路線＝**EXT.3 地形/天氣視覺化**（`plan/EXT.3`，尚未動工）→ EXT.4 狀態異常 module → EXT.5 養成 meta。
 
-**本 session 已完成並提交：** 戰鬥「力量 / 集氣」大圓點擊範圍（typecheck / 428 test / build 全綠、已 commit）。
-dev server 跑在 `http://localhost:5173/`（使用者自測中）。
+**本 session 已完成並提交（typecheck / 443 test / build 全綠）：** EXT.1 全套（juice/haptics prefs 地基 +
+cinematicCoordinator seam + Haptics + 浮動傷害數字/效果圖示/會心 + hit-stop + sprite idle + 修 4 個置中 overlay
+漂移 + 戰鬥進場淡入/C2 脈衝引導 + SettingsModal 打擊感/觸覺開關）、EXT.2 星擊電影化 cut-in。
+dev server 跑在 `http://localhost:5173/`。
 
 ## 真相來源（先讀，別重抄）
 - 架構 / 分層 / 資料流 / 不變式 / 已知坑 / CDP 驗證：`ARCHITECTURE.md`（§10 坑、§11 驗證 ≈ 第 277 行起）
@@ -17,34 +20,34 @@ dev server 跑在 `http://localhost:5173/`（使用者自測中）。
 - 設計總覽 + 各里程碑：`plan/README.md`、`plan/NN-*.md`、`plan/EXT.*`
 - 哪些做了 / 沒做：`plan/CHECKLIST.md`　·　決策脈絡：`.claude/agent-chat/*/conclusion.md`
 
-## 最近完成（本 session，已提交）— 戰鬥「力量 / 集氣」大圓點擊範圍
-> 使用者需求原話：力量選擇 bar（攻擊發動前）與集氣的點擊範圍要大，最好戰鬥畫面中心「那一圈」都能點；
-> 要有圓形 blur 感範圍提示（力量＝透明白、集氣＝不同色）；集氣點擊要有「強烈的點擊互動感」。
-> **純顯示層**：未碰 reducer/engine/持久化，符合 EXT.1「局內爽感」精神。
+## 最近完成（本 session，已提交）— EXT.1 局內爽感 + EXT.2 星擊電影化
+> 全程**純 display、零碰 reducer/engine**；新偏好 `juice`(full/reduced/off)＋`haptics` 住 `settings.prefs`
+> （不入 `MODULE_IDS`）。`juice:'off'` 嚴格回退 M22 基線（DOM 無新增 wrapper）。詳見 `plan/CHECKLIST.md` EXT 段。
 
-改動三檔（`git status` 可見）：
-- `src/ui/components/TimingBar.tsx`：root 包成 `.tap-field.tap-field--timing`（半透明白 blur 大圓，
-  `min(82vw,60vh,520px)`），`onPointerDown` 移到外圈→圈內任意處都停指針；原 `.qte` bar 降為圈中央 `.tap-field__inner`。
-  **此 component 被 qte / statusQte / defenseQte(off) / chainQte 共用→全部變白圈（一致）。**
-- `src/ui/screens/BattleScreen.tsx`：`MashMeter` 重寫為 `.tap-field.tap-field--charge`（橘色 blur 大圓）；
-  每次點擊：點處噴 `.tap-field__ripple`（8 個 DOM 池循環）+ 整圈 `is-hit` 瞬縮 thump，**全走 DOM class
-  重觸發（`offsetWidth` reflow trick），不過 React state**（守效能紅線）。import 加 `type PointerEvent as ReactPointerEvent`。
-- `src/ui/styles/global.css`：新增 `.tap-field*` 全套（glow/breathe/ripple/hit 動畫、timing 白＋charge 橘兩變體）
-  + `.battle-action:has(.tap-field)` 去掉外層方卡（避免大圓外再框一層）。**用到 CSS `:has()`**（iPad Safari 15.4+ OK）。
-  未用 `.tap-field` 的增強模式元件（`RhythmTap` 攻擊節奏 / `ShieldSwipe` 防禦下滑，皆預設 off）維持原方卡外觀、未動。
+新增檔：`src/input/haptics.ts`（Vibration 薄封裝 + `HAPTIC` 表 + 總開關，不支援/關閉 no-op）、
+`src/ui/components/DamageNumbers.tsx`（imperative DOM 池飄字、CSS keyframe、圖示優先）、
+`src/ui/screens/battleCinematic.ts`（cinematicCoordinator：`pause/resume` hit-stop + `cutIn` letterbox/卡片）。
+改動：`game/settings.ts`/`store/settingsStore.ts`（juice/haptics prefs+selector+setter+開機同步觸覺）、
+`BattleScreen.tsx`（damage spawn/haptic/hit-stop、4 overlay 改 `.overlay-center` flex 置中、進場淡入、C2 引導、
+星擊 cut-in 包裝 + try/finally 保證 resume）、`MobieSprite.tsx`/`EncounterScreen.tsx`（billboard idle）、
+`SettingsModal.tsx`（打擊感/觸覺段）、`global.css`（`.dmg-num*`/`.overlay-center*`/`.battle-enter`/`.choice-guide`/
+`.cinematic-*`/`.cutin-card*`/`.sprite--idle`）。**關鍵不變式**：reducer/engine 一字未動；`runStarStrike` 簽名與
+星擊傷害不變；hit-stop ＝ presentation pause 不改 `nextState`。
 
-驗證狀態：
-- ✅ typecheck 綠 · ✅ `npm test` 428 全綠 · ✅ `npm run build` 綠（864KB chunk 警告是既有 bundle follow-up，非本次引入）。
-- ✅ Chrome CDP 實機：集氣橘圈 + blur + 連點進度條正確，截圖 `/private/tmp/mz_shots/mash-circle.png`。
-- ⚠️ **白圈（timing）未拿到乾淨單張截圖**：相位會自動逾時循環（playerChoice 8s → qte 10s → mash 2.8s →
-  解算 → 下一輪），且戰鬥易自動打完。已確認 `.tap-field--timing` 確實渲染（className/rect 量到 520px），
-  但建議下一手或靠使用者自測再目視確認白圈與漣漪 mid-animation。
+驗證：✅ typecheck · ✅ `npm test` 443 全綠（settings+6/haptics+5/cinematic+5） · ✅ build。
+✅ Chrome CDP 實機（截圖在本 session scratchpad）：
+- 浮傷 `-69` 帶 `dmg-num--super`（紅↑↑）於受擊方 spawn；`.dmg-num-layer` 存在（juice=full）。
+- `battle-banner` cx=50%（**EXT.1.e 漂移已修**，原右下偏移消除）；4 個 `.overlay-center` 層皆在。
+- 野生立繪 `sprite--idle` 浮動；SettingsModal「打擊感/觸覺」段渲染正常。
+- 星擊 cut-in：`火花/小火龍/fire #ff5a32/letterbox 2 條/垂直置中` 全確認（`ext2-cutin.png` 見 letterbox 框）。
 
 ## 下一步
-1. **收使用者自測回饋**（集氣手感夠不夠爽）。可能加碼：更大 thump / Haptics 震動（Vibration API，屬 EXT.1 C1）/
-   點擊噴粒子 / 力量圈也加單擊回饋。使用者曾說「不知道怎麼弄就叫 codex 畫」→ 要更華麗可走 `/codex`。
-2. 之後回主路線 **EXT 強化系列**（`plan/EXT.0`）：EXT.1 局內爽感（這次的大圓正是其一環）→ EXT.2 星擊電影化
-   → EXT.3 地形/天氣視覺化 → EXT.4 狀態異常 module（唯一動 reducer）→ EXT.5 養成 meta。
+1. **收使用者自測回饋**（打擊感/震動/cut-in 是否夠爽；juice 預設 full）。若要更華麗的 cut-in 運鏡/粒子，
+   可走 `/codex`（使用者已授權「需要做圖就叫 codex，等久一點」）。
+2. 回主路線 **EXT.3 地形/天氣視覺化**（`plan/EXT.3`，R3F 讀 region/fieldState）→ EXT.4 狀態異常 module
+   （唯一動 reducer，嚴格 module 化）→ EXT.5 養成 meta。
+3. **未驗的小回歸**：`juice:'off'` 的 golden-path DOM 與 M22 完全一致（結構上由三元式保證 FloatDamage 回退，
+   尚未 CDP 抽張對照截圖）；可下一手補驗。
 
 ## 其他未完成 / 待辦（皆非阻塞，詳見舊紀錄）
 - 稀疏初始配招（memory `mobie-sparse-initial-loadout`）；bundle 分檔（主 bundle 864KB）。
@@ -58,10 +61,13 @@ dev server 跑在 `http://localhost:5173/`（使用者自測中）。
 視覺/E2E 無 Playwright：本機 Google Chrome headless + CDP（Node 24 內建 WebSocket）。**戰鬥畫面必帶**
 `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`（R3F 要 GL context）。詳見 `ARCHITECTURE.md §10/§11`。
 
-**本 session 的 CDP 小工具（scratchpad，可重用）**：`cdp.mjs`（吃 JS 檔在頁面執行 + 可選截圖）、
-`probe.js`/`probe2.js`（dump 畫面 clickables）、`step.js`（依 text 陣列依序點擊）、`driverA.js`（再戰→點招式槽→等 timing 圈）。
-Chrome 已 headless 起在 port 9222（profile 在 scratchpad/chrome-profile）；驅動流程：開始遊戲→常綠森林→出戰→
-✨ 推薦出戰→⚔ 出戰→戰鬥；招式槽 class＝`.move-slot`，大圓＝`.tap-field`（`--timing`白 / `--charge`橘）。
+**CDP 小工具（可重用，跨 session 複製）**：`cdp.mjs`（吃 JS 檔在頁面 context 執行 + 可選截圖；找 localhost:5173 page target）。
+本 session scratchpad 另有：`enter_region.js`（title→區域）、`into_battle2.js`（區域→遭遇→推薦→出戰3/3→戰鬥）、
+`enc2battle.js`（遭遇→戰鬥）、`fill_energy.js`（連打數回合填星擊能量到滿）、`trigger_star.js`/`trigger_now.js`
+（點 star-orb→截 cut-in）、`probe_battle.js`（dump 相位）。Chrome headless 在 port 9222。
+驅動流程：開始遊戲→常綠森林（`.region-card`）→⚔ 出戰→✨ 推薦出戰→⚔ 出戰 3/3→戰鬥；招式槽＝`.move-slot`、
+大圓＝`.tap-field`（`--timing`白/`--charge`橘）、滿能星擊＝`.star-orb`、cut-in＝`.cutin-card`、置中層＝`.overlay-center`。
+**注意**：3v3 戰鬥常在能量 ~78% 時就打完（foe 倒光），偶爾要多戰幾場才衝到 100% 觸發星擊。
 
 ## Suggested skills
 - **`/code-review`、`/simplify`** — commit 前對這次 UI 改動做品質把關（CSS `:has()` 相容、ripple 池無洩漏、效能紅線）。

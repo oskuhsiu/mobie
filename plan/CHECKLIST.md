@@ -425,3 +425,30 @@
 - [x] M22.g 攻擊節奏變體 `prefs.attackInputVariant`（mash/rhythm，mash 相位改 RhythmTap→count，SettingsModal 切換）
 - [x] M22.h/i/j 撥草/孵化摩擦/破門：通用 `GestureGate`（一元件三用）gate Encounter/Incubator/TowerSetup；純演出逾時自動推進
 - [x] 純 helpers（rhythmToMashCount/swipeShieldQuality/pathLength/frictionProgress）+12 vitest；皆預設 off 零殘留；CDP 撥草 gate 驗
+
+## EXT.1 — 局內爽感（打擊感＋Haptics＋Sprite＋引導）✅
+> 設計：`plan/EXT.0`/`EXT.1`。全程純 display、零碰 reducer；`juice`(full/reduced/off)＋`haptics` 住 `prefs`，不入 MODULE_IDS。
+### EXT.1.0 設定地基 + cinematicCoordinator seam ✅
+- [x] `settings.ts` 加 `juice`/`haptics` 兩欄（`defaultPrefs`/`migratePrefs` 缺欄補 full/true 向後相容 + `setJuiceIn`/`setHapticsIn` + selector `juiceLevelOf`/`hapticsEnabledOf`）；`settingsStore` `setJuice`/`setHaptics` + 開機/切換同步 `setHapticsEnabled`；+6 vitest
+- [x] `ui/screens/battleCinematic.ts` cinematicCoordinator（`pause/resume` 實作 + `cutIn` hooks 寫好；EXT.1 不接線＝stub）；+5 vitest（pause/resume 中斷不卡死/cutIn 依序/stub 不丟例外）
+### EXT.1.a Haptics ✅
+- [x] `input/haptics.ts` Vibration API 薄封裝（feature-detect + 語意化 `HAPTIC` 表 + 總開關，不支援/關閉一律 no-op、零報錯）；BattleScreen 命中/會心/絕佳/倒下/QTE 抓準、ResultScreen 捕獲揭曉各呼叫；+5 vitest
+### EXT.1.b 浮動傷害數字 + 效果圖示 + 會心強調 ✅
+- [x] `DamageNumbers.tsx`（imperative spawn + 6 格 DOM 池，CSS keyframe 飄字、不過 React state）；圖示優先（絕佳紅↑↑/不佳藍↓/會心放大金色/MISS/沒效果）；juice='off' 回退既有 FloatDamage＝M22 基線、DOM 零新增 wrapper；CDP 驗（-69 帶 dmg-num--super）
+### EXT.1.c Hit-stop 頓格 ✅
+- [x] BattleScreen 命中瞬間 `coordinator.pause`（命中 40ms / 會心・絕佳 120ms），只 juice='full' 生效；presentation clock pause、不碰 reducer → nextState 不變
+### EXT.1.d Sprite 動態 ✅
+- [x] 戰鬥 3D 路徑（Combatant3D 撲擊/受擊/倒下/idle 浮動）即 M22 基線已涵蓋；DOM `MobieSprite` 加 `idle` 微浮動（CSS），EncounterScreen 依 juice 開；CDP 驗 sprite--idle
+### EXT.1.e 修 4 個置中 overlay 漂移 ✅
+- [x] star-orb/battle-banner/support-overlay/combo-overlay 改包 `.overlay-center`（full-bleed flex 層），內層移除 position/translate → framer scale/y 不再蓋掉置中；CDP 驗 banner cx=50%（原右下漂移消除）；更新 memory framer-centering-overlays-followup
+### EXT.1.f 轉場 + C2 脈衝引導 ✅
+- [x] 戰鬥進場淡入（battle-enter，只動 opacity 不與 rootShake 打架）；選招相位 C2 脈衝引導（首玩立即/老玩家閒置 6s，首玩旗標 localStorage `mz.guide.choiceSeen`，出手即收）；juice='off' 不引導；全部 prefers-reduced-motion 降級
+### EXT.1 收尾 ✅
+- [x] SettingsModal 加「🎇 打擊感與回饋」段（打擊感 full/reduced/off segmented + 觸覺開關）；CDP 驗渲染；typecheck/443 test/build 全綠
+
+## EXT.2 — 星擊電影化 ✅
+> 設計：`plan/EXT.2`。依賴 EXT.1 的 cinematicCoordinator seam；填 `cutIn`，**runStarStrike 簽名與星擊傷害一字不動**。
+- [x] `battleCinematic.cutIn` 接上 BattleScreen `setCutIn`/`setLetterbox` state（letterbox 滑入 + 慢鏡停頓 + 全螢幕施放卡片：施放者頭像 PokéAPI runtime URL + 招名 + per-type 光影 typePalette，無 color-mix）
+- [x] `runStarStrike` juice≠off 先 await cutIn 再接既有星擊演出；`try/finally` 保證 `resume()`（中斷/逾時/例外都安全退場不卡死）；星擊永遠 moves[0] finisher → cut-in 取其招名/屬性
+- [x] cut-in 卡片置中走 `.overlay-center`（避免 EXT.1.e 漂移坑）；juice='off' 回退單純 orb；cinematic 受 juice 控制而非 enhancedInteractivity
+- [x] CDP 實機驗收：cut-in「火花／小火龍／fire #ff5a32／letterbox 2 條／垂直置中」全確認 + 截圖；typecheck/443 test/build 全綠
