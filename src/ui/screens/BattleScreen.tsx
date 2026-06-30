@@ -27,9 +27,11 @@ import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
+import { DamageNumbers, type DamageNumbersHandle } from '@/ui/components/DamageNumbers'
 import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
 import { ShieldSwipe } from '@/ui/components/BattleGestures'
-import { interactModeOf, attackInputVariantOf } from '@/game/settings'
+import { interactModeOf, attackInputVariantOf, juiceLevelOf } from '@/game/settings'
+import { haptic } from '@/input/haptics'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
@@ -399,6 +401,8 @@ export function BattleScreen() {
   const defenseMode = useSettings((s) => interactModeOf(s.settings, 'defense'))
   const attackVariant = useSettings((s) => attackInputVariantOf(s.settings))
   const interactMode = useSettings((s) => s.settings.prefs.enhancedInteractivity.mode)
+  // EXT.1 打擊感強度（純字串 selector，只在變動時 re-render）：off＝回退 M22 純 flash+shake / FloatDamage。
+  const juice = useSettings((s) => juiceLevelOf(s.settings))
   // M17 夥伴（訓練師）技能：帳號級、純顯示層。模組關＝行動列不顯示；已習得（起始∪解鎖）才可用。
   const partnerOn = useSettings((s) => s.settings.modules.partnerSkills)
   const learnedSkillIds = usePlayerSkills((s) => s.learnedSkillIds)
@@ -411,8 +415,12 @@ export function BattleScreen() {
   }, [context.regionId, context.tower])
 
   const fxRef = useRef<FxHandle>(null)
+  const damageRef = useRef<DamageNumbersHandle>(null)
   const stageRef = useRef<StageHandle>(null)
   const rootShake = useAnimationControls()
+  // EXT.1：juice 走 ref 供 playEvents（useCallback）讀最新值，不必把 juice 進其依賴陣列重建整條演出器。
+  const juiceRef = useRef(juice)
+  juiceRef.current = juice
   const initedRef = useRef(false)
   // M14.0：開戰時生成 battleSeed + 建一條 mulberry32 stream，整場 resolveTurn 共用持續推進
   // （取代各回合預設 Math.random）。同 seed + 同輸入 → 同事件流，為回放重模擬鋪地基。
@@ -549,6 +557,10 @@ export function BattleScreen() {
           target: e.targetSide, amount: e.amount,
           crit: e.crit, effText: e.effectivenessText, missed: e.missed,
         })
+        // EXT.1.b：juice≠off → spawn 富表現飄字（含 MISS/沒效果，圖示優先）；off 走既有 FloatDamage（store hitFx）＝M22 基線。
+        if (juiceRef.current !== 'off') {
+          damageRef.current?.spawn({ ...pos, amount: e.amount, crit: e.crit, effectiveness: e.effectiveness, missed: e.missed })
+        }
         // 粒子 / 螢幕震動（不過 React state）
         if (!e.missed && e.amount > 0) {
           if (e.crit) {
@@ -563,6 +575,8 @@ export function BattleScreen() {
           stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1) // 3D：受擊抖動
           audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit')
           audio.playMoveSound(recipe.sound) // M21.e：疊一層屬性材質音色（火=爆/電=zap/水=波…）
+          // EXT.1.a：觸覺回饋（依情緒強度，裝置/開關不支援自動 no-op；獨立於 juice）
+          haptic(e.crit ? 'crit' : e.effectiveness >= 2 ? 'superEffective' : 'hit')
         }
         if (e.missed) {
           store().setBanner('攻擊沒有命中…')
@@ -587,6 +601,7 @@ export function BattleScreen() {
         stageRef.current?.faint(e.side) // 3D：傾倒淡沉
         fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
         audio.play('faint')
+        haptic('faint') // EXT.1.a：倒下沉重觸覺
         store().pushLog(`${prefix}${m.nameZh} 倒下了！`)
         await wait(620)
       } else if (e.type === 'heal') {
@@ -646,9 +661,13 @@ export function BattleScreen() {
           const prefix = e.side === 'foe' ? '對手的 ' : ''
           store().setMemberHp(e.side, e.index, e.hpAfter)
           store().showHit({ target: e.side, amount: e.amount ?? 0, crit: false, effText: null, missed: false })
+          if (juiceRef.current !== 'off') {
+            damageRef.current?.spawn({ ...FX_POS[e.side], amount: e.amount ?? 0, crit: false, effectiveness: 1, missed: false })
+          }
           fxRef.current?.burst({ ...FX_POS[e.side], color: '#ff9a3c', count: 14, kind: 'puff' })
           rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
           audio.play('hit')
+          haptic('hit')
           store().setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
           store().pushLog(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
           await wait(820)
@@ -922,7 +941,8 @@ export function BattleScreen() {
         <BattleStage ref={stageRef} player={player} foe={foe} />
       </Suspense>
       <FxCanvas ref={fxRef} />
-      <FloatDamage hitFx={hitFx} />
+      {/* EXT.1.b：juice≠off 用富表現飄字層（圖示優先）；off 回退既有 FloatDamage＝M22 基線、DOM 零新增 wrapper。 */}
+      {juice === 'off' ? <FloatDamage hitFx={hitFx} /> : <DamageNumbers ref={damageRef} />}
 
       {/* 前景 HUD（疊在 3D 之上） */}
       <div className="col battle-fg" style={{ flex: 1, position: 'relative', zIndex: 10 }}>
@@ -1158,7 +1178,7 @@ export function BattleScreen() {
                 hint="10秒內點擊任意處，停在正中可造成最大傷害；逾時隨機！"
                 timeoutMs={ATTACK_QTE_TIMEOUT_MS}
                 randomOnTimeout
-                onResult={(q) => { pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }}
+                onResult={(q) => { if (q === 'perfect' || q === 'good') haptic('qteGood'); pendingQualityRef.current = q; useBattleStore.getState().setPhase('mash') }}
               />
             )}
             {phase === 'mash' && (attackVariant === 'rhythm'
@@ -1167,7 +1187,7 @@ export function BattleScreen() {
             {phase === 'statusQte' && (
               <TimingBar
                 hint="變化招！抓準時機強化效果（只影響強度、不影響成敗）"
-                onResult={(q) => { void runPlayerTurn(q, 0) }}
+                onResult={(q) => { if (q === 'perfect' || q === 'good') haptic('qteGood'); void runPlayerTurn(q, 0) }}
               />
             )}
             {phase === 'defenseQte' && (defenseMode !== 'off'

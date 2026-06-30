@@ -4,6 +4,7 @@ import { useGame } from '@/app/GameProvider'
 import { buildBattleMobie } from '@/game/stats'
 import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
+import { haptic } from '@/input/haptics'
 import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
 import { interactModeOf, INTENSITY_BY_MODE } from '@/game/settings'
@@ -70,7 +71,7 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
     if (finishedRef.current) return
     finishedRef.current = true
     setStage('result')
-    if (success.current) audio.play('capture')
+    if (success.current) { audio.play('capture'); haptic('capture') } // EXT.1.a：捕獲揭曉節慶式連震
     onCapturedRef.current(success.current)
   }, [])
 

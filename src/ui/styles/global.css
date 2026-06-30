@@ -231,6 +231,45 @@ body {
   pointer-events: none; font-variant-numeric: tabular-nums;
 }
 .float-dmg--crit { color: var(--accent); text-shadow: 0 2px 0 #b45309, 0 0 16px rgba(255,210,63,0.8); }
+
+/* ============ EXT.1.b 浮動傷害數字（DOM 池 + CSS 飄字，圖示優先）============
+   每個 .dmg-num 是池中複用節點，spawn 時設座標/文字/變體 class 並重觸發 .is-on 動畫。
+   位置走 left/top %，飄升走 transform keyframe（GPU、不過 React state）。 */
+.dmg-num-layer { position: absolute; inset: 0; z-index: 8; pointer-events: none; }
+.dmg-num {
+  position: absolute; opacity: 0;
+  display: flex; flex-direction: column; align-items: center; line-height: 1;
+  font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap;
+  will-change: transform, opacity;
+  --peak: 1;
+}
+.dmg-num__eff { font-size: 24px; font-weight: 900; line-height: 0.9; }
+.dmg-num__val {
+  font-size: 38px; color: #fff;
+  text-shadow: 0 2px 0 #b91c1c, 0 0 14px rgba(255,80,80,0.7);
+}
+/* 會心：放大金色 + 飄字 peak 更大 */
+.dmg-num--crit { --peak: 1.42; }
+.dmg-num--crit .dmg-num__val { color: var(--accent); font-size: 46px; text-shadow: 0 2px 0 #b45309, 0 0 18px rgba(255,210,63,0.9); }
+.dmg-num--crit .dmg-num__eff { color: var(--accent); text-shadow: 0 0 12px rgba(255,210,63,0.9); }
+/* 效果絕佳：紅 ↑↑ */
+.dmg-num--super .dmg-num__eff { color: #ff5252; text-shadow: 0 0 12px rgba(255,82,82,0.9); }
+.dmg-num--super .dmg-num__val { text-shadow: 0 2px 0 #b91c1c, 0 0 16px rgba(255,82,82,0.85); }
+/* 不太有效：藍 ↓ + 字縮小變淡 */
+.dmg-num--weak .dmg-num__eff { color: #5aa9ff; text-shadow: 0 0 10px rgba(90,169,255,0.85); }
+.dmg-num--weak .dmg-num__val { font-size: 30px; color: #cfe3ff; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+/* MISS / 沒效果：灰、無紅光 */
+.dmg-num--null .dmg-num__val { font-size: 28px; color: #b9c2d6; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+.dmg-num.is-on { animation: dmg-float 0.85s cubic-bezier(0.22,0.7,0.3,1) forwards; }
+@keyframes dmg-float {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.5); }
+  16% { opacity: 1; transform: translate(-50%, -14px) scale(var(--peak)); }
+  70% { opacity: 1; transform: translate(-50%, -44px) scale(var(--peak)); }
+  100% { opacity: 0; transform: translate(-50%, -66px) scale(var(--peak)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dmg-num.is-on { animation-duration: 0.5s; }
+}
 .battle-banner {
   position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
   z-index: 12; text-align: center; max-width: 86%;
