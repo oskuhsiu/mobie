@@ -34,6 +34,14 @@ dev server 跑在 `http://localhost:5173/`。
 `.cinematic-*`/`.cutin-card*`/`.sprite--idle`）。**關鍵不變式**：reducer/engine 一字未動；`runStarStrike` 簽名與
 星擊傷害不變；hit-stop ＝ presentation pause 不改 `nextState`。
 
+**EXT.2 後續重做（使用者回饋「星擊視覺很差」）：** 開四方圓桌（`.claude/agent-chat/session-20260630-162857`，
+含三方 ASCII 示意圖確認）→ 把星擊 cut-in 重做成「蓄力→蓋章→衝擊」三拍弧：拍1 R3F 舞台 timeScale 0.15 慢鏡
++ letterbox + FxCanvas `converge` 四邊吸入粒子 + Tone 上升 sweep；拍2 卡片硬「印章」砸 + timeScale 0 定格 + tick 音；
+拍3 卡片 brightness(4) 過曝退場 + FxCanvas `shockwave`（lighter 全屏大環）+ 白閃 + 震動×1.5 + 相機急推 + sub-bass boom。
+新增 FxCanvas converge/shockwave、audio starChargeSweep/StampTick/ImpactBoom、BattleStage `setTimeScale`（Combatant3D
+delta 乘倍率 + 虛擬時間）。**鐵則**：不在疊 WebGL 的 DOM 用 mix-blend（iPad Safari 掉幀）→ filter:brightness + Canvas
+lighter。CDP screencast 連拍三拍全捕捉、產出 GIF/APNG（本地 `starstrike.gif`，已 gitignore）。
+
 驗證：✅ typecheck · ✅ `npm test` 443 全綠（settings+6/haptics+5/cinematic+5） · ✅ build。
 ✅ Chrome CDP 實機（截圖在本 session scratchpad）：
 - 浮傷 `-69` 帶 `dmg-num--super`（紅↑↑）於受擊方 spawn；`.dmg-num-layer` 存在（juice=full）。

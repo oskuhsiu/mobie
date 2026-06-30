@@ -13,3 +13,7 @@ public/models/*
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# 星擊演示動圖（本地產出，不入庫）
+starstrike.gif
+starstrike-apng.png

@@ -452,3 +452,12 @@
 - [x] `runStarStrike` juice≠off 先 await cutIn 再接既有星擊演出；`try/finally` 保證 `resume()`（中斷/逾時/例外都安全退場不卡死）；星擊永遠 moves[0] finisher → cut-in 取其招名/屬性
 - [x] cut-in 卡片置中走 `.overlay-center`（避免 EXT.1.e 漂移坑）；juice='off' 回退單純 orb；cinematic 受 juice 控制而非 enhancedInteractivity
 - [x] CDP 實機驗收：cut-in「火花／小火龍／fire #ff5a32／letterbox 2 條／垂直置中」全確認 + 截圖；typecheck/443 test/build 全綠
+
+### EXT.2-redo — 星擊三拍電影化（使用者回饋「視覺很差」→ 四方圓桌重做）✅
+> 圓桌結論：`.claude/agent-chat/session-20260630-162857/conclusion.md`（含三方 ASCII 示意圖確認）。
+> 共識核心：用「極端對比」（極暗/極亮、極慢/極快）做出蓄力→蓋章→衝擊的節奏弧；慢鏡只動 R3F 舞台、卡片維持銳利 DOM。
+- [x] A — FxCanvas `converge`（四邊吸入中心 per-type 尾跡粒子）+ `shockwave`（globalCompositeOperation='lighter' 巨型擴散環掃滿全螢幕）；audioEngine `starChargeSweep`（lowpass 200→8000+tremolo）/`starStampTick`/`starImpactBoom`（MembraneSynth sub-bass）
+- [x] B — R3F 真 timeScale 慢鏡：BattleStage `setTimeScale` + Combatant3D useFrame delta 乘倍率 + 虛擬時間給 idle bob（慢鏡不穿幫）；FxCanvas/Tone real-time
+- [x] C — battleCinematic.cutIn 三拍：拍1 timeScale 0.15+letterbox+onCharge(吸入粒子+sweep) → 拍2 卡片硬「印章」砸(scale 1.7→1)+timeScale 0 定格+onStamp(tick) → 拍3 收卡(brightness(4)過曝退場)+timeScale 1+onImpact(白閃+全屏衝擊波+震動×1.5+相機急推+boom)
+- [x] iPad Safari 鐵則（圓桌裁定）：不在疊 WebGL 的 DOM 用 mix-blend-mode（掉幀/破圖）→ filter:brightness 衝白 + Canvas lighter 大圓；per-type 改粒子形狀/色/音非只顏色；否決「sprite 塞進 3D 放大」
+- [x] CDP 實機驗收（screencast 連拍）：拍1 蓄力(letterbox+吸入粒子+暗場慢鏡)、拍2 蓋章卡片「巨角／飛天螳螂／bug 綠光」、拍3 白閃+全屏衝擊波 三拍全捕捉，產出 GIF/APNG（本地）；typecheck/443 test/build 全綠
