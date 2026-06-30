@@ -43,13 +43,19 @@ export interface CinematicHooks {
   setCutIn?: (spec: CutInSpec | null) => void
   /** 上下黑邊 letterbox 開關。 */
   setLetterbox?: (on: boolean) => void
-  /** 演出時鐘倍率（1＝正常、<1＝慢鏡）；CSS 可據此放慢動畫。EXT.1 不使用。 */
+  /** 演出時鐘倍率（1＝正常、<1＝慢鏡、0＝硬定格）。BattleScreen 接到 R3F 舞台 timeScale。 */
   setTimeScale?: (scale: number) => void
+  /** 拍1 蓄力開始：BattleScreen 觸發 FxCanvas 吸入粒子 + Tone 上升 sweep。 */
+  onCharge?: (spec: CutInSpec) => void
+  /** 拍2 蓋章瞬間：BattleScreen 播印章 tick 音。 */
+  onStamp?: (spec: CutInSpec) => void
+  /** 拍3 衝擊：BattleScreen 觸發白閃 + 全屏衝擊波 + screenshake×1.5 + sub-bass boom。 */
+  onImpact?: (spec: CutInSpec) => void
 }
 
-/** cut-in 進場各段時長（ms）。慢鏡的儀式感靠這裡的節奏，而非真的時間膨脹整條 await 鏈。 */
-const CUTIN_LETTERBOX_IN = 220
-const CUTIN_HOLD = 900
+// 三拍時長（ms）。儀式感靠「慢鏡時鐘 + 這裡的節奏」，FxCanvas/Tone 走 real-time 與之脫鉤。
+const CUTIN_CHARGE_MS = 720    // 拍1 蓄力：慢鏡 + 粒子吸入 + sweep
+const CUTIN_STAMP_FREEZE_MS = 120 // 拍2 蓋章後硬定格
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -80,14 +86,22 @@ export function createCinematicCoordinator(hooks: CinematicHooks = {}): Cinemati
       clearStage() // 收 letterbox/cut-in、時鐘回速
     },
     async cutIn(spec) {
-      // 進場：letterbox 滑入 + 降速 + 顯示 cut-in 卡片 → hold（戲劇停頓）→ 收卡片但保留電影框。
-      hooks.setTimeScale?.(0.45)
+      // 三拍弧（plan/EXT.2 圓桌共識）。慢鏡只動 R3F 舞台（setTimeScale），卡片是銳利 DOM、FxCanvas/Tone real-time。
+      // 拍1 蓄力：舞台降到慢鏡 + letterbox 進 + 四邊吸入粒子 + 上升 sweep（卡片還沒出）。
+      hooks.setTimeScale?.(0.15)
       hooks.setLetterbox?.(true)
-      await wait(CUTIN_LETTERBOX_IN)
+      hooks.onCharge?.(spec)
+      await wait(CUTIN_CHARGE_MS)
+      // 拍2 蓋章：卡片像印章硬砸中心 + 舞台硬定格(0) + 印章 tick → 80~120ms freeze。
       hooks.setCutIn?.(spec)
-      await wait(CUTIN_HOLD)
+      hooks.setTimeScale?.(0)
+      hooks.onStamp?.(spec)
+      await wait(CUTIN_STAMP_FREEZE_MS)
+      // 拍3 衝擊：卡片過曝退場 + 舞台 snap 回正常 + 白閃/全屏衝擊波/震動/boom。
       hooks.setCutIn?.(null)
-      // 不在此 resume：letterbox/慢鏡保留到呼叫端命中演出結束後再 resume()。
+      hooks.setTimeScale?.(1)
+      hooks.onImpact?.(spec)
+      // 不在此 resume：letterbox 保留到呼叫端「命中傷害」演完後再 resume() 收黑邊。
     },
   }
 }

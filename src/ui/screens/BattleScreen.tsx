@@ -429,9 +429,32 @@ export function BattleScreen() {
   // EXT.2 星擊電影化 display state（低頻：每場星擊一次，走一般 state 不違反效能紅線）。
   const [cutIn, setCutIn] = useState<CutInSpec | null>(null)
   const [letterbox, setLetterbox] = useState(false)
-  // EXT.1 §6 演出協調器（hit-stop / EXT.2 星擊 cut-in 共用）。hooks＝穩定的 setState 身分，建一次即可。
+  // EXT.1 §6 / EXT.2 演出協調器（hit-stop + 星擊三拍 cut-in 共用）。hooks 全參照穩定身分（setState/ref/
+  // module 單例），建一次即可。慢鏡接到 R3F 舞台 timeScale；蓄力/衝擊的 FX 走 fxRef/audio/rootShake（real-time）。
   const cinematicRef = useRef<CinematicCoordinator | null>(null)
-  if (!cinematicRef.current) cinematicRef.current = createCinematicCoordinator({ setCutIn, setLetterbox })
+  if (!cinematicRef.current) {
+    cinematicRef.current = createCinematicCoordinator({
+      setCutIn,
+      setLetterbox,
+      setTimeScale: (scale) => stageRef.current?.setTimeScale(scale),
+      onCharge: (spec) => {
+        const pal = typePalette[spec.type]
+        fxRef.current?.converge({ nx: 0.5, ny: 0.5, color: pal.color, count: 40, shape: pal.shape })
+        audio.starChargeSweep()
+      },
+      onStamp: () => audio.starStampTick(),
+      onImpact: (spec) => {
+        const pal = typePalette[spec.type]
+        fxRef.current?.flash('#ffffff', 0.9)
+        fxRef.current?.shockwave({ nx: 0.5, ny: 0.5, color: pal.color }) // 外層大環
+        fxRef.current?.shockwave({ nx: 0.5, ny: 0.5, color: pal.accent, lw: 5 }) // 內層細環
+        fxRef.current?.burst({ nx: 0.5, ny: 0.5, color: pal.color, count: 44, power: 2.2, kind: 'spark', shape: pal.shape })
+        rootShake.start({ x: [0, -24, 20, -16, 10, 0], scale: [1, 1.05, 1], transition: { duration: 0.55 } }) // 震動×1.5 + 相機急推
+        audio.starImpactBoom()
+        haptic('crit')
+      },
+    })
+  }
   const initedRef = useRef(false)
   // M14.0：開戰時生成 battleSeed + 建一條 mulberry32 stream，整場 resolveTurn 共用持續推進
   // （取代各回合預設 Math.random）。同 seed + 同輸入 → 同事件流，為回放重模擬鋪地基。
@@ -827,6 +850,7 @@ export function BattleScreen() {
     const useCinematic = juiceRef.current !== 'off'
     try {
       if (useCinematic) {
+        // 三拍 cut-in（蓄力→蓋章→衝擊；衝擊的白閃/衝擊波/震動/boom 由 onImpact 演出，這裡不再重複）。
         // 星擊永遠用 slot0 招當 finisher（reducer：slotBySide.player = starStrike ? 0 : …）→ cut-in 取 moves[0]。
         const caster = b0.player.members[b0.player.activeIndex]
         const finisher = caster.moves[0]
@@ -837,15 +861,18 @@ export function BattleScreen() {
           type: finisher?.type ?? 'normal',
           side: 'player',
         })
+        store().setBanner('★ 星擊發動！')
+      } else {
+        // juice='off'：回退單純 orb 放招（M22 原樣，無 cut-in）。
+        store().setBanner('★ 星擊發動！')
+        audio.play('crit')
+        haptic('crit')
+        fxRef.current?.flash('#ffffff', 0.7)
+        fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
+        rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
+        await wait(620)
+        fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
       }
-      store().setBanner('★ 星擊發動！')
-      audio.play('crit')
-      haptic('crit')
-      fxRef.current?.flash('#ffffff', 0.7)
-      fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
-      rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
-      await wait(620)
-      fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
       const input: ReplayInput = { type: 'ATTACK', starStrike: true }
       const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
@@ -1308,10 +1335,10 @@ export function BattleScreen() {
               key="cutin"
               className="cutin-card"
               style={{ ['--type' as string]: typePalette[cutIn.type].color }}
-              initial={{ opacity: 0, scale: 0.7, x: -48 }}
-              animate={{ opacity: 1, scale: 1, x: 0 }}
-              exit={{ opacity: 0, scale: 1.12 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+              initial={{ opacity: 0, scale: 1.7 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.32, filter: 'brightness(4)' }}
+              transition={{ duration: 0.13, ease: [0.2, 0.9, 0.3, 1] }}
             >
               <img className="cutin-card__art" src={cutIn.artworkUrl} alt="" draggable={false} />
               <div className="cutin-card__text">
