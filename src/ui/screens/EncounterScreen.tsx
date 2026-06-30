@@ -14,7 +14,7 @@ import { IndividualInfo } from '@/ui/components/IndividualInfo'
 import { MobCard } from '@/ui/components/MobCard'
 import { GestureGate } from '@/ui/components/GestureGate'
 import { useSettings } from '@/store/settingsStore'
-import { interactModeOf } from '@/game/settings'
+import { interactModeOf, juiceLevelOf } from '@/game/settings'
 import { rollEncounterProfile, applyProfileToMon, ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { audio } from '@/audio/audioEngine'
 
@@ -22,6 +22,7 @@ export function EncounterScreen() {
   const { context, send } = useGame()
   // M22.h：遭遇前撥草（純演出）。off＝直接出戰；開啟＝撥開草叢手勢後才 ENGAGE。
   const grassOn = useSettings((s) => interactModeOf(s.settings, 'encounter') !== 'off')
+  const spriteIdle = useSettings((s) => juiceLevelOf(s.settings) !== 'off') // EXT.1.d：野生立繪 idle 浮動
   const [grassGate, setGrassGate] = useState(false)
   const engage = () => { if (grassOn) setGrassGate(true); else send({ type: 'ENGAGE' }) }
   // M12.e 對手技能標籤：模組開啟才指派（display）。
@@ -78,7 +79,7 @@ export function EncounterScreen() {
           style={{ width: 'min(60vw, 300px)', height: 'min(60vw, 300px)', position: 'relative' }}
         >
           <div className="platform" />
-          <MobieSprite src={wild.artworkUrl} alt={wild.nameZh} shiny={wild.shiny} />
+          <MobieSprite src={wild.artworkUrl} alt={wild.nameZh} shiny={wild.shiny} idle={spriteIdle} />
         </motion.div>
 
         <motion.div

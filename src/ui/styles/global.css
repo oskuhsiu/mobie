@@ -162,6 +162,10 @@ body {
 /* ============ Mobie sprite ============ */
 .sprite { position: relative; display: grid; place-items: center; }
 .sprite__img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 16px 18px rgba(0,0,0,0.45)); }
+/* EXT.1.d：DOM billboard sprite idle 微浮動（呼叫端依 juice 開關；off＝不加 sprite--idle＝靜止） */
+.sprite--idle .sprite__img { animation: sprite-bob 3.2s ease-in-out infinite; }
+@keyframes sprite-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3.5%); } }
+@media (prefers-reduced-motion: reduce) { .sprite--idle .sprite__img { animation: none; } }
 .sprite__skeleton {
   position: absolute; inset: 12%;
   border-radius: 50%;
@@ -276,6 +280,24 @@ body {
   padding: 10px 22px; border-radius: 14px;
   background: rgba(0,0,0,0.55); border: 1px solid var(--stroke);
   text-shadow: 0 2px 8px rgba(0,0,0,0.6); pointer-events: none;
+}
+
+/* ============ EXT.1.f：戰鬥進場淡入 + C2 脈衝引導 ============
+   battle-enter 只動 opacity（不動 transform）→ 不與 rootShake 的 framer transform 打架。 */
+.battle-enter { animation: battle-fade-in 0.5s ease-out; }
+@keyframes battle-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.choice-guide {
+  font-size: 16px; font-weight: 900; color: var(--accent);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.65); pointer-events: none;
+  animation: choice-guide-pulse 1.1s ease-in-out infinite;
+}
+@keyframes choice-guide-pulse {
+  0%, 100% { opacity: 0.72; transform: translateY(0) scale(1); }
+  50% { opacity: 1; transform: translateY(-3px) scale(1.06); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-enter { animation: none; }
+  .choice-guide { animation: none; opacity: 0.95; }
 }
 
 /* ============ EXT.1.e：置中 overlay 改 full-bleed flex 層（消除 framer 漂移）============

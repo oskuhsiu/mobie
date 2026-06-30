@@ -450,6 +450,10 @@ export function BattleScreen() {
   const [starCharging, setStarCharging] = useState(false)
   // M17 夥伴技能「每場一次」預算：本場已用過的技能 id（display state，不持久化）
   const [partnerUsed, setPartnerUsed] = useState<string[]>([])
+  // EXT.1.f C2 脈衝引導：選招處「👇 選一個招式」提示。首玩（localStorage 旗標未設）或閒置 N 秒才顯示，
+  // 玩家一出手即記旗標並收起；純 display、可由 juice='off' 關閉、不碰 reducer。
+  const [showChoiceGuide, setShowChoiceGuide] = useState(false)
+  const guideSeenRef = useRef(typeof localStorage !== 'undefined' && localStorage.getItem('mz.guide.choiceSeen') === '1')
 
   // 初始化：建出雙方 3 隻隊伍，進場
   useEffect(() => {
@@ -530,6 +534,14 @@ export function BattleScreen() {
     const a = battle.player.members[battle.player.activeIndex]
     if (a && a.maxHp > 0) audio.setIntensity(1 - Math.max(0, a.currentHp) / a.maxHp)
   }, [battle])
+
+  // EXT.1.f C2：選招相位的脈衝引導。首玩立即顯示、否則閒置 6 秒才顯示；離開相位即收。juice='off' 不引導。
+  useEffect(() => {
+    if (juice === 'off' || phase !== 'playerChoice') { setShowChoiceGuide(false); return }
+    if (!guideSeenRef.current) { setShowChoiceGuide(true); return } // 首玩：立即提示
+    const t = setTimeout(() => setShowChoiceGuide(true), 6000) // 老玩家：閒置才提示，不打擾
+    return () => clearTimeout(t)
+  }, [phase, juice])
 
   // 依序消費 reducer events：一次算完、畫面慢慢演
   const playEvents = useCallback(async (b0: BattleState, events: BattleEvent[]) => {
@@ -948,7 +960,11 @@ export function BattleScreen() {
   const chainReady = chainOn && battle.chainGauge >= chainMax
 
   return (
-    <motion.div className="col" style={{ flex: 1, position: 'relative' }} animate={rootShake}>
+    <motion.div
+      className={`col${juice !== 'off' ? ' battle-enter' : ''}`}
+      style={{ flex: 1, position: 'relative' }}
+      animate={rootShake}
+    >
       {/* 3D 戰鬥舞台（背景層）：兩隻在場Mobie + 地台/光照/相機 */}
       <Suspense fallback={null}>
         <BattleStage ref={stageRef} player={player} foe={foe} />
@@ -1113,10 +1129,17 @@ export function BattleScreen() {
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             {/* M19.c 四槽選招：選槽即進 QTE（slotIndex 存進 ref 待解算回合用）。星擊/換人/連鎖另列分離。 */}
             {/* M19.d：變化招走輕量強度 QTE（statusQte，無 mash）；攻擊招走命中 QTE→mash。 */}
+            {/* EXT.1.f C2 脈衝引導：指向選招（首玩/閒置才顯示，出手即收） */}
+            {showChoiceGuide && <div className="choice-guide">👇 選一個招式出擊！</div>}
             <MoveSlots
               moves={player.moves}
               onPick={(slot) => {
                 pendingSlotRef.current = slot
+                if (!guideSeenRef.current) {
+                  guideSeenRef.current = true
+                  try { localStorage.setItem('mz.guide.choiceSeen', '1') } catch { /* 隱私模式：忽略 */ }
+                }
+                setShowChoiceGuide(false)
                 const isStatus = player.moves[slot]?.category === 'status'
                 useBattleStore.getState().setPhase(isStatus ? 'statusQte' : 'qte')
               }}
