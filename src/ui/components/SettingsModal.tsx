@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useSettings } from '@/store/settingsStore'
-import { MODULE_IDS, type InteractMode } from '@/game/settings'
+import { MODULE_IDS, type InteractMode, type JuiceLevel } from '@/game/settings'
 import type { ModuleId } from '@/game/ext/seams'
 import { audio } from '@/audio/audioEngine'
 
@@ -9,6 +9,13 @@ const INTERACT_OPTIONS: { id: InteractMode; label: string; hint: string }[] = [
   { id: 'off', label: '關', hint: '點一下就好，最單純' },
   { id: 'lite', label: '輕度', hint: '滑動丟球、長按蓄力' },
   { id: 'arcade', label: '機台', hint: '畫圈封印、節奏點擊' },
+]
+
+/** EXT.1 打擊感強度三態（plan/EXT.1 §3）：升級爽感／減量／回到 M22 純閃光。 */
+const JUICE_OPTIONS: { id: JuiceLevel; label: string; hint: string }[] = [
+  { id: 'full', label: '完整', hint: '傷害數字＋頓格＋動態（推薦）' },
+  { id: 'reduced', label: '減量', hint: '只留浮傷數字、不頓格' },
+  { id: 'off', label: '關', hint: '回到最單純的閃光' },
 ]
 
 /** 各模組的 UI 文案 + 是否已實作（未實作的在設定頁標「敬請期待」、不可開）。 */
@@ -80,9 +87,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const setInteractMode = useSettings((s) => s.setInteractMode)
   const setReplayRecording = useSettings((s) => s.setReplayRecording)
   const setAttackInputVariant = useSettings((s) => s.setAttackInputVariant)
+  const setJuice = useSettings((s) => s.setJuice)
+  const setHaptics = useSettings((s) => s.setHaptics)
   const interactMode = settings.prefs.enhancedInteractivity.mode
   const recordReplays = settings.prefs.recordReplays
   const attackVariant = settings.prefs.attackInputVariant
+  const juice = settings.prefs.juice
+  const haptics = settings.prefs.haptics
 
   const toggle = (id: ModuleId, available: boolean) => {
     if (!available) return
@@ -148,6 +159,48 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* EXT.1 打擊感 / 觸覺回饋（UX 偏好，純 display；預設 完整 + 震動開） */}
+          <div className="settings-divider">🎇 打擊感與回饋</div>
+          <div className="interact-pref">
+            <div className="interact-pref__head">
+              <span className="mod-row__icon">💥</span>
+              <div className="mod-row__text">
+                <div className="mod-row__label">打擊感強度</div>
+                <div className="mod-row__desc">
+                  攻擊命中時的浮動傷害數字、效果絕佳圖示、會心強調與「頓一下」的重擊感。「關」＝回到最單純的閃光。
+                </div>
+              </div>
+            </div>
+            <div className="interact-seg" role="group" aria-label="打擊感強度">
+              {JUICE_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  className={`interact-seg__btn ${juice === o.id ? 'interact-seg__btn--on' : ''}`}
+                  aria-pressed={juice === o.id}
+                  onClick={() => { if (juice !== o.id) { audio.play('select'); setJuice(o.id) } }}
+                >
+                  <span className="interact-seg__label">{o.label}</span>
+                  <span className="interact-seg__hint">{o.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div
+            className={`mod-row ${haptics ? 'mod-row--on' : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => { audio.play('select'); setHaptics(!haptics) }}
+          >
+            <span className="mod-row__icon">📳</span>
+            <div className="mod-row__text">
+              <div className="mod-row__label">觸覺回饋（震動）</div>
+              <div className="mod-row__desc">命中／會心／捕獲時手機輕震一下（需裝置支援，iPad 多半無效＝自動忽略）。預設開。</div>
+            </div>
+            <span className={`switch ${haptics ? 'switch--on' : ''}`}>
+              <span className="switch__knob" />
+            </span>
           </div>
 
           <div className="settings-divider">🧩 延伸系統模組</div>
