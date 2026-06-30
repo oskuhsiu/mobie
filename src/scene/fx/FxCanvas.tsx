@@ -14,6 +14,9 @@ export interface FxBurstOpts {
   shape?: FxShape
 }
 export interface FxRingOpts { nx: number; ny: number; color: string }
+// EXT.2 星擊：拍1 從四邊吸入中心的尾跡粒子；拍3 填滿全螢幕的巨型擴散衝擊波環。
+export interface FxConvergeOpts { nx: number; ny: number; color: string; count?: number; shape?: FxShape }
+export interface FxShockwaveOpts { nx: number; ny: number; color: string; lw?: number }
 export type FxShape = 'dot' | 'streak' | 'shard'
 export const FX_TRAVEL_SPEED = 0.055
 export interface FxTravelOpts {
@@ -31,10 +34,14 @@ export interface FxHandle {
   ring: (o: FxRingOpts) => void
   flash: (color: string, alpha?: number) => void
   travel: (o: FxTravelOpts) => void
+  /** EXT.2 拍1：從四邊把 per-type 尾跡粒子吸入中心（蓄力）。 */
+  converge: (o: FxConvergeOpts) => void
+  /** EXT.2 拍3：填滿全螢幕的巨型擴散衝擊波環（globalCompositeOperation='lighter' 加亮）。 */
+  shockwave: (o: FxShockwaveOpts) => void
 }
 
 interface P { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; g: number; shape: FxShape; rot: number }
-interface Ring { x: number; y: number; r: number; max: number; color: string; life: number }
+interface Ring { x: number; y: number; r: number; max: number; color: string; life: number; lw: number; glow: boolean; decay: number; grow: number }
 interface Travel {
   x0: number; y0: number; x1: number; y1: number
   color: string; accent: string; shape: FxShape
@@ -90,19 +97,22 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
       s.flash.a = Math.max(0, s.flash.a - 0.06)
     }
 
-    // 擴張環（原地壓縮，閒置時不配置新陣列）
+    // 擴張環（原地壓縮，閒置時不配置新陣列）。EXT.2 衝擊波＝大 max + glow(lighter) + 慢 grow。
     let rj = 0
     for (let i = 0; i < s.rings.length; i++) {
       const r = s.rings[i]
-      r.life -= 0.045
+      r.life -= r.decay
       if (r.life <= 0) continue
-      r.r += (r.max - r.r) * 0.18
+      r.r += (r.max - r.r) * r.grow
+      ctx.save()
+      if (r.glow) ctx.globalCompositeOperation = 'lighter'
       ctx.globalAlpha = r.life * 0.8
       ctx.strokeStyle = r.color
-      ctx.lineWidth = 3
+      ctx.lineWidth = r.lw
       ctx.beginPath()
       ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2)
       ctx.stroke()
+      ctx.restore()
       s.rings[rj++] = r
     }
     s.rings.length = rj
@@ -135,7 +145,7 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
 
       if (done) {
         if (tr.onArrive !== 'none') addBurst(s, tr.x1, tr.y1, tr.color, tr.count, tr.power, 'hit', tr.shape)
-        if (tr.onArrive === 'burst-ring') s.rings.push({ x: tr.x1, y: tr.y1, r: 6, max: Math.min(s.w, s.h) * 0.16, color: tr.accent, life: 1 })
+        if (tr.onArrive === 'burst-ring') s.rings.push({ x: tr.x1, y: tr.y1, r: 6, max: Math.min(s.w, s.h) * 0.16, color: tr.accent, life: 1, lw: 3, glow: false, decay: 0.045, grow: 0.18 })
       } else {
         s.travels[tj++] = tr
       }
@@ -182,7 +192,7 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
     },
     ring: ({ nx, ny, color }) => {
       const s = stateRef.current
-      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 6, max: Math.min(s.w, s.h) * 0.2, color, life: 1 })
+      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 6, max: Math.min(s.w, s.h) * 0.2, color, life: 1, lw: 3, glow: false, decay: 0.045, grow: 0.18 })
       ensureRunning()
     },
     flash: (color, alpha = 0.5) => {
@@ -199,6 +209,34 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
         t: 0,
         speed: FX_TRAVEL_SPEED,
       })
+      ensureRunning()
+    },
+    converge: ({ nx, ny, color, count = 30, shape = 'dot' }) => {
+      const s = stateRef.current
+      const cx = nx * s.w, cy = ny * s.h
+      for (let i = 0; i < count; i++) {
+        // 從四邊隨機點出發，朝中心飛（g=0；friction 會讓它在近中心處自然減速消散）
+        const edge = i & 3
+        let x: number, y: number
+        if (edge === 0) { x = Math.random() * s.w; y = -12 }
+        else if (edge === 1) { x = Math.random() * s.w; y = s.h + 12 }
+        else if (edge === 2) { x = -12; y = Math.random() * s.h }
+        else { x = s.w + 12; y = Math.random() * s.h }
+        const dx = cx - x, dy = cy - y
+        const d = Math.hypot(dx, dy) || 1
+        const life = 40
+        const sp = (d / life) * 1.7 // 補償 0.98 摩擦，讓粒子能逼近中心
+        s.particles.push({
+          x, y, vx: (dx / d) * sp, vy: (dy / d) * sp,
+          life, max: life, size: 3.2, color, g: 0, shape, rot: Math.atan2(dy, dx),
+        })
+      }
+      ensureRunning()
+    },
+    shockwave: ({ nx, ny, color, lw = 12 }) => {
+      const s = stateRef.current
+      // 大 max（畫面對角線）+ glow(lighter) + 慢 grow/decay → 一圈巨型擴散波掃滿全螢幕。
+      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 12, max: Math.hypot(s.w, s.h) * 1.05, color, life: 1, lw, glow: true, decay: 0.03, grow: 0.1 })
       ensureRunning()
     },
   }), [])

@@ -19,6 +19,12 @@ export interface AudioEngine {
   play(id: SfxId): void
   /** M21.e：依招式屬性音色家族播一層「材質」音（疊在 hit/super/crit 上、不取代）。 */
   playMoveSound(id: MoveSoundId): void
+  /** EXT.2 星擊三拍：拍1 上升 filter sweep + 顫音（蓄力預期）。 */
+  starChargeSweep(): void
+  /** EXT.2 星擊三拍：拍2 印章敲擊 tick（蓋章定格瞬間）。 */
+  starStampTick(): void
+  /** EXT.2 星擊三拍：拍3 sub-bass 下潛 + 噪音爆（衝擊）。 */
+  starImpactBoom(): void
   startBgm(): void
   stopBgm(): void
   /** 0..1，越高越緊張（低血量）：調暗 BGM 濾波 + 觸發警報嗶 */
@@ -136,6 +142,49 @@ class ToneAudioEngine implements AudioEngine {
     const T = this.Tone!
     const now = T.now()
     notes.forEach((n, i) => this.sfxLead.triggerAttackRelease(n, dur, now + i * step, vel))
+  }
+
+  // ── EXT.2 星擊三拍音效（全程序化、即用即拋暫態節點，dispose 防洩漏；失敗絕不影響遊戲）──
+  starChargeSweep() {
+    if (!this.ready) return
+    try {
+      const T = this.Tone!
+      const now = T.now()
+      // 上升 lowpass sweep（200→8000Hz）+ 快顫音 → 幼童「要來了！」的物理性預期音。
+      const f = new T.Filter(200, 'lowpass').connect(this.filter)
+      const trem = new T.Tremolo(15, 0.7).connect(f).start()
+      const noise = new T.NoiseSynth({
+        noise: { type: 'white' },
+        envelope: { attack: 0.05, decay: 0.7, sustain: 0.25, release: 0.12 },
+        volume: -8,
+      }).connect(trem)
+      f.frequency.rampTo(8000, 0.68, now)
+      noise.triggerAttackRelease(0.7, now)
+      setTimeout(() => { try { noise.dispose(); trem.dispose(); f.dispose() } catch { /* noop */ } }, 1300)
+    } catch (e) { console.warn('[audio] starChargeSweep', e) }
+  }
+
+  starStampTick() {
+    if (!this.ready) return
+    try {
+      const T = this.Tone!
+      const now = T.now()
+      this.sfxNoise.triggerAttackRelease('64n', now, 0.9) // 短促敲擊
+      this.sfxLead.triggerAttackRelease('C6', '64n', now, 0.7) // 一記高 click
+    } catch (e) { console.warn('[audio] starStampTick', e) }
+  }
+
+  starImpactBoom() {
+    if (!this.ready) return
+    try {
+      const T = this.Tone!
+      const now = T.now()
+      const bass = new T.MembraneSynth({ octaves: 6, pitchDecay: 0.12, volume: -2 }).connect(this.filter)
+      bass.triggerAttackRelease('C1', '4n', now) // sub-bass 下潛
+      this.fxNoise.triggerAttackRelease('4n', now, 0.95) // 噪音爆
+      this.arp(['C6', 'G6'], 0.04, '32n', 0.6) // 一抹亮頂
+      setTimeout(() => { try { bass.dispose() } catch { /* noop */ } }, 1200)
+    } catch (e) { console.warn('[audio] starImpactBoom', e) }
   }
 
   play(id: SfxId) {

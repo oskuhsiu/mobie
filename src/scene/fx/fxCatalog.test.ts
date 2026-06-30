@@ -49,6 +49,8 @@ describe('fxCatalog', () => {
       ring: (o) => calls.push(`ring:${o.nx}:${o.ny}`),
       flash: () => calls.push('flash'),
       travel: (o) => calls.push(`travel:${o.from.nx}:${o.to.nx}:${o.onArrive}:${o.count}`),
+      converge: (o) => calls.push(`converge:${o.nx}:${o.ny}`),
+      shockwave: (o) => calls.push(`shockwave:${o.nx}:${o.ny}`),
     }
     const travelDelay = playMoveFx(fx, resolveFx(move(1021, 'water', 'special')), { nx: 0.2, ny: 0.6 }, { nx: 0.8, ny: 0.2 })
     playMoveFx(fx, resolveFx(move(2000, 'normal', 'status')), { nx: 0.2, ny: 0.6 }, { nx: 0.8, ny: 0.2 })
