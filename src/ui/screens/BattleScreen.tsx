@@ -32,10 +32,10 @@ import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
 import { ShieldSwipe } from '@/ui/components/BattleGestures'
 import { interactModeOf, attackInputVariantOf, juiceLevelOf } from '@/game/settings'
 import { haptic } from '@/input/haptics'
-import { createCinematicCoordinator, type CinematicCoordinator } from '@/ui/screens/battleCinematic'
+import { createCinematicCoordinator, type CinematicCoordinator, type CutInSpec } from '@/ui/screens/battleCinematic'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
-import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
+import { playMoveFx, resolveFx, typePalette } from '@/scene/fx/fxCatalog'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
@@ -426,9 +426,12 @@ export function BattleScreen() {
   // EXT.1：juice 走 ref 供 playEvents（useCallback）讀最新值，不必把 juice 進其依賴陣列重建整條演出器。
   const juiceRef = useRef(juice)
   juiceRef.current = juice
-  // EXT.1 §6 演出協調器（hit-stop / EXT.2 星擊 cut-in 共用）。stable ref：建一次、不進任何依賴陣列。
+  // EXT.2 星擊電影化 display state（低頻：每場星擊一次，走一般 state 不違反效能紅線）。
+  const [cutIn, setCutIn] = useState<CutInSpec | null>(null)
+  const [letterbox, setLetterbox] = useState(false)
+  // EXT.1 §6 演出協調器（hit-stop / EXT.2 星擊 cut-in 共用）。hooks＝穩定的 setState 身分，建一次即可。
   const cinematicRef = useRef<CinematicCoordinator | null>(null)
-  if (!cinematicRef.current) cinematicRef.current = createCinematicCoordinator()
+  if (!cinematicRef.current) cinematicRef.current = createCinematicCoordinator({ setCutIn, setLetterbox })
   const initedRef = useRef(false)
   // M14.0：開戰時生成 battleSeed + 建一條 mulberry32 stream，整場 resolveTurn 共用持續推進
   // （取代各回合預設 Math.random）。同 seed + 同輸入 → 同事件流，為回放重模擬鋪地基。
@@ -811,30 +814,52 @@ export function BattleScreen() {
     concludeTurn(nextState)
   }, [playEvents, concludeTurn, ext, wildEvents])
 
-  // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出
+  // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出。
+  // EXT.2：juice≠off 時先放全螢幕電影化 cut-in（letterbox + 慢鏡 + 施放者頭像/招名），再接既有星擊演出；
+  // **runStarStrike 簽名與星擊傷害一字不動**（cut-in 純演出包裝）。juice='off' 回退單純 orb 放招。
   const runStarStrike = useCallback(async () => {
     const store = useBattleStore.getState
     const b0 = store().battle
     if (!b0) return
     store().setPhase('busy')
     store().resetEnergy()
-    store().setBanner('★ 星擊發動！')
-    audio.play('crit')
-    fxRef.current?.flash('#ffffff', 0.7)
-    fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
-    rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
-    await wait(620)
-    fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
+    const cinematic = cinematicRef.current!
+    const useCinematic = juiceRef.current !== 'off'
+    try {
+      if (useCinematic) {
+        // 星擊永遠用 slot0 招當 finisher（reducer：slotBySide.player = starStrike ? 0 : …）→ cut-in 取 moves[0]。
+        const caster = b0.player.members[b0.player.activeIndex]
+        const finisher = caster.moves[0]
+        await cinematic.cutIn({
+          artworkUrl: caster.artworkUrl,
+          casterName: caster.nameZh,
+          moveName: finisher?.nameZh ?? '星擊',
+          type: finisher?.type ?? 'normal',
+          side: 'player',
+        })
+      }
+      store().setBanner('★ 星擊發動！')
+      audio.play('crit')
+      haptic('crit')
+      fxRef.current?.flash('#ffffff', 0.7)
+      fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
+      rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
+      await wait(620)
+      fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
 
-    const input: ReplayInput = { type: 'ATTACK', starStrike: true }
-    const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
-    recorderRef.current.record(input, events)
-    await playEvents(b0, events)
-    store().setBattle(nextState)
-    store().setBanner(null)
-    store().addEnergy(0, false) // 連鎖歸零（星擊消耗）
+      const input: ReplayInput = { type: 'ATTACK', starStrike: true }
+      const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
+      recorderRef.current.record(input, events)
+      await playEvents(b0, events)
+      store().setBattle(nextState)
+      store().setBanner(null)
+      store().addEnergy(0, false) // 連鎖歸零（星擊消耗）
 
-    concludeTurn(nextState)
+      concludeTurn(nextState)
+    } finally {
+      // 安全退場（plan/EXT.2 §2）：letterbox/cut-in 必收、時鐘回速，中斷/逾時/例外都不卡死。
+      if (useCinematic) cinematic.resume()
+    }
   }, [playEvents, concludeTurn, rootShake, ext, wildEvents])
 
   // 主動換人：收回換上 index → 對手打換上的 → 防禦 QTE 抵減
@@ -1266,6 +1291,38 @@ export function BattleScreen() {
           />
         )}
       </AnimatePresence>
+
+      {/* ===== EXT.2 星擊電影化：letterbox + 全螢幕 cut-in（純 display，由 cinematicCoordinator 驅動） ===== */}
+      <AnimatePresence>
+        {letterbox && (
+          <motion.div key="lb" className="cinematic-letterbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <motion.div className="cinematic-bar cinematic-bar--top" initial={{ y: '-100%' }} animate={{ y: 0 }} exit={{ y: '-100%' }} transition={{ duration: 0.22, ease: 'easeOut' }} />
+            <motion.div className="cinematic-bar cinematic-bar--bottom" initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ duration: 0.22, ease: 'easeOut' }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="overlay-center overlay-center--cutin">
+        <AnimatePresence>
+          {cutIn && (
+            <motion.div
+              key="cutin"
+              className="cutin-card"
+              style={{ ['--type' as string]: typePalette[cutIn.type].color }}
+              initial={{ opacity: 0, scale: 0.7, x: -48 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 1.12 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+            >
+              <img className="cutin-card__art" src={cutIn.artworkUrl} alt="" draggable={false} />
+              <div className="cutin-card__text">
+                <div className="cutin-card__eyebrow">★ 星擊 FINISHER</div>
+                <div className="cutin-card__move">{cutIn.moveName}</div>
+                <div className="cutin-card__caster">{cutIn.casterName}</div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   )
 }

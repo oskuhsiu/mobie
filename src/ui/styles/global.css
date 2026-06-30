@@ -313,6 +313,36 @@ body {
 .overlay-center--support { z-index: 13; padding-top: 38vh; }
 .overlay-center--combo { z-index: 9; padding-top: 30vh; }
 .overlay-center--orb { z-index: 14; padding-top: calc(30vh - 58px); }
+.overlay-center--cutin { z-index: 30; justify-content: center; } /* EXT.2：cut-in 卡片上下置中 */
+
+/* ============ EXT.2 星擊電影化：letterbox + 全螢幕 cut-in ============
+   置中走 .overlay-center flex 層（避免 EXT.1.e 的 framer translate 漂移坑）；per-type 光影用 --type 變數。 */
+.cinematic-letterbox { position: absolute; inset: 0; z-index: 28; pointer-events: none; background: rgba(0,0,0,0.34); }
+.cinematic-bar { position: absolute; left: 0; right: 0; height: 13vh; background: #000; }
+.cinematic-bar--top { top: 0; }
+.cinematic-bar--bottom { bottom: 0; }
+.cutin-card {
+  display: flex; align-items: center; gap: 18px;
+  padding: 16px 30px 16px 16px; border-radius: 24px; max-width: 88vw;
+  background: linear-gradient(120deg, rgba(8,10,22,0.62), rgba(8,10,22,0.94));
+  border: 2px solid var(--type, #ff7ae0);
+  box-shadow: 0 0 50px var(--type, #ff7ae0), 0 20px 60px rgba(0,0,0,0.6);
+  pointer-events: none;
+}
+.cutin-card__art {
+  width: 132px; height: 132px; object-fit: contain; flex-shrink: 0;
+  filter: drop-shadow(0 0 18px var(--type, #ff7ae0)) drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+}
+.cutin-card__text { display: flex; flex-direction: column; gap: 5px; }
+.cutin-card__eyebrow {
+  font-size: 14px; font-weight: 900; letter-spacing: 0.18em; color: #ffd0ff;
+  text-shadow: 0 0 10px rgba(255,122,224,0.85);
+}
+.cutin-card__move {
+  font-size: clamp(28px, 6vw, 46px); font-weight: 900; color: #fff; line-height: 1;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 22px var(--type, #ff7ae0);
+}
+.cutin-card__caster { font-size: 16px; font-weight: 700; color: var(--text-dim); }
 
 /* ============ Team tray (3v3 隊伍狀態) ============ */
 .tray { display: flex; gap: 7px; flex-wrap: wrap; }
