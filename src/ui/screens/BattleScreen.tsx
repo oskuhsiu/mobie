@@ -712,8 +712,11 @@ export function BattleScreen() {
           const def = lookupTerrain(e.terrainId)
           store().setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
           store().pushLog(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
-          fxRef.current?.flash('#a07aff', 0.35)
-          fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: '#a07aff' })
+          // EXT.3：過場一次性 flash 改用新地形代表色（R3F palette/天氣已反應式切換，flash 遮住瞬切）。
+          // off 維持 M22 基線紫光（不引入新地形視覺）。
+          const shiftColor = juiceRef.current === 'off' ? '#a07aff' : resolveTerrainPalette([e.terrainId]).particleColor
+          fxRef.current?.flash(shiftColor, 0.35)
+          fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: shiftColor })
           audio.play('super')
           await wait(950)
           store().setBanner(null)
