@@ -1,0 +1,20 @@
+我同意定案，但補一個命名邊界：`none` 應該表示「無持續粒子 emitter」，不是「WeatherCanvas 完全不能畫靜態 overlay」；所以 sunny 的 god-ray 可以是 palette overlay，不算第 9 原型。22 對照我會鎖成：`rain`: rain/coastal/steam/swamp；`snow`: snowfield；`sand`: sandstorm；`ember`: volcanic/dragons-peak；`electric`: stormfield/electric-field/psychic-field 可極稀；`wind-petal`: flowerfield/grassland/grassy-field/strong-winds/misty-field；`mist`: fog/haunt/mystic/cavern/holy-ground；`none`: sunny/neutral。若 psychic 覺得太不像電，就 emitter=`mist` + palette.sparkAccent，但不要新增原型。
+
+```text
+haunt preset
+
+z10 DOM HUD        HP bars / skills / turn state
+z5  FxCanvas       idle; terrainShift 時紫黑 flash 一次
+z2  WeatherCanvas  mist: low drifting violet haze, full dense / reduced thin
+z0  R3F Stage      groundTint #1d1726, ambient #6c4b8f, fog near 6 far 24
+
+        faint violet fog drifting across screen
+    ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~
+
+        [ALLY A]   [ALLY B]        [ENEMY X]   [BOSS]
+          |          |                |          |
+   _______|__________|________________|__________|______
+        dark floor tint, low contrast, purple backlight
+```
+
+STATUS: AGREE
