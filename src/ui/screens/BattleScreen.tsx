@@ -964,26 +964,28 @@ export function BattleScreen() {
 
       {/* ★ 星擊球：能量滿 + 輪到玩家選招時，於戰鬥區中央大特效顯示；點了即放（不放就點技能槽照常）。
           M22 增強互動：off→點擊即放（原樣）；lite/arcade→點擊改開蓄力/節奏手勢，完成才放招。 */}
-      <AnimatePresence>
-        {energy >= 100 && phase === 'playerChoice' && !starCharging && (
-          <motion.button
-            className="star-orb"
-            initial={{ opacity: 0, scale: 0.4 }}
-            animate={{ opacity: 1, scale: [1, 1.08, 1] }}
-            exit={{ opacity: 0, scale: 0.4 }}
-            transition={{ scale: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.3 } }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => {
-              if (starMode === 'off') { audio.play('crit'); void runStarStrike() }
-              else { audio.play('select'); setStarCharging(true) }
-            }}
-          >
-            <span className="star-orb__ring" />
-            <span className="star-orb__star">★</span>
-            <span className="star-orb__label">星擊發動</span>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <div className="overlay-center overlay-center--orb">
+        <AnimatePresence>
+          {energy >= 100 && phase === 'playerChoice' && !starCharging && (
+            <motion.button
+              className="star-orb"
+              initial={{ opacity: 0, scale: 0.4 }}
+              animate={{ opacity: 1, scale: [1, 1.08, 1] }}
+              exit={{ opacity: 0, scale: 0.4 }}
+              transition={{ scale: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.3 } }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => {
+                if (starMode === 'off') { audio.play('crit'); void runStarStrike() }
+                else { audio.play('select'); setStarCharging(true) }
+              }}
+            >
+              <span className="star-orb__ring" />
+              <span className="star-orb__star">★</span>
+              <span className="star-orb__label">星擊發動</span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* M22 星擊手勢 overlay（lite 長按蓄力 / arcade 節奏點擊）；off 不渲染＝DOM 零新增 wrapper。
           完成（或逾時）→ 收起手勢 + runStarStrike()（簽名不動、傷害不吃手勢結果）。 */}
@@ -1004,57 +1006,63 @@ export function BattleScreen() {
         </div>
       </div>
 
-      {/* 中央播報 */}
-      <AnimatePresence>
-        {banner && (
-          <motion.div
-            key={banner}
-            className="battle-banner"
-            initial={{ opacity: 0, y: 8, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.2 }}
-          >
-            {banner}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 中央播報（EXT.1.e：full-bleed flex 層置中，framer scale/y 不再蓋掉置中） */}
+      <div className="overlay-center overlay-center--banner">
+        <AnimatePresence>
+          {banner && (
+            <motion.div
+              key={banner}
+              className="battle-banner"
+              initial={{ opacity: 0, y: 8, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+            >
+              {banner}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* 支援輪盤 overlay */}
-      <AnimatePresence>
-        {support && (
-          <motion.div
-            key="support"
-            className="support-overlay"
-            initial={{ opacity: 0, scale: 0.6, rotate: -8 }}
-            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            exit={{ opacity: 0, scale: 1.2 }}
-            transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-          >
-            <div className="support-overlay__title">支援輪盤！</div>
-            <div className={`support-overlay__result ${support === 'dud' ? 'is-dud' : ''}`}>
-              {SUPPORT_LABEL[support]}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 支援輪盤 overlay（EXT.1.e：flex 層置中） */}
+      <div className="overlay-center overlay-center--support">
+        <AnimatePresence>
+          {support && (
+            <motion.div
+              key="support"
+              className="support-overlay"
+              initial={{ opacity: 0, scale: 0.6, rotate: -8 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 1.2 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 14 }}
+            >
+              <div className="support-overlay__title">支援輪盤！</div>
+              <div className={`support-overlay__result ${support === 'dud' ? 'is-dud' : ''}`}>
+                {SUPPORT_LABEL[support]}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* M9 連鎖連段數 overlay（連鎖中各段命中時彈出） */}
-      <AnimatePresence>
-        {combo !== null && (
-          <motion.div
-            key={`combo-${combo}`}
-            className="combo-overlay"
-            initial={{ opacity: 0, scale: 0.5, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 1.3 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 16 }}
-          >
-            <span className="combo-overlay__num">{combo}</span>
-            <span className="combo-overlay__label">CHAIN</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* M9 連鎖連段數 overlay（連鎖中各段命中時彈出；EXT.1.e：flex 層置中） */}
+      <div className="overlay-center overlay-center--combo">
+        <AnimatePresence>
+          {combo !== null && (
+            <motion.div
+              key={`combo-${combo}`}
+              className="combo-overlay"
+              initial={{ opacity: 0, scale: 0.5, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 1.3 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 16 }}
+            >
+              <span className="combo-overlay__num">{combo}</span>
+              <span className="combo-overlay__label">CHAIN</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* 我方：HP 牌與隊伍狀態（畫面下方左側），marginTop:auto 把後段推到底部 */}
       <div className="row" style={{ justifyContent: 'flex-start', marginTop: 'auto' }}>

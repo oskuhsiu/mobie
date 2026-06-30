@@ -271,13 +271,26 @@ body {
   .dmg-num.is-on { animation-duration: 0.5s; }
 }
 .battle-banner {
-  position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
-  z-index: 12; text-align: center; max-width: 86%;
+  text-align: center; max-width: 86%;
   font-weight: 900; font-size: clamp(20px, 4.2vw, 32px);
   padding: 10px 22px; border-radius: 14px;
   background: rgba(0,0,0,0.55); border: 1px solid var(--stroke);
   text-shadow: 0 2px 8px rgba(0,0,0,0.6); pointer-events: none;
 }
+
+/* ============ EXT.1.e：置中 overlay 改 full-bleed flex 層（消除 framer 漂移）============
+   原本 star-orb / battle-banner / support-overlay / combo-overlay 各自用 transform:translate(-50%)
+   置中，但 framer-motion 入場動畫會寫 inline transform（scale/y）整個蓋掉那個 translate → 漂移右下。
+   改法（比照已修好的 .battle-action-layer，見 ARCHITECTURE §10）：置中與縱向位置全交給本層 flex+padding，
+   內層元件不再自帶 position/left/top/transform → framer 可自由 animate scale/y/opacity 不再打架。 */
+.overlay-center {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+}
+.overlay-center--banner { z-index: 12; padding-top: 30vh; }
+.overlay-center--support { z-index: 13; padding-top: 38vh; }
+.overlay-center--combo { z-index: 9; padding-top: 30vh; }
+.overlay-center--orb { z-index: 14; padding-top: calc(30vh - 58px); }
 
 /* ============ Team tray (3v3 隊伍狀態) ============ */
 .tray { display: flex; gap: 7px; flex-wrap: wrap; }
@@ -442,8 +455,7 @@ body {
 
 /* ============ 支援輪盤 overlay ============ */
 .support-overlay {
-  position: absolute; left: 50%; top: 38%; transform: translateX(-50%);
-  z-index: 8; pointer-events: none; text-align: center;
+  pointer-events: none; text-align: center;
   padding: 16px 28px; border-radius: 18px;
   background: linear-gradient(160deg, rgba(255,210,63,0.22), rgba(0,0,0,0.6));
   border: 2px solid var(--accent); box-shadow: 0 0 30px rgba(255,210,63,0.5);
@@ -476,8 +488,7 @@ body {
 }
 /* ★ 星擊球：能量滿時於戰鬥區中央的大特效施放點（不在技能列） */
 .star-orb {
-  position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
-  z-index: 14; cursor: pointer;
+  position: relative; pointer-events: auto; cursor: pointer;
   width: 116px; height: 116px; border-radius: 50%;
   display: grid; place-items: center;
   background: radial-gradient(circle at 50% 38%, rgba(255,175,240,0.95), rgba(145,65,203,0.88) 62%, rgba(145,65,203,0.25));
@@ -561,8 +572,7 @@ body {
   box-shadow: 0 0 20px rgba(122,224,255,0.6); font-weight: 900;
 }
 .combo-overlay {
-  position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
-  z-index: 9; pointer-events: none; text-align: center;
+  pointer-events: none; text-align: center;
   display: flex; flex-direction: column; align-items: center; line-height: 1;
   text-shadow: 0 2px 0 #044, 0 0 20px rgba(122,224,255,0.9);
 }
