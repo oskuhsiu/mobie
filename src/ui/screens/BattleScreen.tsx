@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
@@ -243,12 +243,16 @@ function SwitchPanel({ members, activeIndex, lockedIndex, onPick, onCancel }: {
   )
 }
 
-/** 連打蓄力：限時內瘋狂點擊累積色階加成（計數走 ref，不過 React state） */
+/** 連打蓄力：限時內瘋狂點擊累積色階加成（計數走 ref，不過 React state）。
+ *  點擊範圍放大成戰鬥中心一整圈（橘色 blur 光暈），每次點擊噴漣漪 + 整圈 thump 強回饋。 */
 function MashMeter({ onDone }: { onDone: (count: number) => void }) {
   const countRef = useRef(0)
   const barRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
   const doneRef = useRef(false)
+  const fieldRef = useRef<HTMLDivElement>(null)
+  const ripRef = useRef<HTMLDivElement>(null)
+  const ripIdxRef = useRef(0)
 
   useEffect(() => {
     countRef.current = 0
@@ -261,7 +265,7 @@ function MashMeter({ onDone }: { onDone: (count: number) => void }) {
     return () => clearTimeout(t)
   }, [onDone])
 
-  const tap = () => {
+  const tap = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (doneRef.current) return
     const c = (countRef.current += 1)
     const tier = chargeTier(c)
@@ -270,15 +274,34 @@ function MashMeter({ onDone }: { onDone: (count: number) => void }) {
       barRef.current.style.background = tier.color
     }
     if (labelRef.current) labelRef.current.textContent = tier.label || '蓄力中…'
+    // 強回饋（全走 DOM class 重觸發，不過 React state）：點處噴漣漪 + 整圈瞬縮 thump。
+    const field = fieldRef.current
+    const pool = ripRef.current
+    if (field && pool) {
+      const rect = field.getBoundingClientRect()
+      const r = pool.children[ripIdxRef.current++ % pool.children.length] as HTMLDivElement | undefined
+      if (r) {
+        r.style.left = `${e.clientX - rect.left}px`
+        r.style.top = `${e.clientY - rect.top}px`
+        r.classList.remove('is-on'); void r.offsetWidth; r.classList.add('is-on')
+      }
+      field.classList.remove('is-hit'); void field.offsetWidth; field.classList.add('is-hit')
+    }
   }
 
   return (
-    <div className="mash" onPointerDown={tap} role="button" tabIndex={0}>
-      <div className="mash__hint">連打蓄力！瘋狂點擊衝高傷害</div>
-      <div className="mash__track"><div ref={barRef} className="mash__fill" style={{ width: '0%' }} /></div>
-      <div ref={labelRef} className="mash__tier">蓄力中…</div>
-      <div className="qte__timeout" aria-hidden>
-        <div className="qte__timeout-fill" style={{ animationDuration: `${MASH_DURATION_MS}ms` }} />
+    <div ref={fieldRef} className="tap-field tap-field--charge" onPointerDown={tap} role="button" tabIndex={0}>
+      <div className="tap-field__glow" aria-hidden />
+      <div className="tap-field__ripples" ref={ripRef} aria-hidden>
+        {Array.from({ length: 8 }).map((_, i) => <div key={i} className="tap-field__ripple" />)}
+      </div>
+      <div className="tap-field__inner mash">
+        <div className="mash__hint">連打蓄力！瘋狂點擊衝高傷害</div>
+        <div className="mash__track"><div ref={barRef} className="mash__fill" style={{ width: '0%' }} /></div>
+        <div ref={labelRef} className="mash__tier">蓄力中…</div>
+        <div className="qte__timeout" aria-hidden>
+          <div className="qte__timeout-fill" style={{ animationDuration: `${MASH_DURATION_MS}ms` }} />
+        </div>
       </div>
     </div>
   )
