@@ -48,17 +48,23 @@ interface Combatant3DProps {
   faceY: number
   /** idle 浮動相位，避免雙方同步 */
   bobPhase: number
+  /** EXT.2 慢鏡倍率（1＝正常、<1＝慢鏡）。所有 delta 乘上它＋自 track 虛擬時間給 idle bob，
+   *  讓「時停」連待機浮動都慢下來不穿幫。FxCanvas/Tone 不走這條、保持 real-time。 */
+  timeScaleRef: { current: number }
 }
 
 /** 場上一隻Mobie：造型（GLB/billboard）+ 撲擊/受擊/倒下/入場動畫。 */
-export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase }: Combatant3DProps) {
+export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, timeScaleRef }: Combatant3DProps) {
   const group = useRef<Group>(null)
+  // 虛擬累積時間（吃 timeScale）：取代 state.clock.elapsedTime 當 idle bob 的時鐘，慢鏡時 bob 同步變慢。
+  const tRef = useRef(0)
 
-  useFrame((state, rawDelta) => {
+  useFrame((_state, rawDelta) => {
     const g = group.current
     if (!g) return
-    const delta = Math.min(rawDelta, 0.05) // 防卡頓跳幀
-    const t = state.clock.elapsedTime
+    const delta = Math.min(rawDelta, 0.05) * timeScaleRef.current // 防卡頓跳幀 + 慢鏡縮放
+    tRef.current += delta
+    const t = tRef.current
     let x = base[0]
     let y = base[1]
     let z = base[2]

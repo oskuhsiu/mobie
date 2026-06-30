@@ -24,6 +24,8 @@ export interface StageHandle {
   faint: (side: Side) => void
   /** 換上/入場（從上落下 + 彈跳放大，並清除倒下狀態） */
   enter: (side: Side) => void
+  /** EXT.2 慢鏡：設舞台時間倍率（1＝正常、<1＝慢鏡）。只動 3D（FxCanvas/Tone real-time）。 */
+  setTimeScale: (scale: number) => void
 }
 
 interface BattleStageProps {
@@ -62,6 +64,8 @@ function CameraRig() {
 
 const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleStage({ player, foe }, ref) {
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
+  // EXT.2 慢鏡倍率：imperative 寫入、Combatant3D 每幀讀（不過 React state）。
+  const timeScaleRef = useRef(1)
 
   useImperativeHandle(
     ref,
@@ -82,6 +86,9 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
         a.fainted = false
         a.faintT = 0
         a.enterT = ENTER_DUR
+      },
+      setTimeScale: (scale) => {
+        timeScaleRef.current = scale
       },
     }),
     [],
@@ -112,6 +119,7 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
         lungeVec={FOE_LUNGE}
         faceY={Math.PI}
         bobPhase={Math.PI}
+        timeScaleRef={timeScaleRef}
       />
       <Combatant3D
         side="player"
@@ -121,6 +129,7 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
         lungeVec={PLAYER_LUNGE}
         faceY={0}
         bobPhase={0}
+        timeScaleRef={timeScaleRef}
       />
     </Canvas>
   )
