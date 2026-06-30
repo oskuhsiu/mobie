@@ -4,6 +4,7 @@ import { ContactShadows } from '@react-three/drei'
 import { Vector3, PerspectiveCamera } from 'three'
 import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
+import type { TerrainPalette } from './terrainVisual'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { Combatant3D, makeAnim, LUNGE_DUR, SHAKE_DUR, ENTER_DUR, type MonAnim } from './Combatant3D'
 
@@ -31,6 +32,8 @@ export interface StageHandle {
 interface BattleStageProps {
   player: BattleMobie
   foe: BattleMobie
+  /** EXT.3：地形視覺 palette（地板色調/環境光/霧）。未給＝neutral 基線。 */
+  palette?: TerrainPalette
 }
 
 // 取景目標與「target→相機」方向（沿用原本的俯角構圖，只動距離）。
@@ -62,7 +65,7 @@ function CameraRig() {
   return null
 }
 
-const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleStage({ player, foe }, ref) {
+const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleStage({ player, foe, palette }, ref) {
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
   // EXT.2 慢鏡倍率：imperative 寫入、Combatant3D 每幀讀（不過 React state）。
   const timeScaleRef = useRef(1)
@@ -102,9 +105,10 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       camera={{ position: [0, 2.95, 6.4], fov: 40 }}
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
     >
+      {palette?.fog && <fog attach="fog" args={[palette.fog.color, palette.fog.near, palette.fog.far]} />}
       <CameraRig />
-      <StageLights />
-      <ArenaFloor />
+      <StageLights ambient={palette?.ambient} />
+      <ArenaFloor tint={palette?.groundTint} />
       <Pedestal position={FOE_BASE} color="#ff7a9c" />
       <Pedestal position={PLAYER_BASE} color="#5b8cff" />
       <group position={FOE_BASE}><BlobShadow /></group>

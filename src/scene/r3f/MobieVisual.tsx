@@ -70,6 +70,7 @@ function BillboardSprite({ url, shiny }: { url: string; shiny?: boolean }) {
           color={shiny ? '#fff0b8' : '#ffffff'}
           side={DoubleSide}
           toneMapped={false}
+          fog={false}
         />
       </mesh>
     </Billboard>

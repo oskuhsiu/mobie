@@ -4,11 +4,14 @@ import { CanvasTexture, DoubleSide, type Texture } from 'three'
 // 共用場景元件（BattleStage / CaptureStage 共用）。
 // 全程序化幾何 + 燈光，不依賴任何 HDRI/外部資產（offline + 不散布侵權資產）。
 
-/** 競技舞台燈光：半球環境光 + 主方向光 + 冷色補光。刻意輕量以顧 iPad 幀率。 */
-export function StageLights() {
+/**
+ * 競技舞台燈光：半球環境光 + 主方向光 + 冷色補光。刻意輕量以顧 iPad 幀率。
+ * EXT.3：`ambient`＝terrain palette 的天空色（半球上色），未給＝基線 `#bcd0ff`（neutral）。
+ */
+export function StageLights({ ambient = '#bcd0ff' }: { ambient?: string }) {
   return (
     <>
-      <hemisphereLight args={['#bcd0ff', '#1a1230', 0.9]} />
+      <hemisphereLight args={[ambient, '#1a1230', 0.9]} />
       <directionalLight position={[3.5, 7, 4]} intensity={1.15} color="#fff4e0" />
       <pointLight position={[-4, 3, -3]} intensity={28} color="#7aa2ff" distance={18} decay={2} />
     </>
@@ -44,13 +47,16 @@ export function Pedestal({
   )
 }
 
-/** 競技場地板：大圓盤 + 同心透視環（傾斜後成橢圓，撐起 3D 深度線索）。 */
-export function ArenaFloor() {
+/**
+ * 競技場地板：大圓盤 + 同心透視環（傾斜後成橢圓，撐起 3D 深度線索）。
+ * EXT.3：`tint`＝terrain palette 地板色調，未給＝基線 `#0a0e22`（neutral）。
+ */
+export function ArenaFloor({ tint = '#0a0e22' }: { tint?: string }) {
   return (
     <group rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.23, 0]}>
       <mesh receiveShadow>
         <circleGeometry args={[14, 64]} />
-        <meshStandardMaterial color="#0a0e22" roughness={1} metalness={0} />
+        <meshStandardMaterial color={tint} roughness={1} metalness={0} />
       </mesh>
       {[3, 5.4, 8].map((r) => (
         <mesh key={r} position={[0, 0, 0.01]}>

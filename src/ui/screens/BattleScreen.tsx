@@ -35,8 +35,10 @@ import { haptic } from '@/input/haptics'
 import { createCinematicCoordinator, type CinematicCoordinator, type CutInSpec } from '@/ui/screens/battleCinematic'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
+import { WeatherCanvas } from '@/scene/fx/WeatherCanvas'
 import { playMoveFx, resolveFx, typePalette } from '@/scene/fx/fxCatalog'
 import type { StageHandle } from '@/scene/r3f/BattleStage'
+import { resolveTerrainPalette } from '@/scene/r3f/terrainVisual'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
@@ -418,6 +420,15 @@ export function BattleScreen() {
     const region = context.regionId ? lookupRegion(context.regionId) : null
     return region?.mode === 'wild' ? makeWildEvents({ terrainPool: WILD_SHIFT_POOL }) : undefined
   }, [context.regionId, context.tower])
+
+  // EXT.3：當前地形 → 視覺 palette（地板色調/環境光/霧/天氣 emitter）。純 display。
+  // 隨 terrainShift 更新（current 陣列換新參照即重算）；全空/neutral → 基線 palette。
+  const terrainPalette = useMemo(
+    () => resolveTerrainPalette(battle?.field.terrainEffects.current ?? []),
+    [battle?.field.terrainEffects.current],
+  )
+  // 天氣粒子密度（juice 分級）：full=100% / reduced≈30% / off=0（整層不掛＝嚴格回 M22 基線）。
+  const weatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
 
   const fxRef = useRef<FxHandle>(null)
   const damageRef = useRef<DamageNumbersHandle>(null)
@@ -1017,10 +1028,20 @@ export function BattleScreen() {
       style={{ flex: 1, position: 'relative' }}
       animate={rootShake}
     >
-      {/* 3D 戰鬥舞台（背景層）：兩隻在場Mobie + 地台/光照/相機 */}
+      {/* 3D 戰鬥舞台（背景層）：兩隻在場Mobie + 地台/光照/相機。EXT.3：off 不給 palette＝基線色/無霧。 */}
       <Suspense fallback={null}>
-        <BattleStage ref={stageRef} player={player} foe={foe} />
+        <BattleStage ref={stageRef} player={player} foe={foe} palette={juice === 'off' ? undefined : terrainPalette} />
       </Suspense>
+      {/* EXT.3 天氣持續層（z2，介於 R3F 與 FxCanvas）：off 不掛＝零 rAF、嚴格回 M22 基線。 */}
+      {juice !== 'off' && (
+        <WeatherCanvas
+          emitter={terrainPalette.emitter}
+          color={terrainPalette.particleColor}
+          sparkAccent={terrainPalette.sparkAccent}
+          overlay={terrainPalette.overlay}
+          density={weatherDensity}
+        />
+      )}
       <FxCanvas ref={fxRef} />
       {/* EXT.1.b：juice≠off 用富表現飄字層（圖示優先）；off 回退既有 FloatDamage＝M22 基線、DOM 零新增 wrapper。 */}
       {juice === 'off' ? <FloatDamage hitFx={hitFx} /> : <DamageNumbers ref={damageRef} />}
