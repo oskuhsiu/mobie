@@ -4,6 +4,7 @@ import {
   defaultSettings, migrateSettings, setModuleEnabledIn, MODULE_IDS,
   defaultPrefs, migratePrefs, setInteractModeIn, isEnhancedSurfaceEnabled, interactModeOf,
   setAttackInputVariantIn, attackInputVariantOf,
+  setJuiceIn, setHapticsIn, juiceLevelOf, hapticsEnabledOf,
   INTERACT_SURFACES, INTENSITY_BY_MODE,
 } from '@/game/settings'
 import { assembleExt } from '@/store/ext'
@@ -119,6 +120,46 @@ describe('M22 增強互動性偏好（prefs）', () => {
     expect(INTENSITY_BY_MODE.arcade.rhythmBeats).toBeGreaterThan(INTENSITY_BY_MODE.lite.rhythmBeats)
     expect(INTENSITY_BY_MODE.arcade.rhythmWindowMs).toBeLessThan(INTENSITY_BY_MODE.lite.rhythmWindowMs)
     expect(INTENSITY_BY_MODE.arcade.circleTargetRad).toBeGreaterThan(INTENSITY_BY_MODE.lite.circleTargetRad)
+  })
+})
+
+describe('EXT.1 打擊感 juice / 觸覺 haptics 偏好', () => {
+  it('預設 juice=full、haptics=true（升級爽感）', () => {
+    expect(defaultPrefs().juice).toBe('full')
+    expect(defaultPrefs().haptics).toBe(true)
+    expect(juiceLevelOf(defaultSettings())).toBe('full')
+    expect(hapticsEnabledOf(defaultSettings())).toBe(true)
+  })
+
+  it('migratePrefs juice：缺欄/未知 → full；只認 reduced/off', () => {
+    expect(migratePrefs({}).juice).toBe('full') // 缺欄 → 升級爽感
+    expect(migratePrefs({ juice: 'bogus' }).juice).toBe('full') // 未知 → full
+    expect(migratePrefs({ juice: 'reduced' }).juice).toBe('reduced')
+    expect(migratePrefs({ juice: 'off' }).juice).toBe('off')
+  })
+
+  it('migratePrefs haptics：缺欄 → true；只認顯式 false 才關', () => {
+    expect(migratePrefs({}).haptics).toBe(true) // 缺欄 → on
+    expect(migratePrefs({ haptics: false }).haptics).toBe(false) // 顯式 false → off
+    expect(migratePrefs({ haptics: 'no' }).haptics).toBe(true) // 非 false → 維持 on
+  })
+
+  it('舊存檔（無 EXT.1 欄）遷移後補 full/true，且不干擾既有 prefs', () => {
+    const s = migrateSettings({ prefs: { enhancedInteractivity: { mode: 'lite' }, recordReplays: true } })
+    expect(s.prefs.juice).toBe('full')
+    expect(s.prefs.haptics).toBe(true)
+    expect(s.prefs.enhancedInteractivity.mode).toBe('lite') // 既有欄不被覆蓋
+    expect(s.prefs.recordReplays).toBe(true)
+  })
+
+  it('setJuiceIn / setHapticsIn 純函數、不改原物件', () => {
+    const a = defaultSettings()
+    const b = setJuiceIn(a, 'off')
+    expect(a.prefs.juice).toBe('full')
+    expect(b.prefs.juice).toBe('off')
+    const c = setHapticsIn(a, false)
+    expect(a.prefs.haptics).toBe(true)
+    expect(c.prefs.haptics).toBe(false)
   })
 })
 

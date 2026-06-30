@@ -28,6 +28,15 @@ export type InteractMode = 'off' | 'lite' | 'arcade'
 /** M22.g 攻擊輸入變體：mash＝既有連打（預設）；rhythm＝太鼓式節奏點擊（只在 mode≠off 時替換）。 */
 export type AttackInputVariant = 'mash' | 'rhythm'
 
+// ── EXT.1 局內爽感（plan/EXT.1 §3）。純 display UX 偏好，住 prefs（不進 MODULE_IDS、不碰 reducer）。──
+/**
+ * 打擊感強度：
+ * - full＝升級後的完整爽感（浮傷數字＋效果圖示＋頓格＋sprite 動態）；**新預設**。
+ * - reduced＝只留浮傷數字、不頓格（暈動敏感／低效能裝置）。
+ * - off＝完全回到 M22 純 flash+shake，DOM 不得出現任何 EXT.1 新增 wrapper（驗收項）。
+ */
+export type JuiceLevel = 'full' | 'reduced' | 'off'
+
 export interface GamePrefs {
   enhancedInteractivity: {
     mode: InteractMode
@@ -38,6 +47,10 @@ export interface GamePrefs {
   recordReplays: boolean
   /** M22.g：攻擊蓄力輸入變體（mash 連打／rhythm 節奏）。預設 mash＝現狀；只在 mode≠off 時生效。 */
   attackInputVariant: AttackInputVariant
+  /** EXT.1：打擊感強度（數字/頓格/sprite 動態）。預設 full＝升級爽感（升級既有演出、非新戰鬥規則）。 */
+  juice: JuiceLevel
+  /** EXT.1：觸覺回饋總開關（Vibration API）。預設 on，裝置不支援時自動 no-op。 */
+  haptics: boolean
 }
 
 export interface GameSettings {
@@ -88,9 +101,10 @@ function allSurfacesOn(): Record<InteractSurface, boolean> {
   return s
 }
 
-/** M22 UX 偏好預設：mode='off'（現狀一字不差）、surfaces 全 true（待 mode 開啟才生效）。 */
+/** M22 UX 偏好預設：mode='off'（現狀一字不差）、surfaces 全 true（待 mode 開啟才生效）。
+ *  EXT.1：juice='full'（升級爽感）、haptics=true（裝置不支援自動 no-op）。 */
 export function defaultPrefs(): GamePrefs {
-  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() }, recordReplays: false, attackInputVariant: 'mash' }
+  return { enhancedInteractivity: { mode: 'off', surfaces: allSurfacesOn() }, recordReplays: false, attackInputVariant: 'mash', juice: 'full', haptics: true }
 }
 
 export function defaultSettings(): GameSettings {
@@ -103,6 +117,9 @@ export function migratePrefs(raw: unknown): GamePrefs {
   const o = raw as Record<string, unknown>
   const recordReplays = o.recordReplays === true // 缺欄/未知 → 預設 off
   const attackInputVariant: AttackInputVariant = o.attackInputVariant === 'rhythm' ? 'rhythm' : 'mash'
+  // EXT.1：juice 預設 full（缺欄/未知 → 升級爽感）；haptics 預設 true（只認顯式 false 才關）。
+  const juice: JuiceLevel = o.juice === 'off' ? 'off' : o.juice === 'reduced' ? 'reduced' : 'full'
+  const haptics = o.haptics !== false
   let mode: InteractMode = 'off'
   const surfaces = allSurfacesOn()
   const ei = o.enhancedInteractivity
@@ -117,7 +134,7 @@ export function migratePrefs(raw: unknown): GamePrefs {
       }
     }
   }
-  return { enhancedInteractivity: { mode, surfaces }, recordReplays, attackInputVariant }
+  return { enhancedInteractivity: { mode, surfaces }, recordReplays, attackInputVariant, juice, haptics }
 }
 
 /** 把任意外來物正規化成合法 GameSettings（遷移 / 防壞檔）。純函數，可測。 */
@@ -161,6 +178,26 @@ export function setReplayRecordingIn(settings: GameSettings, on: boolean): GameS
 /** 純函數：回傳把攻擊輸入變體設成新值後的設定（M22.g）。 */
 export function setAttackInputVariantIn(settings: GameSettings, variant: AttackInputVariant): GameSettings {
   return { ...settings, prefs: { ...settings.prefs, attackInputVariant: variant } }
+}
+
+/** 純函數：回傳把打擊感強度設成新值後的設定（EXT.1）。 */
+export function setJuiceIn(settings: GameSettings, juice: JuiceLevel): GameSettings {
+  return { ...settings, prefs: { ...settings.prefs, juice } }
+}
+
+/** 純函數：回傳把觸覺回饋開關設成新值後的設定（EXT.1）。 */
+export function setHapticsIn(settings: GameSettings, on: boolean): GameSettings {
+  return { ...settings, prefs: { ...settings.prefs, haptics: on } }
+}
+
+/** 當前打擊感強度（EXT.1）。供 BattleScreen/sprite 判斷是否 spawn 數字/頓格/動態。 */
+export function juiceLevelOf(settings: GameSettings): JuiceLevel {
+  return settings.prefs.juice
+}
+
+/** 觸覺回饋是否開啟（EXT.1）。實際是否震動仍取決於裝置 feature-detect（見 input/haptics）。 */
+export function hapticsEnabledOf(settings: GameSettings): boolean {
+  return settings.prefs.haptics === true
 }
 
 /** 當前生效的攻擊輸入變體：只有 mode≠off 且選了 rhythm 才回 'rhythm'，否則 'mash'（現狀）。 */
