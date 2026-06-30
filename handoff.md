@@ -5,14 +5,14 @@
 本檔不重抄這些，過時就刪。專案＝iPad 為主、自用的 Pokémon Mezastar 風格遊戲，Web/PWA。
 
 ## 現況
-**M0–M22 全部完成**＋ **EXT.1（局內爽感）/ EXT.2（星擊電影化）完成**並 Chrome CDP 驗證；版號 v0.1.27。
+**M0–M22 全部完成**＋ **EXT.1（局內爽感）/ EXT.2（星擊電影化，含三拍 redo）完成**並 Chrome CDP 驗證；版號 v0.1.32。
 內容＝全國圖鑑 1–1025（G1–G9）、16 主題野外區 + 競技場 + 連勝塔、16 起始卡。
 下一輪主路線＝**EXT.3 地形/天氣視覺化**（`plan/EXT.3`，尚未動工）→ EXT.4 狀態異常 module → EXT.5 養成 meta。
 
 **本 session 已完成並提交（typecheck / 443 test / build 全綠）：** EXT.1 全套（juice/haptics prefs 地基 +
 cinematicCoordinator seam + Haptics + 浮動傷害數字/效果圖示/會心 + hit-stop + sprite idle + 修 4 個置中 overlay
-漂移 + 戰鬥進場淡入/C2 脈衝引導 + SettingsModal 打擊感/觸覺開關）、EXT.2 星擊電影化 cut-in。
-dev server 跑在 `http://localhost:5173/`。
+漂移 + 戰鬥進場淡入/C2 脈衝引導 + SettingsModal 打擊感/觸覺開關）、EXT.2 星擊電影化 cut-in（後又依使用者回饋重做成三拍弧）。
+**dev server 已於 session 結束時關閉**（重啟＝`npm run dev`）。
 
 ## 真相來源（先讀，別重抄）
 - 架構 / 分層 / 資料流 / 不變式 / 已知坑 / CDP 驗證：`ARCHITECTURE.md`（§10 坑、§11 驗證 ≈ 第 277 行起）
@@ -65,21 +65,33 @@ lighter。CDP screencast 連拍三拍全捕捉、產出 GIF/APNG（本地 `stars
   framer 4 個置中 overlay 仍用 translate（memory `framer-centering-overlays-followup`）；M19.e moveLearned 結算 UI。
 
 ## 跑 / 驗證
-`npm install`（設 git hook）→ `npm run dev`（5173；現正在跑）；`npm run typecheck` / `npm test` / `npm run build`。
+`npm install`（設 git hook）→ `npm run dev`（5173）；`npm run typecheck` / `npm test` / `npm run build`。
 視覺/E2E 無 Playwright：本機 Google Chrome headless + CDP（Node 24 內建 WebSocket）。**戰鬥畫面必帶**
 `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`（R3F 要 GL context）。詳見 `ARCHITECTURE.md §10/§11`。
+headless 用軟體 GL（swiftshader）戰鬥只 ~3fps → screencast 動圖偏頓，真機 GPU 順很多。
 
-**CDP 小工具（可重用，跨 session 複製）**：`cdp.mjs`（吃 JS 檔在頁面 context 執行 + 可選截圖；找 localhost:5173 page target）。
-本 session scratchpad 另有：`enter_region.js`（title→區域）、`into_battle2.js`（區域→遭遇→推薦→出戰3/3→戰鬥）、
-`enc2battle.js`（遭遇→戰鬥）、`fill_energy.js`（連打數回合填星擊能量到滿）、`trigger_star.js`/`trigger_now.js`
-（點 star-orb→截 cut-in）、`probe_battle.js`（dump 相位）。Chrome headless 在 port 9222。
-驅動流程：開始遊戲→常綠森林（`.region-card`）→⚔ 出戰→✨ 推薦出戰→⚔ 出戰 3/3→戰鬥；招式槽＝`.move-slot`、
-大圓＝`.tap-field`（`--timing`白/`--charge`橘）、滿能星擊＝`.star-orb`、cut-in＝`.cutin-card`、置中層＝`.overlay-center`。
-**注意**：3v3 戰鬥常在能量 ~78% 時就打完（foe 倒光），偶爾要多戰幾場才衝到 100% 觸發星擊。
+**CDP 慣例 + 驅動流程**：`cdp.mjs`（吃 JS 檔在頁面 context 執行 + 可選截圖；找 localhost:5173 page target）。
+Chrome headless 在 port 9222。流程：開始遊戲→`.region-card`（常綠森林）→⚔ 出戰→✨ 推薦出戰→⚔ 出戰 3/3→戰鬥；
+招式槽＝`.move-slot`（變化招＝`.move-slot--status`）、大圓＝`.tap-field`（`--timing`白/`--charge`橘）、
+滿能星擊＝`.star-orb`、cut-in 卡片＝`.cutin-card`、letterbox＝`.cinematic-letterbox`、置中層＝`.overlay-center`。
+> 註：本 session 的 driver/capture 腳本住 ephemeral scratchpad（已隨 session 消失），下個 agent 需照下方配方重建。
+
+**★ 星擊 cut-in 擷取配方（本 session 踩過的坑，務必照做）**：
+1. **集滿能量很難**：每場戰鬥能量歸零、隊伍多半無變化招、攻擊太快 KO 敵人（~2 回合）→ energy 常卡 ~78% 戰鬥就結束。
+   可靠解＝**臨時插樁**：把 `BattleScreen.tsx` 的 `energyGain` 暫改 `=> 100`（一回合集滿），擷取後 `git checkout` 還原。
+2. **headless 取樣太疏**：cut-in 真實 ~1s 但 swiftshader ~3fps → 只拍到 1–3 幀。擷取時把 `battleCinematic.ts` 的
+   `CUTIN_CHARGE_MS`(720→2200)/`CUTIN_STAMP_FREEZE_MS`(120→550) 暫時拉長，多取幾幀，事後一併 `git checkout` 還原。
+3. **抓幀用 `Page.startScreencast`（format jpeg）**，不要 `Page.captureScreenshot`（重頁 ~1s/張）。先到 `.star-orb`、
+   開 screencast、`o.click()`、收 ~5s 幀、`Page.stopScreencast`。組圖：`ffmpeg -framerate 9 -i g%03d.jpg ... palettegen` →
+   GIF；`-f apng` → APNG（ffmpeg 7.1 + apngasm 在 PATH）。本次成品在專案根 `starstrike.gif`/`starstrike-apng.png`（已 gitignore）。
+4. 寫 `~/Desktop` 會被 macOS TCC 擋；改寫專案目錄或 `~/`。
 
 ## Suggested skills
-- **`/code-review`、`/simplify`** — commit 前對這次 UI 改動做品質把關（CSS `:has()` 相容、ripple 池無洩漏、效能紅線）。
-- **`/codex`（或 codex-code/codex-review）** — 若使用者要更華麗的集氣點擊特效，照其指示交給 codex 設計。
-- **`/run` 或 Chrome CDP** — 啟動 app 截圖驗證白圈/漣漪（本專案 browser-driven；上面已有可重用工具）。
-- **`/karpathy-guidelines`** — 加碼特效時保持 surgical、純顯示、可驗證。
-- **`/agent-chat`** — 進 EXT 系列下一項前的開放式設計抉擇（先上網查證再開）。
+- **`/agent-chat`** — 開 EXT.3（或任何 EXT）前先開四方圓桌敲定方向、動工前請各 agent 畫 ASCII 示意圖確認，
+  本 session 證實這流程能避免「做完才發現方向錯」（星擊重做即此教訓）。結論存 `.claude/agent-chat/*/conclusion.md`。
+- **`/code-review`、`/simplify`** — commit 前對 UI/FX 改動把關（效能紅線：高頻值走 ref/rAF/DOM 不進 React state；
+  暫態 Tone/Canvas 節點要 dispose；iPad Safari 別在 WebGL 上疊 mix-blend）。
+- **`/codex`** — 使用者已授權「需要做圖就叫 codex，等久一點」；要更華麗的 cut-in 運鏡/粒子可交給它，接回現有
+  `cinematicCoordinator` seam（介面已備，不必重構）。
+- **`/run` 或 Chrome CDP** — browser-driven 驗證；星擊類擷取照上方「擷取配方」（臨時插樁 + screencast）。
+- **`/karpathy-guidelines`** — EXT.3 起加視覺時保持 surgical、純 display、可驗證、勿違反硬約束。
