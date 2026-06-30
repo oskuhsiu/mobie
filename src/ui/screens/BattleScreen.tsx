@@ -32,6 +32,7 @@ import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
 import { ShieldSwipe } from '@/ui/components/BattleGestures'
 import { interactModeOf, attackInputVariantOf, juiceLevelOf } from '@/game/settings'
 import { haptic } from '@/input/haptics'
+import { createCinematicCoordinator, type CinematicCoordinator } from '@/ui/screens/battleCinematic'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
@@ -69,6 +70,10 @@ const CHOICE_TIMEOUT_MS = 8000
 const ATTACK_QTE_TIMEOUT_MS = 10000
 // 連打蓄力視窗：原本 950ms 太短（玩測回饋「給的時間超級少」），放寬到 2.8s 讓連點真的衝得起來。
 const MASH_DURATION_MS = 2800
+// EXT.1.c hit-stop（presentation clock pause，不改 reducer 時間線）：命中瞬間凍結演出推進的毫秒數。
+// 只在 juice='full' 生效；會心/效果絕佳給更長的「頓」讓重擊更有份量。
+const HITSTOP_HIT_MS = 40
+const HITSTOP_STRONG_MS = 120
 // 鍵盤「四鍵 / 方向」映射 → 招式槽（plan/17 §1.1）。數字 1–4＝讀序（主），方向鍵＝2×2 順時針面鍵：
 // ↑左上(0) → →右上(1) → ↓右下(3) → ←左下(2)。按下瞬間即選定並進入 QTE（不做游標導覽）。
 const SLOT_KEY_MAP: Record<string, number> = {
@@ -421,6 +426,9 @@ export function BattleScreen() {
   // EXT.1：juice 走 ref 供 playEvents（useCallback）讀最新值，不必把 juice 進其依賴陣列重建整條演出器。
   const juiceRef = useRef(juice)
   juiceRef.current = juice
+  // EXT.1 §6 演出協調器（hit-stop / EXT.2 星擊 cut-in 共用）。stable ref：建一次、不進任何依賴陣列。
+  const cinematicRef = useRef<CinematicCoordinator | null>(null)
+  if (!cinematicRef.current) cinematicRef.current = createCinematicCoordinator()
   const initedRef = useRef(false)
   // M14.0：開戰時生成 battleSeed + 建一條 mulberry32 stream，整場 resolveTurn 共用持續推進
   // （取代各回合預設 Math.random）。同 seed + 同輸入 → 同事件流，為回放重模擬鋪地基。
@@ -577,6 +585,11 @@ export function BattleScreen() {
           audio.playMoveSound(recipe.sound) // M21.e：疊一層屬性材質音色（火=爆/電=zap/水=波…）
           // EXT.1.a：觸覺回饋（依情緒強度，裝置/開關不支援自動 no-op；獨立於 juice）
           haptic(e.crit ? 'crit' : e.effectiveness >= 2 ? 'superEffective' : 'hit')
+          // EXT.1.c：hit-stop 頓格（只 full 生效）——命中瞬間凍結演出推進，會心/絕佳更久。
+          // 純拉長演出節奏，**不改 nextState**（reducer 早已一次算完整回合）。
+          if (juiceRef.current === 'full') {
+            await cinematicRef.current!.pause(strong ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
+          }
         }
         if (e.missed) {
           store().setBanner('攻擊沒有命中…')
