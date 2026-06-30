@@ -5,14 +5,14 @@
 本檔不重抄這些，過時就刪。專案＝iPad 為主、自用的 Pokémon Mezastar 風格遊戲，Web/PWA。
 
 ## 現況
-**M0–M22 全部完成**＋ **EXT.1（局內爽感）/ EXT.2（星擊電影化，含三拍 redo）完成**並 Chrome CDP 驗證；版號 v0.1.32。
-內容＝全國圖鑑 1–1025（G1–G9）、16 主題野外區 + 競技場 + 連勝塔、16 起始卡。
-下一輪主路線＝**EXT.3 地形/天氣視覺化**（`plan/EXT.3`，尚未動工）→ EXT.4 狀態異常 module → EXT.5 養成 meta。
+**M0–M22 全部完成**＋ **EXT.1（局內爽感）/ EXT.2（星擊電影化，含三拍 redo）/ EXT.3（地形天氣視覺化）完成**
+並 Chrome CDP 驗證；版號 v0.1.36。內容＝全國圖鑑 1–1025（G1–G9）、16 主題野外區 + 競技場 + 連勝塔、16 起始卡。
+下一輪主路線＝**EXT.4 狀態異常 module**（`plan/EXT.4`，唯一動 reducer，嚴格 module 化）→ EXT.5 養成 meta。
 
-**本 session 已完成並提交（typecheck / 443 test / build 全綠）：** EXT.1 全套（juice/haptics prefs 地基 +
-cinematicCoordinator seam + Haptics + 浮動傷害數字/效果圖示/會心 + hit-stop + sprite idle + 修 4 個置中 overlay
-漂移 + 戰鬥進場淡入/C2 脈衝引導 + SettingsModal 打擊感/觸覺開關）、EXT.2 星擊電影化 cut-in（後又依使用者回饋重做成三拍弧）。
-**dev server 已於 session 結束時關閉**（重啟＝`npm run dev`）。
+**本 session 已完成並提交（typecheck / 452 test / build 全綠）：** EXT.3 地形/天氣視覺化全套——
+先開 `/agent-chat` 四方圓桌定調（`.claude/agent-chat/session-20260630-220524`，2 輪收斂、含三方 ASCII），
+再四階段實作：terrainVisual palette 表 + WeatherCanvas 持續層 + R3F tint/ambient/fog 接線 + terrainShift 過場。
+**dev server 仍開在 :5173**（本機真機 GPU 可試玩；headless swiftshader 只 ~3fps 偏頓）。
 
 ## 真相來源（先讀，別重抄）
 - 架構 / 分層 / 資料流 / 不變式 / 已知坑 / CDP 驗證：`ARCHITECTURE.md`（§10 坑、§11 驗證 ≈ 第 277 行起）
@@ -20,42 +20,31 @@ cinematicCoordinator seam + Haptics + 浮動傷害數字/效果圖示/會心 + h
 - 設計總覽 + 各里程碑：`plan/README.md`、`plan/NN-*.md`、`plan/EXT.*`
 - 哪些做了 / 沒做：`plan/CHECKLIST.md`　·　決策脈絡：`.claude/agent-chat/*/conclusion.md`
 
-## 最近完成（本 session，已提交）— EXT.1 局內爽感 + EXT.2 星擊電影化
-> 全程**純 display、零碰 reducer/engine**；新偏好 `juice`(full/reduced/off)＋`haptics` 住 `settings.prefs`
-> （不入 `MODULE_IDS`）。`juice:'off'` 嚴格回退 M22 基線（DOM 無新增 wrapper）。詳見 `plan/CHECKLIST.md` EXT 段。
+## 最近完成（本 session，已提交）— EXT.3 地形/天氣視覺化
+> 全程**純 display、零碰 reducer/engine/data**；同 seed `nextState` 不變。詳見 `plan/CHECKLIST.md` EXT.3 段。
+> 動工前先開 `/agent-chat` 四方圓桌定調（結論 `.claude/agent-chat/session-20260630-220524/conclusion.md`，含三方 ASCII）。
 
-新增檔：`src/input/haptics.ts`（Vibration 薄封裝 + `HAPTIC` 表 + 總開關，不支援/關閉 no-op）、
-`src/ui/components/DamageNumbers.tsx`（imperative DOM 池飄字、CSS keyframe、圖示優先）、
-`src/ui/screens/battleCinematic.ts`（cinematicCoordinator：`pause/resume` hit-stop + `cutIn` letterbox/卡片）。
-改動：`game/settings.ts`/`store/settingsStore.ts`（juice/haptics prefs+selector+setter+開機同步觸覺）、
-`BattleScreen.tsx`（damage spawn/haptic/hit-stop、4 overlay 改 `.overlay-center` flex 置中、進場淡入、C2 引導、
-星擊 cut-in 包裝 + try/finally 保證 resume）、`MobieSprite.tsx`/`EncounterScreen.tsx`（billboard idle）、
-`SettingsModal.tsx`（打擊感/觸覺段）、`global.css`（`.dmg-num*`/`.overlay-center*`/`.battle-enter`/`.choice-guide`/
-`.cinematic-*`/`.cutin-card*`/`.sprite--idle`）。**關鍵不變式**：reducer/engine 一字未動；`runStarStrike` 簽名與
-星擊傷害不變；hit-stop ＝ presentation pause 不改 `nextState`。
+**架構（圓桌定案）**：戰鬥畫面四層 z 序——R3F `BattleStage`(z0) / 新 `WeatherCanvas`(z2) / `FxCanvas`(z5) / DOM HUD(z10)。
+**獨立 WeatherCanvas、不碰 FxCanvas**（保住 FxCanvas idle-stop 命脈；mistral 提的「塞進 FxCanvas persistent layer」3:1 否決）。
+新增檔：`src/scene/r3f/terrainVisual.ts`（22 terrain → 8 emitter 原型 `rain/snow/sand/ember/electric/wind-petal/mist/none`
+＋每 terrain palette{groundTint,ambient,fog?,particleColor,sparkAccent?,overlay?}；**neutral palette＝M22 基線** #0a0e22/#bcd0ff；
+辨識度靠 palette 上色非加原型）、`src/scene/fx/WeatherCanvas.tsx`（canvas2D 持續層、8 emitter 自管 rAF + **同等 idle-stop**：
+density 0 或 emitter none 無 overlay 即停；池回收不配新物件；sunny god-ray 靜態 overlay）。
+改動：`sceneParts.tsx`（StageLights 吃 ambient / ArenaFloor 吃 tint）、`BattleStage.tsx`（加 `<fog>`）、`MobieVisual.tsx`
+（立繪材質 `fog={false}` 保讀性——fog 只營造背景地板深度、不洗主角）、`BattleScreen.tsx`（resolve palette 傳舞台、off→undefined＝
+基線；掛 WeatherCanvas，**off 不掛/reduced 0.3/full 1.0**；terrainShift 一次性 flash 改用新地形代表色）。
 
-**EXT.2 後續重做（使用者回饋「星擊視覺很差」）：** 開四方圓桌（`.claude/agent-chat/session-20260630-162857`，
-含三方 ASCII 示意圖確認）→ 把星擊 cut-in 重做成「蓄力→蓋章→衝擊」三拍弧：拍1 R3F 舞台 timeScale 0.15 慢鏡
-+ letterbox + FxCanvas `converge` 四邊吸入粒子 + Tone 上升 sweep；拍2 卡片硬「印章」砸 + timeScale 0 定格 + tick 音；
-拍3 卡片 brightness(4) 過曝退場 + FxCanvas `shockwave`（lighter 全屏大環）+ 白閃 + 震動×1.5 + 相機急推 + sub-bass boom。
-新增 FxCanvas converge/shockwave、audio starChargeSweep/StampTick/ImpactBoom、BattleStage `setTimeScale`（Combatant3D
-delta 乘倍率 + 虛擬時間）。**鐵則**：不在疊 WebGL 的 DOM 用 mix-blend（iPad Safari 掉幀）→ filter:brightness + Canvas
-lighter。CDP screencast 連拍三拍全捕捉、產出 GIF/APNG（本地 `starstrike.gif`，已 gitignore）。
-
-驗證：✅ typecheck · ✅ `npm test` 443 全綠（settings+6/haptics+5/cinematic+5） · ✅ build。
-✅ Chrome CDP 實機（截圖在本 session scratchpad）：
-- 浮傷 `-69` 帶 `dmg-num--super`（紅↑↑）於受擊方 spawn；`.dmg-num-layer` 存在（juice=full）。
-- `battle-banner` cx=50%（**EXT.1.e 漂移已修**，原右下偏移消除）；4 個 `.overlay-center` 層皆在。
-- 野生立繪 `sprite--idle` 浮動；SettingsModal「打擊感/觸覺」段渲染正常。
-- 星擊 cut-in：`火花/小火龍/fire #ff5a32/letterbox 2 條/垂直置中` 全確認（`ext2-cutin.png` 見 letterbox 框）。
+驗證：✅ typecheck · ✅ `npm test` 452 全綠（terrainVisual +9） · ✅ build。✅ Chrome CDP 實機（截圖在本 session scratchpad）：
+- **rain**：藍雨絲灑滿 + 冷藍地板 tint + fog 背景深度，立繪銳利；terrain chip 雨天；3 canvas z 序 `["",2,5]`。
+- **volcanic**：橘色上升火星(ember) + 暖紅地板 + 紅霧深度；與 rain 辨識度天差地別。
+- **juice=off 嚴格回基線**：canvas 數＝**2**、**無 z2 WeatherCanvas**、palette=undefined 無 fog（上半紅底＝`.app` 既有 region
+  主題背景 `radial-gradient`，非 EXT.3）。**＝順手補掉了上 session 標記未驗的 off-baseline 回歸。**
 
 ## 下一步
-1. **收使用者自測回饋**（打擊感/震動/cut-in 是否夠爽；juice 預設 full）。若要更華麗的 cut-in 運鏡/粒子，
-   可走 `/codex`（使用者已授權「需要做圖就叫 codex，等久一點」）。
-2. 回主路線 **EXT.3 地形/天氣視覺化**（`plan/EXT.3`，R3F 讀 region/fieldState）→ EXT.4 狀態異常 module
-   （唯一動 reducer，嚴格 module 化）→ EXT.5 養成 meta。
-3. **未驗的小回歸**：`juice:'off'` 的 golden-path DOM 與 M22 完全一致（結構上由三元式保證 FloatDamage 回退，
-   尚未 CDP 抽張對照截圖）；可下一手補驗。
+1. **收使用者自測回饋**（dev server 仍開 :5173，真機 GPU 看天氣/fog/tint 是否夠美；headless 只 ~3fps 偏頓）。
+   若要更華麗的天氣（如真閃電 bolt、體積霧、god-ray 加強），接 `cinematicCoordinator`/WeatherCanvas seam 給 `/codex`。
+2. 主路線 **EXT.4 狀態異常 module**（`plan/EXT.4`，**唯一動 reducer**，嚴格 module 化）→ EXT.5 養成 meta。
+3. **可選微調**：terrainShift 目前 palette 瞬切 + flash 遮（夠用）；若要真淡入需在 R3F lerp material color（未做、低優先）。
 
 ## 其他未完成 / 待辦（皆非阻塞，詳見舊紀錄）
 - 稀疏初始配招（memory `mobie-sparse-initial-loadout`）；bundle 分檔（主 bundle 864KB）。

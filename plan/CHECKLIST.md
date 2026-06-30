@@ -461,3 +461,12 @@
 - [x] C — battleCinematic.cutIn 三拍：拍1 timeScale 0.15+letterbox+onCharge(吸入粒子+sweep) → 拍2 卡片硬「印章」砸(scale 1.7→1)+timeScale 0 定格+onStamp(tick) → 拍3 收卡(brightness(4)過曝退場)+timeScale 1+onImpact(白閃+全屏衝擊波+震動×1.5+相機急推+boom)
 - [x] iPad Safari 鐵則（圓桌裁定）：不在疊 WebGL 的 DOM 用 mix-blend-mode（掉幀/破圖）→ filter:brightness 衝白 + Canvas lighter 大圓；per-type 改粒子形狀/色/音非只顏色；否決「sprite 塞進 3D 放大」
 - [x] CDP 實機驗收（screencast 連拍）：拍1 蓄力(letterbox+吸入粒子+暗場慢鏡)、拍2 蓋章卡片「巨角／飛天螳螂／bug 綠光」、拍3 白閃+全屏衝擊波 三拍全捕捉，產出 GIF/APNG（本地）；typecheck/443 test/build 全綠
+
+## EXT.3 — 地形/天氣視覺化 ✅
+> 設計：`plan/EXT.3`。圓桌結論：`.claude/agent-chat/session-20260630-220524/conclusion.md`（含三方 ASCII）。
+> 核心：8 emitter 原型 + 每 terrain palette；獨立 WeatherCanvas（不碰 FxCanvas）；R3F 吃 tint/ambient/fog；全程純 display、reducer/engine/data 一字未動。
+- [x] A — `scene/r3f/terrainVisual.ts`：22 terrain → 8 emitter(rain/snow/sand/ember/electric/wind-petal/mist/none) + palette(groundTint/ambient/fog/particleColor/sparkAccent/overlay)；neutral palette＝M22 基線(#0a0e22/#bcd0ff)；resolveTerrainPalette 取首個非 neutral；+9 vitest（exhaustive/基線/resolver）
+- [x] B — `scene/fx/WeatherCanvas.tsx`：canvas2D 持續層，8 emitter 自管 rAF + idle-stop（density 0 或 emitter none 無 overlay 即停＝同等省電）；池回收不配新物件；sunny god-ray 靜態 overlay。sceneParts StageLights/ArenaFloor 吃 ambient/tint；BattleStage 加 fog；MobieVisual 立繪材質 fog=false 保讀性
+- [x] B — BattleScreen resolve palette 傳 BattleStage（off→undefined＝基線）；掛 WeatherCanvas（off 不掛、reduced 0.3 密度、full 1.0）；palette 隨 terrainEffects.current 反應式切換
+- [x] C — terrainShift 過場：一次性 FxCanvas flash/ring 改用新地形 palette.particleColor（off 維持基線紫光）；billboard fallback 由 WeatherCanvas DOM 獨立性自動滿足
+- [x] CDP 實機驗收：rain（藍雨絲+冷藍 tint+fog 深度、立繪銳利）／volcanic（橘火星+暖紅+紅霧）辨識度天差地別；juice=off 嚴格回基線（canvas 數 2、無 z2 WeatherCanvas、無 fog）；三層 z 序 R3F(0)/Weather(2)/Fx(5)；typecheck/452 test/build 全綠
