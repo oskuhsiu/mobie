@@ -7,6 +7,7 @@ import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
+import { expForLevel, MAX_LEVEL } from '@/game/growth'
 
 const STAT_ROWS: { key: keyof Stats; label: string }[] = [
   { key: 'hp', label: 'HP' }, { key: 'atk', label: '攻' }, { key: 'def', label: '防' },
@@ -39,20 +40,27 @@ function Masked({ label }: { label: string }) {
  * 自己（owner）或已看穿（revealed）→ 全顯示招式/六維/星級/特性道具；對手未看穿 → 基本面（名/型別/Lv）+ 深度遮罩。
  * 看穿旗標由 M17 設（battleStore.revealedFoes）；M16 對手 revealed 恆 false → 顯占位「看穿後揭露」。
  */
-export function MobCard({ mon, owner, revealed, onClose }: {
+export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
   mon: BattleMobie
   owner: boolean
+  ownerExp?: number
   revealed: boolean
   onClose: () => void
 }) {
   const showDeep = owner || revealed
   const item = getItem(mon.heldItemId)
   const ability = getAbility(mon.abilityId)
+  const ownerAtMaxLevel = mon.level >= MAX_LEVEL
+  const ownerLevelStart = expForLevel(mon.level)
+  const ownerNextLevel = ownerAtMaxLevel ? ownerLevelStart : expForLevel(mon.level + 1)
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         className="modal-card mobcard"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${mon.nameZh} 完整資訊`}
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -72,6 +80,13 @@ export function MobCard({ mon, owner, revealed, onClose }: {
           </div>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
+
+        {owner && ownerExp !== undefined && (
+          <div className="mobcard-growth">
+            <span>總 EXP {ownerExp}</span>
+            <span>{ownerAtMaxLevel ? '已達滿級' : `距離 Lv.${mon.level + 1} 還需 ${Math.max(0, ownerNextLevel - ownerExp)} EXP`}</span>
+          </div>
+        )}
 
         {/* M12.e 對手技能標籤（基本面，未看穿也顯示——它就是用來預告對手風格的） */}
         {mon.encounterTags && mon.encounterTags.length > 0 && (

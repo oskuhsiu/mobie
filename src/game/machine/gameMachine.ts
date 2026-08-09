@@ -47,7 +47,7 @@ export type GameEvent =
   | { type: 'TOWER_CONTINUE' }
   | { type: 'TOWER_QUIT' }
 
-const initialContext: GameContext = {
+export const INITIAL_GAME_CONTEXT: GameContext = {
   regionId: null,
   foeTeam: [],
   playerTeam: [],
@@ -118,7 +118,7 @@ export const gameMachine = setup({
 }).createMachine({
   id: 'game',
   initial: 'title',
-  context: initialContext,
+  context: INITIAL_GAME_CONTEXT,
   states: {
     title: {
       on: { START: 'regionSelect' },

@@ -28,33 +28,59 @@ type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 't
  */
 export function ToolsMenu() {
   const [overlay, setOverlay] = useState<Overlay>('none')
+  const [moreOpen, setMoreOpen] = useState(false)
   const open = (o: Overlay) => { void audio.unlock(); setOverlay(o) }
   const claimable = useMeta((s) => claimableCount(s.meta))
   const hatchable = useIncubator((s) => s.state.eggs.some(isHatchable))
 
   return (
     <>
-      <motion.div
-        className="row" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
-      >
-        <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('team')}>🎒 隊伍</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('partner')}>✨ 夥伴技能</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📚 圖鑑</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
-          🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
-        </button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('incubator')}>
-          🥚 孵化所{hatchable && <span className="title-dot">!</span>}
-        </button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('replays')}>🎬 回放</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
-        <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
-      </motion.div>
+      <div className="tools-menu">
+        <motion.div
+          className="row tools-menu-primary" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
+        >
+          <button aria-label="我的 Mobie" className="btn btn--ghost tools-menu-primary__mobies" onClick={() => open('team')}>✨ 我的 Mobie</button>
+          <button
+            aria-label="更多"
+            aria-expanded={moreOpen}
+            aria-controls="tools-menu-more"
+            className="btn btn--ghost tools-menu-primary__more"
+            onClick={() => { void audio.unlock(); setMoreOpen((openNow) => !openNow) }}
+          >
+            更多 {moreOpen ? '▴' : '▾'}
+          </button>
+        </motion.div>
+
+        <AnimatePresence>
+          {moreOpen && (
+            <motion.div
+              id="tools-menu-more"
+              className="row tools-menu-more"
+              style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('partner')}>✨ 夥伴技能</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📚 圖鑑</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
+                🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('incubator')}>
+                🥚 孵化所{hatchable && <span className="title-dot">!</span>}
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('replays')}>🎬 回放</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
+              <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <Suspense fallback={null}>
         <AnimatePresence>

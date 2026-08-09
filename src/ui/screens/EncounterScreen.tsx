@@ -6,7 +6,7 @@ import { useMeta } from '@/store/metaStore'
 import { useAccidents } from '@/store/accidentStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
 import type { BattleMobie } from '@/game/types'
-import { lookupRegion } from '@/game/data/regionLookup'
+import { canCaptureIn, lookupRegion } from '@/game/data/regionLookup'
 import { rollEncounterAccidents, type SupplyOption } from '@/game/accidents'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
@@ -17,6 +17,7 @@ import { useSettings } from '@/store/settingsStore'
 import { interactModeOf, juiceLevelOf } from '@/game/settings'
 import { rollEncounterProfile, applyProfileToMon, ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { audio } from '@/audio/audioEngine'
+import { captureTargetOf } from '@/game/hunt'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
@@ -42,7 +43,9 @@ export function EncounterScreen() {
     const region = context.regionId ? lookupRegion(context.regionId) : null
     return region ? rollEncounterAccidents(region, context.foeTeam) : { luckyExpMult: 1, supply: null }
   }, [context.regionId, context.foeTeam])
-  const bossShiny = foes.length > 0 && foes[foes.length - 1].shiny
+  const target = captureTargetOf(foes)
+  const captureEligible = canCaptureIn(context.regionId)
+  const bossShiny = target?.shiny ?? false
   const [supplyOpen, setSupplyOpen] = useState(false)
   // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）；同時套用本場意外旗標。
   useEffect(() => {
@@ -61,8 +64,7 @@ export function EncounterScreen() {
     setSupplyOpen(false)
   }
 
-  const wild = foes[0] ?? null
-  if (!wild) return null
+  if (!target) return null
 
   return (
     <div className="col" style={{ flex: 1 }}>
@@ -71,7 +73,12 @@ export function EncounterScreen() {
         ← 返回
       </button>
 
-      <div className="center" style={{ flex: 1, gap: 18 }}>
+      <div
+        className="center hunt-target"
+        style={{ flex: 1, gap: 18 }}
+        role="region"
+        aria-label={`${captureEligible ? '可收服目標' : '對戰主將'} ${target.nameZh}`}
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.6, y: -40 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -79,14 +86,15 @@ export function EncounterScreen() {
           style={{ width: 'min(60vw, 300px)', height: 'min(60vw, 300px)', position: 'relative' }}
         >
           <div className="platform" />
-          <MobieSprite src={wild.artworkUrl} alt={wild.nameZh} shiny={wild.shiny} idle={spriteIdle} />
+          <MobieSprite src={target.artworkUrl} alt={target.nameZh} shiny={target.shiny} idle={spriteIdle} />
         </motion.div>
 
         <motion.div
           className="col center" style={{ gap: 8 }}
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
         >
-          <div className="eyebrow">對手帶著 {foes.length} 隻Mobie出現了！</div>
+          <div className="eyebrow hunt-target__label">{captureEligible ? '可收服目標' : '對戰主將'}</div>
+          {captureEligible && <div className="h-sub hunt-target__promise">擊敗後可嘗試收服</div>}
           {/* M11 野外意外旗標：稀有閃光 boss / 幸運加碼 */}
           {(bossShiny || accidents.luckyExpMult > 1) && (
             <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -95,20 +103,25 @@ export function EncounterScreen() {
             </div>
           )}
           <div className="h-title" style={{ fontSize: 36 }}>
-            {wild.nameZh} <span className="hpbar__lv">Lv.{wild.level}</span>
+            {target.nameZh} <span className="hpbar__lv">Lv.{target.level}</span>
           </div>
-          <TypeBadges types={wild.types} />
-          {wild.encounterTags && wild.encounterTags.length > 0 && (
+          <TypeBadges types={target.types} />
+          {target.encounterTags && target.encounterTags.length > 0 && (
             <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {wild.encounterTags.map((t) => {
+              {target.encounterTags.map((t) => {
                 const meta = ENCOUNTER_TAG_META[t as EncounterTag]
                 return meta ? <span key={t} className="enc-tag" title={meta.desc}>{meta.icon} {meta.label}</span> : null
               })}
             </div>
           )}
-          <IndividualInfo mon={wild} detailed />
-          <button className="btn btn--ghost btn--sm" onClick={() => openCard(wild)}>ⓘ 查看資訊卡</button>
+          <IndividualInfo mon={target} detailed />
+          <button
+            className="btn btn--ghost btn--sm"
+            aria-label={`查看${target.nameZh}資訊卡`}
+            onClick={() => openCard(target)}
+          >ⓘ 查看資訊卡</button>
           {/* 對手隊伍縮圖（最後一隻為 boss）；點開資訊卡 */}
+          <div className="h-sub hunt-target__team-label">{captureEligible ? 'Boss 隊伍' : '對手隊伍'}</div>
           <div className="row" style={{ gap: 10, marginTop: 6 }}>
             {foes.map((f, i) => (
               <button
@@ -119,6 +132,7 @@ export function EncounterScreen() {
                   border: `1px solid ${i === foes.length - 1 ? 'var(--accent)' : 'var(--stroke)'}`,
                   background: 'rgba(0,0,0,0.3)',
                 }}
+                aria-label={`${f.nameZh}，${captureEligible && i === foes.length - 1 ? '可收服目標' : captureEligible ? 'Boss 隊伍成員' : '對手隊伍成員'}`}
                 title={i === foes.length - 1 ? `${f.nameZh}（boss）` : f.nameZh}
               >
                 <img src={f.artworkUrl} alt={f.nameZh} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />

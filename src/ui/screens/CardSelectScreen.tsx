@@ -13,11 +13,15 @@ import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
 import { MobCard } from '@/ui/components/MobCard'
+import { captureTargetOf } from '@/game/hunt'
+import { canCaptureIn } from '@/game/data/regionLookup'
 
 export function CardSelectScreen() {
   const { context, send } = useGame()
   // 對手全隊（不只第一隻）：建議要考慮整隊相剋
   const foes = useMemo(() => context.foeTeam.map(buildBattleMobie), [context.foeTeam])
+  const target = captureTargetOf(foes)
+  const captureEligible = canCaptureIn(context.regionId)
   // M16：資訊卡（自己卡 owner 全顯、對手卡基本面+深度遮罩）
   const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean } | null>(null)
 
@@ -45,6 +49,7 @@ export function CardSelectScreen() {
 
   // 已選卡片 id（依點選順序，最多 TEAM_SIZE 隻）
   const [picked, setPicked] = useState<string[]>([])
+  const [adviceShown, setAdviceShown] = useState(false)
 
   // 生效羈絆（plan/09 §2）：用同一份 prep；羈絆模組關閉時 preBattleHooks 為空＝無 tag。
   const prep = useSettings((s) => s.prep)
@@ -54,10 +59,10 @@ export function CardSelectScreen() {
   )
   const synergies = useMemo(() => prep.preBattleHooks.flatMap((h) => h(pickedMons)), [prep, pickedMons])
 
-  // 一鍵填入推薦陣容（玩家可再自行調整後再出戰）
-  const pickRecommended = () => {
+  // 建議只揭露候選與理由；選取權始終留給玩家。
+  const showAdvice = () => {
     audio.play('select')
-    setPicked(recommendedIds)
+    setAdviceShown(true)
   }
 
   const toggle = (cardId: string) => {
@@ -90,26 +95,30 @@ export function CardSelectScreen() {
         <div className="col" style={{ gap: 4 }}>
           <div className="eyebrow">Step 2 · 組你的隊伍</div>
           <div className="h-title" style={{ fontSize: 28 }}>選擇出戰Mobie</div>
-          <div className="h-sub">挑 {TEAM_SIZE} 隻組隊；不熟屬性？按「推薦出戰」幫你挑剋制陣容</div>
+          <div className="h-sub">挑 {TEAM_SIZE} 隻組隊；第一隻是先發，其餘依序後備</div>
         </div>
         <motion.button
           className="btn btn--ghost" style={{ padding: '12px 18px', whiteSpace: 'nowrap', fontSize: 15 }}
           whileTap={{ scale: 0.96 }}
-          onClick={pickRecommended}
+          onClick={showAdvice}
+          aria-pressed={adviceShown}
         >
-          ✨ 推薦出戰
+          顯示建議
         </motion.button>
       </div>
 
       {/* 對手陣容（含屬性），讓玩家對照下方的剋/弱徽章 */}
       <div className="foe-strip">
-        <span className="foe-strip__label">對手</span>
+        <span className="foe-strip__label capture-target-label">
+          {target ? `${captureEligible ? '可收服目標' : '對戰主將'}：${target.nameZh}` : '對手'}
+        </span>
         <div className="foe-strip__list scroll">
           {foes.map((f, i) => (
             <button
               key={i}
               className={`foe-strip__mon ${i === foes.length - 1 ? 'foe-strip__mon--boss' : ''}`}
               title={`${f.nameZh} Lv.${f.level}（看資訊卡）`}
+              aria-label={`${f.nameZh}，${captureEligible && i === foes.length - 1 ? '可收服目標' : '對手隊伍成員'}`}
               onClick={() => { audio.play('select'); setCardView({ mon: f, owner: false }) }}
             >
               <img src={f.artworkUrl} alt={f.nameZh} />
@@ -125,10 +134,12 @@ export function CardSelectScreen() {
           const isRec = recommendedSet.has(card.cardId)
           const order = picked.indexOf(card.cardId)
           const isPicked = order >= 0
+          const positionLabel = order === 0 ? '先發' : `後備 ${order}`
           return (
             <motion.button
               key={card.cardId}
-              className={`poke-card ${isPicked ? 'poke-card--picked' : ''} ${isRec ? 'poke-card--rec' : ''}`}
+              className={`poke-card ${isPicked ? 'poke-card--picked' : ''} ${adviceShown && isRec ? 'poke-card--rec' : ''}`}
+              aria-label={isPicked ? `取消選擇 ${mon.nameZh}，${positionLabel}` : `選擇 ${mon.nameZh}`}
               initial={{ opacity: 0, rotateY: 35, y: 20 }}
               animate={{ opacity: 1, rotateY: 0, y: 0 }}
               transition={{ delay: 0.05 * i, type: 'spring', stiffness: 150, damping: 16 }}
@@ -144,7 +155,13 @@ export function CardSelectScreen() {
                   <span className="matchup-badge matchup-badge--bad">弱 {mu.weakTo}</span>
                 )}
               </div>
-              {isRec && <span className="poke-card__rec">⭐ 推薦</span>}
+              {adviceShown && isRec && <span className="poke-card__rec">⭐ 建議候選</span>}
+              {adviceShown && mu && (
+                <span className="col matchup-advice" style={{ gap: 2 }}>
+                  <span className="matchup-advice__upside">進攻：{mu.counters > 0 ? `可克制 ${mu.counters} 名對手` : '缺少明顯屬性克制'}</span>
+                  <span className="matchup-advice__risk">風險：{mu.weakTo > 0 ? `會被 ${mu.weakTo} 名對手克制` : '未發現明顯屬性弱點'}</span>
+                </span>
+              )}
               {/* ⓘ 開資訊卡（stopPropagation 不觸發選取，保留出戰手感） */}
               <span
                 className="poke-card__info"
@@ -158,7 +175,7 @@ export function CardSelectScreen() {
                     className="poke-card__pick"
                     initial={{ scale: 0, x: '-50%' }} animate={{ scale: 1, x: '-50%' }} exit={{ scale: 0, x: '-50%' }}
                   >
-                    {order + 1}
+                    {positionLabel}
                   </motion.span>
                 )}
               </AnimatePresence>

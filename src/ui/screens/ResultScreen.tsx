@@ -16,12 +16,17 @@ import { floorReward, towerExpMult, isBossFloor, getAscension } from '@/game/tow
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
+import { ownedToCard } from '@/game/growth'
+import { abilityForType } from '@/game/ext/abilities'
 import { canCaptureIn } from '@/game/data/regionLookup'
 import { MobieSprite } from '@/ui/components/MobieSprite'
+import { MobCard } from '@/ui/components/MobCard'
 import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
+import type { OwnedUnit } from '@/game/types'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
 const CaptureStage = lazy(() => import('@/scene/r3f/CaptureStage'))
+const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ default: m.TeamModal })))
 
 /** 戰敗仍給的經驗比例（相對勝利全額）——讓每場都有累積，破解「要先贏才能變強」死結 */
 const LOSS_EXP_RATIO = 0.15
@@ -275,6 +280,9 @@ export function ResultScreen() {
   // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場/連勝塔勝利不進捕獲流程。
   const canCapture = isWin && !tower && canCaptureIn(context.regionId)
   const [captureDone, setCaptureDone] = useState(!canCapture)
+  const [capturedUnit, setCapturedUnit] = useState<OwnedUnit | null>(null)
+  const [captureCardOpen, setCaptureCardOpen] = useState(false)
+  const [collectionOpen, setCollectionOpen] = useState(false)
 
   // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
@@ -340,13 +348,22 @@ export function ResultScreen() {
           useIncubator.getState().addDuplicateEgg(boss.speciesId, `${bp.nameZh} 蛋`, inheritedMoveId)
           setDupConverted(true)
         } else {
-          void captureUnit(boss) // 新種：加入並存檔到隊伍
+          // 新種：加入並存檔到隊伍；只以本次 Promise 的結果驅動 CTA，
+          // 避免上一場的 lastCaptured 在本場失敗時被誤當成新夥伴。
+          void captureUnit(boss).then((unit) => setCapturedUnit(unit))
         }
       }
     }
     send({ type: 'SET_CAPTURED', captured: ok })
     setCaptureDone(true)
   }, [context.foeTeam, captureUnit, send])
+
+  const capturedMon = useMemo(() => {
+    if (!capturedUnit) return null
+    const mon = buildBattleMobie(ownedToCard(capturedUnit))
+    mon.abilityId = abilityForType(getSpecies(capturedUnit.speciesId).types[0])
+    return mon
+  }, [capturedUnit])
 
   return (
     <div className="col" style={{ flex: 1 }}>
@@ -361,6 +378,35 @@ export function ResultScreen() {
       {dupConverted && (
         <motion.div className="dup-note" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           🥚 已擁有此Mobie → 自動轉化為孵化蛋（前往 🥚 孵化所查看）
+        </motion.div>
+      )}
+
+      {captureDone && capturedMon && (
+        <motion.div
+          className="capture-companion-actions"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="capture-companion-actions__copy">
+            <span className="eyebrow">NEW COMPANION</span>
+            <b>{capturedMon.nameZh} 已加入收藏</b>
+          </div>
+          <div className="row capture-companion-actions__buttons">
+            <button
+              className="btn btn--sm"
+              aria-label="查看新夥伴"
+              onClick={() => setCaptureCardOpen(true)}
+            >
+              🔎 查看新夥伴
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              aria-label="我的 Mobie"
+              onClick={() => setCollectionOpen(true)}
+            >
+              ✦ 我的 Mobie
+            </button>
+          </div>
         </motion.div>
       )}
 
@@ -412,6 +458,24 @@ export function ResultScreen() {
           <EvolutionOverlay evolutions={lastEvolutions} onDone={() => setEvoDone(true)} />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {captureCardOpen && capturedMon && (
+          <MobCard
+            mon={capturedMon}
+            owner
+            ownerExp={capturedUnit?.exp}
+            revealed
+            onClose={() => setCaptureCardOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {collectionOpen && <TeamModal onClose={() => setCollectionOpen(false)} />}
+        </AnimatePresence>
+      </Suspense>
     </div>
   )
 }

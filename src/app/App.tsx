@@ -20,7 +20,7 @@ const fade = {
   transition: { duration: 0.3, ease: 'easeOut' as const },
 }
 
-function Stage() {
+export function Stage() {
   const game = useGame()
   const { value, context } = game
 

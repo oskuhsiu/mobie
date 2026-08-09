@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import { useMachine } from '@xstate/react'
+import type { SnapshotFrom } from 'xstate'
 import { gameMachine, type GameContext, type GameEvent } from '@/game/machine/gameMachine'
 
 interface GameApi {
@@ -11,8 +12,11 @@ interface GameApi {
 
 const Ctx = createContext<GameApi | null>(null)
 
-export function GameProvider({ children }: { children: ReactNode }) {
-  const [snapshot, send] = useMachine(gameMachine)
+export function GameProvider({ children, snapshot: restoredSnapshot }: {
+  children: ReactNode
+  snapshot?: SnapshotFrom<typeof gameMachine>
+}) {
+  const [snapshot, send] = useMachine(gameMachine, restoredSnapshot ? { snapshot: restoredSnapshot } : {})
 
   const api: GameApi = {
     context: snapshot.context,

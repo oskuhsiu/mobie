@@ -17,3 +17,6 @@ public/models/*
 # 星擊演示動圖（本地產出，不入庫）
 starstrike.gif
 starstrike-apng.png
+
+# Codex 產出的本機規格與執行票券（既有已追蹤文件不受 ignore 影響）
+plan/

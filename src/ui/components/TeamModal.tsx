@@ -7,7 +7,7 @@ import { getSpecies } from '@/game/data/species'
 import { ITEMS, getItem } from '@/game/ext/items'
 import { abilityForType, getAbility } from '@/game/ext/abilities'
 import { buildBattleMobie } from '@/game/stats'
-import { ownedToCard } from '@/game/growth'
+import { expForLevel, MAX_LEVEL, ownedToCard } from '@/game/growth'
 import { MobCard } from '@/ui/components/MobCard'
 import type { BattleMobie, OwnedUnit } from '@/game/types'
 import { audio } from '@/audio/audioEngine'
@@ -24,7 +24,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const abilitiesOn = useSettings((s) => s.settings.modules.abilities)
   const [openId, setOpenId] = useState<string | null>(null)
   // 點 Mobie 開資訊卡（M16）：用 owner 全顯模式檢視招式/六維/個體/特性/道具。
-  const [detail, setDetail] = useState<BattleMobie | null>(null)
+  const [detail, setDetail] = useState<{ mon: BattleMobie; exp: number } | null>(null)
   // 哪些相關模組未開（提示去設定開啟）
   const offModules = [!itemsOn && '持有道具', !abilitiesOn && '特性'].filter(Boolean) as string[]
 
@@ -39,7 +39,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
     const mon = buildBattleMobie(ownedToCard(u))
     mon.abilityId = abilityForType(getSpecies(u.speciesId).types[0])
     audio.play('select')
-    setDetail(mon)
+    setDetail({ mon, exp: u.exp })
   }
 
   return (
@@ -47,6 +47,9 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
         className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="我的 Mobie"
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -54,8 +57,8 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
       >
         <div className="modal-card__head">
           <div>
-            <div className="h-title" style={{ fontSize: 24 }}>🎒 隊伍 · 道具</div>
-            <div className="h-sub">每隻可裝一個持有道具；強化能力 / 提升傷害 / 回合末回血。</div>
+            <div className="h-title" style={{ fontSize: 24 }}>我的 Mobie</div>
+            <div className="h-sub">看看夥伴的成長進度，選一隻深入了解招式、能力與個體。</div>
           </div>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
@@ -67,20 +70,49 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {roster.length === 0 && (
+            <div className="my-mobies-empty">
+              還沒有夥伴。前往冒險收服 Mobie，或使用「更多」裡的掃卡加入夥伴吧！
+            </div>
+          )}
           {roster.map((u) => {
             const sp = getSpecies(u.speciesId)
             const held = getItem(u.heldItemId)
             const ability = getAbility(abilityForType(sp.types[0]))
             const open = openId === u.id
+            const atMaxLevel = u.level >= MAX_LEVEL
+            const levelStart = expForLevel(u.level)
+            const nextLevel = atMaxLevel ? levelStart : expForLevel(u.level + 1)
+            const progress = atMaxLevel ? 1 : Math.max(0, Math.min(1, (u.exp - levelStart) / (nextLevel - levelStart)))
             return (
               <div key={u.id} className="col" style={{ gap: 0 }}>
                 <div className="team-row">
-                  <button className="team-row__main" onClick={() => openDetail(u)} title="看資訊卡">
+                  <button
+                    aria-label={`${sp.nameZh} Lv.${u.level}，查看完整資訊`}
+                    className="team-row__main"
+                    onClick={() => openDetail(u)}
+                    title="看資訊卡"
+                  >
                     <div className="team-row__art">
                       <img src={sp.artworkUrl} alt={sp.nameZh} />
                     </div>
                     <div className="team-row__info">
                       <div className="team-row__name">{sp.nameZh} <span className="hpbar__lv">Lv.{u.level}</span> <span className="team-row__info-hint">ℹ️ 詳情</span></div>
+                      <div className="my-mobies-growth">
+                        {atMaxLevel ? (
+                          <span className="my-mobies-growth__max">已達滿級</span>
+                        ) : (
+                          <>
+                            <div className="my-mobies-growth__labels">
+                              <span>{u.exp - levelStart} / {nextLevel - levelStart} EXP</span>
+                              <span>Lv.{u.level + 1} 門檻 {nextLevel}</span>
+                            </div>
+                            <div className="my-mobies-growth__track" role="progressbar" aria-label={`${sp.nameZh} 等級進度`} aria-valuenow={u.exp - levelStart} aria-valuemin={0} aria-valuemax={nextLevel - levelStart}>
+                              <div className="my-mobies-growth__fill" style={{ width: `${progress * 100}%` }} />
+                            </div>
+                          </>
+                        )}
+                      </div>
                       <div className="team-row__sub">
                         {ability && <span className="team-row__ability" title={ability.desc}>特性：{ability.icon} {ability.name}</span>}
                         <span>道具：{held ? `${held.icon} ${held.name}` : '未裝備'}</span>
@@ -142,7 +174,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
     {/* M16 資訊卡：自己的 Mobie 一律全顯（招式/數值/個體/特性/道具）。
         置於 backdrop 之外的 sibling，避免點 MobCard 背景冒泡關掉整個隊伍頁。 */}
     <AnimatePresence>
-      {detail && <MobCard mon={detail} owner revealed onClose={() => setDetail(null)} />}
+      {detail && <MobCard mon={detail.mon} owner ownerExp={detail.exp} revealed onClose={() => setDetail(null)} />}
     </AnimatePresence>
     </>
   )

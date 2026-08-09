@@ -14,7 +14,8 @@ import {
   type SupportOutcome,
 } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
-import type { BattleMobie, Move, TerrainId } from '@/game/types'
+import type { BattleMobie, Move, TerrainId, TypeName } from '@/game/types'
+import { initiativePresentation, moveDecisionPresentation } from '@/game/battle/decisionPresentation'
 import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
@@ -66,9 +67,6 @@ const FX_POS: Record<Side, { nx: number; ny: number }> = {
   foe: { nx: 0.72, ny: 0.22 },
   player: { nx: 0.3, ny: 0.62 },
 }
-// M19.c 選招逾時（plan/17 §1.1「逾時自動 slot0、不停頓」）：到時自動以出生自帶招（slot0）出擊。
-// 自用街機節奏取偏寬鬆值，給玩家讀完 4 招的時間；待玩測再調（plan/17 §9）。
-const CHOICE_TIMEOUT_MS = 8000
 const ATTACK_QTE_TIMEOUT_MS = 10000
 // 連打蓄力視窗：原本 950ms 太短（玩測回饋「給的時間超級少」），放寬到 2.8s 讓連點真的衝得起來。
 const MASH_DURATION_MS = 2800
@@ -318,12 +316,19 @@ function MashMeter({ onDone }: { onDone: (count: number) => void }) {
 
 /**
  * M19.c 四槽「選槽即開打」：點槽（或按 1–4 / 方向鍵）即選定該招並立即進入 QTE，不做巢狀選單，
- * 維持 Mezastar 流暢打擊感。逾時（CHOICE_TIMEOUT_MS）自動以 slot0 出擊、不停頓。
+ * 維持 Mezastar 流暢打擊感。選招階段會持續等待玩家明確選擇。
  * 攻擊招走命中 QTE（M19.c）；變化招（power 0，M19.d）目前資料不存在，故一律走命中 QTE。
- * 倒數條走純 CSS animation（不過 React state / rAF，守效能紅線）。
  */
-function MoveSlots({ moves, onPick }: { moves: Move[]; onPick: (slot: number) => void }) {
-  // 用 ref 鎖「已選定」：避免逾時與玩家輸入競合、或重複觸發兩次出招。
+export interface MoveSlotsProps {
+  moves: Move[]
+  defenderTypes: TypeName[]
+  playerSpeed: number
+  foeSpeed: number
+  onPick: (slot: number) => void
+}
+
+export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, onPick }: MoveSlotsProps) {
+  // 用 ref 鎖「已選定」：避免點擊與鍵盤輸入競合、或重複觸發兩次出招。
   const pickedRef = useRef(false)
   const pick = useCallback((slot: number) => {
     if (pickedRef.current) return
@@ -331,13 +336,6 @@ function MoveSlots({ moves, onPick }: { moves: Move[]; onPick: (slot: number) =>
     pickedRef.current = true
     onPick(slot)
   }, [moves.length, onPick])
-
-  // 逾時自動 slot0（plan/17 §1.1）。
-  useEffect(() => {
-    pickedRef.current = false
-    const t = setTimeout(() => pick(0), CHOICE_TIMEOUT_MS)
-    return () => clearTimeout(t)
-  }, [pick])
 
   // 四鍵 / 方向鍵映射（plan/17 §1.1）。只在本面板掛載期間監聽。
   useEffect(() => {
@@ -353,33 +351,53 @@ function MoveSlots({ moves, onPick }: { moves: Move[]; onPick: (slot: number) =>
 
   return (
     <div className="move-choice">
+      <div className="move-initiative">{initiativePresentation(playerSpeed, foeSpeed)}</div>
       <div className="move-grid" style={{ gridTemplateColumns: moves.length <= 1 ? '1fr' : 'repeat(2, 1fr)' }}>
-        {moves.map((mv, i) => (
-          <motion.button
-            key={i}
-            className={`move-slot ${mv.category === 'status' ? 'move-slot--status' : ''}`}
-            style={{ ['--mv' as string]: typeColor(mv.type) }}
-            whileTap={{ scale: 0.96 }}
-            onClick={() => { audio.play('select'); pick(i) }}
-          >
-            <span className="move-slot__key">{i + 1}</span>
-            <span className="move-slot__name">{mv.nameZh}</span>
-            <span className="move-slot__meta">
-              <span className="type-badge" style={{ background: typeColor(mv.type) }}>{TYPE_LABEL_ZH[mv.type]}</span>
-              <span className="move-slot__cat">{mv.category === 'physical' ? '物理' : mv.category === 'special' ? '特殊' : '變化'}</span>
-            </span>
-            {mv.category === 'status'
-              ? <span className="move-slot__stats">✦ {mv.effect?.label ?? '輔助效果'}</span>
-              : <span className="move-slot__stats">威力 {mv.power}　命中 {mv.accuracy}</span>}
-          </motion.button>
-        ))}
+        {moves.map((mv, i) => {
+          const decision = moveDecisionPresentation(mv, defenderTypes)
+          return (
+            <motion.button
+              key={i}
+              className={`move-slot ${mv.category === 'status' ? 'move-slot--status' : ''}`}
+              style={{ ['--mv' as string]: typeColor(mv.type) }}
+              whileTap={{ scale: 0.96 }}
+              aria-label={`${mv.nameZh}，${decision.label}`}
+              onClick={() => { audio.play('select'); pick(i) }}
+            >
+              <span className="move-slot__key">{i + 1}</span>
+              <span className="move-slot__name">{mv.nameZh}</span>
+              <span className="move-slot__meta">
+                <span className="type-badge" style={{ background: typeColor(mv.type) }}>{TYPE_LABEL_ZH[mv.type]}</span>
+                <span className="move-slot__cat">{mv.category === 'physical' ? '物理' : mv.category === 'special' ? '特殊' : '變化'}</span>
+              </span>
+              <span className="move-slot__effectiveness">{decision.label}</span>
+              {mv.category === 'status'
+                ? null
+                : <span className="move-slot__stats">威力 {mv.power}　命中 {mv.accuracy}</span>}
+            </motion.button>
+          )
+        })}
       </div>
-      {/* 倒數條（CSS 動畫驅動，純展示；逾時時 pick(0)）。key 重掛＝每進選招重置動畫。 */}
-      <div className="move-countdown" aria-hidden>
-        <div
-          className="move-countdown__bar"
-          style={{ animationDuration: `${CHOICE_TIMEOUT_MS}ms` }}
-        />
+    </div>
+  )
+}
+
+export function SwitchAction({ switchable, onPick }: { switchable: boolean; onPick: () => void }) {
+  return (
+    <div className="switch-action">
+      <motion.button
+        className="btn btn--ghost"
+        style={{ fontSize: 16, padding: '12px 22px' }}
+        whileTap={switchable ? { scale: 0.96 } : undefined}
+        disabled={!switchable}
+        aria-label="換人"
+        aria-describedby="switch-action-cost"
+        onClick={() => { audio.play('select'); onPick() }}
+      >
+        🔄 換人
+      </motion.button>
+      <div id="switch-action-cost" className="switch-action__cost">
+        放棄本回合攻擊並承受對手攻擊
       </div>
     </div>
   )
@@ -477,7 +495,7 @@ export function BattleScreen() {
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
   const pendingQualityRef = useRef<QteQuality>('normal')
-  // M19.c 選定的招式槽（選槽→qte→mash 相位間存活）；逾時/缺省＝slot0。
+  // M19.c 選定的招式槽（選槽→qte→mash 相位間存活）；玩家明確選擇前不會進入 QTE。
   const pendingSlotRef = useRef(0)
   // 防濫用：剛換下的那隻，下一個換人不能立刻換回（一回合後解鎖）
   const [lockedIndex, setLockedIndex] = useState<number | null>(null)
@@ -835,7 +853,7 @@ export function BattleScreen() {
     if (!b0) return
     store().setPhase('busy')
 
-    // M19.c：玩家選定的招式槽（缺省/逾時＝slot0）。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
+    // M19.c：玩家選定的招式槽。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
     const slotIndex = pendingSlotRef.current
     const input: ReplayInput = { type: 'ATTACK', quality, mashCount, slotIndex }
     const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
@@ -1209,6 +1227,9 @@ export function BattleScreen() {
             {showChoiceGuide && <div className="choice-guide">👇 選一個招式出擊！</div>}
             <MoveSlots
               moves={player.moves}
+              defenderTypes={foe.types}
+              playerSpeed={player.spe}
+              foeSpeed={foe.spe}
               onPick={(slot) => {
                 pendingSlotRef.current = slot
                 if (!guideSeenRef.current) {
@@ -1220,15 +1241,11 @@ export function BattleScreen() {
                 useBattleStore.getState().setPhase(isStatus ? 'statusQte' : 'qte')
               }}
             />
-            <div className="row" style={{ gap: 12, justifyContent: 'center' }}>
-              <motion.button
-                className="btn btn--ghost" style={{ fontSize: 16, padding: '12px 22px' }}
-                whileTap={switchable ? { scale: 0.96 } : undefined}
-                disabled={!switchable}
-                onClick={() => { audio.play('select'); useBattleStore.getState().setPhase('switchSelect') }}
-              >
-                🔄 換人
-              </motion.button>
+            <div className="row battle-secondary-actions" style={{ gap: 12, justifyContent: 'center' }}>
+              <SwitchAction
+                switchable={switchable}
+                onPick={() => useBattleStore.getState().setPhase('switchSelect')}
+              />
               {/* 星擊不在此列：能量滿時改在戰鬥區大特效顯示（見下方 StarStrikeOrb），點了即放。 */}
               {chainReady && (
                 <motion.button
