@@ -1,13 +1,40 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MoveSlots, SwitchAction } from '@/ui/screens/BattleScreen'
 import type { Move } from '@/game/types'
+import { renderGameJourney } from '@/test/renderGameJourney'
+import { useBattleStore } from '@/store/battleStore'
 
 vi.mock('@/audio/audioEngine', () => ({
-  audio: { play: vi.fn(), unlock: vi.fn().mockResolvedValue(undefined) },
+  audio: {
+    play: vi.fn(),
+    unlock: vi.fn().mockResolvedValue(undefined),
+    setIntensity: vi.fn(),
+    playMoveSound: vi.fn(),
+    starChargeSweep: vi.fn(),
+    starStampTick: vi.fn(),
+    starImpactBoom: vi.fn(),
+  },
 }))
+vi.mock('@/input/haptics', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/input/haptics')>()
+  return { ...actual, haptic: vi.fn() }
+})
+vi.mock('@/scene/r3f/BattleStage', async () => {
+  const { forwardRef } = await import('react')
+  return { default: forwardRef(() => <div aria-label="battle-stage" />) }
+})
+vi.mock('@/scene/fx/FxCanvas', async () => {
+  const { forwardRef } = await import('react')
+  return { FxCanvas: forwardRef(() => <div aria-label="battle-effects" />) }
+})
+vi.mock('@/scene/fx/WeatherCanvas', () => ({ WeatherCanvas: () => null }))
+vi.mock('@/ui/components/DamageNumbers', async () => {
+  const { forwardRef } = await import('react')
+  return { DamageNumbers: forwardRef(() => null) }
+})
 
 const moves: Move[] = [{
   id: 1,
@@ -23,6 +50,42 @@ describe('battle decision journey', () => {
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+  })
+
+  it('keeps the real battle in player choice, updates for the active foe, then enters QTE only after a pick', async () => {
+    vi.useFakeTimers()
+    renderGameJourney({
+      state: 'battle',
+      context: {
+        regionId: 'practice',
+        playerTeam: [
+          { cardId: 'journey-fire', speciesId: 4, level: 16 },
+          { cardId: 'journey-player-2', speciesId: 25, level: 16 },
+          { cardId: 'journey-player-3', speciesId: 133, level: 16 },
+        ],
+        foeTeam: [
+          { cardId: 'journey-grass', speciesId: 1, level: 11 },
+          { cardId: 'journey-water', speciesId: 7, level: 11 },
+          { cardId: 'journey-foe-3', speciesId: 10, level: 11 },
+        ],
+      },
+    })
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_100) })
+    expect(useBattleStore.getState().phase).toBe('playerChoice')
+    expect(screen.getByRole('button', { name: /火花.*效果絕佳 ×2/ })).toBeTruthy()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(8_001) })
+    expect(useBattleStore.getState().phase).toBe('playerChoice')
+    expect(screen.queryByText(/10秒內點擊任意處/)).toBeNull()
+
+    act(() => useBattleStore.getState().setActiveIndex('foe', 1))
+    expect(screen.getByRole('button', { name: /火花.*效果不佳 ×0\.5/ })).toBeTruthy()
+    act(() => useBattleStore.getState().setActiveIndex('foe', 0))
+
+    fireEvent.click(screen.getByRole('button', { name: /火花.*效果絕佳 ×2/ }))
+    expect(useBattleStore.getState().phase).toBe('qte')
+    expect(screen.getByText(/10秒內點擊任意處/)).toBeTruthy()
   })
 
   it('waits beyond the former eight-second boundary for an explicit move choice', () => {

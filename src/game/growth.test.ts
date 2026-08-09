@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   expForLevel, levelFromExp, expYield, applyExp,
-  createOwnedUnit, ownedToCard, MAX_LEVEL,
+  createOwnedUnit, ownedToCard, growthProgress, MAX_LEVEL,
 } from './growth'
 import { MemoryAdapter } from './persistence'
 import type { OwnedUnit } from '@/game/types'
@@ -28,6 +28,23 @@ describe('n^3 經驗曲線', () => {
     for (let n = 1; n <= MAX_LEVEL; n++) {
       expect(levelFromExp(expForLevel(n))).toBe(n)
     }
+  })
+
+  it('集中計算目前等級內的成長進度與下一級需求', () => {
+    expect(growthProgress(7, 400)).toEqual({
+      atMaxLevel: false,
+      levelStartExp: 343,
+      nextLevelExp: 512,
+      earnedExp: 57,
+      requiredExp: 169,
+      remainingExp: 112,
+      ratio: 57 / 169,
+    })
+    expect(growthProgress(MAX_LEVEL, expForLevel(MAX_LEVEL))).toMatchObject({
+      atMaxLevel: true,
+      remainingExp: 0,
+      ratio: 1,
+    })
   })
 })
 

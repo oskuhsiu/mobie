@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  resolveAttack, qteMultiplier, captureChance, attemptCapture, playerActsFirst,
+  resolveAttack, qteMultiplier, captureChance, attemptCapture, playerActsFirst, compareInitiative,
 } from './engine'
 import { move, mon } from './testFixtures'
 
@@ -96,6 +96,12 @@ describe('qteMultiplier', () => {
 })
 
 describe('playerActsFirst', () => {
+  it('用共用判定區分我方、對手與平手', () => {
+    expect(compareInitiative(90, 30)).toBe('player')
+    expect(compareInitiative(30, 90)).toBe('foe')
+    expect(compareInitiative(90, 90)).toBe('tie')
+  })
+
   it('速度高者先攻', () => {
     const fast = mon({ move: move('normal'), spe: 90 })
     const slow = mon({ move: move('normal'), spe: 30 })

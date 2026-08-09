@@ -45,10 +45,23 @@ export function typeEffectiveness(attack: TypeName, defenderTypes: TypeName[]): 
   return defenderTypes.reduce((mult, t) => mult * typeMultiplier(attack, t), 1)
 }
 
+export type EffectivenessTier = 'immune' | 'super' | 'resisted' | 'neutral'
+
+/** 唯一的倍率語意分級；戰鬥紀錄與選招提示都由此轉譯文案。 */
+export function effectivenessTier(mult: number): EffectivenessTier {
+  if (mult === 0) return 'immune'
+  if (mult >= 2) return 'super'
+  if (mult < 1) return 'resisted'
+  return 'neutral'
+}
+
 /** 文案：效果如何 */
 export function effectivenessLabel(mult: number): string | null {
-  if (mult === 0) return '沒有效果…'
-  if (mult >= 2) return '效果絕佳！'
-  if (mult < 1) return '效果不太好…'
-  return null
+  const labels: Record<EffectivenessTier, string | null> = {
+    immune: '沒有效果…',
+    super: '效果絕佳！',
+    resisted: '效果不太好…',
+    neutral: null,
+  }
+  return labels[effectivenessTier(mult)]
 }

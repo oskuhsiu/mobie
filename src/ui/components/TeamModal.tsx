@@ -7,7 +7,7 @@ import { getSpecies } from '@/game/data/species'
 import { ITEMS, getItem } from '@/game/ext/items'
 import { abilityForType, getAbility } from '@/game/ext/abilities'
 import { buildBattleMobie } from '@/game/stats'
-import { expForLevel, MAX_LEVEL, ownedToCard } from '@/game/growth'
+import { growthProgress, ownedToCard } from '@/game/growth'
 import { MobCard } from '@/ui/components/MobCard'
 import type { BattleMobie, OwnedUnit } from '@/game/types'
 import { audio } from '@/audio/audioEngine'
@@ -80,10 +80,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
             const held = getItem(u.heldItemId)
             const ability = getAbility(abilityForType(sp.types[0]))
             const open = openId === u.id
-            const atMaxLevel = u.level >= MAX_LEVEL
-            const levelStart = expForLevel(u.level)
-            const nextLevel = atMaxLevel ? levelStart : expForLevel(u.level + 1)
-            const progress = atMaxLevel ? 1 : Math.max(0, Math.min(1, (u.exp - levelStart) / (nextLevel - levelStart)))
+            const growth = growthProgress(u.level, u.exp)
             return (
               <div key={u.id} className="col" style={{ gap: 0 }}>
                 <div className="team-row">
@@ -99,16 +96,16 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                     <div className="team-row__info">
                       <div className="team-row__name">{sp.nameZh} <span className="hpbar__lv">Lv.{u.level}</span> <span className="team-row__info-hint">ℹ️ 詳情</span></div>
                       <div className="my-mobies-growth">
-                        {atMaxLevel ? (
+                        {growth.atMaxLevel ? (
                           <span className="my-mobies-growth__max">已達滿級</span>
                         ) : (
                           <>
                             <div className="my-mobies-growth__labels">
-                              <span>{u.exp - levelStart} / {nextLevel - levelStart} EXP</span>
-                              <span>Lv.{u.level + 1} 門檻 {nextLevel}</span>
+                              <span>{growth.earnedExp} / {growth.requiredExp} EXP</span>
+                              <span>Lv.{u.level + 1} 門檻 {growth.nextLevelExp}</span>
                             </div>
-                            <div className="my-mobies-growth__track" role="progressbar" aria-label={`${sp.nameZh} 等級進度`} aria-valuenow={u.exp - levelStart} aria-valuemin={0} aria-valuemax={nextLevel - levelStart}>
-                              <div className="my-mobies-growth__fill" style={{ width: `${progress * 100}%` }} />
+                            <div className="my-mobies-growth__track" role="progressbar" aria-label={`${sp.nameZh} 等級進度`} aria-valuenow={growth.earnedExp} aria-valuemin={0} aria-valuemax={growth.requiredExp}>
+                              <div className="my-mobies-growth__fill" style={{ width: `${growth.ratio * 100}%` }} />
                             </div>
                           </>
                         )}

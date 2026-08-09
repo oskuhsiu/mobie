@@ -24,6 +24,37 @@ export function levelFromExp(exp: number): number {
   return Math.max(1, Math.min(MAX_LEVEL, n))
 }
 
+export interface GrowthProgress {
+  atMaxLevel: boolean
+  levelStartExp: number
+  nextLevelExp: number
+  earnedExp: number
+  requiredExp: number
+  remainingExp: number
+  ratio: number
+}
+
+/** 目前等級區間內的顯示進度，供收藏列與完整資訊卡共用。 */
+export function growthProgress(level: number, exp: number): GrowthProgress {
+  const normalizedLevel = Math.max(1, Math.min(MAX_LEVEL, Math.floor(level)))
+  const atMaxLevel = normalizedLevel >= MAX_LEVEL
+  const levelStartExp = expForLevel(normalizedLevel)
+  const nextLevelExp = atMaxLevel ? levelStartExp : expForLevel(normalizedLevel + 1)
+  const requiredExp = Math.max(0, nextLevelExp - levelStartExp)
+  const earnedExp = atMaxLevel
+    ? requiredExp
+    : Math.max(0, Math.min(requiredExp, exp - levelStartExp))
+  return {
+    atMaxLevel,
+    levelStartExp,
+    nextLevelExp,
+    earnedExp,
+    requiredExp,
+    remainingExp: atMaxLevel ? 0 : requiredExp - earnedExp,
+    ratio: atMaxLevel ? 1 : earnedExp / requiredExp,
+  }
+}
+
 /** 擊敗一隻 level Mobie得到的經驗（依被擊敗者等級；自用平衡值） */
 export function expYield(defeatedLevel: number): number {
   const L = Math.max(1, Math.floor(defeatedLevel))

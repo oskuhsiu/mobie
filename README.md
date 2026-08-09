@@ -19,8 +19,8 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Individuality & growth**: seeded IV/nature/shiny, Medium-Fast `n³` EXP curve, persisted roster.
 - **Capture**: defeat a region boss to add it to your roster (persisted).
 - **Practice mode**: low-level, low-risk battles to grind EXP safely.
-- **Team-select helper**: per-card "counters N / weak to N" badges vs the whole foe team, plus a
-  one-tap "recommend team".
+- **Team-select advice**: reveal a recommended trio with offense/risk reasons, then let the player
+  choose and order the three Mobie instead of silently filling the team.
 - **Turn cap** to prevent unwinnable stalemates.
 - **QR cards & library** (M2): scan a card QR (or hand-enter the code) to add a Mobie; browse, import
   (JSON/CSV), make custom cards, and print QR codes from the in-app library.
@@ -34,8 +34,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Multi-move loadouts** (M19): each Mobie has a species learnset and up to 4 equipped moves
   (attack + status), learn/forget at the **Move Trainer** with SP; battle is "pick a slot → QTE".
   Identity is carried by the single star-strike finisher.
-- **Mobie info card** (M16): tap a Mobie — in battle (HP plate / team tray) **or** in the **Team**
-  screen — to see its moves, six stats, individuality, ability and held item.
+- **My Mobie collection** (M16): the first-level **我的 Mobie** action shows every owned companion,
+  current-level EXP progress and next threshold; tap one for moves, six stats, individuality, ability
+  and held item. The same detail card remains available from battle HP plates / team trays.
 - **Terrain** (M8): regions have fixed / mixed / random terrain that scales move power.
 - **Combo chain** (M9) and **per-type battle FX** (M21) for extra arcade punch.
 - **Collection & growth** (M10): evolution, star grade, a 1–1025 **dex**, **achievements**, and an
@@ -51,9 +52,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
   each is a swappable module hooked onto fixed engine seams, so turning it off leaves zero residue:
   team synergy, held items, abilities, combo chain, evolution. (The tower is a game *mode*, not a
   toggle.)
-- **Tools stay reachable mid-game**: the title's tools row is shared onto the region-select hub, so
-  scan / library / team / moves / partner skills / dex / achievements / incubator / models / save /
-  settings are available after the game starts, not only from the title.
+- **Focused hub navigation**: title and region-select keep **我的 Mobie** and **更多** at the first
+  level. Scan / library / moves / partner skills / dex / achievements / incubator / models / save /
+  settings remain available in the scrollable secondary menu without competing with the hunt loop.
 - Content: national dex 1–1025 (G1–G9), 16 themed regions (+ arena), 16 cross-type starter cards.
 
 ## Getting started
@@ -102,7 +103,7 @@ src/
   scene/r3f/  scene/models/   3D battle stage + user GLB store (M3)
   audio/  scene/fx/  input/   Audio, per-type battle FX, QTE + gesture seams
 scripts/gen_dex.mjs   PokéAPI data generator
-plan/                 Design docs & milestones (source of truth)
+plan/                 Existing tracked design docs; local generated specs/tickets are gitignored
 ```
 
 See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full system design, and **[handoff.md](handoff.md)**
@@ -126,7 +127,7 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP) are complete** and CDP-verified — **372 Vitest tests**, typecheck,
+M22 a–e (enhanced-interactivity MVP) are complete** and browser-verified — **475 Vitest tests**, typecheck,
 and build all green. Content: national dex 1–1025, 16 regions (+ arena), 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the

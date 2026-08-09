@@ -2,8 +2,9 @@
 
 iPad-first, personal-use **Pokémon Mezastar-style** game. Web/PWA, runs in iPad Safari
 (iPhone-compatible). This document describes the system's structure and the invariants a
-contributor must respect. Milestone/design rationale lives in [`plan/`](plan/) — this file
-does not repeat it.
+contributor must respect. Existing tracked milestone/design rationale lives in [`plan/`](plan/) —
+this file does not repeat it. Locally generated agent specs/tickets under `plan/` are intentionally
+gitignored; that workflow does not alter the authority of documents already tracked there.
 
 > Source-of-truth map: high-level design `plan/README.md`; architecture/data-model/state-machine
 > `plan/01-architecture.md`; battle reference (damage/type/crit/speed) `plan/06-battle-reference.md`;
@@ -17,7 +18,8 @@ does not repeat it.
 - **XState 5** (`@xstate/react`) — high-level screen flow only.
 - **Zustand 5** — battle display state and persistent roster store.
 - **framer-motion** — UI/battle animation; **Tone.js** — procedural audio (dynamic-imported on first touch).
-- **Vitest** — unit tests (`environment: node`). Package manager: **npm** (not pnpm).
+- **Vitest** — unit tests (`environment: node`) plus opt-in `jsdom` semantic UI journeys. Package
+  manager: **npm** (not pnpm).
 - Path alias `@/* → src/*` (configured in both `vite.config.ts` and `tsconfig.json`).
 - **Lazy-loaded heavies** (dynamic-imported so they stay out of the ~408 KB main bundle): `three` /
   `@react-three/fiber` / `@react-three/drei` (3D, M3), `jsqr` (QR scan, M2), `qrcode` (QR gen, M2),
@@ -48,7 +50,7 @@ input/      QTE seam (qualityFromPointer / zones)
 **Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Extension modules
 (`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
 which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
-pure is what makes the battle system testable (428 tests) and the animation layer swappable.
+pure is what makes the battle system testable (475 tests) and the animation layer swappable.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
@@ -59,14 +61,16 @@ title → regionSelect → encounter → cardSelect → battle → result
    (result: PLAY_AGAIN rerolls foes → encounter; TO_REGIONS → regionSelect)
 ```
 
-- The machine only carries `regionId`, `foeTeam` (3 Cards, last = boss/capture target),
+- The machine only carries `regionId`, `foeTeam` (3 Cards; `game/hunt.captureTargetOf` defines the
+  final member as the featured boss/capture target),
   `playerTeam` (3 Cards), `outcome`, `captured`, and the M11 `tower` run. **It does not run the
   battle** — turn/HP/QTE/switch are handled by `battleStore` + the pure reducer.
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
-  `ui/components/ToolsMenu` (scan / library / team / moves / partner skills / dex / achievements /
-  incubator / 3D models / save / settings — all lazy-loaded modals), so every tool stays reachable
-  after the game starts, not just from the title. `regionSelect` adds `BACK → title` (a 🏠 button);
-  it is the in-game hub returned to after each result.
+  `ui/components/ToolsMenu`. Its first level is deliberately limited to **我的 Mobie** and **更多**;
+  the latter opens a scrollable secondary menu for scan / library / moves / partner skills / dex /
+  achievements / incubator / 3D models / save / settings (all lazy-loaded). Every utility therefore
+  remains reachable without flattening it into the primary hunt loop. `regionSelect` adds
+  `BACK → title` (a 🏠 button); it is the in-game hub returned to after each result.
 - `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. The arena (id `'practice'`) resolves
   through `data/regionLookup.lookupRegion` to the hand-authored `data/practiceRegion.ts` — so it reuses
   the entire normal flow with no special-casing.
@@ -89,7 +93,8 @@ title → regionSelect → encounter → cardSelect → battle → result
   battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the abilities
   module's S1 hook); these are never persisted and are absent when a module is off. The read-only
   `MobCard` detail view (M16) renders one of these — in battle it reads the live, prep-applied member;
-  outside battle (the Team modal) it builds a fresh one from an `OwnedUnit` for an owner-full view.
+  outside battle (the **我的 Mobie** modal) it builds a fresh one from an `OwnedUnit` for an
+  owner-full view, alongside canonical `n³` EXP progress from `game/growth.growthProgress`.
 - **`Region.mode`** — `'arena' | 'wild'` (M6 mode contract, see §3).
 
 **Determinism:** `game/individual.rollIndividual(seed)` derives ivs/nature/shiny from a seeded RNG
@@ -174,9 +179,9 @@ violate "persist only canonical roster"). `MODULE_REGISTRY` (`store/ext.ts`) lis
 **Deferred** (would touch engine/reducer): focus-sash style lethal-intercept `onceTrigger` (needs a
 post-damage seam) and Intimidate-style `onSwitchIn` (needs a switch-resolution seam).
 
-UI: `SettingsModal` (Title "⚙️ 設定", per-system toggles) and `TeamModal` (Title "🎒 隊伍", equip items /
-view abilities); battle plate shows ability + item badges; synergy tags show in card-select and a battle
-opening banner.
+UI: `SettingsModal` (Title "⚙️ 設定", per-system toggles) and `TeamModal` (Title "我的 Mobie", browse
+growth/details with held-item equipment as a secondary action); battle plate shows ability + item badges;
+synergy tags show in card-select and a battle opening banner.
 
 ## 7. Persistence & progression
 
@@ -187,8 +192,8 @@ opening banner.
   `replaceAll(units)` (whole-roster replace used by save import).
 - **`game/growth.ts`** — Medium-Fast `n³` exp curve, `applyExp`, `createOwnedUnit`, `ownedToCard`.
 - **`game/recommend.ts`** — pure team-selection scoring vs the *whole* foe team (offense type
-  effectiveness minus defensive risk + level/stat tiebreak); powers the card-select badges and
-  one-tap "recommend team".
+  effectiveness minus defensive risk + level/stat tiebreak); powers advisory badges and the revealed
+  recommended trio. Advice never mutates selection: the player still chooses and orders the team.
 
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
 `heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models`
@@ -266,18 +271,15 @@ user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the 
 
 ## 11. Testing & verification
 
-- `npm test` (Vitest) — **428 tests.** Domain logic (type chart, individuality, growth, engine,
+- `npm test` (Vitest) — **475 tests.** Domain logic (type chart, individuality, growth, engine,
   reducer incl. turn cap, accidents, recommend, card-code/import, roster sanitize, save meta
   `compareSaves` + bundle round-trip & corruption classification) plus the M6/M7 extension suites
   (ext/settings, synergy, items, abilities, held-item persistence) and the project-wide verification
   pass: **`data/dataIntegrity.test.ts`** (all 1025 species/moves/regions/cards/type-chart swept) and
   **`battle/simulation.test.ts`** (hundreds of full seeded battles asserting HP bounds / no-NaN /
-  always-terminates / determinism, modules off vs all-on).
+  always-terminates / determinism, modules off vs all-on), plus `jsdom` semantic journeys for the
+  title/hub, owned-Mobie details, hunt target/advice/order, real battle decisions, and capture results.
 - `npm run typecheck` / `npm run build` must stay green.
-- No Playwright/chromium-cli installed. Visual/E2E verification uses local Google Chrome via
-  `--headless=new --remote-debugging-port=9222` + a Node CDP script (buttons via `el.click()`, QTE via
-  dispatched `PointerEvent('pointerdown')`; file inputs via `DOM.setFileInputFiles`, downloads via
-  `Browser.setDownloadBehavior`). **Battle screens need software WebGL** — add `--use-gl=angle
-  --use-angle=swiftshader --enable-unsafe-swiftshader` (Chrome 149+ dropped the automatic SwiftShader
-  fallback, so R3F's `BattleStage` fails to get a GL context without these). Screenshots land in
-  `/tmp/mz_shots/` (volatile).
+- Responsive visual verification runs in a real local browser at iPad and narrow-phone viewports;
+  semantic assertions stay in Vitest so navigation and decision regressions do not depend on pixels.
+  Headless battle screens need software WebGL flags when the environment does not provide a GL context.

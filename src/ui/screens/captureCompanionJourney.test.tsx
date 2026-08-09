@@ -62,6 +62,7 @@ describe('capture to companion journey', () => {
       { name: '查看新夥伴' },
       { timeout: 4_000 },
     )
+    expect(screen.getByText(/綠毛蟲.*Lv\.13.*已加入收藏/)).toBeTruthy()
     expect(screen.getByRole('button', { name: '我的 Mobie' })).toBeTruthy()
 
     fireEvent.click(inspect)
@@ -91,5 +92,6 @@ describe('capture to companion journey', () => {
     await screen.findByText(/自動轉化為孵化蛋/, {}, { timeout: 4_000 })
 
     expect(screen.queryByRole('button', { name: '查看新夥伴' })).toBeNull()
+    expect(screen.queryByText(/加入了你的隊伍/)).toBeNull()
   }, 8_000)
 })

@@ -151,14 +151,23 @@ export function resolveAttack(
   }
 }
 
+export type Initiative = 'player' | 'foe' | 'tie'
+
+/** 唯一的先攻語意判定；UI 與實際回合排序共用。 */
+export function compareInitiative(playerSpeed: number, foeSpeed: number): Initiative {
+  if (playerSpeed === foeSpeed) return 'tie'
+  return playerSpeed > foeSpeed ? 'player' : 'foe'
+}
+
 /** 先手判定：速度高者先攻，相同則隨機 */
 export function playerActsFirst(
   player: BattleMobie,
   foe: BattleMobie,
   rng: () => number = Math.random,
 ): boolean {
-  if (player.spe !== foe.spe) return player.spe > foe.spe
-  return rng() < 0.5
+  const initiative = compareInitiative(player.spe, foe.spe)
+  if (initiative === 'tie') return rng() < 0.5
+  return initiative === 'player'
 }
 
 /** 擊敗野生Mobie後的捕獲機率（等級越低越好捕），0–1 */

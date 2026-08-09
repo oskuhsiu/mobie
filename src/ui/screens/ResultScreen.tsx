@@ -19,6 +19,7 @@ import { getSpecies } from '@/game/data/species'
 import { ownedToCard } from '@/game/growth'
 import { abilityForType } from '@/game/ext/abilities'
 import { canCaptureIn } from '@/game/data/regionLookup'
+import { captureTargetOf } from '@/game/hunt'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { MobCard } from '@/ui/components/MobCard'
 import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
@@ -45,11 +46,17 @@ function Pokeball({ size = 64, color = '#ff5161' }: { size?: number; color?: str
 
 type Stage = 'aim' | 'throw' | 'wobble' | 'seal' | 'result'
 
-function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
+function WinView({
+  onCaptured,
+  duplicateConverted,
+}: {
+  onCaptured: (ok: boolean) => void
+  duplicateConverted: boolean
+}) {
   const { context } = useGame()
-  // 捕獲對象＝對手隊伍末隻（boss）
+  // 所有狩獵畫面共用同一個 featured/capture target contract。
   const wild = useMemo(() => {
-    const boss = context.foeTeam[context.foeTeam.length - 1]
+    const boss = captureTargetOf(context.foeTeam)
     return boss ? buildBattleMobie(boss) : null
   }, [context.foeTeam])
   // 捕獲球輪盤：轉出球種 → 套捕獲率係數（M11 幸運捕獲球 captureMult 加成）
@@ -185,7 +192,11 @@ function WinView({ onCaptured }: { onCaptured: (ok: boolean) => void }) {
               {caught ? '收服成功！' : '可惜，逃脫了！'}
             </div>
             <div className="h-sub">
-              {caught ? `${wild.nameZh} 加入了你的隊伍` : `${wild.nameZh} 掙脫了寶貝球`}
+              {caught
+                ? duplicateConverted
+                  ? `${wild.nameZh} 已轉化為孵化蛋`
+                  : `${wild.nameZh} 加入了你的隊伍`
+                : `${wild.nameZh} 掙脫了寶貝球`}
             </div>
           </motion.div>
         )}
@@ -302,7 +313,7 @@ export function ResultScreen() {
       let spReward: number
       if (tower) spReward = floorReward(tower.floor, tower.ascension).sp
       else {
-        const bossLevel = context.foeTeam[context.foeTeam.length - 1]?.level ?? 1
+        const bossLevel = captureTargetOf(context.foeTeam)?.level ?? 1
         spReward = canCaptureIn(context.regionId) ? Math.max(1, 2 + Math.floor(bossLevel / 10)) : 1
       }
       useSkillPoints.getState().add(spReward)
@@ -336,7 +347,7 @@ export function ResultScreen() {
   // 收服回呼：穩定參照（避免 WinView 計時器 effect 因父層 re-render churn）
   const onCaptured = useCallback((ok: boolean) => {
     if (ok) {
-      const boss = context.foeTeam[context.foeTeam.length - 1]
+      const boss = captureTargetOf(context.foeTeam)
       if (boss) {
         const bp = buildBattleMobie(boss)
         // 圖鑑一律登錄（registered + captures，異色另計）——不論保留或轉蛋
@@ -370,7 +381,7 @@ export function ResultScreen() {
       {tower
         ? <TowerView isWin={isWin} />
         : canCapture
-          ? <WinView onCaptured={onCaptured} />
+          ? <WinView onCaptured={onCaptured} duplicateConverted={dupConverted} />
           : isWin
             ? <ArenaWinView />
             : <LoseView />}
@@ -389,7 +400,7 @@ export function ResultScreen() {
         >
           <div className="capture-companion-actions__copy">
             <span className="eyebrow">NEW COMPANION</span>
-            <b>{capturedMon.nameZh} 已加入收藏</b>
+            <b>{capturedMon.nameZh} · Lv.{capturedMon.level} 已加入收藏</b>
           </div>
           <div className="row capture-companion-actions__buttons">
             <button

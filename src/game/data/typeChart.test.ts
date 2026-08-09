@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { typeMultiplier, typeEffectiveness, effectivenessLabel } from './typeChart'
+import { typeMultiplier, typeEffectiveness, effectivenessLabel, effectivenessTier } from './typeChart'
 
 describe('typeMultiplier（單屬性相剋）', () => {
   it('剋制為 2 倍', () => {
@@ -43,5 +43,11 @@ describe('effectivenessLabel', () => {
     expect(effectivenessLabel(4)).toBe('效果絕佳！')
     expect(effectivenessLabel(0.5)).toBe('效果不太好…')
     expect(effectivenessLabel(1)).toBeNull()
+  })
+
+  it('共用同一組倍率分級供戰鬥與選招介面使用', () => {
+    expect([0, 2, 0.5, 1].map(effectivenessTier)).toEqual([
+      'immune', 'super', 'resisted', 'neutral',
+    ])
   })
 })

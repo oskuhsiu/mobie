@@ -7,7 +7,7 @@ import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
-import { expForLevel, MAX_LEVEL } from '@/game/growth'
+import { growthProgress } from '@/game/growth'
 
 const STAT_ROWS: { key: keyof Stats; label: string }[] = [
   { key: 'hp', label: 'HP' }, { key: 'atk', label: '攻' }, { key: 'def', label: '防' },
@@ -50,9 +50,7 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
   const showDeep = owner || revealed
   const item = getItem(mon.heldItemId)
   const ability = getAbility(mon.abilityId)
-  const ownerAtMaxLevel = mon.level >= MAX_LEVEL
-  const ownerLevelStart = expForLevel(mon.level)
-  const ownerNextLevel = ownerAtMaxLevel ? ownerLevelStart : expForLevel(mon.level + 1)
+  const ownerGrowth = ownerExp === undefined ? null : growthProgress(mon.level, ownerExp)
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -84,7 +82,7 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
         {owner && ownerExp !== undefined && (
           <div className="mobcard-growth">
             <span>總 EXP {ownerExp}</span>
-            <span>{ownerAtMaxLevel ? '已達滿級' : `距離 Lv.${mon.level + 1} 還需 ${Math.max(0, ownerNextLevel - ownerExp)} EXP`}</span>
+            <span>{ownerGrowth?.atMaxLevel ? '已達滿級' : `距離 Lv.${mon.level + 1} 還需 ${ownerGrowth?.remainingExp ?? 0} EXP`}</span>
           </div>
         )}
 
