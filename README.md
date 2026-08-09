@@ -127,7 +127,7 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP) are complete** and browser-verified — **475 Vitest tests**, typecheck,
+M22 a–e (enhanced-interactivity MVP) are complete** and browser-verified — **477 Vitest tests**, typecheck,
 and build all green. Content: national dex 1–1025, 16 regions (+ arena), 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the

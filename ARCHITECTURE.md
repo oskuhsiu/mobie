@@ -50,7 +50,7 @@ input/      QTE seam (qualityFromPointer / zones)
 **Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Extension modules
 (`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
 which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
-pure is what makes the battle system testable (475 tests) and the animation layer swappable.
+pure is what makes the battle system testable (477 tests) and the animation layer swappable.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
@@ -94,7 +94,8 @@ title → regionSelect → encounter → cardSelect → battle → result
   module's S1 hook); these are never persisted and are absent when a module is off. The read-only
   `MobCard` detail view (M16) renders one of these — in battle it reads the live, prep-applied member;
   outside battle (the **我的 Mobie** modal) it builds a fresh one from an `OwnedUnit` for an
-  owner-full view, alongside canonical `n³` EXP progress from `game/growth.growthProgress`.
+  owner-full view through `game/ownedMobie.buildOwnedMobieForDisplay`, alongside canonical `n³` EXP
+  progress from `game/growth.growthProgress`.
 - **`Region.mode`** — `'arena' | 'wild'` (M6 mode contract, see §3).
 
 **Determinism:** `game/individual.rollIndividual(seed)` derives ivs/nature/shiny from a seeded RNG
@@ -271,7 +272,7 @@ user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the 
 
 ## 11. Testing & verification
 
-- `npm test` (Vitest) — **475 tests.** Domain logic (type chart, individuality, growth, engine,
+- `npm test` (Vitest) — **477 tests.** Domain logic (type chart, individuality, growth, engine,
   reducer incl. turn cap, accidents, recommend, card-code/import, roster sanitize, save meta
   `compareSaves` + bundle round-trip & corruption classification) plus the M6/M7 extension suites
   (ext/settings, synergy, items, abilities, held-item persistence) and the project-wide verification

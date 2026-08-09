@@ -16,8 +16,7 @@ import { floorReward, towerExpMult, isBossFloor, getAscension } from '@/game/tow
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
-import { ownedToCard } from '@/game/growth'
-import { abilityForType } from '@/game/ext/abilities'
+import { buildOwnedMobieForDisplay } from '@/game/ownedMobie'
 import { canCaptureIn } from '@/game/data/regionLookup'
 import { captureTargetOf } from '@/game/hunt'
 import { MobieSprite } from '@/ui/components/MobieSprite'
@@ -371,9 +370,7 @@ export function ResultScreen() {
 
   const capturedMon = useMemo(() => {
     if (!capturedUnit) return null
-    const mon = buildBattleMobie(ownedToCard(capturedUnit))
-    mon.abilityId = abilityForType(getSpecies(capturedUnit.speciesId).types[0])
-    return mon
+    return buildOwnedMobieForDisplay(capturedUnit)
   }, [capturedUnit])
 
   return (

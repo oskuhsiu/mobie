@@ -3,6 +3,8 @@ import {
   initiativePresentation,
   moveDecisionPresentation,
 } from '@/game/battle/decisionPresentation'
+import { createBattleState, resolveTurn } from '@/game/battle/reducer'
+import { mon } from '@/game/battle/testFixtures'
 import type { Move } from '@/game/types'
 
 const damageMove = (type: Move['type']): Move => ({
@@ -43,5 +45,25 @@ describe('battle decision presentation', () => {
     [100, 100, '速度相同，先攻順序不定'],
   ])('describes initiative from the existing speed rule', (playerSpeed, foeSpeed, label) => {
     expect(initiativePresentation(playerSpeed, foeSpeed)).toBe(label)
+  })
+
+  it('讀取選招提示前後，deterministic 純戰鬥結果完全相同', () => {
+    const playerMove = damageMove('fire')
+    const makeState = () => createBattleState(
+      [mon({ types: ['fire'], move: playerMove, moves: [playerMove], spe: 101 })],
+      [mon({ types: ['grass'], spe: 100 })],
+    )
+    const action = { type: 'ATTACK', slotIndex: 0, quality: 'normal' } as const
+    const expected = resolveTurn(makeState(), action, { rng: () => 0.5 })
+
+    const observedState = makeState()
+    moveDecisionPresentation(playerMove, observedState.foe.members[0].types)
+    initiativePresentation(
+      observedState.player.members[0].spe,
+      observedState.foe.members[0].spe,
+    )
+    const observed = resolveTurn(observedState, action, { rng: () => 0.5 })
+
+    expect(observed).toEqual(expected)
   })
 })

@@ -6,8 +6,8 @@ import { useSettings } from '@/store/settingsStore'
 import { getSpecies } from '@/game/data/species'
 import { ITEMS, getItem } from '@/game/ext/items'
 import { abilityForType, getAbility } from '@/game/ext/abilities'
-import { buildBattleMobie } from '@/game/stats'
-import { growthProgress, ownedToCard } from '@/game/growth'
+import { growthProgress } from '@/game/growth'
+import { buildOwnedMobieForDisplay } from '@/game/ownedMobie'
 import { MobCard } from '@/ui/components/MobCard'
 import type { BattleMobie, OwnedUnit } from '@/game/types'
 import { audio } from '@/audio/audioEngine'
@@ -36,8 +36,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
 
   // 由 canonical OwnedUnit 建出檢視用 BattleMobie；補上依屬性決定論的特性 id 供卡片顯示。
   const openDetail = (u: OwnedUnit) => {
-    const mon = buildBattleMobie(ownedToCard(u))
-    mon.abilityId = abilityForType(getSpecies(u.speciesId).types[0])
+    const mon = buildOwnedMobieForDisplay(u)
     audio.play('select')
     setDetail({ mon, exp: u.exp })
   }
