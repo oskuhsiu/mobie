@@ -10,8 +10,10 @@ const args = Object.fromEntries(
 const port = Number(args.port ?? 9222)
 const appUrl = args.url ?? 'http://127.0.0.1:5173/'
 const sampleMs = Number(args['sample-ms'] ?? 1500)
+const maxMedianMs = Number(args['max-median-ms'] ?? 25)
+const maxP95Ms = Number(args['max-p95-ms'] ?? 34)
 const maxFrameGapMs = Number(args['max-frame-gap-ms'] ?? 34)
-const maxJankRate = Number(args['max-jank-rate'] ?? 0.25)
+const maxJankRate = Number(args['max-jank-rate'] ?? 0.05)
 const deviceScaleFactor = args.dpr ? Number(args.dpr) : null
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -203,7 +205,9 @@ async function run(cdp) {
   ])
   const failures = results
     .filter(({ name }) => required.has(name))
-    .filter(({ p50, jankRate }) => p50 > maxFrameGapMs || jankRate > maxJankRate)
+    .filter(({ p50, p95, jankRate }) => (
+      p50 > maxMedianMs || p95 > maxP95Ms || jankRate > maxJankRate
+    ))
 
   console.log(`GPU: ${renderer ?? 'unknown'}`)
   console.table(
@@ -220,9 +224,9 @@ async function run(cdp) {
     })),
   )
 
-  if (calibration.p50 > maxFrameGapMs || calibration.jankRate > maxJankRate) {
+  if (calibration.p50 > maxMedianMs || calibration.p95 > maxP95Ms || calibration.jankRate > maxJankRate) {
     throw new Error(
-      `Chrome calibration is too slow (${calibration.p50.toFixed(1)}ms p50, ${(calibration.jankRate * 100).toFixed(1)}% jank); benchmark is invalid`,
+      `Chrome calibration is too slow (${calibration.p50.toFixed(1)}ms p50, ${calibration.p95.toFixed(1)}ms p95, ${(calibration.jankRate * 100).toFixed(1)}% jank); benchmark is invalid`,
     )
   }
   if (softwareRenderer && args['allow-software'] !== 'true') {
@@ -232,11 +236,11 @@ async function run(cdp) {
   if (failures.length) {
     process.exitCode = 1
     console.error(
-      `FAIL: ${failures.map(({ name, p50, jankRate }) => `${name} ${p50.toFixed(1)}ms p50 / ${(jankRate * 100).toFixed(1)}% jank`).join(', ')}`,
+      `FAIL: ${failures.map(({ name, p50, p95, jankRate }) => `${name} ${p50.toFixed(1)}ms p50 / ${p95.toFixed(1)}ms p95 / ${(jankRate * 100).toFixed(1)}% jank`).join(', ')}`,
     )
   } else {
     console.log(
-      `PASS: screen entry, steady state and an active battle turn stay within ${maxFrameGapMs}ms p50 and ${(maxJankRate * 100).toFixed(0)}% jank`,
+      `PASS: screen entry, steady state and an active battle turn stay within ${maxMedianMs}ms p50, ${maxP95Ms}ms p95 and ${(maxJankRate * 100).toFixed(0)}% gaps over ${maxFrameGapMs}ms`,
     )
   }
 }
