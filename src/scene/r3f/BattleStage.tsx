@@ -113,7 +113,8 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       <Pedestal position={PLAYER_BASE} color="#5b8cff" />
       <group position={FOE_BASE}><BlobShadow /></group>
       <group position={PLAYER_BASE}><BlobShadow /></group>
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.35} scale={10} blur={2.6} far={4} resolution={256} color="#05060f" />
+      {/* BlobShadow follows combatants; the costly blurred scene-depth pass only needs the initial grounding frame. */}
+      <ContactShadows position={[0, 0.01, 0]} opacity={0.35} scale={10} blur={2.6} far={4} resolution={256} frames={1} color="#05060f" />
 
       <Combatant3D
         side="foe"

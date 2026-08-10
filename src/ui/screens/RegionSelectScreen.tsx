@@ -31,7 +31,6 @@ export function RegionSelectScreen() {
       {/* 競技場入口：中性地形、純得經驗、不可捕獲，低風險刷經驗 */}
       <motion.button
         className="practice-cta"
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => send({ type: 'SELECT_REGION', regionId: PRACTICE_REGION.id })}
       >
@@ -46,7 +45,6 @@ export function RegionSelectScreen() {
       {/* M11 連勝塔入口：連續 escalating 戰鬥、Ascension 難度、依深度給 SP */}
       <motion.button
         className="practice-cta tower-cta"
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
         whileTap={{ scale: 0.98 }}
         onClick={() => send({ type: 'OPEN_TOWER' })}
       >
@@ -59,14 +57,11 @@ export function RegionSelectScreen() {
       </motion.button>
 
       <div className="region-grid scroll-y" style={{ paddingBottom: 8 }}>
-        {REGIONS.map((r, i) => (
+        {REGIONS.map((r) => (
           <motion.button
             key={r.id}
             className="region-card"
             style={{ background: `linear-gradient(150deg, ${r.gradient[0]}, ${r.gradient[1]})` }}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.06 * i, type: 'spring', stiffness: 140, damping: 16 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => send({ type: 'SELECT_REGION', regionId: r.id })}
           >

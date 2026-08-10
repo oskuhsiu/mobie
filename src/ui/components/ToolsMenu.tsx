@@ -36,9 +36,8 @@ export function ToolsMenu() {
   return (
     <>
       <div className="tools-menu">
-        <motion.div
+        <div
           className="row tools-menu-primary" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}
         >
           <button aria-label="我的 Mobie" className="btn btn--ghost tools-menu-primary__mobies" onClick={() => open('team')}>✨ 我的 Mobie</button>
           <button
@@ -50,7 +49,7 @@ export function ToolsMenu() {
           >
             更多 {moreOpen ? '▴' : '▾'}
           </button>
-        </motion.div>
+        </div>
 
         <AnimatePresence>
           {moreOpen && (

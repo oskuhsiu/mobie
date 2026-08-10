@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { GameProvider, useGame } from '@/app/GameProvider'
 import { useRoster } from '@/store/rosterStore'
 import { useMeta } from '@/store/metaStore'
@@ -12,13 +11,6 @@ import { CardSelectScreen } from '@/ui/screens/CardSelectScreen'
 import { BattleScreen } from '@/ui/screens/BattleScreen'
 import { ResultScreen } from '@/ui/screens/ResultScreen'
 import { TowerSetupScreen } from '@/ui/screens/TowerSetupScreen'
-
-const fade = {
-  initial: { opacity: 0, scale: 0.98 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 1.02 },
-  transition: { duration: 0.3, ease: 'easeOut' as const },
-}
 
 export function Stage() {
   const game = useGame()
@@ -33,17 +25,16 @@ export function Stage() {
 
   return (
     <div className="app" style={{ background: bg, transition: 'background 0.6s ease' }}>
-      <AnimatePresence mode="wait">
-        <motion.div key={value} className="screen" {...fade}>
-          {value === 'title' && <TitleScreen />}
-          {value === 'regionSelect' && <RegionSelectScreen />}
-          {value === 'towerSetup' && <TowerSetupScreen />}
-          {value === 'encounter' && <EncounterScreen />}
-          {value === 'cardSelect' && <CardSelectScreen />}
-          {value === 'battle' && <BattleScreen />}
-          {value === 'result' && <ResultScreen />}
-        </motion.div>
-      </AnimatePresence>
+      {/* Keep transitions local: scaling this full-screen layer forces gradients, blur and WebGL to re-rasterize together. */}
+      <div className="screen">
+        {value === 'title' && <TitleScreen />}
+        {value === 'regionSelect' && <RegionSelectScreen />}
+        {value === 'towerSetup' && <TowerSetupScreen />}
+        {value === 'encounter' && <EncounterScreen />}
+        {value === 'cardSelect' && <CardSelectScreen />}
+        {value === 'battle' && <BattleScreen />}
+        {value === 'result' && <ResultScreen />}
+      </div>
     </div>
   )
 }

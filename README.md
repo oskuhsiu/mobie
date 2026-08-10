@@ -85,6 +85,7 @@ is enabled by `npm install` (the `prepare` script sets `core.hooksPath`) — so 
 | `npm run typecheck` | TypeScript check only |
 | `npm test` | Run the Vitest suite |
 | `npm run test:watch` | Vitest in watch mode |
+| `npm run perf:check -- --port=9223` | CDP frame-pacing check against a running app + hardware Chrome target |
 
 ## Project layout
 
