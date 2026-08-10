@@ -176,6 +176,12 @@ async function run(cdp) {
   await sleep(3000)
   const battleSteady = await sample('battle-steady')
 
+  await evaluate('[...document.querySelectorAll(".move-slot")].find((slot) => !slot.classList.contains("move-slot--status")).click()')
+  await waitFor('Boolean(document.querySelector(".battle-action [role=button]"))')
+  await evaluate('document.querySelector(".battle-action [role=button]").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))')
+  await waitFor('!document.querySelector(".battle-action")', 12_000)
+  const battleTurn = await sample('battle-turn')
+
   const results = [
     calibration,
     titleEntry,
@@ -184,8 +190,17 @@ async function run(cdp) {
     regionsSteady,
     battleEntry,
     battleSteady,
+    battleTurn,
   ]
-  const required = new Set(['title-steady', 'regions-steady', 'battle-entry', 'battle-steady'])
+  const required = new Set([
+    'title-entry',
+    'title-steady',
+    'regions-entry',
+    'regions-steady',
+    'battle-entry',
+    'battle-steady',
+    'battle-turn',
+  ])
   const failures = results
     .filter(({ name }) => required.has(name))
     .filter(({ p50, jankRate }) => p50 > maxFrameGapMs || jankRate > maxJankRate)
@@ -221,7 +236,7 @@ async function run(cdp) {
     )
   } else {
     console.log(
-      `PASS: steady screens and battle entry stay within ${maxFrameGapMs}ms p50 and ${(maxJankRate * 100).toFixed(0)}% jank`,
+      `PASS: screen entry, steady state and an active battle turn stay within ${maxFrameGapMs}ms p50 and ${(maxJankRate * 100).toFixed(0)}% jank`,
     )
   }
 }

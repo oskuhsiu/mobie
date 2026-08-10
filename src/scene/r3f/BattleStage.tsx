@@ -1,6 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { ContactShadows } from '@react-three/drei'
 import { Vector3, PerspectiveCamera } from 'three'
 import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
@@ -113,8 +112,6 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       <Pedestal position={PLAYER_BASE} color="#5b8cff" />
       <group position={FOE_BASE}><BlobShadow /></group>
       <group position={PLAYER_BASE}><BlobShadow /></group>
-      {/* BlobShadow follows combatants; the costly blurred scene-depth pass only needs the initial grounding frame. */}
-      <ContactShadows position={[0, 0.01, 0]} opacity={0.35} scale={10} blur={2.6} far={4} resolution={256} frames={1} color="#05060f" />
 
       <Combatant3D
         side="foe"
