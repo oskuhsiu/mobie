@@ -34,6 +34,22 @@ export interface AudioEngine {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type ToneMod = typeof import('tone')
 
+/**
+ * Tone clamps an unsynchronised source scheduled in the past to AudioContext.currentTime.
+ * After a long frame, several Transport callbacks can therefore collapse onto the exact
+ * same source start and throw. Drop stale catch-up notes and keep each synth lane
+ * strictly monotonic; normal look-ahead scheduling is returned unchanged.
+ */
+export function safeBgmStartTime(
+  scheduledTime: number,
+  currentTime: number,
+  previousStartTime: number,
+  sampleDuration = 1 / 48_000,
+): number | null {
+  if (scheduledTime <= currentTime) return null
+  return Math.max(scheduledTime, previousStartTime + sampleDuration)
+}
+
 class ToneAudioEngine implements AudioEngine {
   private Tone: ToneMod | null = null
   private ready = false
@@ -48,11 +64,30 @@ class ToneAudioEngine implements AudioEngine {
   private bgmBass: any = null
   private seq: any = null
   private bassSeq: any = null
+  private bgmLeadStartTime = Number.NEGATIVE_INFINITY
+  private bgmBassStartTime = Number.NEGATIVE_INFINITY
   private bgmStarted = false
   private intensity = 0
   private lastAlarm = 0
 
   isReady() { return this.ready }
+
+  private playBgmNote(lane: 'lead' | 'bass', note: string, duration: string, time: number, velocity: number) {
+    try {
+      const T = this.Tone!
+      const context = T.getContext()
+      const previous = lane === 'lead' ? this.bgmLeadStartTime : this.bgmBassStartTime
+      const start = safeBgmStartTime(time, context.immediate(), previous, 1 / context.sampleRate)
+      if (start === null) return
+      const synth = lane === 'lead' ? this.bgmLead : this.bgmBass
+      synth.triggerAttackRelease(note, duration, start, velocity)
+      if (lane === 'lead') this.bgmLeadStartTime = start
+      else this.bgmBassStartTime = start
+    } catch (e) {
+      // Sequence callbacks are asynchronous, so startBgm's outer try/catch cannot contain them.
+      console.warn('[audio] bgm note', e)
+    }
+  }
 
   async unlock() {
     if (this.ready) return
@@ -110,8 +145,8 @@ class ToneAudioEngine implements AudioEngine {
     // chiptune loop（程序化，零取樣）
     const melody = ['E4', 'G4', 'A4', 'B4', 'A4', 'G4', 'E4', 'D4', 'E4', 'G4', 'C5', 'B4', 'A4', 'G4', 'E4', null]
     const bass = ['E2', null, 'A2', null, 'C3', null, 'B2', null]
-    this.seq = new T.Sequence((time, n) => { if (n) this.bgmLead.triggerAttackRelease(n, '8n', time, 0.6) }, melody, '8n')
-    this.bassSeq = new T.Sequence((time, n) => { if (n) this.bgmBass.triggerAttackRelease(n, '4n', time, 0.8) }, bass, '4n')
+    this.seq = new T.Sequence((time, n) => { if (n) this.playBgmNote('lead', n, '8n', time, 0.6) }, melody, '8n')
+    this.bassSeq = new T.Sequence((time, n) => { if (n) this.playBgmNote('bass', n, '4n', time, 0.8) }, bass, '4n')
   }
 
   startBgm() {
