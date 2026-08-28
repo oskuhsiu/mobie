@@ -32,7 +32,7 @@ import { DamageNumbers, type DamageNumbersHandle } from '@/ui/components/DamageN
 import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
 import { ShieldSwipe } from '@/ui/components/BattleGestures'
 import { interactModeOf, attackInputVariantOf, juiceLevelOf } from '@/game/settings'
-import { haptic } from '@/input/haptics'
+import { haptic, vibrate } from '@/input/haptics'
 import { createCinematicCoordinator, type CinematicCoordinator, type CutInSpec } from '@/ui/screens/battleCinematic'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
@@ -44,7 +44,18 @@ import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
-import type { M23Checkpoint } from '@/dev/m23/contracts'
+import type { M23Checkpoint, M23PresentationTraceStage } from '@/dev/m23/contracts'
+import { BattleDirector } from '@/presentation/battle/BattleDirector'
+import { BattleTurnCoordinator } from '@/presentation/battle/BattleTurnCoordinator'
+import { compileBattleCues } from '@/presentation/battle/compileBattleCues'
+import { LegacyNormalAttackCueHandler, type BattleCuePorts } from '@/presentation/battle/cueHandlers'
+import { RealPresentationClock } from '@/presentation/battle/PresentationClock'
+import type {
+  CueContext,
+  NormalAttackInput,
+  PresentationToken,
+  TurnResolution,
+} from '@/presentation/battle/contracts'
 
 // 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
 const BattleStage = lazy(() => import('@/scene/r3f/BattleStage'))
@@ -71,6 +82,11 @@ const FX_POS: Record<Side, { nx: number; ny: number }> = {
 const ATTACK_QTE_TIMEOUT_MS = 10000
 // 連打蓄力視窗：原本 950ms 太短（玩測回饋「給的時間超級少」），放寬到 2.8s 讓連點真的衝得起來。
 const MASH_DURATION_MS = 2800
+const LEGACY_PRESENTATION_CONTEXT: CueContext = {
+  token: { battleSessionId: 'legacy-direct', presentationId: 0 },
+  signal: new AbortController().signal,
+  clock: new RealPresentationClock(),
+}
 // EXT.1.c hit-stop（presentation clock pause，不改 reducer 時間線）：命中瞬間凍結演出推進的毫秒數。
 // 只在 juice='full' 生效；會心/效果絕佳給更長的「頓」讓重擊更有份量。
 const HITSTOP_HIT_MS = 40
@@ -86,6 +102,19 @@ const WILD_SHIFT_POOL = TERRAINS.filter((t) => t.id !== 'neutral').map((t) => t.
 
 function baselineDriver() {
   return import.meta.env.DEV ? window.__MOBIE_M23_BASELINE__ : undefined
+}
+
+function tracePresentation(
+  token: PresentationToken,
+  stage: M23PresentationTraceStage,
+  detail: { cueId?: string; detail?: string; turn?: number } = {},
+): void {
+  baselineDriver()?.recordPresentationEvent({
+    transactionId: `${token.battleSessionId}:${token.presentationId}`,
+    presentationId: token.presentationId,
+    stage,
+    ...detail,
+  })
 }
 
 function checkpointForEvent(event: BattleEvent): M23Checkpoint | undefined {
@@ -422,14 +451,14 @@ export function SwitchAction({ switchable, onPick }: { switchable: boolean; onPi
 
 export function BattleScreen() {
   const { context, send } = useGame()
-  const battle = useBattleStore((s) => s.battle)
+  const battle = useBattleStore((s) => s.presentation?.battle ?? s.battle)
   const phase = useBattleStore((s) => s.phase)
-  const banner = useBattleStore((s) => s.banner)
-  const hitFx = useBattleStore((s) => s.hitFx)
-  const support = useBattleStore((s) => s.support)
+  const banner = useBattleStore((s) => s.presentation ? s.presentation.banner : s.banner)
+  const hitFx = useBattleStore((s) => s.presentation ? s.presentation.hitFx : s.hitFx)
+  const support = useBattleStore((s) => s.presentation ? s.presentation.support : s.support)
   const energy = useBattleStore((s) => s.energy)
-  const combo = useBattleStore((s) => s.combo)
-  const log = useBattleStore((s) => s.log)
+  const combo = useBattleStore((s) => s.presentation ? s.presentation.combo : s.combo)
+  const log = useBattleStore((s) => s.presentation ? s.presentation.log : s.log)
   const revealedFoes = useBattleStore((s) => s.revealedFoes)
   // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
   const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean; foeIndex: number } | null>(null)
@@ -455,6 +484,10 @@ export function BattleScreen() {
     const region = context.regionId ? lookupRegion(context.regionId) : null
     return region?.mode === 'wild' ? makeWildEvents({ terrainPool: WILD_SHIFT_POOL }) : undefined
   }, [context.regionId, context.tower])
+  const extRef = useRef(ext)
+  const wildEventsRef = useRef(wildEvents)
+  extRef.current = ext
+  wildEventsRef.current = wildEvents
 
   // EXT.3：當前地形 → 視覺 palette（地板色調/環境光/霧/天氣 emitter）。純 display。
   // 隨 terrainShift 更新（current 陣列換新參照即重算）；全空/neutral → 基線 palette。
@@ -508,6 +541,8 @@ export function BattleScreen() {
   const battleRngRef = useRef<() => number>(Math.random)
   // M14.c：戰鬥回放單點錄製器（每場一個 instance；recordReplays 關＝不 start＝record/finish 皆 no-op）。
   const recorderRef = useRef(new ReplayRecorder())
+  const turnCoordinatorRef = useRef<BattleTurnCoordinator | null>(null)
+  const turnSessionRef = useRef({ battleSessionId: '' })
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
@@ -549,6 +584,7 @@ export function BattleScreen() {
       ?? `${context.playerTeam.map((c) => c.cardId).join('|')}#${terrainSeed}#${Date.now()}`
     battleSeedRef.current = battleSeed
     battleRngRef.current = makeRng(battleSeed)
+    turnSessionRef.current = { battleSessionId: `battle:${battleSeed}` }
     // 連勝塔（M11）視為中性場：無地形（也無野外意外，見 wildEvents memo）
     const terrains = context.tower || !region ? [] : resolveBattleTerrains(region, terrainSeed)
     const terrainDefs = terrainDefsOf(terrains)
@@ -591,6 +627,10 @@ export function BattleScreen() {
     })()
   }, [context, prep])
 
+  useEffect(() => () => {
+    turnCoordinatorRef.current?.cancel('unmount')
+  }, [])
+
   // 戰鬥結束 → 通知流程狀態機
   useEffect(() => {
     if (phase !== 'won' && phase !== 'lost') return
@@ -628,241 +668,368 @@ export function BattleScreen() {
     return () => clearTimeout(t)
   }, [phase, juice])
 
-  // 依序消費 reducer events：一次算完、畫面慢慢演
-  const playEvents = useCallback(async (b0: BattleState, events: BattleEvent[]) => {
-    const store = () => useBattleStore.getState()
-    for (const e of events) {
-      await baselineDriver()?.checkpoint(`event:${e.type}`, checkpointForEvent(e))
-      if (e.type === 'damageApplied') {
-        const atk = monAt(b0, e.attackerSide, e.attackerIndex)
-        const def = monAt(b0, e.targetSide, e.targetIndex)
-        // M19：實際出招由 reducer 寫進 resolvedMoveId（多招式下對手也會用非 slot0 招）；缺省回 slot0。
-        const usedMove = e.resolvedMoveId != null ? getMove(e.resolvedMoveId) : atk.move
-        const atkPrefix = e.attackerSide === 'foe' ? '對手的 ' : ''
-        stageRef.current?.lunge(e.attackerSide) // 3D：出手方撲擊
-        store().setBanner(`${atkPrefix}${atk.nameZh} 使出 ${usedMove.nameZh}！`)
-        audio.play('attack')
-        await wait(440)
+  const playLegacyEvent = useCallback(async (
+    b0: BattleState,
+    e: BattleEvent,
+    cueContext: CueContext,
+    projected: boolean,
+  ) => {
+    const store = useBattleStore.getState
+    const delay = (ms: number) => cueContext.clock.wait(ms, cueContext.signal)
+    const setMemberHp = (side: Side, index: number, hp: number) => projected
+      ? store().presentationSetMemberHp(cueContext.token, side, index, hp)
+      : store().setMemberHp(side, index, hp)
+    const setActiveIndex = (side: Side, index: number) => projected
+      ? store().presentationSetActiveIndex(cueContext.token, side, index)
+      : store().setActiveIndex(side, index)
+    const setBanner = (value: string | null) => projected
+      ? store().presentationSetBanner(cueContext.token, value)
+      : store().setBanner(value)
+    const pushLog = (message: string) => projected
+      ? store().presentationPushLog(cueContext.token, message)
+      : store().pushLog(message)
+    const showHit = (fx: Omit<HitFx, 'id'>) => projected
+      ? store().presentationShowHit(cueContext.token, fx)
+      : store().showHit(fx)
+    const clearFx = () => projected
+      ? store().presentationClearTransient(cueContext.token)
+      : store().clearFx()
+    const setSupport = (value: SupportOutcome | null) => projected
+      ? store().presentationSetSupport(cueContext.token, value)
+      : store().setSupport(value)
+    const setCombo = (value: number | null) => projected
+      ? store().presentationSetCombo(cueContext.token, value)
+      : store().setCombo(value)
 
-        const pos = FX_POS[e.targetSide]
-        const recipe = resolveFx(usedMove)
-        const strong = e.crit || e.effectiveness >= 2
-        let impactDelayMs = 0
-        if (!e.missed && e.amount > 0) {
-          baselineDriver()?.recordCastImpact(performance.now())
-          impactDelayMs = playMoveFx(
-            fxRef.current,
-            strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
-            FX_POS[e.attackerSide],
-            pos,
-          )
-        }
-        if (impactDelayMs > 0) await wait(impactDelayMs)
-
-        store().setMemberHp(e.targetSide, e.targetIndex, e.hpAfter)
-        store().showHit({
-          target: e.targetSide, amount: e.amount,
-          crit: e.crit, effText: e.effectivenessText, missed: e.missed,
-        })
-        // EXT.1.b：juice≠off → spawn 富表現飄字（含 MISS/沒效果，圖示優先）；off 走既有 FloatDamage（store hitFx）＝M22 基線。
+    if (e.type === 'damageApplied') throw new Error('damageApplied must use the semantic attack cue handler')
+    if (e.type === 'memberFainted') {
+      const m = monAt(b0, e.side, e.index)
+      const prefix = e.side === 'foe' ? '對手的 ' : ''
+      stageRef.current?.faint(e.side)
+      fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
+      audio.play('faint')
+      haptic('faint')
+      pushLog(`${prefix}${m.nameZh} 倒下了！`)
+      await delay(620)
+    } else if (e.type === 'heal') {
+      const m = monAt(b0, e.side, e.index)
+      const src = getItem(e.source) ?? getAbility(e.source)
+      setMemberHp(e.side, e.index, e.hpAfter)
+      fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 12, power: 1, kind: 'spark' })
+      audio.play('select')
+      const prefix = e.side === 'foe' ? '對手的 ' : ''
+      setBanner(`${src?.icon ?? '✨'} ${prefix}${m.nameZh} 回復了 ${e.amount} HP`)
+      pushLog(`${prefix}${m.nameZh} 回復 ${e.amount} HP（${src?.name ?? e.source}）`)
+      await delay(720)
+      setBanner(null)
+      await delay(120)
+    } else if (e.type === 'statusApplied') {
+      const m = monAt(b0, e.side, e.index)
+      const mv = getMove(e.moveId)
+      const recipe = resolveFx(mv)
+      const prefix = e.side === 'foe' ? '對手的 ' : ''
+      stageRef.current?.lunge(e.side)
+      setBanner(`${prefix}${m.nameZh} 使出 ${mv.nameZh}！`)
+      audio.play('select')
+      await delay(540)
+      playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
+      audio.playMoveSound(recipe.sound)
+      if (e.effectKind === 'heal' && e.hpAfter != null) {
+        setMemberHp(e.side, e.index, e.hpAfter)
+        audio.play('super')
+        setBanner(`✨ ${e.label}　+${e.healAmount} HP`)
+      } else if (e.effectKind === 'buff') {
+        audio.play('super')
+        setBanner(`▲ ${e.label}（${e.remaining} 回合）`)
+      } else {
+        audio.play('super')
+        setBanner(`🌿 ${e.label}`)
+      }
+      pushLog(`${prefix}${m.nameZh}：${e.label}`)
+      await delay(820)
+      setBanner(null)
+      await delay(140)
+    } else if (e.type === 'wildAccident') {
+      if (e.kind === 'terrainShift' && e.terrainId) {
+        const def = lookupTerrain(e.terrainId)
+        setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
+        pushLog(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
+        const shiftColor = juiceRef.current === 'off' ? '#a07aff' : resolveTerrainPalette([e.terrainId]).particleColor
+        fxRef.current?.flash(shiftColor, 0.35)
+        fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: shiftColor })
+        audio.play('super')
+        await delay(950)
+        setBanner(null)
+        await delay(140)
+      } else if (e.kind === 'intrusion' && e.side != null && e.index != null && e.hpAfter != null) {
+        const m = monAt(b0, e.side, e.index)
+        const prefix = e.side === 'foe' ? '對手的 ' : ''
+        setMemberHp(e.side, e.index, e.hpAfter)
+        showHit({ target: e.side, amount: e.amount ?? 0, crit: false, effText: null, missed: false })
         if (juiceRef.current !== 'off') {
-          damageRef.current?.spawn({ ...pos, amount: e.amount, crit: e.crit, effectiveness: e.effectiveness, missed: e.missed })
+          damageRef.current?.spawn({ ...FX_POS[e.side], amount: e.amount ?? 0, crit: false, effectiveness: 1, missed: false })
         }
-        // 粒子 / 螢幕震動（不過 React state）
-        if (!e.missed && e.amount > 0) {
-          if (e.crit) {
-            fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
-            fxRef.current?.ring({ ...pos, color: '#ffd23f' })
-            fxRef.current?.flash('#ffffff', 0.45)
-          } else if (e.effectiveness >= 2) {
-            fxRef.current?.ring({ ...pos, color: recipe.accent })
-          }
-          const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
-          rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
-          stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1) // 3D：受擊抖動
-          audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit')
-          audio.playMoveSound(recipe.sound) // M21.e：疊一層屬性材質音色（火=爆/電=zap/水=波…）
-          // EXT.1.a：觸覺回饋（依情緒強度，裝置/開關不支援自動 no-op；獨立於 juice）
-          haptic(e.crit ? 'crit' : e.effectiveness >= 2 ? 'superEffective' : 'hit')
-          // EXT.1.c：hit-stop 頓格（只 full 生效）——命中瞬間凍結演出推進，會心/絕佳更久。
-          // 純拉長演出節奏，**不改 nextState**（reducer 早已一次算完整回合）。
-          if (juiceRef.current === 'full') {
-            await cinematicRef.current!.pause(strong ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
-          }
+        fxRef.current?.burst({ ...FX_POS[e.side], color: '#ff9a3c', count: 14, kind: 'puff' })
+        void rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
+        audio.play('hit')
+        haptic('hit')
+        setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
+        pushLog(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
+        await delay(820)
+        clearFx()
+        setBanner(null)
+        await delay(140)
+      }
+    } else if (e.type === 'activeChanged') {
+      setActiveIndex(e.side, e.toIndex)
+      stageRef.current?.enter(e.side)
+      const m = monAt(b0, e.side, e.toIndex)
+      fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffffff' })
+      if (e.side === 'player') fxRef.current?.flash('#ffffff', 0.3)
+      audio.play('switch')
+      setBanner(e.side === 'player' ? `上吧，${m.nameZh}！` : `對手派出了 ${m.nameZh}！`)
+      await delay(640)
+      setBanner(null)
+      await delay(120)
+    } else if (e.type === 'switchDefenseResolved') {
+      const pct = Math.round((1 - e.damageMult) * 100)
+      const label = e.defenseQuality === 'perfect' ? '完美防禦！'
+        : e.defenseQuality === 'good' ? '防禦成功！'
+          : e.defenseQuality === 'normal' ? '勉強防禦' : '防禦失敗…'
+      setBanner(pct > 0 ? `${label}　減傷 ${pct}%` : label)
+      pushLog(`${label}（減傷 ${pct}%）`)
+      await delay(640)
+      setBanner(null)
+      await delay(110)
+    } else if (e.type === 'random' && e.event.type === 'supportRoulette') {
+      const outcome = e.event.outcome as SupportOutcome
+      setSupport(outcome)
+      audio.play('select')
+      await delay(950)
+      audio.play(outcome === 'dud' ? 'select' : 'super')
+      pushLog(`支援輪盤：${SUPPORT_LABEL[outcome]}`)
+      await delay(800)
+      setSupport(null)
+      await delay(150)
+    } else if (e.type === 'battleEnded' && e.reason === 'timeout') {
+      setBanner('達回合上限！依剩餘血量判定勝負')
+      pushLog('回合數達上限，依雙方剩餘血量判定勝負')
+      await delay(1150)
+      setBanner(null)
+      await delay(150)
+    } else if (e.type === 'chainOpportunity') {
+      setBanner('🔗 連鎖就緒！')
+      pushLog('連鎖槽集滿！可發動連鎖攻擊')
+      audio.play('super')
+      fxRef.current?.flash('#7ae0ff', 0.3)
+      await delay(680)
+      setBanner(null)
+      await delay(120)
+    } else if (e.type === 'chainHit') {
+      setCombo(e.comboCount)
+      fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 12, power: 1.2, kind: 'spark' })
+      audio.play('select')
+      await delay(180)
+    } else if (e.type === 'comboCast') {
+      setBanner(`${e.icon} 合體技「${e.name}」！`)
+      const eff = e.castKind === 'infuseTerrain' ? '灌注場域' : e.castKind === 'teamBuff' ? '全隊增益' : '弱化敵方'
+      pushLog(`${e.icon} 合體技「${e.name}」發動：${eff}（${e.remaining} 回合）`)
+      audio.play('crit')
+      fxRef.current?.flash('#ffe14a', 0.6)
+      fxRef.current?.ring({ ...FX_POS.player, color: '#ffe14a' })
+      fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 30, power: 1.8, kind: 'spark' })
+      void rootShake.start({ x: [0, -16, 14, -10, 0], transition: { duration: 0.42 } })
+      await delay(760)
+      setBanner(null)
+      await delay(140)
+    }
+  }, [rootShake])
+
+  const createCuePorts = useCallback((projected: boolean): BattleCuePorts => ({
+    scene: {
+      begin: (cue) => { stageRef.current?.lunge(cue.attackerSide) },
+      impact: async (cue, cueContext) => {
+        const e = cue.event
+        if (e.missed || e.amount <= 0) return
+        baselineDriver()?.recordCastImpact(performance.now())
+        const recipe = resolveFx(cue.move)
+        const strong = e.crit || e.effectiveness >= 2
+        const impactDelayMs = playMoveFx(
+          fxRef.current,
+          strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
+          FX_POS[e.attackerSide],
+          FX_POS[e.targetSide],
+        )
+        if (impactDelayMs > 0) await cueContext.clock.wait(impactDelayMs, cueContext.signal)
+      },
+      reaction: (cue) => {
+        const e = cue.event
+        if (e.missed || e.amount <= 0) return
+        const pos = FX_POS[e.targetSide]
+        const recipe = resolveFx(cue.move)
+        const strong = e.crit || e.effectiveness >= 2
+        if (e.crit) {
+          fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
+          fxRef.current?.ring({ ...pos, color: '#ffd23f' })
+          fxRef.current?.flash('#ffffff', 0.45)
+        } else if (e.effectiveness >= 2) {
+          fxRef.current?.ring({ ...pos, color: recipe.accent })
         }
+        const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
+        void rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
+        stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1)
+      },
+      hitStop: (cue) => {
+        const e = cue.event
+        if (e.missed || e.amount <= 0 || juiceRef.current !== 'full') return
+        return cinematicRef.current!.pause(e.crit || e.effectiveness >= 2 ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
+      },
+      clear: () => undefined,
+    },
+    hud: {
+      showMove: (cue, cueContext) => {
+        const prefix = cue.attackerSide === 'foe' ? '對手的 ' : ''
+        const store = useBattleStore.getState()
+        if (projected) store.presentationSetBanner(cueContext.token, `${prefix}${cue.attacker.nameZh} 使出 ${cue.move.nameZh}！`)
+        else store.setBanner(`${prefix}${cue.attacker.nameZh} 使出 ${cue.move.nameZh}！`)
+      },
+      applyDamage: (cue, cueContext) => {
+        const e = cue.event
+        const store = useBattleStore.getState()
+        if (projected) {
+          store.presentationSetMemberHp(cueContext.token, e.targetSide, e.targetIndex, e.hpAfter)
+          store.presentationShowHit(cueContext.token, {
+            target: e.targetSide, amount: e.amount, crit: e.crit,
+            effText: e.effectivenessText, missed: e.missed,
+          })
+        } else {
+          store.setMemberHp(e.targetSide, e.targetIndex, e.hpAfter)
+          store.showHit({
+            target: e.targetSide, amount: e.amount, crit: e.crit,
+            effText: e.effectivenessText, missed: e.missed,
+          })
+        }
+        if (juiceRef.current !== 'off') {
+          damageRef.current?.spawn({
+            ...FX_POS[e.targetSide], amount: e.amount, crit: e.crit,
+            effectiveness: e.effectiveness, missed: e.missed,
+          })
+        }
+      },
+      showResult: (cue, cueContext) => {
+        const e = cue.event
+        const store = useBattleStore.getState()
+        const setBanner = (value: string | null) => projected
+          ? store.presentationSetBanner(cueContext.token, value)
+          : store.setBanner(value)
+        const pushLog = (message: string) => projected
+          ? store.presentationPushLog(cueContext.token, message)
+          : store.pushLog(message)
         if (e.missed) {
-          store().setBanner('攻擊沒有命中…')
-          store().pushLog(`${atk.nameZh} 的攻擊落空了！`)
+          setBanner('攻擊沒有命中…')
+          pushLog(`${cue.attacker.nameZh} 的攻擊落空了！`)
         } else if (e.effectiveness === 0) {
-          store().setBanner('沒有效果…')
-          store().pushLog(`對 ${def.nameZh} 完全沒有效果…`)
+          setBanner('沒有效果…')
+          pushLog(`對 ${cue.defender.nameZh} 完全沒有效果…`)
         } else {
           const bits: string[] = []
           if (e.crit) bits.push('會心一擊！')
           if (e.effectivenessText) bits.push(e.effectivenessText)
-          store().setBanner(bits.join('　') || null)
-          store().pushLog(`對 ${def.nameZh} 造成 ${e.amount} 點傷害`)
+          setBanner(bits.join('　') || null)
+          pushLog(`對 ${cue.defender.nameZh} 造成 ${e.amount} 點傷害`)
         }
-        await wait(820)
-        store().clearFx()
-        store().setBanner(null)
-        await wait(140)
-      } else if (e.type === 'memberFainted') {
-        const m = monAt(b0, e.side, e.index)
-        const prefix = e.side === 'foe' ? '對手的 ' : ''
-        stageRef.current?.faint(e.side) // 3D：傾倒淡沉
-        fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
-        audio.play('faint')
-        haptic('faint') // EXT.1.a：倒下沉重觸覺
-        store().pushLog(`${prefix}${m.nameZh} 倒下了！`)
-        await wait(620)
-      } else if (e.type === 'heal') {
-        const m = monAt(b0, e.side, e.index)
-        // 回血來源可能是道具（剩飯）或日後的特性——兩邊查，誰有就用誰
-        const src = getItem(e.source) ?? getAbility(e.source)
-        store().setMemberHp(e.side, e.index, e.hpAfter)
-        fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 12, power: 1, kind: 'spark' })
-        audio.play('select')
-        const prefix = e.side === 'foe' ? '對手的 ' : ''
-        store().setBanner(`${src?.icon ?? '✨'} ${prefix}${m.nameZh} 回復了 ${e.amount} HP`)
-        store().pushLog(`${prefix}${m.nameZh} 回復 ${e.amount} HP（${src?.name ?? e.source}）`)
-        await wait(720)
-        store().setBanner(null)
-        await wait(120)
-      } else if (e.type === 'statusApplied') {
-        // M19.d 變化招：「使出 X」+ 依效果類型演出（buff 升箭頭 / heal 回血 / terrain 揭示）。
-        const m = monAt(b0, e.side, e.index)
-        const mv = getMove(e.moveId)
-        const recipe = resolveFx(mv)
-        const prefix = e.side === 'foe' ? '對手的 ' : ''
-        stageRef.current?.lunge(e.side)
-        store().setBanner(`${prefix}${m.nameZh} 使出 ${mv.nameZh}！`)
-        audio.play('select')
-        await wait(540)
-        playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
-        audio.playMoveSound(recipe.sound) // M21.e：變化招也帶屬性材質音
-        if (e.effectKind === 'heal' && e.hpAfter != null) {
-          store().setMemberHp(e.side, e.index, e.hpAfter)
-          audio.play('super')
-          store().setBanner(`✨ ${e.label}　+${e.healAmount} HP`)
-        } else if (e.effectKind === 'buff') {
-          audio.play('super')
-          store().setBanner(`▲ ${e.label}（${e.remaining} 回合）`)
-        } else {
-          audio.play('super')
-          store().setBanner(`🌿 ${e.label}`)
-        }
-        store().pushLog(`${prefix}${m.nameZh}：${e.label}`)
-        await wait(820)
-        store().setBanner(null)
-        await wait(140)
-      } else if (e.type === 'wildAccident') {
-        // M11 野外意外演出：地形突變（改場域）/ 亂入野生（非致命削血）。
-        if (e.kind === 'terrainShift' && e.terrainId) {
-          const def = lookupTerrain(e.terrainId)
-          store().setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
-          store().pushLog(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
-          // EXT.3：過場一次性 flash 改用新地形代表色（R3F palette/天氣已反應式切換，flash 遮住瞬切）。
-          // off 維持 M22 基線紫光（不引入新地形視覺）。
-          const shiftColor = juiceRef.current === 'off' ? '#a07aff' : resolveTerrainPalette([e.terrainId]).particleColor
-          fxRef.current?.flash(shiftColor, 0.35)
-          fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: shiftColor })
-          audio.play('super')
-          await wait(950)
-          store().setBanner(null)
-          await wait(140)
-        } else if (e.kind === 'intrusion' && e.side != null && e.index != null && e.hpAfter != null) {
-          const m = monAt(b0, e.side, e.index)
-          const prefix = e.side === 'foe' ? '對手的 ' : ''
-          store().setMemberHp(e.side, e.index, e.hpAfter)
-          store().showHit({ target: e.side, amount: e.amount ?? 0, crit: false, effText: null, missed: false })
-          if (juiceRef.current !== 'off') {
-            damageRef.current?.spawn({ ...FX_POS[e.side], amount: e.amount ?? 0, crit: false, effectiveness: 1, missed: false })
-          }
-          fxRef.current?.burst({ ...FX_POS[e.side], color: '#ff9a3c', count: 14, kind: 'puff' })
-          rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
-          audio.play('hit')
-          haptic('hit')
-          store().setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
-          store().pushLog(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
-          await wait(820)
-          store().clearFx()
-          store().setBanner(null)
-          await wait(140)
-        }
-      } else if (e.type === 'activeChanged') {
-        store().setActiveIndex(e.side, e.toIndex)
-        stageRef.current?.enter(e.side) // 3D：新一隻落場入場（並清除倒下狀態）
-        const m = monAt(b0, e.side, e.toIndex)
-        // 放出開球閃光
-        fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffffff' })
-        if (e.side === 'player') fxRef.current?.flash('#ffffff', 0.3)
-        audio.play('switch')
-        store().setBanner(e.side === 'player' ? `上吧，${m.nameZh}！` : `對手派出了 ${m.nameZh}！`)
-        await wait(640)
-        store().setBanner(null)
-        await wait(120)
-      } else if (e.type === 'switchDefenseResolved') {
-        const pct = Math.round((1 - e.damageMult) * 100)
-        const label =
-          e.defenseQuality === 'perfect' ? '完美防禦！'
-            : e.defenseQuality === 'good' ? '防禦成功！'
-              : e.defenseQuality === 'normal' ? '勉強防禦' : '防禦失敗…'
-        store().setBanner(pct > 0 ? `${label}　減傷 ${pct}%` : label)
-        store().pushLog(`${label}（減傷 ${pct}%）`)
-        await wait(640)
-        store().setBanner(null)
-        await wait(110)
-      } else if (e.type === 'random' && e.event.type === 'supportRoulette') {
-        const outcome = e.event.outcome as SupportOutcome
-        store().setSupport(outcome)
-        audio.play('select')
-        await wait(950)
-        audio.play(outcome === 'dud' ? 'select' : 'super')
-        store().pushLog(`支援輪盤：${SUPPORT_LABEL[outcome]}`)
-        await wait(800)
-        store().setSupport(null)
-        await wait(150)
-      } else if (e.type === 'battleEnded' && e.reason === 'timeout') {
-        // 回合上限：依剩餘血量判定，給玩家一個明確說明
-        store().setBanner('達回合上限！依剩餘血量判定勝負')
-        store().pushLog('回合數達上限，依雙方剩餘血量判定勝負')
-        await wait(1150)
-        store().setBanner(null)
-        await wait(150)
-      } else if (e.type === 'chainOpportunity') {
-        // M9：連鎖槽集滿、可發動連鎖（下個 playerChoice 亮起連鎖鈕）
-        store().setBanner('🔗 連鎖就緒！')
-        store().pushLog('連鎖槽集滿！可發動連鎖攻擊')
-        audio.play('super')
-        fxRef.current?.flash('#7ae0ff', 0.3)
-        await wait(680)
-        store().setBanner(null)
-        await wait(120)
-      } else if (e.type === 'chainHit') {
-        // M9：連鎖第 comboCount 段——亮連段數字 + spark；緊接的 damageApplied 演出實際傷害
-        store().setCombo(e.comboCount)
-        fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 12, power: 1.2, kind: 'spark' })
-        audio.play('select')
-        await wait(180)
-      } else if (e.type === 'comboCast') {
-        // M12.d 合體技：合束→大招閃光→場域特效（其合成傷害仍走緊接的 damageApplied）
-        store().setBanner(`${e.icon} 合體技「${e.name}」！`)
-        const eff = e.castKind === 'infuseTerrain' ? '灌注場域' : e.castKind === 'teamBuff' ? '全隊增益' : '弱化敵方'
-        store().pushLog(`${e.icon} 合體技「${e.name}」發動：${eff}（${e.remaining} 回合）`)
-        audio.play('crit')
-        fxRef.current?.flash('#ffe14a', 0.6)
-        fxRef.current?.ring({ ...FX_POS.player, color: '#ffe14a' })
-        fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 30, power: 1.8, kind: 'spark' })
-        rootShake.start({ x: [0, -16, 14, -10, 0], transition: { duration: 0.42 } })
-        await wait(760)
-        store().setBanner(null)
-        await wait(140)
-      }
-      // 其餘 random（accuracy/crit）：UI 不另演，已併入 damageApplied
-      // battleEnded（自然勝負）：迴圈結束後依 nextState.winner 設 phase
-    }
+        if (projected) tracePresentation(cueContext.token, 'feed', { cueId: cue.id, detail: 'result' })
+      },
+      clear: (_cue, cueContext) => {
+        const store = useBattleStore.getState()
+        if (projected) store.presentationClearTransient(cueContext.token)
+        else { store.clearFx(); store.setBanner(null) }
+      },
+    },
+    audio: {
+      playAttack: (cue, cueContext) => {
+        audio.play('attack')
+        if (projected) tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'attack' })
+      },
+      playImpact: (cue, cueContext) => {
+        const e = cue.event
+        if (e.missed || e.amount <= 0) return
+        audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit')
+        if (projected) tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'impact' })
+      },
+      playMoveSound: (cue, cueContext) => {
+        const e = cue.event
+        if (e.missed || e.amount <= 0) return
+        const sound = resolveFx(cue.move).sound
+        audio.playMoveSound(sound)
+        if (projected) tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: `move:${sound}` })
+      },
+    },
+    haptic: {
+      impact: (cue) => {
+        const e = cue.event
+        if (e.missed || e.amount <= 0) return
+        haptic(e.crit ? 'crit' : e.effectiveness >= 2 ? 'superEffective' : 'hit')
+      },
+    },
+    legacy: {
+      play: (cue, cueContext) => playLegacyEvent(cue.before, cue.event, cueContext, projected),
+    },
+  }), [playLegacyEvent, rootShake])
+
+  const canonicalCueHandler = useMemo(
+    () => new LegacyNormalAttackCueHandler(createCuePorts(false)),
+    [createCuePorts],
+  )
+  const presentationCueHandler = useMemo(
+    () => new LegacyNormalAttackCueHandler(createCuePorts(true)),
+    [createCuePorts],
+  )
+
+  const resetPresentationVisuals = useCallback((token: PresentationToken) => {
+    useBattleStore.getState().presentationClearTransient(token)
+    cinematicRef.current?.resume()
+    stageRef.current?.resetPresentation()
+    fxRef.current?.clear()
+    damageRef.current?.clear()
+    rootShake.stop()
+    rootShake.set({ x: 0, scale: 1 })
+    vibrate(0)
   }, [rootShake])
+
+  const presentationDirector = useMemo(() => new BattleDirector({
+    handler: presentationCueHandler,
+    lifecycle: {
+      beforeCue: (cue, cueContext) => {
+        tracePresentation(cueContext.token, 'cue', {
+          cueId: cue.id,
+          detail: cue.kind === 'normal-attack'
+            ? `normal-attack:${cue.event.missed || cue.event.amount <= 0 ? 'no-impact' : 'impact'}`
+            : `legacy:${cue.event.type}`,
+        })
+        return baselineDriver()?.checkpoint(`event:${cue.event.type}`, checkpointForEvent(cue.event))
+      },
+      degraded: (_error, cueContext) => { resetPresentationVisuals(cueContext.token) },
+      reset: (cueContext) => { useBattleStore.getState().presentationClearTransient(cueContext.token) },
+    },
+  }), [presentationCueHandler, resetPresentationVisuals])
+
+  // 舊 action paths 暫時保留 transaction owner，但共用相同 damage cue handler，避免兩套打擊節奏漂移。
+  const playEvents = useCallback(async (b0: BattleState, events: BattleEvent[]) => {
+    for (const e of events) {
+      await baselineDriver()?.checkpoint(`event:${e.type}`, checkpointForEvent(e))
+      if (e.type === 'damageApplied') {
+        const cue = compileBattleCues({
+          kind: 'turn', token: LEGACY_PRESENTATION_CONTEXT.token,
+          before: b0, input: { type: 'ATTACK' }, events: [e],
+        })[0]
+        if (!cue || cue.kind !== 'normal-attack') throw new Error('damage event did not compile to a normal attack cue')
+        await canonicalCueHandler.play(cue, LEGACY_PRESENTATION_CONTEXT)
+      } else {
+        await playLegacyEvent(b0, e, LEGACY_PRESENTATION_CONTEXT, false)
+      }
+    }
+  }, [canonicalCueHandler, playLegacyEvent])
 
   // M14.c：每回合結束統一收尾——依勝負設 phase；分出勝負時 finish 錄製（持久化回放）。
   // 四個 run 函式共用，取代各自重複的「winner→phase」三行。
@@ -883,24 +1050,96 @@ export function BattleScreen() {
     const store = useBattleStore.getState
     const b0 = store().battle
     if (!b0) return
-    store().setPhase('busy')
 
     // M19.c：玩家選定的招式槽。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
     const slotIndex = pendingSlotRef.current
-    const input: ReplayInput = { type: 'ATTACK', quality, mashCount, slotIndex }
-    baselineDriver()?.beginCast(performance.now())
-    const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
-    recorderRef.current.record(input, events)
-    await playEvents(b0, events)
-    store().setBattle(nextState) // snap turn/winner（HP/active 已動畫到位）
+    const selectedMove = b0.player.members[b0.player.activeIndex]?.moves[slotIndex]
+      ?? b0.player.members[b0.player.activeIndex]?.move
+    const input: NormalAttackInput = { type: 'ATTACK', quality, mashCount, slotIndex }
 
-    // 星擊能量：依 QTE 表現 + 是否命中（連鎖）累積
-    const dealt = events.some((e) => e.type === 'damageApplied' && e.attackerSide === 'player' && !e.missed && e.amount > 0)
-    store().addEnergy(energyGain(quality, mashCount), dealt)
+    // Ticket 03 才會把 status ATTACK 搬進 coordinator；此票只打通 damaging tracer。
+    if (selectedMove?.category === 'status') {
+      store().setPhase('busy')
+      baselineDriver()?.beginCast(performance.now())
+      const { nextState, events } = resolveTurn(b0, input, {
+        rng: battleRngRef.current, ext: extRef.current,
+        terrainMultiplier: resolveTerrainMult, wildEvents: wildEventsRef.current,
+      })
+      recorderRef.current.record(input, events)
+      await playEvents(b0, events)
+      store().setBattle(nextState)
+      const dealt = events.some((event) => event.type === 'damageApplied'
+        && event.attackerSide === 'player' && !event.missed && event.amount > 0)
+      store().addEnergy(energyGain(quality, mashCount), dealt)
+      setLockedIndex(null)
+      concludeTurn(nextState)
+      return
+    }
 
-    setLockedIndex(null) // 攻擊一回合後解除換回鎖
-    concludeTurn(nextState)
-  }, [playEvents, concludeTurn, ext, wildEvents])
+    if (!turnCoordinatorRef.current) {
+      if (!turnSessionRef.current.battleSessionId) return
+      turnCoordinatorRef.current = new BattleTurnCoordinator({
+        session: turnSessionRef.current,
+        resolve: (token, before, turnInput): TurnResolution => {
+          baselineDriver()?.beginCast(performance.now())
+          const { nextState, events } = resolveTurn(before, turnInput, {
+            rng: battleRngRef.current, ext: extRef.current,
+            terrainMultiplier: resolveTerrainMult, wildEvents: wildEventsRef.current,
+          })
+          tracePresentation(token, 'resolve', { turn: before.turn })
+          const dealtDamage = events.some((event) => event.type === 'damageApplied'
+            && event.attackerSide === 'player' && !event.missed && event.amount > 0)
+          return {
+            before,
+            input: turnInput,
+            events,
+            nextState,
+            commitMeta: {
+              energyDelta: energyGain(turnInput.quality ?? 'normal', turnInput.mashCount ?? 0),
+              dealtDamage,
+              lockedIndex: null,
+            },
+          }
+        },
+        record: (token, turnInput, events) => {
+          recorderRef.current.record(turnInput, [...events])
+          tracePresentation(token, 'record', { turn: useBattleStore.getState().battle?.turn })
+        },
+        director: {
+          present: (job, signal) => {
+            tracePresentation(job.token, 'present', { turn: job.before.turn })
+            return presentationDirector.present(job, signal)
+          },
+        },
+        transaction: {
+          begin: (token, before) => {
+            useBattleStore.getState().beginPresentation(token, before)
+            tracePresentation(token, 'begin', { turn: before.turn })
+          },
+          isCurrent: (token) => useBattleStore.getState().isPresentationCurrent(token),
+          commit: (token, resolution) => {
+            const currentStore = useBattleStore.getState()
+            if (!currentStore.isPresentationCurrent(token)) return
+            currentStore.commitPresentation(token, resolution.nextState)
+            useBattleStore.getState().addEnergy(
+              resolution.commitMeta.energyDelta,
+              resolution.commitMeta.dealtDamage,
+            )
+            setLockedIndex(resolution.commitMeta.lockedIndex)
+            tracePresentation(token, 'commit', { turn: resolution.nextState.turn })
+            concludeTurn(resolution.nextState)
+          },
+          cancel: (token, reason) => {
+            resetPresentationVisuals(token)
+            useBattleStore.getState().cancelPresentation(token, 'playerChoice')
+            tracePresentation(token, 'cancel', { detail: reason, turn: useBattleStore.getState().battle?.turn })
+          },
+        },
+      })
+    }
+
+    await turnCoordinatorRef.current.submit(b0, input)
+  }, [concludeTurn, playEvents, presentationDirector, resetPresentationVisuals])
 
   // 星擊 Finisher：滿槽放，大倍率必定會心 + 華麗演出。
   // EXT.2：juice≠off 時先放全螢幕電影化 cut-in（letterbox + 慢鏡 + 施放者頭像/招名），再接既有星擊演出；

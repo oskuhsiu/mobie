@@ -20,6 +20,8 @@ export interface DamageSpawn {
 
 export interface DamageNumbersHandle {
   spawn: (o: DamageSpawn) => void
+  /** 取消 presentation 時移除仍在播放的飄字。 */
+  clear: () => void
 }
 
 const POOL = 6 // 同時最多 6 個飄字（本遊戲傷害逐一演出，6 足夠且不殘留）
@@ -63,6 +65,11 @@ export const DamageNumbers = forwardRef<DamageNumbersHandle>((_props, ref) => {
       node.classList.remove('is-on')
       void node.offsetWidth
       node.classList.add('is-on')
+    },
+    clear: () => {
+      const pool = poolRef.current
+      if (!pool) return
+      for (const node of pool.children) node.classList.remove('is-on')
     },
   }), [])
 

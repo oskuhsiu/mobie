@@ -32,3 +32,24 @@ export interface M23PoolCount {
   live: number
   capacity: number | null
 }
+
+export type M23PresentationTraceStage =
+  | 'begin'
+  | 'resolve'
+  | 'record'
+  | 'present'
+  | 'cue'
+  | 'audio'
+  | 'feed'
+  | 'commit'
+  | 'cancel'
+
+/** DEV-only exactly-once trace used by the real-Chrome M23 transaction gate. */
+export interface M23PresentationTraceEvent {
+  transactionId: string
+  presentationId: number
+  stage: M23PresentationTraceStage
+  cueId?: string
+  detail?: string
+  turn?: number
+}

@@ -76,6 +76,73 @@ async function collectBattleChunks() {
   return { files }
 }
 
+function assertNormalTransactionTrace(trace) {
+  if (!Array.isArray(trace)) throw new Error('Normal-turn presentation trace is unavailable')
+  const groups = new Map()
+  trace.forEach((event, index) => {
+    const entries = groups.get(event.transactionId) ?? []
+    entries.push({ ...event, index })
+    groups.set(event.transactionId, entries)
+  })
+  const committed = [...groups.entries()]
+    .filter(([, events]) => events.some((event) => event.stage === 'commit'))
+    .sort((a, b) => a[1][0].index - b[1][0].index)
+  if (committed.length < 2) {
+    throw new Error(`Expected two committed normal-turn transactions, received ${committed.length}`)
+  }
+
+  const selected = committed.slice(0, 2)
+  for (const [transactionId, events] of selected) {
+    for (const stage of ['begin', 'resolve', 'record', 'present', 'commit']) {
+      const count = events.filter((event) => event.stage === stage).length
+      if (count !== 1) throw new Error(`${transactionId} expected one ${stage} event, received ${count}`)
+    }
+    const observableEffects = events.filter((event) => event.stage === 'audio' || event.stage === 'feed')
+    const effectKeys = observableEffects.map((event) => `${event.stage}:${event.cueId ?? ''}:${event.detail ?? ''}`)
+    if (new Set(effectKeys).size !== effectKeys.length) {
+      throw new Error(`${transactionId} repeated a feed/audio cue`)
+    }
+    const normalCues = events.filter((event) => event.stage === 'cue' && event.detail?.startsWith('normal-attack:'))
+    const expectedAudioCount = normalCues.reduce(
+      (count, event) => count + (event.detail === 'normal-attack:impact' ? 3 : 1),
+      0,
+    )
+    const audioCount = events.filter((event) => event.stage === 'audio').length
+    const feedCount = events.filter((event) => event.stage === 'feed').length
+    if (audioCount !== expectedAudioCount || feedCount !== normalCues.length) {
+      throw new Error(`${transactionId} feed/audio counts do not match compiled normal-attack cues`)
+    }
+    const beginTurn = events.find((event) => event.stage === 'begin')?.turn
+    const commitTurn = events.find((event) => event.stage === 'commit')?.turn
+    if (!Number.isInteger(beginTurn) || commitTurn !== beginTurn + 1) {
+      throw new Error(`${transactionId} did not advance canonical turn exactly once`)
+    }
+  }
+
+  const firstEvents = selected[0][1]
+  const secondEvents = selected[1][1]
+  const firstCommitTurn = firstEvents.find((event) => event.stage === 'commit')?.turn
+  const secondBeginTurn = secondEvents.find((event) => event.stage === 'begin')?.turn
+  const firstPresentationId = firstEvents[0].presentationId
+  const secondPresentationId = secondEvents[0].presentationId
+  if (secondBeginTurn !== firstCommitTurn || secondPresentationId <= firstPresentationId) {
+    throw new Error('Normal-turn transactions were not consecutive with monotonic presentation IDs')
+  }
+
+  return {
+    transactionIds: selected.map(([transactionId]) => transactionId),
+    presentationIds: [firstPresentationId, secondPresentationId],
+    canonicalTurns: [
+      firstEvents.find((event) => event.stage === 'begin')?.turn,
+      firstCommitTurn,
+      secondEvents.find((event) => event.stage === 'commit')?.turn,
+    ],
+    resolveCount: selected.reduce((count, [, events]) => count + events.filter((event) => event.stage === 'resolve').length, 0),
+    recordCount: selected.reduce((count, [, events]) => count + events.filter((event) => event.stage === 'record').length, 0),
+    commitCount: selected.reduce((count, [, events]) => count + events.filter((event) => event.stage === 'commit').length, 0),
+  }
+}
+
 const args = parseArgs(process.argv.slice(2))
 const config = {
   port: finitePositive(args.port ?? 9222, 'port', { integer: true }),
@@ -460,6 +527,7 @@ async function run(cdp) {
   if (!Number.isFinite(diagnostics.firstCastLatencyMs)) {
     throw new Error('First-cast impact latency was not recorded')
   }
+  const normalTurnTransactions = assertNormalTransactionTrace(diagnostics.presentationTrace)
   const battleChunks = await collectBattleChunks()
   const performanceResult = await call('Performance.getMetrics')
   const cdpPerformance = Object.fromEntries(performanceResult.metrics.map(({ name, value }) => [name, value]))
@@ -514,6 +582,7 @@ async function run(cdp) {
     driver: {
       options: configured,
       diagnostics,
+      normalTurnTransactions,
       deterministicScenario: {
         digest: deterministicScenario.digest,
         caseIds: deterministicScenario.cases.map(({ id }) => id),

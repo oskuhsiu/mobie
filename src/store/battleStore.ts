@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { BattleMobie, TerrainId } from '@/game/types'
 import { createBattleState, upsertStatus, type BattleState, type Side, type SupportOutcome, type StatusEffect } from '@/game/battle/reducer'
+import type { PresentationToken } from '@/presentation/battle/contracts'
 
 export type { Side }
 
@@ -21,6 +22,26 @@ export interface HitFx {
   id: number
 }
 
+export interface BattlePresentationProjection {
+  token: PresentationToken
+  battle: BattleState
+  log: string[]
+  banner: string | null
+  hitFx: HitFx | null
+  support: SupportOutcome | null
+  combo: number | null
+  fxCounter: number
+}
+
+const samePresentation = (left: PresentationToken, right: PresentationToken): boolean =>
+  left.battleSessionId === right.battleSessionId && left.presentationId === right.presentationId
+
+const cloneBattle = (battle: BattleState): BattleState => ({
+  ...battle,
+  player: { ...battle.player, members: [...battle.player.members] },
+  foe: { ...battle.foe, members: [...battle.foe.members] },
+})
+
 interface BattleUiState {
   /** canonical 戰鬥態（由 reducer 算、BattleScreen 依 event 逐步搬進來做動畫） */
   battle: BattleState | null
@@ -40,6 +61,8 @@ interface BattleUiState {
   combo: number | null
   /** M16/M17：已看穿的對手隊員 index（MobCard 對手深度揭露）；M16 恆空，M17 看穿鈕 add。 */
   revealedFoes: number[]
+  /** Token-owned presentation shadow; canonical battle stays unchanged until commitPresentation. */
+  presentation: BattlePresentationProjection | null
 
   init: (playerMembers: BattleMobie[], foeMembers: BattleMobie[], terrains?: TerrainId[]) => void
   /** 整盤覆寫（回合結算後 snap turn/winner，HP 已逐步動畫到位） */
@@ -64,9 +87,21 @@ interface BattleUiState {
   showHit: (fx: Omit<HitFx, 'id'>) => void
   clearFx: () => void
   setCaptured: (b: boolean) => void
+  beginPresentation: (token: PresentationToken, before: BattleState) => void
+  presentationSetMemberHp: (token: PresentationToken, side: Side, index: number, hp: number) => void
+  presentationSetActiveIndex: (token: PresentationToken, side: Side, index: number) => void
+  presentationSetBanner: (token: PresentationToken, banner: string | null) => void
+  presentationPushLog: (token: PresentationToken, message: string) => void
+  presentationShowHit: (token: PresentationToken, fx: Omit<HitFx, 'id'>) => void
+  presentationSetSupport: (token: PresentationToken, support: SupportOutcome | null) => void
+  presentationSetCombo: (token: PresentationToken, combo: number | null) => void
+  presentationClearTransient: (token: PresentationToken) => void
+  isPresentationCurrent: (token: PresentationToken) => boolean
+  commitPresentation: (token: PresentationToken, nextState: BattleState) => void
+  cancelPresentation: (token: PresentationToken, phase?: BattlePhase) => void
 }
 
-export const useBattleStore = create<BattleUiState>((set) => ({
+export const useBattleStore = create<BattleUiState>((set, get) => ({
   battle: null,
   phase: 'intro',
   log: [],
@@ -79,6 +114,7 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   chain: 0,
   combo: null,
   revealedFoes: [],
+  presentation: null,
 
   init: (playerMembers, foeMembers, terrains) =>
     set({
@@ -86,9 +122,10 @@ export const useBattleStore = create<BattleUiState>((set) => ({
       phase: 'intro', log: [], banner: null,
       hitFx: null, fxCounter: 0, captured: null,
       support: null, energy: 0, chain: 0, combo: null, revealedFoes: [],
+      presentation: null,
     }),
 
-  setBattle: (battle) => set({ battle }),
+  setBattle: (battle) => set({ battle, presentation: null }),
 
   setMemberHp: (side, index, hp) =>
     set((s) => {
@@ -129,4 +166,119 @@ export const useBattleStore = create<BattleUiState>((set) => ({
   showHit: (fx) => set((s) => ({ hitFx: { ...fx, id: s.fxCounter + 1 }, fxCounter: s.fxCounter + 1 })),
   clearFx: () => set({ hitFx: null }),
   setCaptured: (captured) => set({ captured }),
+
+  beginPresentation: (token, before) =>
+    set((s) => {
+      if (s.presentation && !samePresentation(s.presentation.token, token)) return {}
+      return {
+        phase: 'busy',
+        presentation: {
+          token,
+          battle: cloneBattle(before),
+          log: [...s.log],
+          banner: s.banner,
+          hitFx: s.hitFx ? { ...s.hitFx } : null,
+          support: s.support,
+          combo: s.combo,
+          fxCounter: s.fxCounter,
+        },
+      }
+    }),
+
+  presentationSetMemberHp: (token, side, index, hp) =>
+    set((s) => {
+      const projection = s.presentation
+      if (!projection || !samePresentation(projection.token, token)) return {}
+      const sideState = projection.battle[side]
+      const members = sideState.members.map((member, memberIndex) =>
+        memberIndex === index ? { ...member, currentHp: hp } : member,
+      )
+      return {
+        presentation: {
+          ...projection,
+          battle: { ...projection.battle, [side]: { ...sideState, members } },
+        },
+      }
+    }),
+
+  presentationSetActiveIndex: (token, side, index) =>
+    set((s) => {
+      const projection = s.presentation
+      if (!projection || !samePresentation(projection.token, token)) return {}
+      return {
+        presentation: {
+          ...projection,
+          battle: {
+            ...projection.battle,
+            [side]: { ...projection.battle[side], activeIndex: index },
+          },
+        },
+      }
+    }),
+
+  presentationSetBanner: (token, banner) =>
+    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+      ? { presentation: { ...s.presentation, banner } }
+      : {}),
+  presentationPushLog: (token, message) =>
+    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+      ? { presentation: { ...s.presentation, log: [...s.presentation.log.slice(-4), message] } }
+      : {}),
+  presentationShowHit: (token, fx) =>
+    set((s) => {
+      const projection = s.presentation
+      if (!projection || !samePresentation(projection.token, token)) return {}
+      const fxCounter = projection.fxCounter + 1
+      return { presentation: { ...projection, hitFx: { ...fx, id: fxCounter }, fxCounter } }
+    }),
+  presentationSetSupport: (token, support) =>
+    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+      ? { presentation: { ...s.presentation, support } }
+      : {}),
+  presentationSetCombo: (token, combo) =>
+    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+      ? { presentation: { ...s.presentation, combo } }
+      : {}),
+  presentationClearTransient: (token) =>
+    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+      ? {
+          presentation: {
+            ...s.presentation,
+            banner: null,
+            hitFx: null,
+            support: null,
+            combo: null,
+          },
+        }
+      : {}),
+  isPresentationCurrent: (token) => {
+    const projection = get().presentation
+    return Boolean(projection && samePresentation(projection.token, token))
+  },
+  commitPresentation: (token, nextState) =>
+    set((s) => {
+      const projection = s.presentation
+      if (!projection || !samePresentation(projection.token, token)) return {}
+      return {
+        battle: nextState,
+        log: projection.log,
+        fxCounter: projection.fxCounter,
+        banner: null,
+        hitFx: null,
+        support: null,
+        combo: null,
+        presentation: null,
+      }
+    }),
+  cancelPresentation: (token, phase = 'playerChoice') =>
+    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+      ? {
+          presentation: null,
+          phase,
+          banner: null,
+          hitFx: null,
+          support: null,
+          combo: null,
+        }
+      : {}),
 }))

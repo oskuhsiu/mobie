@@ -27,6 +27,8 @@ export interface StageHandle {
   enter: (side: Side) => void
   /** EXT.2 慢鏡：設舞台時間倍率（1＝正常、<1＝慢鏡）。只動 3D（FxCanvas/Tone real-time）。 */
   setTimeScale: (scale: number) => void
+  /** 取消 presentation 時清除所有暫態姿勢，不改目前顯示的戰鬥成員。 */
+  resetPresentation: () => void
 }
 
 export type RendererDiagnostics = M23RendererResources
@@ -121,6 +123,12 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       },
       setTimeScale: (scale) => {
         timeScaleRef.current = scale
+      },
+      resetPresentation: () => {
+        for (const side of ['player', 'foe'] as const) {
+          Object.assign(anim.current[side], makeAnim())
+        }
+        timeScaleRef.current = 1
       },
     }),
     [],

@@ -39,6 +39,8 @@ export interface FxHandle {
   converge: (o: FxConvergeOpts) => void
   /** EXT.2 拍3：填滿全螢幕的巨型擴散衝擊波環（globalCompositeOperation='lighter' 加亮）。 */
   shockwave: (o: FxShockwaveOpts) => void
+  /** 取消 presentation 時立即清除所有一次性 FX。 */
+  clear: () => void
   /** Ticket 01 diagnostics: current live arrays are unbounded legacy lists, hence capacity=null. */
   diagnostics?: () => Record<string, M23PoolCount>
 }
@@ -241,6 +243,17 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
       // 大 max（畫面對角線）+ glow(lighter) + 慢 grow/decay → 一圈巨型擴散波掃滿全螢幕。
       s.rings.push({ x: nx * s.w, y: ny * s.h, r: 12, max: Math.hypot(s.w, s.h) * 1.05, color, life: 1, lw, glow: true, decay: 0.03, grow: 0.1 })
       ensureRunning()
+    },
+    clear: () => {
+      const s = stateRef.current
+      s.particles.length = 0
+      s.rings.length = 0
+      s.travels.length = 0
+      s.flash.a = 0
+      cancelAnimationFrame(s.raf)
+      s.raf = 0
+      s.running = false
+      s.ctx?.clearRect(0, 0, s.w, s.h)
     },
     diagnostics: () => {
       const s = stateRef.current

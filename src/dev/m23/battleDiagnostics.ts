@@ -2,6 +2,7 @@ import type {
   M23Checkpoint,
   M23MotionPreference,
   M23PoolCount,
+  M23PresentationTraceEvent,
   M23RendererResources,
   M23RequestedGraphics,
 } from './contracts'
@@ -20,11 +21,13 @@ export interface M23DiagnosticsSnapshot {
   checkpoints: M23Checkpoint[]
   assetComplexity: Record<string, number>
   firstCastLatencyMs: number | null
+  presentationTrace: M23PresentationTraceEvent[]
   limitations: string[]
 }
 
 const MAX_FRAME_SAMPLES = 6_000
 const MAX_LONG_TASKS = 500
+const MAX_PRESENTATION_TRACE_EVENTS = 1_000
 
 function appendBounded(values: number[], value: number, limit: number): void {
   values.push(value)
@@ -49,6 +52,7 @@ export class M23BattleDiagnostics {
   private checkpoints = new Set<M23Checkpoint>()
   private firstCastStartedAt: number | null = null
   private firstCastLatencyMs: number | null = null
+  private presentationTrace: M23PresentationTraceEvent[] = []
   private observer: PerformanceObserver | null = null
   private peakAssetComplexity: Record<string, number> = {
     peakImageElements: 0,
@@ -108,6 +112,13 @@ export class M23BattleDiagnostics {
     this.firstCastLatencyMs = Math.max(0, at - this.firstCastStartedAt)
   }
 
+  recordPresentationEvent(event: M23PresentationTraceEvent): void {
+    this.presentationTrace.push({ ...event })
+    if (this.presentationTrace.length > MAX_PRESENTATION_TRACE_EVENTS) {
+      this.presentationTrace.splice(0, this.presentationTrace.length - MAX_PRESENTATION_TRACE_EVENTS)
+    }
+  }
+
   recordRenderedFrame(at: number): void {
     if (this.lastRenderedFrameAt !== null) {
       const gap = at - this.lastRenderedFrameAt
@@ -152,6 +163,7 @@ export class M23BattleDiagnostics {
     this.checkpoints.clear()
     this.firstCastStartedAt = null
     this.firstCastLatencyMs = null
+    this.presentationTrace = []
     this.peakAssetComplexity = {
       peakImageElements: 0,
       peakDecodedPixels: 0,
@@ -218,6 +230,7 @@ export class M23BattleDiagnostics {
       checkpoints: [...this.checkpoints],
       assetComplexity: { ...this.peakAssetComplexity },
       firstCastLatencyMs: this.firstCastLatencyMs,
+      presentationTrace: this.presentationTrace.map((event) => ({ ...event })),
       limitations,
     }
   }

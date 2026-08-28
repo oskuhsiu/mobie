@@ -20,6 +20,7 @@ import {
   type M23Checkpoint,
   type M23MotionPreference,
   type M23PoolCount,
+  type M23PresentationTraceEvent,
   type M23RendererResources,
   type M23RequestedGraphics,
 } from './contracts'
@@ -49,6 +50,7 @@ export interface M23BaselineDriver {
   recordPools: (pools: Record<string, M23PoolCount>) => void
   beginCast: (at: number) => void
   recordCastImpact: (at: number) => void
+  recordPresentationEvent: (event: M23PresentationTraceEvent) => void
   diagnostics: () => M23DiagnosticsSnapshot
   resetDiagnostics: () => void
   dispose: () => void
@@ -228,6 +230,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     recordPools: (pools) => diagnostics.recordPools(pools),
     beginCast: (at) => diagnostics.beginCast(at),
     recordCastImpact: (at) => diagnostics.recordCastImpact(at),
+    recordPresentationEvent: (event) => diagnostics.recordPresentationEvent(event),
     diagnostics: () => diagnostics.snapshot(),
     resetDiagnostics: () => {
       cueIndex = -1
