@@ -20,6 +20,18 @@ export const M23_REQUIRED_CHECKPOINTS = [
 
 export type M23Checkpoint = (typeof M23_REQUIRED_CHECKPOINTS)[number]
 
+export const M23_TURN_TRANSACTION_CASES = [
+  'normal-hit-chain-ready',
+  'status-buff',
+  'switch-forced-switch',
+  'chain-combo',
+  'crit-super-star',
+  'win',
+  'lose',
+  'timeout',
+] as const
+export type M23TurnTransactionCase = (typeof M23_TURN_TRANSACTION_CASES)[number]
+
 export interface M23RendererResources {
   geometries: number
   textures: number
@@ -42,6 +54,8 @@ export type M23PresentationTraceStage =
   | 'audio'
   | 'feed'
   | 'commit'
+  | 'finish'
+  | 'end'
   | 'cancel'
 
 /** DEV-only exactly-once trace used by the real-Chrome M23 transaction gate. */

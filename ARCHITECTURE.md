@@ -47,7 +47,9 @@ scene/models/  User drop-in GLB store (IndexedDB) + normalize (M3)
 input/      QTE seam (qualityFromPointer / zones)
 ```
 
-**Dependency direction:** `ui → store → game`. `game/` never imports React/UI. Extension modules
+**Dependency direction:** `ui → presentation/store → game`; battleStore implements the presentation
+transaction seam and may import its pure contracts/runtime identity helpers. `presentation/battle` and
+`game/` never import React, scene, or UI. Extension modules
 (`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
 which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
 pure is what makes the battle system testable (477 tests) and the animation layer swappable.
@@ -121,11 +123,16 @@ Two halves, deliberately separated:
    - **Turn cap:** `MAX_TURNS = 30`. If a turn resolves with no natural winner past the cap, the winner
      is decided by remaining team-HP fraction (ties favor the player) and a `battleEnded{reason:'timeout'}`
      event is emitted — guards against type-immunity stalemates.
-2. **Animation/display layer — `ui/screens/BattleScreen.tsx` + `store/battleStore.ts`.**
-   BattleScreen calls `resolveTurn` (computing the full turn), then **consumes the event queue one by
-   one**, driving framer-motion + FxCanvas + audio, and writing display HP/active via `battleStore`.
-   Final `setBattle(nextState)` snaps turn/winner. The reducer stays pure; all "play it out slowly"
-   logic is here. The move picker stays in the bottom strip, but timing-critical inputs (attack QTE,
+2. **Presentation/display layer — `presentation/battle/` + `ui/screens/BattleScreen.tsx` adapters +
+   `store/battleStore.ts`.** `BattleTurnCoordinator` is the only turn transaction owner for every
+   `ReplayInput`: allocate a fenced token → resolve once → record once → compile/present ordered cues →
+   atomically commit once. `compileBattleCues` and the Director do not import React, scene, or UI;
+   BattleScreen only collects input and supplies legacy scene/HUD/audio/haptic ports. During playback,
+   battleStore exposes a token-owned shadow for HP/active/feed while canonical `BattleState`, energy,
+   lock, combo, phase, replay finish, and `END_BATTLE` remain unchanged until `commitTurn`. Its
+   non-persisted runtime session owns the Web Crypto result identity pair, seeded RNG, replay recorder,
+   and monotonic presentation counter across component remounts. The reducer stays pure. The move
+   picker stays in the bottom strip, but timing-critical inputs (attack QTE,
    mash-charge, defense/chain QTE) render in a centered `.battle-action` overlay so they sit in the
    battle area, not pinned to the screen bottom. (Centering uses a full-bleed flex layer, **not** a CSS
    `translate(-50%,-50%)` — framer-motion writes its own `transform` for the scale/opacity entrance and
@@ -214,9 +221,11 @@ stream so a recorded log can be re-simulated. `codec.ts` does stable-key-order `
 `Record<BattleEvent['type'], true>` so a new event variant **fails to compile** until the codec, the
 `report.ts` projector (one Chinese handler per variant), and `REPLAY_FORMAT_VERSION` + `migrateReplay` are
 all updated — plan/15 §10 coupling-governance made mechanical (M12.d's `comboCast` bumped it to v2).
-`ReplayRecorder` collects turns single-point in `BattleScreen` (gated by `prefs.recordReplays`, default
-off); `ReplayPlayerModal` re-folds the event stream to reconstruct HP/active with a synced text-report
-sidebar. **No `.txt` is persisted** — it's a pure projection generated on export.
+`ReplayRecorder` is owned by the non-persisted battle runtime session and is called exactly once by
+`BattleTurnCoordinator` (gated by `prefs.recordReplays`, default off); recording failure disables only
+that session's replay and never reruns the reducer. `ReplayPlayerModal` re-folds the event stream to
+reconstruct HP/active with a synced text-report sidebar. **No `.txt` is persisted** — it's a pure
+projection generated on export.
 
 ### 7.1 Portable save files (M5 — `game/save/`)
 

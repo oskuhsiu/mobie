@@ -102,9 +102,9 @@ function assertNormalTransactionTrace(trace) {
     if (new Set(effectKeys).size !== effectKeys.length) {
       throw new Error(`${transactionId} repeated a feed/audio cue`)
     }
-    const normalCues = events.filter((event) => event.stage === 'cue' && event.detail?.startsWith('normal-attack:'))
+    const normalCues = events.filter((event) => event.stage === 'cue' && event.detail?.startsWith('damage:'))
     const expectedAudioCount = normalCues.reduce(
-      (count, event) => count + (event.detail === 'normal-attack:impact' ? 3 : 1),
+      (count, event) => count + (event.detail === 'damage:impact' ? 3 : 1),
       0,
     )
     const audioCount = events.filter((event) => event.stage === 'audio').length

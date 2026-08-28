@@ -27,9 +27,17 @@ export interface GameContext {
   /** 玩家出戰隊伍（cardSelect 選滿 3 隻） */
   playerTeam: Card[]
   outcome: Outcome | null
+  /** Stable handoff from battle presentation to result settlement. */
+  battleResult: BattleResultHandoff | null
   captured: boolean
   /** M11 連勝塔 run（null＝非塔戰）；塔戰無捕獲、地形、野外意外 */
   tower: TowerRun | null
+}
+
+export interface BattleResultHandoff {
+  resultId: string
+  resultFingerprint: string
+  outcome: Outcome
 }
 
 export type GameEvent =
@@ -38,7 +46,7 @@ export type GameEvent =
   | { type: 'ENGAGE' }
   | { type: 'BACK' }
   | { type: 'SELECT_TEAM'; cards: Card[] }
-  | { type: 'END_BATTLE'; outcome: Outcome }
+  | ({ type: 'END_BATTLE' } & BattleResultHandoff)
   | { type: 'SET_CAPTURED'; captured: boolean }
   | { type: 'PLAY_AGAIN' }
   | { type: 'TO_REGIONS' }
@@ -52,6 +60,7 @@ export const INITIAL_GAME_CONTEXT: GameContext = {
   foeTeam: [],
   playerTeam: [],
   outcome: null,
+  battleResult: null,
   captured: false,
   tower: null,
 }
@@ -71,29 +80,36 @@ export const gameMachine = setup({
       const region = lookupRegion(event.regionId)
       // M11 稀有閃光 boss（wild-only，機率）：升 boss 為異色 + 高 IV
       const foeTeam = maybeRareBoss(rollEncounterTeam(region, TEAM_SIZE), region, Math.random)
-      return { regionId: event.regionId, foeTeam }
+      return { regionId: event.regionId, foeTeam, outcome: null, battleResult: null }
     }),
     pickTeam: assign(({ event }) => {
       if (event.type !== 'SELECT_TEAM') return {}
-      return { playerTeam: event.cards }
+      return { playerTeam: event.cards, outcome: null, battleResult: null }
     }),
     recordOutcome: assign(({ event }) => {
       if (event.type !== 'END_BATTLE') return {}
-      return { outcome: event.outcome }
+      return {
+        outcome: event.outcome,
+        battleResult: {
+          resultId: event.resultId,
+          resultFingerprint: event.resultFingerprint,
+          outcome: event.outcome,
+        },
+      }
     }),
     setCaptured: assign(({ event }) => {
       if (event.type !== 'SET_CAPTURED') return {}
       return { captured: event.captured }
     }),
     resetEncounter: assign(() => ({
-      foeTeam: [], playerTeam: [], outcome: null, captured: false, tower: null,
+      foeTeam: [], playerTeam: [], outcome: null, battleResult: null, captured: false, tower: null,
     })),
     // M11 連勝塔：開新 run（第 1 樓），生成 foe；隊伍固定為 run team。
     startTower: assign(({ event }) => {
       if (event.type !== 'START_TOWER') return {}
       const tower: TowerRun = { ascension: event.ascension, floor: 1, seed: event.seed, teamCards: event.cards }
       return {
-        tower, playerTeam: event.cards, outcome: null, captured: false,
+        tower, playerTeam: event.cards, outcome: null, battleResult: null, captured: false,
         foeTeam: towerFoeTeam(1, event.ascension, event.seed),
       }
     }),
@@ -103,16 +119,16 @@ export const gameMachine = setup({
       if (!t) return {}
       const floor = t.floor + 1
       return {
-        tower: { ...t, floor }, playerTeam: t.teamCards, outcome: null, captured: false,
+        tower: { ...t, floor }, playerTeam: t.teamCards, outcome: null, battleResult: null, captured: false,
         foeTeam: towerFoeTeam(floor, t.ascension, t.seed),
       }
     }),
-    endTower: assign(() => ({ tower: null, foeTeam: [], playerTeam: [], outcome: null, captured: false })),
+    endTower: assign(() => ({ tower: null, foeTeam: [], playerTeam: [], outcome: null, battleResult: null, captured: false })),
     rerollFoes: assign(({ context }) => {
       if (!context.regionId) return {}
       const region = lookupRegion(context.regionId)
       const foeTeam = maybeRareBoss(rollEncounterTeam(region, TEAM_SIZE), region, Math.random)
-      return { foeTeam, playerTeam: [], outcome: null, captured: false }
+      return { foeTeam, playerTeam: [], outcome: null, battleResult: null, captured: false }
     }),
   },
 }).createMachine({

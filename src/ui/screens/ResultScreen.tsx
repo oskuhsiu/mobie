@@ -233,7 +233,6 @@ function ArenaWinView() {
     () => (context.playerTeam[0] ? buildBattleMobie(context.playerTeam[0]) : null),
     [context.playerTeam],
   )
-  useEffect(() => { audio.play('victory') }, [])
   return (
     <div className="center" style={{ flex: 1, gap: 16 }}>
       <motion.div className="eyebrow" style={{ color: 'var(--good)' }}
@@ -257,7 +256,6 @@ function TowerView({ isWin }: { isWin: boolean }) {
   const t = context.tower!
   const lead = useMemo(() => (context.playerTeam[0] ? buildBattleMobie(context.playerTeam[0]) : null), [context.playerTeam])
   const asc = getAscension(t.ascension)
-  useEffect(() => { audio.play(isWin ? 'victory' : 'defeat') }, [isWin])
   return (
     <div className="center" style={{ flex: 1, gap: 14 }}>
       <motion.div className="eyebrow" style={{ color: isWin ? 'var(--good)' : 'var(--bad)' }}
@@ -285,7 +283,8 @@ function TowerView({ isWin }: { isWin: boolean }) {
 
 export function ResultScreen() {
   const { context, send } = useGame()
-  const isWin = context.outcome === 'win'
+  const outcome = context.battleResult?.outcome ?? context.outcome
+  const isWin = outcome === 'win'
   const tower = context.tower
   // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場/連勝塔勝利不進捕獲流程。
   const canCapture = isWin && !tower && canCaptureIn(context.regionId)
@@ -303,7 +302,7 @@ export function ResultScreen() {
   const postGrowth = useSettings((s) => s.postGrowth)
   const grantedRef = useRef(false)
   useEffect(() => {
-    if (!context.outcome || grantedRef.current) return
+    if (!outcome || grantedRef.current) return
     grantedRef.current = true
     // 圖鑑/成就：勝利依 mode 計數（塔戰算 arena 純戰鬥）；進化在 grant 完成後登錄
     if (isWin) useMeta.getState().recordWin(!tower && canCaptureIn(context.regionId) ? 'wild' : 'arena')
@@ -335,7 +334,7 @@ export function ResultScreen() {
       const evos = useRoster.getState().lastEvolutions
       if (evos.length > 0) useMeta.getState().recordEvolutions(evos)
     })
-  }, [isWin, context.outcome, context.regionId, context.playerTeam, context.foeTeam, grantBattleExp, postGrowth])
+  }, [isWin, outcome, context.regionId, context.playerTeam, context.foeTeam, grantBattleExp, postGrowth])
 
   // 進化演出：等捕獲流程結束（或本來就不捕獲）後才播，避免兩段演出疊在一起
   const [evoDone, setEvoDone] = useState(false)

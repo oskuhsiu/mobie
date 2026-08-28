@@ -2,7 +2,7 @@ import type {
   BattleCue,
   BattleCueHandler,
   CueContext,
-  NormalAttackCue,
+  DamageCue,
 } from './contracts'
 import type { LegacyPresentationPorts } from './legacy/LegacyPresentationPorts'
 
@@ -12,18 +12,27 @@ async function invoke(work: Promise<void> | void, context: CueContext): Promise<
   await context.clock.race(Promise.resolve(work), context.signal)
 }
 
-export class LegacyNormalAttackCueHandler implements BattleCueHandler {
+function assertNever(value: never): never {
+  throw new Error(`Unhandled battle cue: ${JSON.stringify(value)}`)
+}
+
+export class LegacyBattleCueHandler implements BattleCueHandler {
   constructor(private readonly ports: BattleCuePorts) {}
 
   async play(cue: BattleCue, context: CueContext): Promise<void> {
-    if (cue.kind === 'legacy-event') {
-      await invoke(this.ports.legacy.play(cue, context), context)
-      return
+    switch (cue.kind) {
+      case 'legacy-event': await invoke(this.ports.legacy.play(cue, context), context); return
+      case 'intentional-noop': return
+      case 'star-prelude': await invoke(this.ports.action.starPrelude(cue, context), context); return
+      case 'chain-prelude': await invoke(this.ports.action.chainPrelude(cue, context), context); return
+      case 'chain-cleanup': await invoke(this.ports.action.chainCleanup(cue, context), context); return
+      case 'battle-outcome': await invoke(this.ports.action.outcome(cue, context), context); return
+      case 'damage': await this.playDamage(cue, context); return
+      default: return assertNever(cue)
     }
-    await this.playNormalAttack(cue, context)
   }
 
-  private async playNormalAttack(cue: NormalAttackCue, context: CueContext): Promise<void> {
+  private async playDamage(cue: DamageCue, context: CueContext): Promise<void> {
     await invoke(this.ports.scene.begin(cue, context), context)
     await invoke(this.ports.hud.showMove(cue, context), context)
     await invoke(this.ports.audio.playAttack(cue, context), context)

@@ -1,15 +1,17 @@
 import type {
+  BattleActionPort,
+  DamageAudioPort,
+  DamageHapticPort,
+  DamageHudPort,
+  DamageScenePort,
   LegacyEventPort,
-  NormalAttackAudioPort,
-  NormalAttackHapticPort,
-  NormalAttackHudPort,
-  NormalAttackScenePort,
 } from '../contracts'
 
 export interface LegacyPresentationPorts {
-  scene: NormalAttackScenePort
-  hud: NormalAttackHudPort
-  audio: NormalAttackAudioPort
-  haptic: NormalAttackHapticPort
+  scene: DamageScenePort
+  hud: DamageHudPort
+  audio: DamageAudioPort
+  haptic: DamageHapticPort
   legacy: LegacyEventPort
+  action: BattleActionPort
 }

@@ -1,10 +1,10 @@
 import type {
   BattleDirectorPort,
-  BattleSessionToken,
   BattleTransactionPort,
   CancelReason,
-  NormalAttackInput,
   PresentationToken,
+  TryRecordStatus,
+  TurnInput,
   TurnPresentationJob,
   TurnResolution,
   TurnSubmissionResult,
@@ -12,9 +12,9 @@ import type {
 import type { BattleState } from '@/game/battle/reducer'
 
 export interface BattleTurnCoordinatorOptions {
-  session: BattleSessionToken
-  resolve(token: PresentationToken, before: BattleState, input: NormalAttackInput): TurnResolution
-  record(token: PresentationToken, input: NormalAttackInput, events: TurnResolution['events']): void
+  acquireToken(): PresentationToken | null
+  resolve(token: PresentationToken, before: BattleState, input: TurnInput): TurnResolution
+  tryRecordOnce(token: PresentationToken, input: TurnInput, events: TurnResolution['events']): TryRecordStatus
   director: BattleDirectorPort
   transaction: BattleTransactionPort
 }
@@ -23,26 +23,52 @@ interface ActiveTurn {
   token: PresentationToken
   controller: AbortController
   cancelRequested: boolean
+  commitStarted: boolean
+}
+
+function validateOutcome(resolution: TurnResolution): void {
+  const outcomes = resolution.events.filter((event) => event.type === 'battleEnded')
+  if (outcomes.length > 1) throw new Error('A turn resolution may contain at most one battleEnded event')
+  const event = outcomes[0]
+  const meta = resolution.commitMeta.outcome
+  if (!event) {
+    if (resolution.nextState.winner !== null || meta !== null) {
+      throw new Error('Outcome state requires a battleEnded event')
+    }
+    return
+  }
+  const expectedOutcome = event.winner === 'player' ? 'win' : 'lose'
+  if (
+    resolution.nextState.winner !== event.winner
+    || meta?.winner !== event.winner
+    || meta.outcome !== expectedOutcome
+    || meta.reason !== event.reason
+  ) {
+    throw new Error('battleEnded must agree with nextState and commit outcome')
+  }
 }
 
 export class BattleTurnCoordinator {
-  private nextPresentationId = 1
   private active: ActiveTurn | null = null
 
   constructor(private readonly options: BattleTurnCoordinatorOptions) {}
 
-  async submit(before: BattleState, input: NormalAttackInput): Promise<TurnSubmissionResult> {
+  async submit(before: BattleState, input: TurnInput): Promise<TurnSubmissionResult> {
     if (this.active) return 'ignored'
 
+    const token = this.options.acquireToken()
+    if (!token) return 'ignored'
+
     const active: ActiveTurn = {
-      token: { ...this.options.session, presentationId: this.nextPresentationId++ },
+      token,
       controller: new AbortController(),
       cancelRequested: false,
+      commitStarted: false,
     }
     this.active = active
     try {
       try {
-        this.options.transaction.begin(active.token, before)
+        this.options.transaction.begin(active.token, before, input)
       } catch (error) {
         this.notifyResolveFailed(active.token, error)
         this.requestCancel(active, 'stale')
@@ -56,17 +82,16 @@ export class BattleTurnCoordinator {
       let resolution: TurnResolution
       try {
         resolution = this.options.resolve(active.token, before, input)
+        validateOutcome(resolution)
       } catch (error) {
         if (this.isCurrent(active.token)) this.notifyResolveFailed(active.token, error)
         this.requestCancel(active, 'stale')
         return 'failed'
       }
 
-      try {
-        this.options.record(active.token, input, resolution.events)
-      } catch (error) {
-        this.notifyRecordFailed(active.token, error)
-      }
+      // Public recorder adapter is deliberately no-throw. A failed status degrades
+      // replay persistence only; the already-resolved canonical turn is never rerun.
+      this.options.tryRecordOnce(active.token, input, resolution.events)
 
       const job: TurnPresentationJob = {
         kind: 'turn',
@@ -74,6 +99,8 @@ export class BattleTurnCoordinator {
         before,
         input,
         events: resolution.events,
+        battleSeed: resolution.battleSeed,
+        turn: resolution.turn,
       }
 
       let presentation: 'completed' | 'degraded' | 'cancelled'
@@ -90,7 +117,11 @@ export class BattleTurnCoordinator {
       }
 
       try {
-        this.options.transaction.commit(active.token, resolution)
+        active.commitStarted = true
+        if (!this.options.transaction.commit(active.token, resolution)) {
+          this.requestCancel(active, 'stale')
+          return 'cancelled'
+        }
       } catch {
         this.requestCancel(active, 'stale')
         return 'failed'
@@ -102,7 +133,7 @@ export class BattleTurnCoordinator {
   }
 
   cancel(reason: CancelReason): void {
-    if (!this.active) return
+    if (!this.active || this.active.commitStarted) return
     try {
       this.active.controller.abort(reason)
     } catch {
@@ -134,14 +165,6 @@ export class BattleTurnCoordinator {
       this.options.transaction.resolveFailed?.(token, error)
     } catch {
       // Failure notification is best-effort; cancellation still releases the turn.
-    }
-  }
-
-  private notifyRecordFailed(token: PresentationToken, error: unknown): void {
-    try {
-      this.options.transaction.recordFailed?.(token, error)
-    } catch {
-      // Recorder degradation is non-blocking and never reruns the resolver.
     }
   }
 

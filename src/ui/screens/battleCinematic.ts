@@ -34,7 +34,7 @@ export interface CinematicCoordinator {
   resume(): void
   /** EXT.2 全螢幕 cut-in 進場（letterbox in + 慢鏡 + cut-in 卡片 hold）。
    *  resolve 時保留 letterbox/慢鏡（讓緊接的命中演出仍在電影框內）；收尾由呼叫端 resume()。 */
-  cutIn(spec: CutInSpec): Promise<void>
+  cutIn(spec: CutInSpec, timing?: { wait(ms: number): Promise<void> }): Promise<void>
 }
 
 /** BattleScreen 注入的 display 副作用（低頻：每場星擊一次，走一般 React state 不違反效能紅線）。 */
@@ -85,18 +85,19 @@ export function createCinematicCoordinator(hooks: CinematicHooks = {}): Cinemati
       abortPause?.() // 提前結束任何進行中的凍結
       clearStage() // 收 letterbox/cut-in、時鐘回速
     },
-    async cutIn(spec) {
+    async cutIn(spec, timing) {
+      const waitFor = timing?.wait ?? wait
       // 三拍弧（plan/EXT.2 圓桌共識）。慢鏡只動 R3F 舞台（setTimeScale），卡片是銳利 DOM、FxCanvas/Tone real-time。
       // 拍1 蓄力：舞台降到慢鏡 + letterbox 進 + 四邊吸入粒子 + 上升 sweep（卡片還沒出）。
       hooks.setTimeScale?.(0.15)
       hooks.setLetterbox?.(true)
       hooks.onCharge?.(spec)
-      await wait(CUTIN_CHARGE_MS)
+      await waitFor(CUTIN_CHARGE_MS)
       // 拍2 蓋章：卡片像印章硬砸中心 + 舞台硬定格(0) + 印章 tick → 80~120ms freeze。
       hooks.setCutIn?.(spec)
       hooks.setTimeScale?.(0)
       hooks.onStamp?.(spec)
-      await wait(CUTIN_STAMP_FREEZE_MS)
+      await waitFor(CUTIN_STAMP_FREEZE_MS)
       // 拍3 衝擊：卡片過曝退場 + 舞台 snap 回正常 + 白閃/全屏衝擊波/震動/boom。
       hooks.setCutIn?.(null)
       hooks.setTimeScale?.(1)

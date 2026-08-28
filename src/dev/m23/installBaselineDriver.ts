@@ -9,6 +9,8 @@ import {
 import { useSettings } from '@/store/settingsStore'
 import { useBattleStore } from '@/store/battleStore'
 import { assembleBattlePrep, assembleExt, assemblePostGrowth } from '@/store/ext'
+import type { BattleSessionToken } from '@/presentation/battle/contracts'
+import type { QteQuality } from '@/game/battle/engine'
 import {
   M23BattleDiagnostics,
   type M23DiagnosticsSnapshot,
@@ -17,12 +19,14 @@ import {
   M23_BASELINE_SCENARIO_ID,
   M23_GRAPHICS_OPTIONS,
   M23_MOTION_OPTIONS,
+  M23_TURN_TRANSACTION_CASES,
   type M23Checkpoint,
   type M23MotionPreference,
   type M23PoolCount,
   type M23PresentationTraceEvent,
   type M23RendererResources,
   type M23RequestedGraphics,
+  type M23TurnTransactionCase,
 } from './contracts'
 
 export interface M23BaselineDriverOptions {
@@ -40,6 +44,16 @@ export interface M23BaselineDriver {
   configure: (options?: Partial<M23BaselineDriverOptions>) => M23BaselineDriverOptions
   run: (options?: Pick<Partial<M23BaselineDriverOptions>, 'scenarioId' | 'seed'>) => M23BaselineScenarioResult
   prepareCheckpoint: (checkpoint: 'player-choice' | 'qte' | 'star' | 'terrain' | 'terrain-rain' | 'switch') => void
+  prepareTransactionCase: (caseId: M23TurnTransactionCase) => void
+  battleState: () => ReturnType<typeof useBattleStore.getState>['battle']
+  runtimeState: () => {
+    phase: ReturnType<typeof useBattleStore.getState>['phase']
+    energy: number
+    lockedIndex: number | null
+    session: { token: BattleSessionToken; nextPresentationId: number; endSent: boolean } | null
+  }
+  takeQteQuality: (actual: QteQuality) => QteQuality
+  activeTransactionCase: () => M23TurnTransactionCase | null
   prepareArtworkFixture: (fixture: M23ArtworkFixture) => void
   checkpoint: (cue: string, checkpoint?: M23Checkpoint) => Promise<void>
   step: (count?: number) => void
@@ -122,6 +136,8 @@ export function installM23BaselineDriver(): M23BaselineDriver {
   let cueIndex = -1
   let stepPermits = 0
   let resumeWaiters: Array<() => void> = []
+  let qteQualityQueue: QteQuality[] = []
+  let activeTransactionCase: M23TurnTransactionCase | null = null
 
   const configure = (patch: Partial<M23BaselineDriverOptions> = {}): M23BaselineDriverOptions => {
     if (patch.scenarioId !== undefined && patch.scenarioId !== M23_BASELINE_SCENARIO_ID) {
@@ -188,6 +204,72 @@ export function installM23BaselineDriver(): M23BaselineDriver {
         phase: checkpoint === 'qte' ? 'qte' : checkpoint === 'switch' ? 'switchSelect' : 'playerChoice',
       })
     },
+    prepareTransactionCase: (caseId) => {
+      if (!M23_TURN_TRANSACTION_CASES.includes(caseId)) throw new Error(`Unknown turn transaction case: ${caseId}`)
+      const scenario = runM23BaselineScenario({ scenarioId: options.scenarioId, seed: options.seed })
+      const fixture = scenario.cases.find((candidate) => candidate.id === caseId)
+      if (!fixture) throw new Error(`Missing baseline turn fixture: ${caseId}`)
+      const battle = structuredClone(fixture.initialState)
+      if (caseId === 'chain-combo') {
+        battle.chainGauge = useSettings.getState().ext.chain?.gaugeFull ?? 100
+      }
+      const state = useBattleStore.getState()
+      const qualityByCase: Record<M23TurnTransactionCase, QteQuality[]> = {
+        'normal-hit-chain-ready': ['good'],
+        'status-buff': ['perfect'],
+        'switch-forced-switch': ['weak'],
+        'chain-combo': ['perfect', 'good', 'normal'],
+        'crit-super-star': [],
+        win: ['perfect'],
+        lose: ['weak'],
+        timeout: ['normal'],
+      }
+      qteQualityQueue = [...qualityByCase[caseId]]
+      activeTransactionCase = caseId
+      for (const side of ['player', 'foe'] as const) {
+        battle[side].members = battle[side].members.map((member, index) => ({
+          ...member,
+          artworkUrl: member.artworkUrl
+            || state.battle?.[side].members[index]?.artworkUrl
+            || M23_ARTWORK_FIXTURES['large-texture'],
+        }))
+      }
+      useBattleStore.setState({
+        battle,
+        phase: 'playerChoice',
+        log: [],
+        banner: null,
+        hitFx: null,
+        support: null,
+        energy: caseId === 'crit-super-star' ? 100 : 0,
+        chain: 0,
+        combo: null,
+        lockedIndex: null,
+        presentation: null,
+        session: state.session ? {
+          ...state.session,
+          battleSeed: `${options.seed}|${caseId}`,
+          rngCursor: 0,
+          pendingReplay: null,
+        } : null,
+      })
+    },
+    battleState: () => useBattleStore.getState().battle,
+    runtimeState: () => {
+      const state = useBattleStore.getState()
+      return {
+        phase: state.phase,
+        energy: state.energy,
+        lockedIndex: state.lockedIndex,
+        session: state.session ? {
+          token: state.session.token,
+          nextPresentationId: state.session.nextPresentationId,
+          endSent: state.session.endSent,
+        } : null,
+      }
+    },
+    takeQteQuality: (actual) => qteQualityQueue.shift() ?? actual,
+    activeTransactionCase: () => activeTransactionCase,
     prepareArtworkFixture: (fixture) => {
       const state = useBattleStore.getState()
       if (!state.battle) throw new Error('A live battle is required before preparing artwork')
@@ -235,6 +317,8 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     resetDiagnostics: () => {
       cueIndex = -1
       stepPermits = 0
+      qteQualityQueue = []
+      activeTransactionCase = null
       diagnostics.reset()
     },
     dispose: () => {

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { ReplayRecorder } from './replayRecorder'
-import type { RecorderStart } from './replayRecorder'
+import type { RecorderStart, ReplayRecorderDependencies } from './replayRecorder'
 import type { BattleEvent } from '@/game/battle/reducer'
+import { hashSeed } from '@/game/rng'
+import { encodeReplay } from '@/game/replay/codec'
 
 const START: RecorderStart = {
   battleSeed: 'seed-1',
@@ -49,5 +51,72 @@ describe('ReplayRecorder', () => {
     const r = new ReplayRecorder()
     r.start(START)
     expect(r.build('lose')).toBeNull()
+  })
+
+  it('tryRecord 清楚區分 inactive、recorded 與首次失敗後的 disabled', () => {
+    const r = new ReplayRecorder()
+    expect(r.tryRecord({ type: 'ATTACK' }, [ev])).toEqual({ status: 'inactive' })
+
+    r.start(START)
+    expect(r.tryRecord({ type: 'ATTACK' }, [ev])).toEqual({ status: 'recorded' })
+
+    const failure = new Error('event copy failed')
+    const brokenEvents = new Proxy([] as BattleEvent[], {
+      get(target, property, receiver) {
+        if (property === Symbol.iterator) throw failure
+        return Reflect.get(target, property, receiver)
+      },
+    })
+    expect(r.tryRecord({ type: 'ATTACK' }, brokenEvents)).toEqual({ status: 'failed', error: failure })
+    expect(r.active).toBe(false)
+    expect(r.build('win')).toBeNull()
+    expect(r.tryRecord({ type: 'ATTACK' }, [ev])).toEqual({ status: 'disabled' })
+
+    r.start(START)
+    expect(r.tryRecord({ type: 'ATTACK' }, [ev])).toEqual({ status: 'recorded' })
+  })
+
+  it('stages a turn without changing the canonical replay until commitPrepared', () => {
+    const r = new ReplayRecorder()
+    r.start(START)
+    const prepared = r.prepareTurn({ type: 'ATTACK' }, [ev])
+    expect(prepared.status).toBe('prepared')
+    expect(r.build('win')).toBeNull()
+    if (prepared.status !== 'prepared') throw new Error('expected prepared replay turn')
+    expect(r.commitPrepared(prepared.turn)).toEqual({ status: 'recorded' })
+    expect(r.build('win')?.turns).toHaveLength(1)
+  })
+
+  it('contains build, encode, and persistence failures without throwing', async () => {
+    const makeDependencies = (overrides: Partial<ReplayRecorderDependencies> = {}): ReplayRecorderDependencies => ({
+      hashSeed,
+      encodeReplay,
+      putReplay: vi.fn().mockResolvedValue(undefined),
+      ...overrides,
+    })
+
+    const brokenBuild = new ReplayRecorder(makeDependencies({
+      hashSeed: () => { throw new Error('hash failed') },
+    }))
+    brokenBuild.start(START)
+    brokenBuild.record({ type: 'ATTACK' }, [ev])
+    expect(() => brokenBuild.build('win')).not.toThrow()
+    expect(brokenBuild.active).toBe(false)
+
+    const brokenEncode = new ReplayRecorder(makeDependencies({
+      encodeReplay: () => { throw new Error('encode failed') },
+    }))
+    brokenEncode.start(START)
+    brokenEncode.record({ type: 'ATTACK' }, [ev])
+    await expect(brokenEncode.finish('win')).resolves.toBe(false)
+    expect(brokenEncode.active).toBe(false)
+
+    const brokenPersist = new ReplayRecorder(makeDependencies({
+      putReplay: vi.fn().mockRejectedValue(new Error('persist failed')),
+    }))
+    brokenPersist.start(START)
+    brokenPersist.record({ type: 'ATTACK' }, [ev])
+    await expect(brokenPersist.finish('win')).resolves.toBe(false)
+    expect(brokenPersist.active).toBe(false)
   })
 })

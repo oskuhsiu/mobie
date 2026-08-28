@@ -37,6 +37,15 @@ describe('EXT.1 cinematicCoordinator', () => {
     expect(hooks.setTimeScale).toHaveBeenCalledWith(1)
   })
 
+  it('cutIn uses the injected transaction timing for both waits', async () => {
+    const waits: number[] = []
+    const c = createCinematicCoordinator()
+    await c.cutIn({
+      artworkUrl: 'art', casterName: 'caster', moveName: 'move', type: 'normal', side: 'player',
+    }, { wait: async (ms) => { waits.push(ms) } })
+    expect(waits).toEqual([720, 120])
+  })
+
   it('cutIn 三拍依序：蓄力(慢鏡+letterbox+charge)→蓋章(卡片+定格0+stamp)→衝擊(收卡+回速1+impact)，保留電影框', async () => {
     const calls: string[] = []
     const hooks: CinematicHooks = {

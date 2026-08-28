@@ -79,9 +79,13 @@ describe('battle decision journey', () => {
     expect(useBattleStore.getState().phase).toBe('playerChoice')
     expect(screen.queryByText(/10秒內點擊任意處/)).toBeNull()
 
-    act(() => useBattleStore.getState().setActiveIndex('foe', 1))
+    act(() => useBattleStore.setState((state) => state.battle ? {
+      battle: { ...state.battle, foe: { ...state.battle.foe, activeIndex: 1 } },
+    } : {}))
     expect(screen.getByRole('button', { name: /火花.*效果不佳 ×0\.5/ })).toBeTruthy()
-    act(() => useBattleStore.getState().setActiveIndex('foe', 0))
+    act(() => useBattleStore.setState((state) => state.battle ? {
+      battle: { ...state.battle, foe: { ...state.battle.foe, activeIndex: 0 } },
+    } : {}))
 
     fireEvent.click(screen.getByRole('button', { name: /火花.*效果絕佳 ×2/ }))
     expect(useBattleStore.getState().phase).toBe('qte')

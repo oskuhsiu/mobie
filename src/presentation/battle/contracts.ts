@@ -4,34 +4,50 @@ import type { BattleMobie, Move } from '@/game/types'
 
 export interface BattleSessionToken {
   battleSessionId: string
+  resultFingerprint: string
 }
 
 export interface PresentationToken extends BattleSessionToken {
   presentationId: number
 }
 
-export type NormalAttackInput = Omit<Extract<ReplayInput, { type: 'ATTACK' }>, 'starStrike'> & {
-  starStrike?: false
+export type TurnInput = ReplayInput
+
+export type EnergyCommitPolicy =
+  | { kind: 'gain'; delta: number; dealtDamage: boolean }
+  | { kind: 'reset' }
+  | { kind: 'unchanged' }
+
+export interface TurnCommitMeta {
+  energy: EnergyCommitPolicy
+  lockedIndex: number | null | 'unchanged'
+  combo: number | null | 'unchanged'
+  outcome: {
+    winner: Side
+    outcome: 'win' | 'lose'
+    reason?: 'timeout'
+  } | null
 }
 
 export interface TurnResolution {
   before: BattleState
-  input: NormalAttackInput
+  input: TurnInput
   events: readonly BattleEvent[]
   nextState: BattleState
-  commitMeta: {
-    energyDelta: number
-    dealtDamage: boolean
-    lockedIndex: null
-  }
+  battleSeed: string
+  turn: number
+  rngCalls: number
+  commitMeta: TurnCommitMeta
 }
 
 export interface TurnPresentationJob {
   kind: 'turn'
   token: PresentationToken
   before: BattleState
-  input: NormalAttackInput
+  input: TurnInput
   events: readonly BattleEvent[]
+  battleSeed: string
+  turn: number
 }
 
 export interface PresentationClock {
@@ -45,14 +61,14 @@ export interface CueContext {
   clock: PresentationClock
 }
 
-export interface NormalAttackTiming {
+export interface DamageTiming {
   windupMs: 440
   resultMs: 820
   clearMs: 140
 }
 
-export interface NormalAttackCue {
-  kind: 'normal-attack'
+export interface DamageCue {
+  kind: 'damage'
   id: string
   eventIndex: number
   event: Extract<BattleEvent, { type: 'damageApplied' }>
@@ -61,52 +77,102 @@ export interface NormalAttackCue {
   attackerSide: Side
   defenderSide: Side
   move: Move
-  timing: NormalAttackTiming
+  timing: DamageTiming
 }
 
-export type LegacyEventCue = {
-  [Type in Exclude<BattleEvent['type'], 'damageApplied'>]: {
-    kind: 'legacy-event'
-    id: string
-    eventIndex: number
-    before: BattleState
-    event: Extract<BattleEvent, { type: Type }>
-  }
-}[Exclude<BattleEvent['type'], 'damageApplied'>]
+type NarrowLegacyEvent =
+  | Exclude<BattleEvent, { type: 'damageApplied' | 'battleEnded' | 'random' }>
+  | (Omit<Extract<BattleEvent, { type: 'random' }>, 'event'> & {
+      event: Extract<BattleEvent, { type: 'random' }>['event'] & { type: 'supportRoulette' }
+    })
 
-export type BattleCue = NormalAttackCue | LegacyEventCue
+export interface LegacyBattleCue {
+  kind: 'legacy-event'
+  id: string
+  eventIndex: number
+  before: BattleState
+  event: NarrowLegacyEvent
+}
+
+export interface IntentionalNoopCue {
+  kind: 'intentional-noop'
+  id: string
+  eventIndex: number
+  event: Extract<BattleEvent, { type: 'random' }>
+}
+
+export interface StarPreludeCue {
+  kind: 'star-prelude'
+  id: 'input:star-prelude'
+}
+
+export interface ChainPreludeCue {
+  kind: 'chain-prelude'
+  id: 'input:chain-prelude'
+  timingMs: 420
+}
+
+export interface ChainCleanupCue {
+  kind: 'chain-cleanup'
+  id: 'input:chain-cleanup'
+  timingMs: 180
+}
+
+export interface BattleOutcomeCue {
+  kind: 'battle-outcome'
+  id: string
+  eventIndex: number
+  event: Extract<BattleEvent, { type: 'battleEnded' }>
+}
+
+export type BattleCue =
+  | DamageCue
+  | LegacyBattleCue
+  | IntentionalNoopCue
+  | StarPreludeCue
+  | ChainPreludeCue
+  | ChainCleanupCue
+  | BattleOutcomeCue
 
 export type CancelReason = 'unmount' | 'superseded' | 'stale' | 'skip' | 'context-lost'
 export type PresentationResult = 'completed' | 'degraded' | 'cancelled'
 export type TurnSubmissionResult = PresentationResult | 'ignored' | 'failed'
+export type TryRecordStatus = 'recorded' | 'already-recorded' | 'disabled' | 'failed'
 
-export interface NormalAttackScenePort {
-  begin(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  impact(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  reaction(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  hitStop(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  clear(cue: NormalAttackCue, context: CueContext): Promise<void> | void
+export interface DamageScenePort {
+  begin(cue: DamageCue, context: CueContext): Promise<void> | void
+  impact(cue: DamageCue, context: CueContext): Promise<void> | void
+  reaction(cue: DamageCue, context: CueContext): Promise<void> | void
+  hitStop(cue: DamageCue, context: CueContext): Promise<void> | void
+  clear(cue: DamageCue, context: CueContext): Promise<void> | void
 }
 
-export interface NormalAttackHudPort {
-  showMove(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  applyDamage(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  showResult(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  clear(cue: NormalAttackCue, context: CueContext): Promise<void> | void
+export interface DamageHudPort {
+  showMove(cue: DamageCue, context: CueContext): Promise<void> | void
+  applyDamage(cue: DamageCue, context: CueContext): Promise<void> | void
+  showResult(cue: DamageCue, context: CueContext): Promise<void> | void
+  clear(cue: DamageCue, context: CueContext): Promise<void> | void
 }
 
-export interface NormalAttackAudioPort {
-  playAttack(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  playImpact(cue: NormalAttackCue, context: CueContext): Promise<void> | void
-  playMoveSound(cue: NormalAttackCue, context: CueContext): Promise<void> | void
+export interface DamageAudioPort {
+  playAttack(cue: DamageCue, context: CueContext): Promise<void> | void
+  playImpact(cue: DamageCue, context: CueContext): Promise<void> | void
+  playMoveSound(cue: DamageCue, context: CueContext): Promise<void> | void
 }
 
-export interface NormalAttackHapticPort {
-  impact(cue: NormalAttackCue, context: CueContext): Promise<void> | void
+export interface DamageHapticPort {
+  impact(cue: DamageCue, context: CueContext): Promise<void> | void
 }
 
 export interface LegacyEventPort {
-  play(cue: LegacyEventCue, context: CueContext): Promise<void> | void
+  play(cue: LegacyBattleCue, context: CueContext): Promise<void> | void
+}
+
+export interface BattleActionPort {
+  starPrelude(cue: StarPreludeCue, context: CueContext): Promise<void> | void
+  chainPrelude(cue: ChainPreludeCue, context: CueContext): Promise<void> | void
+  chainCleanup(cue: ChainCleanupCue, context: CueContext): Promise<void> | void
+  outcome(cue: BattleOutcomeCue, context: CueContext): Promise<void> | void
 }
 
 export interface BattleCueHandler {
@@ -118,10 +184,9 @@ export interface BattleDirectorPort {
 }
 
 export interface BattleTransactionPort {
-  begin(token: PresentationToken, before: BattleState): void
+  begin(token: PresentationToken, before: BattleState, input: TurnInput): void
   isCurrent(token: PresentationToken): boolean
-  commit(token: PresentationToken, resolution: TurnResolution): void
+  commit(token: PresentationToken, resolution: TurnResolution): boolean
   cancel(token: PresentationToken, reason: CancelReason): void
   resolveFailed?(token: PresentationToken, error: unknown): void
-  recordFailed?(token: PresentationToken, error: unknown): void
 }
