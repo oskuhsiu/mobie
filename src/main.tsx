@@ -9,3 +9,12 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+if (
+  import.meta.env.DEV
+  && new URLSearchParams(window.location.search).get('m23Scenario') === 'm23-current-parity-v1'
+) {
+  void import('@/dev/m23/installBaselineDriver').then(({ installM23BaselineDriver }) => {
+    installM23BaselineDriver()
+  })
+}

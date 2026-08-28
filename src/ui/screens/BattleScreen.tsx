@@ -44,6 +44,7 @@ import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
+import type { M23Checkpoint } from '@/dev/m23/contracts'
 
 // 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
 const BattleStage = lazy(() => import('@/scene/r3f/BattleStage'))
@@ -82,6 +83,22 @@ const SLOT_KEY_MAP: Record<string, number> = {
 }
 // M11 地形突變可抽的池（全地形除中性）；wild 戰鬥才注入。
 const WILD_SHIFT_POOL = TERRAINS.filter((t) => t.id !== 'neutral').map((t) => t.id)
+
+function baselineDriver() {
+  return import.meta.env.DEV ? window.__MOBIE_M23_BASELINE__ : undefined
+}
+
+function checkpointForEvent(event: BattleEvent): M23Checkpoint | undefined {
+  switch (event.type) {
+    case 'damageApplied': return 'normal-attack'
+    case 'wildAccident': return event.kind === 'terrainShift' ? 'terrain' : undefined
+    case 'statusApplied': return event.effectKind === 'terrain' ? 'terrain' : undefined
+    case 'activeChanged': return 'switch'
+    case 'memberFainted': return 'faint'
+    case 'battleEnded': return 'outcome'
+    default: return undefined
+  }
+}
 
 // M14.c：把一方 BattleMobie[] 轉成回放用的 DisplayUnitSnapshot[]（只取畫面/FX 分派要的穩定欄位）。
 function teamSnapshot(side: Side, members: BattleMobie[]): DisplayUnitSnapshot[] {
@@ -528,7 +545,8 @@ export function BattleScreen() {
     const region = context.regionId ? lookupRegion(context.regionId) : null
     const terrainSeed = context.foeTeam.map((c) => c.cardId).join('|')
     // M14.0：本場 rng 種子＝雙方 cardId + 開戰時刻（每場唯一、可寫入回放 header 供重模擬）。
-    const battleSeed = `${context.playerTeam.map((c) => c.cardId).join('|')}#${terrainSeed}#${Date.now()}`
+    const battleSeed = baselineDriver()?.options.seed
+      ?? `${context.playerTeam.map((c) => c.cardId).join('|')}#${terrainSeed}#${Date.now()}`
     battleSeedRef.current = battleSeed
     battleRngRef.current = makeRng(battleSeed)
     // 連勝塔（M11）視為中性場：無地形（也無野外意外，見 wildEvents memo）
@@ -568,6 +586,7 @@ export function BattleScreen() {
         s.setBanner(null)
         await wait(140)
       }
+      await baselineDriver()?.checkpoint('phase:player-choice', 'player-choice')
       s.setPhase('playerChoice')
     })()
   }, [context, prep])
@@ -582,6 +601,17 @@ export function BattleScreen() {
     )
     return () => clearTimeout(t)
   }, [phase, send])
+
+  useEffect(() => {
+    baselineDriver()?.setActivity(
+      phase === 'qte'
+      || phase === 'mash'
+      || phase === 'statusQte'
+      || phase === 'defenseQte'
+      || phase === 'chainQte'
+      || phase === 'busy',
+    )
+  }, [phase])
 
   // 低血量緊張度 → BGM 濾波/警報（依我方在場 HP）
   useEffect(() => {
@@ -602,6 +632,7 @@ export function BattleScreen() {
   const playEvents = useCallback(async (b0: BattleState, events: BattleEvent[]) => {
     const store = () => useBattleStore.getState()
     for (const e of events) {
+      await baselineDriver()?.checkpoint(`event:${e.type}`, checkpointForEvent(e))
       if (e.type === 'damageApplied') {
         const atk = monAt(b0, e.attackerSide, e.attackerIndex)
         const def = monAt(b0, e.targetSide, e.targetIndex)
@@ -618,6 +649,7 @@ export function BattleScreen() {
         const strong = e.crit || e.effectiveness >= 2
         let impactDelayMs = 0
         if (!e.missed && e.amount > 0) {
+          baselineDriver()?.recordCastImpact(performance.now())
           impactDelayMs = playMoveFx(
             fxRef.current,
             strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
@@ -856,6 +888,7 @@ export function BattleScreen() {
     // M19.c：玩家選定的招式槽。reducer 用 equippedMoves[slotIndex] 重驗並 resolve。
     const slotIndex = pendingSlotRef.current
     const input: ReplayInput = { type: 'ATTACK', quality, mashCount, slotIndex }
+    baselineDriver()?.beginCast(performance.now())
     const { nextState, events } = resolveTurn(b0, input, { rng: battleRngRef.current, ext, terrainMultiplier: resolveTerrainMult, wildEvents })
     recorderRef.current.record(input, events)
     await playEvents(b0, events)
@@ -881,6 +914,7 @@ export function BattleScreen() {
     const cinematic = cinematicRef.current!
     const useCinematic = juiceRef.current !== 'off'
     try {
+      await baselineDriver()?.checkpoint('action:star', 'star')
       if (useCinematic) {
         // 三拍 cut-in（蓄力→蓋章→衝擊；衝擊的白閃/衝擊波/震動/boom 由 onImpact 演出，這裡不再重複）。
         // 星擊永遠用 slot0 招當 finisher（reducer：slotBySide.player = starStrike ? 0 : …）→ cut-in 取 moves[0]。
@@ -1051,7 +1085,19 @@ export function BattleScreen() {
     >
       {/* 3D 戰鬥舞台（背景層）：兩隻在場Mobie + 地台/光照/相機。EXT.3：off 不給 palette＝基線色/無霧。 */}
       <Suspense fallback={null}>
-        <BattleStage ref={stageRef} player={player} foe={foe} palette={juice === 'off' ? undefined : terrainPalette} />
+        <BattleStage
+          ref={stageRef}
+          player={player}
+          foe={foe}
+          palette={juice === 'off' ? undefined : terrainPalette}
+          onRenderedFrame={import.meta.env.DEV ? (at) => baselineDriver()?.recordRenderedFrame(at) : undefined}
+          onRendererDiagnostics={import.meta.env.DEV ? (resources) => {
+            const driver = baselineDriver()
+            driver?.recordRendererResources(resources)
+            const pools = fxRef.current?.diagnostics?.()
+            if (pools) driver?.recordPools(pools)
+          } : undefined}
+        />
       </Suspense>
       {/* EXT.3 天氣持續層（z2，介於 R3F 與 FxCanvas）：off 不掛＝零 rAF、嚴格回 M22 基線。 */}
       {juice !== 'off' && (
@@ -1061,6 +1107,7 @@ export function BattleScreen() {
           sparkAccent={terrainPalette.sparkAccent}
           overlay={terrainPalette.overlay}
           density={weatherDensity}
+          onPoolDiagnostics={import.meta.env.DEV ? (pool) => baselineDriver()?.recordPools({ weather: pool }) : undefined}
         />
       )}
       <FxCanvas ref={fxRef} />
@@ -1238,6 +1285,7 @@ export function BattleScreen() {
                 }
                 setShowChoiceGuide(false)
                 const isStatus = player.moves[slot]?.category === 'status'
+                void baselineDriver()?.checkpoint('phase:qte', 'qte')
                 useBattleStore.getState().setPhase(isStatus ? 'statusQte' : 'qte')
               }}
             />

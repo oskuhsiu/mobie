@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import type { M23PoolCount } from '@/dev/m23/contracts'
 
 // imperative canvas2D 粒子層：完全不過 React state（效能紅線）。
 // 自有 rAF 迴圈，閒置時停掉；座標用 0..1 正規化，由呼叫端依版面給位置。
@@ -38,6 +39,8 @@ export interface FxHandle {
   converge: (o: FxConvergeOpts) => void
   /** EXT.2 拍3：填滿全螢幕的巨型擴散衝擊波環（globalCompositeOperation='lighter' 加亮）。 */
   shockwave: (o: FxShockwaveOpts) => void
+  /** Ticket 01 diagnostics: current live arrays are unbounded legacy lists, hence capacity=null. */
+  diagnostics?: () => Record<string, M23PoolCount>
 }
 
 interface P { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; g: number; shape: FxShape; rot: number }
@@ -238,6 +241,14 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
       // 大 max（畫面對角線）+ glow(lighter) + 慢 grow/decay → 一圈巨型擴散波掃滿全螢幕。
       s.rings.push({ x: nx * s.w, y: ny * s.h, r: 12, max: Math.hypot(s.w, s.h) * 1.05, color, life: 1, lw, glow: true, decay: 0.03, grow: 0.1 })
       ensureRunning()
+    },
+    diagnostics: () => {
+      const s = stateRef.current
+      return {
+        'fx-particles': { live: s.particles.length, capacity: null },
+        'fx-rings': { live: s.rings.length, capacity: null },
+        'fx-travels': { live: s.travels.length, capacity: null },
+      }
     },
   }), [])
 

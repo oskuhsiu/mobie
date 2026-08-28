@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { WeatherEmitter, WeatherOverlay } from '@/scene/r3f/terrainVisual'
+import type { M23PoolCount } from '@/dev/m23/contracts'
 
 // EXT.3 天氣持續層（plan/EXT.3，圓桌 session-20260630-220524 定案）。
 // 與 FxCanvas 同模式（canvas2D、imperative rAF、0..1 正規化、dpr），但職責相反：
@@ -20,6 +21,8 @@ export interface WeatherCanvasProps {
   density: number
   /** z 序：介於 R3F(0) 與 FxCanvas(5) 之間。 */
   zIndex?: number
+  /** Ticket 01 DEV instrumentation. The pool is bounded by BASE_COUNT for its emitter. */
+  onPoolDiagnostics?: (pool: M23PoolCount) => void
 }
 
 interface WP {
@@ -36,7 +39,7 @@ const BASE_COUNT: Record<WeatherEmitter, number> = {
 const TWO_PI = Math.PI * 2
 const rand = (a: number, b: number) => a + Math.random() * (b - a)
 
-export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, zIndex = 2 }: WeatherCanvasProps) {
+export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, zIndex = 2, onPoolDiagnostics }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const cfg = useRef({ emitter, color, sparkAccent, overlay, density })
   cfg.current = { emitter, color, sparkAccent, overlay, density }
@@ -44,6 +47,8 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
   const prevEmitter = useRef(emitter)
   // 由主 effect 掛上、由 props 變更 effect 呼叫，喚醒可能已 idle-stop 的迴圈。
   const kickRef = useRef<(() => void) | null>(null)
+  const diagnosticsRef = useRef(onPoolDiagnostics)
+  diagnosticsRef.current = onPoolDiagnostics
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -53,6 +58,8 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
     let raf = 0
     let running = false
     let godrayT = 0
+    let lastReportedLive = -1
+    let lastReportedCapacity = -1
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect()
@@ -202,7 +209,11 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
       const em = c.emitter
       const active = c.density > 0 && (em !== 'none' || !!c.overlay)
       ctx.clearRect(0, 0, w, h)
-      if (!active) { running = false; return }
+      if (!active) {
+        diagnosticsRef.current?.({ live: 0, capacity: BASE_COUNT[em] })
+        running = false
+        return
+      }
 
       if (prevEmitter.current !== em) { pool = []; prevEmitter.current = em }
       if (c.overlay === 'godray') drawGodray()
@@ -210,6 +221,12 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
       const target = Math.round(BASE_COUNT[em] * Math.min(1, Math.max(0, c.density)))
       while (pool.length < target) pool.push(mk(em))
       if (pool.length > target) pool.length = target
+      const capacity = BASE_COUNT[em]
+      if (pool.length !== lastReportedLive || capacity !== lastReportedCapacity) {
+        diagnosticsRef.current?.({ live: pool.length, capacity })
+        lastReportedLive = pool.length
+        lastReportedCapacity = capacity
+      }
 
       const acc = c.sparkAccent ?? c.color
       for (let i = 0; i < pool.length; i++) {

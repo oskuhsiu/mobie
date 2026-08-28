@@ -1,9 +1,10 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Vector3, PerspectiveCamera } from 'three'
 import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
 import type { TerrainPalette } from './terrainVisual'
+import type { M23RendererResources } from '@/dev/m23/contracts'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { Combatant3D, makeAnim, LUNGE_DUR, SHAKE_DUR, ENTER_DUR, type MonAnim } from './Combatant3D'
 
@@ -28,11 +29,17 @@ export interface StageHandle {
   setTimeScale: (scale: number) => void
 }
 
+export type RendererDiagnostics = M23RendererResources
+
 interface BattleStageProps {
   player: BattleMobie
   foe: BattleMobie
   /** EXT.3：地形視覺 palette（地板色調/環境光/霧）。未給＝neutral 基線。 */
   palette?: TerrainPalette
+  /** Ticket 01 DEV instrumentation. Omitted in production usage. */
+  onRenderedFrame?: (at: number) => void
+  /** Ticket 01 DEV instrumentation. Omitted in production usage. */
+  onRendererDiagnostics?: (diagnostics: RendererDiagnostics) => void
 }
 
 // 取景目標與「target→相機」方向（沿用原本的俯角構圖，只動距離）。
@@ -64,7 +71,30 @@ function CameraRig() {
   return null
 }
 
-const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleStage({ player, foe, palette }, ref) {
+function DiagnosticsProbe({ onRenderedFrame, onRendererDiagnostics }: Pick<BattleStageProps, 'onRenderedFrame' | 'onRendererDiagnostics'>) {
+  const frame = useRef(0)
+  useFrame(({ gl }) => {
+    onRenderedFrame?.(performance.now())
+    frame.current += 1
+    if (!onRendererDiagnostics || frame.current % 60 !== 0) return
+    onRendererDiagnostics({
+      geometries: gl.info.memory.geometries,
+      textures: gl.info.memory.textures,
+      programs: gl.info.programs?.length ?? 0,
+      triangles: gl.info.render.triangles,
+      drawCalls: gl.info.render.calls,
+    })
+  })
+  return null
+}
+
+const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleStage({
+  player,
+  foe,
+  palette,
+  onRenderedFrame,
+  onRendererDiagnostics,
+}, ref) {
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
   // EXT.2 慢鏡倍率：imperative 寫入、Combatant3D 每幀讀（不過 React state）。
   const timeScaleRef = useRef(1)
@@ -105,6 +135,9 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
     >
       {palette?.fog && <fog attach="fog" args={[palette.fog.color, palette.fog.near, palette.fog.far]} />}
+      {(onRenderedFrame || onRendererDiagnostics) && (
+        <DiagnosticsProbe onRenderedFrame={onRenderedFrame} onRendererDiagnostics={onRendererDiagnostics} />
+      )}
       <CameraRig />
       <StageLights ambient={palette?.ambient} />
       <ArenaFloor tint={palette?.groundTint} />
