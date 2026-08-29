@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { TEAM_SIZE } from '@/game/machine/gameMachine'
 import { useRoster } from '@/store/rosterStore'
-import { useSettings } from '@/store/settingsStore'
+import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import { ownedToCard } from '@/game/growth'
 import { buildBattleMobie } from '@/game/stats'
 import { scoreCardVsFoes, recommendTeamIds, type Matchup } from '@/game/recommend'
@@ -51,13 +51,12 @@ export function CardSelectScreen() {
   const [picked, setPicked] = useState<string[]>([])
   const [adviceShown, setAdviceShown] = useState(false)
 
-  // 生效羈絆（plan/09 §2）：用同一份 prep；羈絆模組關閉時 preBattleHooks 為空＝無 tag。
-  const prep = useSettings((s) => s.prep)
+  // Preview the same fixed player synergy rules used by battle initialization.
   const pickedMons = useMemo(
     () => picked.map((id) => cards.find((c) => c.card.cardId === id)?.mon).filter((m): m is NonNullable<typeof m> => Boolean(m)),
     [picked, cards],
   )
-  const synergies = useMemo(() => prep.preBattleHooks.flatMap((h) => h(pickedMons)), [prep, pickedMons])
+  const synergies = useMemo(() => PRODUCT_RUNTIME.previewPlayerSynergy(pickedMons), [pickedMons])
 
   // 建議只揭露候選與理由；選取權始終留給玩家。
   const showAdvice = () => {

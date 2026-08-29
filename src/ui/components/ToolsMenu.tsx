@@ -6,9 +6,8 @@ import { useIncubator } from '@/store/incubatorStore'
 import { claimableCount } from '@/game/achievements'
 import { isHatchable } from '@/game/incubator'
 
-// 工具 overlay 較重（jsqr/qrcode/three），lazy 載入避免拖慢開場/區域選擇
+// 工具 overlay 較重（qrcode/three），lazy 載入避免拖慢開場/區域選擇
 const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
-const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
 const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
 const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
 const SettingsModal = lazy(() => import('@/ui/components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
@@ -20,10 +19,10 @@ const AchievementsModal = lazy(() => import('@/ui/components/AchievementsModal')
 const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then((m) => ({ default: m.IncubatorModal })))
 const ReplayListModal = lazy(() => import('@/ui/components/ReplayListModal').then((m) => ({ default: m.ReplayListModal })))
 
-type Overlay = 'none' | 'models' | 'scan' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
+type Overlay = 'none' | 'models' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
 
 /**
- * 共用工具列：掃卡 / 卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 3D 模型 / 存檔 / 設定。
+ * 共用工具列：卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 3D 模型 / 存檔 / 設定。
  * Title 與 RegionSelect（遊戲中樞）共用——避免「開始遊戲後這些功能就找不到」。
  */
 export function ToolsMenu() {
@@ -61,7 +60,6 @@ export function ToolsMenu() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <button className="btn btn--ghost btn--sm" onClick={() => open('scan')}>📷 掃卡</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('partner')}>✨ 夥伴技能</button>
@@ -84,7 +82,6 @@ export function ToolsMenu() {
       <Suspense fallback={null}>
         <AnimatePresence>
           {overlay === 'models' && <ModelManagerModal onClose={() => setOverlay('none')} />}
-          {overlay === 'scan' && <CardScannerModal onClose={() => setOverlay('none')} />}
           {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
           {overlay === 'save' && <SaveManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'settings' && <SettingsModal onClose={() => setOverlay('none')} />}

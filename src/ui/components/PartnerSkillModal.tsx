@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
-import { useSettings } from '@/store/settingsStore'
 import { PARTNER_SKILLS, isPartnerSkillLearned, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { audio } from '@/audio/audioEngine'
 
@@ -15,7 +14,6 @@ export function PartnerSkillModal({ onClose }: { onClose: () => void }) {
   const learn = usePlayerSkills((s) => s.learn)
   const sp = useSkillPoints((s) => s.sp)
   const spend = useSkillPoints((s) => s.spend)
-  const moduleOn = useSettings((s) => s.settings.modules.partnerSkills)
 
   const unlock = (skill: PartnerSkillDef) => {
     // 已習得（含起始）就直接返回——learn() 冪等但 spend() 不是，故先讀「最新」狀態擋住快速重複點擊的重扣。
@@ -46,12 +44,6 @@ export function PartnerSkillModal({ onClose }: { onClose: () => void }) {
             <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
           </div>
         </div>
-
-        {!moduleOn && (
-          <div className="trainer-sec" style={{ color: 'var(--accent)' }}>
-            ⚠️ 夥伴技能模組尚未開啟——到 ⚙️ 設定開啟後，戰鬥中才會出現「✨ 夥伴技能」行動鈕。
-          </div>
-        )}
 
         <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {PARTNER_SKILLS.map((skill) => {

@@ -1,9 +1,7 @@
 // M7 — 隊伍羈絆（S2）純函數測試。設計真相：plan/09 §2。
 import { describe, it, expect } from 'vitest'
 import { mon } from '@/game/battle/testFixtures'
-import { computeSynergy, SYNERGY_RULES, SYNERGY_MODULE } from '@/game/ext/synergy'
-import { assembleBattlePrep, applyBattlePrep } from '@/store/ext'
-import { defaultSettings, setModuleEnabledIn } from '@/game/settings'
+import { computeSynergy, SYNERGY_RULES } from '@/game/ext/synergy'
 
 const ids = (mods: ReturnType<typeof computeSynergy>) => mods.map((m) => m.source + ':' + m.label)
 const has = (mods: ReturnType<typeof computeSynergy>, frag: string) => ids(mods).some((s) => s.includes(frag))
@@ -67,32 +65,5 @@ describe('M7 隊伍羈絆 computeSynergy', () => {
     expect(computeSynergy([])).toEqual([])
     expect(has(computeSynergy([mon({ types: ['fire'] })]), '同屬共鳴')).toBe(false)
     expect(has(computeSynergy([mon({ speciesId: 6 })]), '世代羈絆')).toBe(false)
-  })
-})
-
-describe('M7 羈絆掛載（prep 閘控，可選式）', () => {
-  const team = () => [mon({ types: ['fire'], speciesId: 6 }), mon({ types: ['fire'], speciesId: 25 }), mon({ types: ['water'], speciesId: 130 })]
-  const reg = [SYNERGY_MODULE]
-
-  it('關閉：prep 為空 → applyBattlePrep 原封不動、無 modifier', () => {
-    const prep = assembleBattlePrep(defaultSettings(), reg)
-    expect(prep.preBattleHooks).toHaveLength(0)
-    const before = team()
-    const { team: after, modifiers } = applyBattlePrep(before, prep, true)
-    expect(modifiers).toEqual([])
-    expect(after.map((m) => m.spe)).toEqual(before.map((m) => m.spe))
-  })
-
-  it('開啟：套用生效羈絆，且野生對手（withSynergy=false）不吃羈絆', () => {
-    const on = setModuleEnabledIn(defaultSettings(), 'synergy', true)
-    const prep = assembleBattlePrep(on, reg)
-    const { team: player, modifiers } = applyBattlePrep(team(), prep, true)
-    // 2 隻火＋1 隻水：觸發同屬共鳴（atk/spa +10%）+ 世代羈絆（HP +8%）；不觸發多樣陣容
-    expect(modifiers.length).toBeGreaterThanOrEqual(2)
-    expect(player[0].atk).toBe(55) // 同屬共鳴 +10%，base 50
-
-    const { team: foe, modifiers: foeMods } = applyBattlePrep(team(), prep, false)
-    expect(foeMods).toEqual([])
-    expect(foe[0].atk).toBe(50) // 對手不吃羈絆
   })
 })

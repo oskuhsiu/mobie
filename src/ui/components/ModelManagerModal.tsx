@@ -5,9 +5,7 @@ import { putModel, deleteModel, listModelIds, subscribeModels } from '@/scene/mo
 import { audio } from '@/audio/audioEngine'
 
 /**
- * 3D 模型管理：把本機 GLB drop-in 對應到某 speciesId（存進 IndexedDB）。
- * repo 不內建/不散布任何模型——這只是把「使用者自己的檔案」存進「使用者自己的瀏覽器」。
- * 戰鬥場景 MobieVisual 會優先用這裡匯入的 GLB，沒有才退回 artwork billboard。
+ * Legacy local GLB archive. Battle/Capture are artwork-only and never read these blobs.
  */
 export function ModelManagerModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState('')
@@ -64,7 +62,7 @@ export function ModelManagerModal({ onClose }: { onClose: () => void }) {
         <div className="modal-card__head">
           <div>
             <div className="h-title" style={{ fontSize: 24 }}>🧩 3D 模型</div>
-            <div className="h-sub">替任一Mobie匯入本機 GLB；沒匯入的就用官方 artwork 立繪。</div>
+            <div className="h-sub">管理舊版留在本機的 GLB；目前戰鬥與收服固定使用 artwork 立繪。</div>
           </div>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
@@ -89,7 +87,7 @@ export function ModelManagerModal({ onClose }: { onClose: () => void }) {
                     {sp.nameZh} <span className="model-row__id">#{sp.id}</span>
                   </div>
                   <div className={`model-row__status ${has ? 'is-custom' : ''}`}>
-                    {has ? '✓ 已套用自訂 3D 模型' : '預設：artwork 立繪'}
+                    {has ? '✓ 本機留有舊版模型' : '沒有舊版模型資料'}
                   </div>
                 </div>
                 {has && (
@@ -114,7 +112,7 @@ export function ModelManagerModal({ onClose }: { onClose: () => void }) {
 
         <div className="model-foot">
           模型只存在你這台瀏覽器（IndexedDB），本程式不內建也不散布任何 3D 模型。
-          建議用 .glb；模型會自動縮放置中站到地台上。
+          目前不會在戰鬥或收服畫面載入；後續資料工具票會統一處理此舊版入口。
         </div>
       </motion.div>
     </motion.div>

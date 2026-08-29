@@ -1,6 +1,6 @@
 // M12.d — 合體技（plan/12 §4）reducer + matcher 測試。
 // 證明：① matchCombo 純配對（屬性/種族/去重/未用過）② 連鎖提交符合配對 → comboCast + 施放效果寫 fieldState
-//       ③ 合成大招直接傷害 ④ 每組合每場一次（usedComboKeys）⑤ 合體模組關閉零殘留 ⑥ 純函數。
+//       ③ 合成大招直接傷害 ④ 每組合每場一次（usedComboKeys）⑤ reducer capability fallback ⑥ 純函數。
 import { describe, it, expect } from 'vitest'
 import { createBattleState, resolveTurn, type BattleState, type ChainHit } from './reducer'
 import type { ExtBundle } from '@/game/ext/seams'
@@ -72,7 +72,7 @@ describe('合體技 reducer 整合', () => {
     expect(r2.events.some((e) => e.type === 'comboCast')).toBe(false)
   })
 
-  it('合體模組關閉（無 ext.combo）→ 連鎖不升級、零殘留', () => {
+  it('純 reducer 無 ext.combo → 連鎖不升級、零殘留', () => {
     const s = full(createBattleState([fireMon(), waterMon(), plainMon()], [tank(), tank(), tank()]))
     const { nextState, events } = resolveTurn(s, { type: 'SUBMIT_CHAIN_RESULT', hits: HITS }, { rng: RNG, ext: { damageHooks: [], turnEndTriggers: [], chain: { maxHits: 3, gaugeFull: 100, gainBase: 50 } } })
     expect(events.some((e) => e.type === 'comboCast')).toBe(false)

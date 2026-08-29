@@ -5,7 +5,6 @@ import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
-import { ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { growthProgress } from '@/game/growth'
 
@@ -83,17 +82,6 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
           <div className="mobcard-growth">
             <span>總 EXP {ownerExp}</span>
             <span>{ownerGrowth?.atMaxLevel ? '已達滿級' : `距離 Lv.${mon.level + 1} 還需 ${ownerGrowth?.remainingExp ?? 0} EXP`}</span>
-          </div>
-        )}
-
-        {/* M12.e 對手技能標籤（基本面，未看穿也顯示——它就是用來預告對手風格的） */}
-        {mon.encounterTags && mon.encounterTags.length > 0 && (
-          <div className="mobcard-tags">
-            {mon.encounterTags.map((t) => {
-              const meta = ENCOUNTER_TAG_META[t as EncounterTag]
-              if (!meta) return null
-              return <span key={t} className="enc-tag" title={meta.desc}>{meta.icon} {meta.label}</span>
-            })}
           </div>
         )}
 

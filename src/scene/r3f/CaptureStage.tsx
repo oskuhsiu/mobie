@@ -27,15 +27,14 @@ function CaptureCameraRig() {
 }
 
 interface CaptureStageProps {
-  speciesId: number
   artworkUrl: string
   shiny?: boolean
   /** 收服成功 → 縮小淡沉「進球」 */
   vanish: boolean
 }
 
-/** 收服畫面用的單體 3D 舞台：野生Mobie（GLB/billboard）站在地台上，收服時縮沉消失。 */
-export default function CaptureStage({ speciesId, artworkUrl, shiny, vanish }: CaptureStageProps) {
+/** 收服畫面用的單體 3D 舞台：野生 Mobie artwork billboard 站在地台上。 */
+export default function CaptureStage({ artworkUrl, shiny, vanish }: CaptureStageProps) {
   return (
     <Canvas
       dpr={[1, 2]}
@@ -48,12 +47,12 @@ export default function CaptureStage({ speciesId, artworkUrl, shiny, vanish }: C
       <Pedestal position={[0, 0, 0]} color="#9b7aff" />
       <BlobShadow />
       <ContactShadows position={[0, 0.01, 0]} opacity={0.4} scale={6} blur={2.4} far={3} resolution={256} color="#05060f" />
-      <CaptureMon speciesId={speciesId} artworkUrl={artworkUrl} shiny={shiny} vanish={vanish} />
+      <CaptureMon artworkUrl={artworkUrl} shiny={shiny} vanish={vanish} />
     </Canvas>
   )
 }
 
-function CaptureMon({ speciesId, artworkUrl, shiny, vanish }: CaptureStageProps) {
+function CaptureMon({ artworkUrl, shiny, vanish }: CaptureStageProps) {
   const group = useRef<Group>(null)
   const v = useRef(0) // vanish 進度 0..1（平滑趨近）
 
@@ -70,7 +69,7 @@ function CaptureMon({ speciesId, artworkUrl, shiny, vanish }: CaptureStageProps)
 
   return (
     <group ref={group}>
-      <MobieVisual speciesId={speciesId} artworkUrl={artworkUrl} shiny={shiny} />
+      <MobieVisual artworkUrl={artworkUrl} shiny={shiny} />
     </group>
   )
 }

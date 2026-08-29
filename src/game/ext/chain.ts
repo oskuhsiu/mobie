@@ -7,8 +7,8 @@
 //   ③ 單招街機——每隻連鎖時用自己的單一專屬招，連鎖不引入新招式、倒下隊友不可連鎖。
 //   ④ reducer 重新驗證（防幽靈傷害）：提交時重查參與者存活 + 目標仍為同一 active 敵（plan/09 §3.3）。
 //
-// 本模組「只」註冊 S5（chainResolve = 規則）。資格累積 / 重驗 / 結算邏輯全在 reducer（核心不變式所在）；
-// 連續 QTE 演出 / 連段 FX 在 display 層（BattleScreen）。停用＝ext.chain undefined＝不累積、不 emit、回單體攻擊。
+// 此 extension 只註冊 S5（chainResolve = 規則）。資格累積 / 重驗 / 結算邏輯全在 reducer；
+// productRuntime 固定注入，連續 QTE 演出 / 連段 FX 留在 display 層。
 
 import type { ChainRules, ExtensionModule } from '@/game/ext/seams'
 
@@ -20,8 +20,7 @@ export const CHAIN_RULES: ChainRules = {
 }
 
 /**
- * 連鎖攻擊模組：只掛 S5（chainResolve）。
- * 停用＝assembleExt 不收此縫＝ext.chain undefined＝reducer 不累積連鎖槽、不 emit chainOpportunity＝回單體攻擊。
+ * 連鎖攻擊 extension：固定掛入 productRuntime 的 S5（chainResolve）。
  */
 export const CHAIN_MODULE: ExtensionModule = {
   id: 'chain',

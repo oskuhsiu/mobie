@@ -15,7 +15,6 @@ import { MobCard } from '@/ui/components/MobCard'
 import { GestureGate } from '@/ui/components/GestureGate'
 import { useSettings } from '@/store/settingsStore'
 import { interactModeOf, juiceLevelOf } from '@/game/settings'
-import { rollEncounterProfile, applyProfileToMon, ENCOUNTER_TAG_META, type EncounterTag } from '@/game/encounterProfile'
 import { audio } from '@/audio/audioEngine'
 import { captureTargetOf } from '@/game/hunt'
 
@@ -26,15 +25,7 @@ export function EncounterScreen() {
   const spriteIdle = useSettings((s) => juiceLevelOf(s.settings) !== 'off') // EXT.1.d：野生立繪 idle 浮動
   const [grassGate, setGrassGate] = useState(false)
   const engage = () => { if (grassOn) setGrassGate(true); else send({ type: 'ENGAGE' }) }
-  // M12.e 對手技能標籤：模組開啟才指派（display）。
-  const encOn = useSettings((s) => s.settings.modules.encounterSkills)
-  const foes = useMemo(
-    () => {
-      const built = context.foeTeam.map(buildBattleMobie)
-      return encOn ? built.map((m, i) => applyProfileToMon(m, rollEncounterProfile(m.speciesId, i === built.length - 1))) : built
-    },
-    [context.foeTeam, encOn],
-  )
+  const foes = useMemo(() => context.foeTeam.map(buildBattleMobie), [context.foeTeam])
   // M16：點對手開資訊卡（對手＝基本面，深度遮罩待 M17 看穿）
   const [cardMon, setCardMon] = useState<BattleMobie | null>(null)
   const openCard = (m: BattleMobie) => { audio.play('select'); setCardMon(m) }
@@ -106,14 +97,6 @@ export function EncounterScreen() {
             {target.nameZh} <span className="hpbar__lv">Lv.{target.level}</span>
           </div>
           <TypeBadges types={target.types} />
-          {target.encounterTags && target.encounterTags.length > 0 && (
-            <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {target.encounterTags.map((t) => {
-                const meta = ENCOUNTER_TAG_META[t as EncounterTag]
-                return meta ? <span key={t} className="enc-tag" title={meta.desc}>{meta.icon} {meta.label}</span> : null
-              })}
-            </div>
-          )}
           <IndividualInfo mon={target} detailed />
           <button
             className="btn btn--ghost btn--sm"

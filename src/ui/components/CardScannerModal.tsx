@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import jsQR from 'jsqr'
+import '@/ui/styles/cardScanner.css'
 import { parseCardCode, type CardCodeReason } from '@/game/cardCode'
 import { getCard } from '@/game/cardLibrary'
 import { getSpecies } from '@/game/data/species'

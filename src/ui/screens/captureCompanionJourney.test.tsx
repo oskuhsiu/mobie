@@ -81,7 +81,8 @@ describe('capture to companion journey', () => {
         foeTeam: [
           foeTeam[0],
           foeTeam[1],
-          { cardId: 'TEST-DUPLICATE-TARGET', speciesId: 1, level: 13 },
+          // 卡比獸在 seeded roster 中且不會因本場固定進化規則改種族，穩定維持 duplicate 前提。
+          { cardId: 'TEST-DUPLICATE-TARGET', speciesId: 143, level: 13 },
         ],
         playerTeam,
         outcome: 'win',

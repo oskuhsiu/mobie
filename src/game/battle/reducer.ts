@@ -79,12 +79,13 @@ export interface BattleState {
   field: FieldState
   /**
    * 連鎖槽（M9，plan/09 §3）：玩家普攻命中累積、達 ext.chain.gaugeFull → emit chainOpportunity。
-   * 戰鬥內暫態（隨 BattleState，不持久化）。連鎖模組關閉（ext.chain undefined）＝恆 0、不累積＝零殘留。
+   * 戰鬥內暫態（隨 BattleState，不持久化）。純 reducer 缺少 chain capability 時維持 0；
+   * production productRuntime 固定提供該 capability。
    */
   chainGauge: number
   /**
    * M12.d 合體技：本場已施放過的合體 key（每組合每場一次限流）。戰鬥內暫態，不回寫 OwnedUnit。
-   * 合體模組關閉（ext.combo undefined）＝永不 push＝恆空＝零殘留。
+   * 純 reducer 缺少 combo capability 時保持空；production productRuntime 固定提供。
    */
   usedComboKeys: string[]
 }
@@ -220,8 +221,8 @@ export interface TurnOptions {
   /** 隨機來源（命中/變異/暴擊/速度同值決勝），預設 Math.random */
   rng?: () => number
   /**
-   * 注入的純能力包（plan/09 §0）：已啟用模組由 store 層 assembleExt 組好再傳入。
-   * 預設不傳＝行為與 M1.x 完全一致。reducer 不認識「道具/羈絆」，只認識 hook（damageHooks/turnEndTriggers/chain）。
+   * 注入的純能力包（plan/09 §0）：production 由 productRuntime 固定組裝。
+   * reducer 不認識「道具/羈絆」，只認識 hook（damageHooks/turnEndTriggers/chain）。
    */
   ext?: ExtBundle
   /**
@@ -698,7 +699,7 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
       }
     }
 
-    // 連鎖槽（M9）：連鎖模組開啟時，玩家普攻命中依 QTE 品質累積（不綁隨機）。星擊不續槽（已是 finisher）。
+    // 連鎖槽（M9）：有 chain capability 時，玩家普攻命中依 QTE 品質累積。星擊不續槽。
     // M19.d：變化招不斷鏈、貢獻減半「支援值」（plan/17 §5：不參與傷害，但推進連鎖）。
     if (options.ext?.chain && !starStrike) {
       const playerLanded = events.some(
@@ -749,7 +750,7 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
         // 玩家較慢且 active 領銜者已被敵先手 KO → 連鎖發不出（§0.4 B，不開特例）
         if (w.player.activeIndex !== startActive.player) continue
         resolvePlayerChain(w, action.hits, opts, maxHits, events)
-        // M12.d 合體技：連鎖升級判定（合體模組開啟才注入；關閉＝不升級＝零殘留）。
+        // M12.d 合體技：由注入的 combo matcher 判定連鎖升級。
         if (options.ext?.combo) resolveCombo(w, action.hits, opts, options.ext.combo, events)
       }
     }
@@ -788,8 +789,8 @@ export function resolveTurn(state: BattleState, action: BattleAction, options: T
     events.push({ type: 'battleEnded', winner, reason: 'timeout' })
   }
 
-  // 連鎖資格（M9，plan/09 §3.2）：連鎖模組開啟、連鎖槽集滿、戰鬥續行且有可參與隊友 → emit chainOpportunity。
-  // display 接此 → 下個 playerChoice 亮起連鎖鈕。停用（ext.chain undefined）＝連鎖槽恆 0＝永不 emit＝零殘留。
+  // 連鎖資格（M9）：capability 存在、槽集滿、戰鬥續行且有可參與隊友 → emit chainOpportunity。
+  // display 接此 → 下個 playerChoice 亮起連鎖鈕。純 reducer 缺 capability 時不 emit；production 固定提供。
   if (w.winner === null && options.ext?.chain && w.chainGauge >= options.ext.chain.gaugeFull) {
     const eligibleIndices = chainEligible(w.player, options.ext.chain.maxHits)
     if (eligibleIndices.length > 0) {

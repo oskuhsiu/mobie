@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import { useSettings } from '@/store/settingsStore'
-import { MODULE_IDS, type InteractMode, type JuiceLevel } from '@/game/settings'
-import type { ModuleId } from '@/game/ext/seams'
+import type { InteractMode, JuiceLevel } from '@/game/settings'
 import { audio } from '@/audio/audioEngine'
 
 /** M22 增強互動性三態（plan/22 §1.2, §5.4）：mode 派生強度，不做使用者滑桿。 */
@@ -18,72 +17,9 @@ const JUICE_OPTIONS: { id: JuiceLevel; label: string; hint: string }[] = [
   { id: 'off', label: '關', hint: '回到最單純的閃光' },
 ]
 
-/** 各模組的 UI 文案 + 是否已實作（未實作的在設定頁標「敬請期待」、不可開）。 */
-interface ModuleMeta {
-  icon: string
-  label: string
-  desc: string
-  available: boolean
-}
-
-const MODULE_META: Record<ModuleId, ModuleMeta> = {
-  synergy: {
-    icon: '🤝',
-    label: '隊伍羈絆',
-    desc: '依組隊條件給全隊加成（多樣陣容 / 同屬共鳴 / 世代羈絆），選卡時即時顯示。',
-    available: true,
-  },
-  heldItems: {
-    icon: '🎒',
-    label: '持有道具',
-    desc: '每隻可裝一個被動道具：強化能力值 / 提升傷害 / 回合末回血。在「隊伍」頁裝備。',
-    available: true,
-  },
-  abilities: {
-    icon: '✨',
-    label: '特性',
-    desc: '依屬性的種族被動（絕境爆發 / 蠻力 / 疾風 / 神秘體 / 厚實），對戰雙方皆生效。',
-    available: true,
-  },
-  chain: {
-    icon: '🔗',
-    label: '連鎖攻擊',
-    desc: '普攻命中累積連鎖槽，集滿可發動連鎖：最多 3 隻隊友依序連續出擊（吃速度、目標倒下即截斷）。',
-    available: true,
-  },
-  combo: {
-    icon: '✨',
-    label: '合體技',
-    desc: '連鎖時若參與隊友符合配對（如火＋水）→ 升級成合體大招＋施放效果（灌注地形／全隊增益／敵方弱化），每組合每場一次。需搭配「連鎖攻擊」。',
-    available: true,
-  },
-  evolution: {
-    icon: '🧬',
-    label: '進化',
-    desc: 'Mobie到達進化等級時於戰後進化、變更種族並重算能力值（個體/道具保留，招式仍單一）。',
-    available: true,
-  },
-  partnerSkills: {
-    icon: '✨',
-    label: '夥伴技能',
-    desc: '訓練師自己的帳號級戰術工具：戰鬥中「🔍 看穿」對手底細、「📣 訓練師加油」灌注全隊士氣。在「夥伴技能」頁花 SP 解鎖。',
-    available: true,
-  },
-  encounterSkills: {
-    icon: '🃏',
-    label: '對手技能標籤',
-    desc: '野生對手依物種帶 0–2 個被動標籤（猛攻／擾亂／堅韌／馭場／合擊），微調其能力值並在遭遇/資訊卡顯示；對手 AI 仍只普通攻擊。',
-    available: true,
-  },
-}
-
-/**
- * 延伸系統設定面板：逐一開關可選式掛載模組（plan/09 §0.3）。
- * 預設全關＝純 M1.x 體驗；開啟後該模組的縫才生效（戰前 prep / 戰中 ext 由 store 重組）。
- */
+/** 玩家可調整的操作與回饋偏好。 */
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const settings = useSettings((s) => s.settings)
-  const setModuleEnabled = useSettings((s) => s.setModuleEnabled)
   const setInteractMode = useSettings((s) => s.setInteractMode)
   const setReplayRecording = useSettings((s) => s.setReplayRecording)
   const setAttackInputVariant = useSettings((s) => s.setAttackInputVariant)
@@ -94,12 +30,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const attackVariant = settings.prefs.attackInputVariant
   const juice = settings.prefs.juice
   const haptics = settings.prefs.haptics
-
-  const toggle = (id: ModuleId, available: boolean) => {
-    if (!available) return
-    audio.play('select')
-    setModuleEnabled(id, !settings.modules[id])
-  }
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -112,8 +42,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       >
         <div className="modal-card__head">
           <div>
-            <div className="h-title" style={{ fontSize: 24 }}>⚙️ 延伸系統</div>
-            <div className="h-sub">逐一開啟想玩的進階系統；預設全關＝最單純的對戰。</div>
+            <div className="h-title" style={{ fontSize: 24 }}>⚙️ 設定</div>
+            <div className="h-sub">調整操作與回饋偏好，立即套用於遊戲體驗。</div>
           </div>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
@@ -203,35 +133,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </span>
           </div>
 
-          <div className="settings-divider">🧩 延伸系統模組</div>
-
-          {MODULE_IDS.map((id) => {
-            const meta = MODULE_META[id]
-            const on = settings.modules[id] && meta.available
-            return (
-              <div
-                key={id}
-                className={`mod-row ${on ? 'mod-row--on' : ''} ${meta.available ? '' : 'mod-row--soon'}`}
-                role="button"
-                tabIndex={0}
-                aria-disabled={!meta.available}
-                onClick={() => toggle(id, meta.available)}
-              >
-                <span className="mod-row__icon">{meta.icon}</span>
-                <div className="mod-row__text">
-                  <div className="mod-row__label">
-                    {meta.label}
-                    {!meta.available && <span className="mod-row__soon">敬請期待</span>}
-                  </div>
-                  <div className="mod-row__desc">{meta.desc}</div>
-                </div>
-                <span className={`switch ${on ? 'switch--on' : ''} ${meta.available ? '' : 'switch--off'}`}>
-                  <span className="switch__knob" />
-                </span>
-              </div>
-            )
-          })}
-
           <div className="settings-divider">🎬 戰鬥回放</div>
           <div
             className={`mod-row ${recordReplays ? 'mod-row--on' : ''}`}
@@ -251,7 +152,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="model-foot">
-          設定獨立存於 <b>mobie.settings.v1</b>，不影響Mobie存檔。關掉模組＝零殘留，回到純對戰。
+          偏好設定只影響操作與回饋，不影響 Mobie 存檔。
         </div>
       </motion.div>
     </motion.div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   M23_BASELINE_SCENARIO_ID,
-  M23_BASELINE_SETTINGS,
+  M23_FIXED_PRODUCT_MODULES,
   runM23BaselineScenario,
 } from './baselineScenario'
 
@@ -40,7 +40,7 @@ describe('M23 deterministic baseline scenario', () => {
     expect(ended.some((event) => event.winner === 'foe')).toBe(true)
     expect(ended.some((event) => event.reason === 'timeout')).toBe(true)
 
-    expect(result.productConfiguration.modules).toEqual(M23_BASELINE_SETTINGS.modules)
+    expect(result.productConfiguration.modules).toEqual(M23_FIXED_PRODUCT_MODULES)
     expect(result.productConfiguration.modules.encounterSkills).toBe(false)
     expect(result.productConfiguration.scanner).toBe('absent')
     expect(result.productConfiguration.synergyModifiers.length).toBeGreaterThan(0)

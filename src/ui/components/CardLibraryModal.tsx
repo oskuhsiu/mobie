@@ -74,7 +74,7 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
           {cards.length === 0 && <div className="model-empty">卡庫是空的，先新增或匯入卡。</div>}
         </div>
 
-        <div className="model-foot">卡庫存在你這台瀏覽器（IndexedDB）。掃卡時以 cardId 反查這裡。</div>
+        <div className="model-foot">卡庫存在你這台瀏覽器（IndexedDB）。QR 只作為卡片識別與列印備份。</div>
       </motion.div>
 
       <AnimatePresence>
@@ -190,7 +190,7 @@ function QrOverlay({ card, onClose }: { card: Card; onClose: () => void }) {
         <div className="qr-card__title">{sp.nameZh} Lv.{card.level}</div>
         {dataUrl ? <img className="qr-card__img" src={dataUrl} alt="QR" /> : <div className="qr-card__img qr-card__img--loading">產生中…</div>}
         <div className="qr-card__code">{code}</div>
-        <div className="qr-card__hint">列印或拍下此 QR 當實體卡；掃它即可加入隊伍。</div>
+        <div className="qr-card__hint">列印或保存此 QR 作為卡片備份。</div>
         <div className="row" style={{ gap: 8, justifyContent: 'center' }}>
           <button className="btn btn--sm" onClick={() => window.print()}>列印</button>
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>

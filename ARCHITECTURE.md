@@ -21,9 +21,9 @@ gitignored; that workflow does not alter the authority of documents already trac
 - **Vitest** — unit tests (`environment: node`) plus opt-in `jsdom` semantic UI journeys. Package
   manager: **npm** (not pnpm).
 - Path alias `@/* → src/*` (configured in both `vite.config.ts` and `tsconfig.json`).
-- **Lazy-loaded heavies** (dynamic-imported so they stay out of the ~408 KB main bundle): `three` /
-  `@react-three/fiber` / `@react-three/drei` (3D, M3), `jsqr` (QR scan, M2), `qrcode` (QR gen, M2),
-  `tone` (audio), `fflate` (save-file zip, M5).
+- **Lazy-loaded heavies** (dynamic-imported so they stay out of the main bundle): `three` /
+  `@react-three/fiber` / `@react-three/drei`, `qrcode`, `tone`, and `fflate`. The dormant M23 Scanner
+  source still references `jsqr`, but no reachable import edge or production Scanner chunk exists.
 
 ## 2. Layered structure (`src/`)
 
@@ -32,27 +32,27 @@ app/        App shell + GameProvider (XState machine context via React context)
 game/       Pure domain logic (no React). The testable core.
   data/     Seed/generated data + type chart + region lookup
   battle/   Pure battle engine + reducer + fixtures + tests
-  ext/      Extension seams (S1–S8) + optional modules: synergy/items/abilities + shared statPatch (M6/M7)
+  ext/      Extension seams + fixed productRuntime: synergy/items/abilities/chain/combo/evolution
   machine/  XState gameMachine (screen flow)
   save/     Portable save file (M5): envelope meta, zip pack/unpack, export/import I/O, backup slot
-  settings.ts  Per-system module toggle slice (mz.settings.v1, M6)
+  settings.ts  Runtime UX preferences + read-only legacy v1 module-data preservation
   cardCode/cardsImport/cardLibrary   QR card-code parse + import + IndexedDB card store (M2)
-store/      Zustand: battleStore (display), rosterStore (persistence), settingsStore + ext (assemble
-            extension hooks), bagStore (item bag mz.itembag.v1, M7)
+store/      Zustand: battleStore (display), rosterStore (persistence), prefs-only settingsStore,
+            bagStore (item bag mz.itembag.v1, M7)
 ui/         React screens + components + global.css + type metadata
 audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
 scene/r3f/  React-three-fiber 3D battle/capture stage (M3, lazy three)
-scene/models/  User drop-in GLB store (IndexedDB) + normalize (M3)
+scene/models/  Legacy custom-model tooling; Battle/Capture never import or read it
 input/      QTE seam (qualityFromPointer / zones)
 ```
 
 **Dependency direction:** `ui → presentation/store → game`; battleStore implements the presentation
 transaction seam and may import its pure contracts/runtime identity helpers. `presentation/battle` and
-`game/` never import React, scene, or UI. Extension modules
-(`game/ext/`) are pure data + pure hook functions; `store/ext.ts` is the *only* place that knows
-which modules are enabled (it reads `settings` and assembles the injected hooks). Keeping domain logic
-pure is what makes the battle system testable (477 tests) and the animation layer swappable.
+`game/` never import React, scene, or UI. Extension modules are pure data + pure hook functions;
+`game/ext/productRuntime.ts` permanently composes mature battle capabilities behind one interface.
+Writable settings never participate in gameplay assembly. Keeping domain logic pure makes the battle
+system testable and the animation layer swappable.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
@@ -71,7 +71,7 @@ title → regionSelect → encounter → cardSelect → battle → result
   runtime through `resetEncounter`, and never records an outcome or result handoff.
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
   `ui/components/ToolsMenu`. Its first level is deliberately limited to **我的 Mobie** and **更多**;
-  the latter opens a scrollable secondary menu for scan / library / moves / partner skills / dex /
+  the latter opens a scrollable secondary menu for library / moves / partner skills / dex /
   achievements / incubator / 3D models / save / settings (all lazy-loaded). Every utility therefore
   remains reachable without flattening it into the primary hunt loop. `regionSelect` adds
   `BACK → title` (a 🏠 button); it is the in-game hub returned to after each result.
@@ -94,8 +94,8 @@ title → regionSelect → encounter → cardSelect → battle → result
   battle numbers are never persisted.
 - **`BattleMobie`** — fully-resolved battle instance, computed by `stats.buildBattleMobie(card)`.
   Holds the resolved `moves[]` loadout (≤4; `move` = slot-0 kept for back-compat, M19) and
-  battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the abilities
-  module's S1 hook); these are never persisted and are absent when a module is off. The read-only
+  battle-transient extension fields (`heldItemId` from the card, `abilityId` assigned by the fixed
+  abilities S1 hook); these derived fields are never persisted. The read-only
   `MobCard` detail view (M16) renders one of these — in battle it reads the live, prep-applied member;
   outside battle (the **我的 Mobie** modal) it builds a fresh one from an `OwnedUnit` for an
   owner-full view through `game/ownedMobie.buildOwnedMobieForDisplay`, alongside canonical `n³` EXP
@@ -117,7 +117,8 @@ Two halves, deliberately separated:
    `battleEnded`, `random`). `engine.ts` holds the formulas (`resolveAttack`, QTE/defense multipliers,
    crit/accuracy, ball/capture, charge tier, `playerActsFirst`).
    - `ext` is an injected **pure capability bundle** (like `rng`) — the reducer never imports modules
-     and never knows the words "item"/"ability". Default `EMPTY_EXT` ⇒ behavior identical to M1.x. See §6.
+     and never knows the words "item"/"ability". Production always injects `PRODUCT_RUNTIME`; direct
+     reducer compatibility tests may omit the bundle. See §6.
    - **Multi-move (M19):** `ATTACK` carries an additive `slotIndex`; the reducer resolves it against the
      immutable battle loadout and writes the chosen `resolvedMoveId` back into the event. It is still
      **one `ATTACK` action per turn** (no new phase); identity is the single star-strike finisher; status
@@ -159,18 +160,18 @@ reuses the single battle initializer with `forceNew`, and Leave fences resources
 **Performance red-line:** high-frequency values (QTE pointer position, future MediaPipe coords) go
 through refs/rAF/DOM or Zustand — **never** React top-level state. See `TimingBar`, `MashMeter`, `FxCanvas`.
 
-## 6. Extension system (optional modules via seams — M6 / M7)
+## 6. Fixed product extensions via pure seams
 
-Optional gameplay systems (held items, team synergy, abilities, chain, evolution) are
-**not** if/else'd into the core. The core defines fixed **seams (S1–S8)**; a module registers only the
-seams it uses. **Disabled = not registered = zero residue** (the core loop is byte-for-byte M1.x).
-Design source: `plan/09-extension-systems.md` §0; the seam definitions live in `game/ext/seams.ts`.
-`ModuleId` lists toggleable modules — `synergy / heldItems / abilities / chain / combo / evolution`
-(seam-registered; **`combo`** = M12.d 合體技, a chain-upgrade riding an injected `ext.combo` capability) plus
-`partnerSkills` (M17) and `encounterSkills` (M12.e, deterministic foe tags applied as a display-layer foe stat
-patch) — the last two are display-layer/fieldState gates, **not** in `MODULE_REGISTRY`.
-**The tower (M11) is a game *mode* entered from `regionSelect`, not a settings toggle**, so it is not a
-`ModuleId` — an earlier dead "tower" toggle that read "coming soon" was removed.
+Held items, team synergy, abilities, chain, combo, evolution, and partner skills are permanent product
+truth, not Settings toggles. The reducer remains unaware of feature names: it consumes pure S1–S6 seams,
+while `game/ext/productRuntime.ts` privately composes every mature extension exactly once. Its small
+interface exposes turn extensions, two-team preparation, player-synergy preview, and post-growth
+application. `BattleScreen`, `CardSelectScreen`, baseline fixtures, simulations, and `rosterStore` all
+cross that same seam.
+
+Encounter styles are hard-off: there is no profile stat patch, `BattleMobie` tag field, renderer branch,
+warning, or reachable DOM. Partner skills are governed only by learned-skill state, legal battle phase,
+and the per-session usage ledger. The tower remains a game mode entered from `regionSelect`.
 
 | Seam | Where it runs | Purity | Used by |
 |---|---|---|---|
@@ -178,16 +179,12 @@ patch) — the last two are display-layer/fieldState gates, **not** in `MODULE_R
 | **S2 `preBattleModifiers`** | battle init / team change (once) | `team → NamedModifier[]` | synergy |
 | **S3 `damageHook`** | mid-`resolveAttack` | `ctx → multiplier` | items (life orb / expert belt), abilities (pinch / guard) |
 | **S4 `turnEndTrigger`** | end-of-turn sync phase (before MAX_TURNS judging) | `state → events` | items (leftovers heal → `heal` event) |
-| S5 `chainResolve` / S6 `postGrowth` / S7 `gameMode` / S8 `saveSlice` | — | — | reserved for M9–M11 |
+| S5 `chainResolve` / combo | reducer chain submission | pure rules/matcher | chain + combo |
+| S6 `postGrowth` | roster growth boundary | `unit → unit` | evolution |
 
-**Two injection paths** (assembled in `store/ext.ts`, the only layer that reads `settings`):
-
-- **`ExtBundle`** (S3/S4/S5) is passed to `resolveTurn(…, { rng, ext })`. Built by `assembleExt(settings)`.
-  Hooks read battle-transient `heldItemId`/`abilityId` off the `BattleMobie` and self-filter — one
-  static hook per module, no per-unit closures.
-- **`BattlePrep`** (S1/S2) is applied at battle init by `applyBattlePrep(team, prep, withSynergy)`
-  (built by `assembleBattlePrep(settings)`). `BattleScreen` applies it to the player team (synergy on)
-  and the foe team (synergy off; abilities still apply since they're species-based).
+The fixed runtime passes one `ExtBundle` to every production `resolveTurn`, prepares both teams together
+(items/abilities on both, synergy on player only), and applies evolution inside `grantBattleExp`. Replay
+snapshots and events therefore derive from the same prepared canonical battle rather than a second config.
 
 **Modules** (`game/ext/`, hand-authored data — no PokéAPI, emoji icons, zero IP):
 - `synergy.ts` — `computeSynergy(team)` pure function + rules (diverse / kinship / generation); each
@@ -199,15 +196,12 @@ patch) — the last two are display-layer/fieldState gates, **not** in `MODULE_R
   generated-file edit, no network); kinds `statMod`/`pinch`/`guard`. Applies to both sides.
 - `statPatch.ts` — shared `scale`/`applyStatMod`/`createLookup` used by the three modules.
 
-The reducer/engine were **not** modified for M7 beyond an additive `heal` `BattleEvent` variant.
-Settings live in `mz.settings.v1` (`game/settings.ts`, default all-off, separate namespace — does not
-violate "persist only canonical roster"). `MODULE_REGISTRY` (`store/ext.ts`) lists registered modules.
-**Deferred** (would touch engine/reducer): focus-sash style lethal-intercept `onceTrigger` (needs a
-post-damage seam) and Intimidate-style `onSwitchIn` (needs a switch-resolution seam).
-
-UI: `SettingsModal` (Title "⚙️ 設定", per-system toggles) and `TeamModal` (Title "我的 Mobie", browse
-growth/details with held-item equipment as a secondary action); battle plate shows ability + item badges;
-synergy tags show in card-select and a battle opening banner.
+The reducer/engine remain pure; direct compatibility tests omit `ext`, while production always passes
+the fixed product runtime. Runtime
+`GameSettings` contains UX preferences only. Existing `mobie.settings.v1.modules` data is ignored by
+runtime and preserved unchanged when prefs are written, so it remains rollback input without becoming
+an interim schema or writable toggle. `SettingsModal` contains only real interaction, feedback, and
+replay preferences; Team/Partner surfaces contain no module-off warnings.
 
 ## 7. Persistence & progression
 
@@ -224,7 +218,8 @@ synergy tags show in card-select and a battle opening banner.
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
 `heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models`
 (IndexedDB GLB blobs, M3) · `mz.savemeta.v1` (localStorage save envelope meta, M5) · `mz-save-backup`
-(IndexedDB single-slot pre-import backup, M5) · `mz.settings.v1` (localStorage module toggles, M6) ·
+(IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v1` (runtime prefs plus untouched legacy
+`modules` rollback data) ·
 `mz.itembag.v1` (localStorage item bag, M7) · `mz-replays` (IndexedDB, M14 battle replays — canonical
 `encodeReplay` JSON only, `battleId`-deduped, FIFO-capped 50). The portable save bundles the roster (so
 `heldItemId` travels with it); the item-bag slice is not yet included in the `.save` (a known follow-up).
@@ -280,8 +275,9 @@ to rebuild. **These four files are generated — change the generator, not the o
 ## 9. Asset / IP policy (hard constraint)
 
 The repo **does not bundle, fetch, or distribute infringing assets**. Artwork uses official PokéAPI
-raw URLs loaded at runtime (with skeleton fallback). Audio is fully procedural (Tone.js). 3D models are
-user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the responsibility framing.
+raw URLs loaded at runtime (with skeleton fallback). Audio is fully procedural (Tone.js). Battle and
+Capture combatants are artwork billboards and never read GLB/GLTF or custom model storage. Legacy model
+tooling remains isolated from those runtime chunks pending its separately owned retirement ticket.
 
 ## 10. Known gotchas
 
@@ -299,13 +295,13 @@ user drop-in only (`public/models/` is gitignored). See `uninstall.txt` for the 
 
 ## 11. Testing & verification
 
-- `npm test` (Vitest) — **477 tests.** Domain logic (type chart, individuality, growth, engine,
+- `npm test` (Vitest) covers domain logic (type chart, individuality, growth, engine,
   reducer incl. turn cap, accidents, recommend, card-code/import, roster sanitize, save meta
   `compareSaves` + bundle round-trip & corruption classification) plus the M6/M7 extension suites
   (ext/settings, synergy, items, abilities, held-item persistence) and the project-wide verification
   pass: **`data/dataIntegrity.test.ts`** (all 1025 species/moves/regions/cards/type-chart swept) and
   **`battle/simulation.test.ts`** (hundreds of full seeded battles asserting HP bounds / no-NaN /
-  always-terminates / determinism, modules off vs all-on), plus `jsdom` semantic journeys for the
+  always-terminates / determinism under the fixed product runtime), plus `jsdom` semantic journeys for the
   title/hub, owned-Mobie details, hunt target/advice/order, real battle decisions, and capture results.
 - `npm run typecheck` / `npm run build` must stay green.
 - Responsive visual verification runs in a real local browser at iPad and narrow-phone viewports;

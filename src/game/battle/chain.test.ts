@@ -1,5 +1,5 @@
 // M9 — 連鎖攻擊（plan/09 §3）reducer 核心測試。
-// 證明：① 連鎖模組關閉零殘留（gauge 恆 0、不 emit）② 連鎖槽依 QTE 表現累積、滿則 emit chainOpportunity
+// 證明：① 純 reducer 缺 capability 時安全 no-op ② fixed product chain 規則完整運作
 //       ③ SUBMIT_CHAIN_RESULT 多段對同一 active 敵、吃速度 ④ 重驗（死亡攻擊者跳過 / 目標倒下截斷 / 領銜者被 KO 發不出）
 //       ⑤ 連鎖消耗連鎖槽 ⑥ 純函數 / 決定論。
 import { describe, it, expect } from 'vitest'
@@ -29,8 +29,8 @@ const HITS3: ChainHit[] = [
 const trio = () => [mon({ spe: 100 }), mon({ nameZh: 'B' }), mon({ nameZh: 'C' })]
 const tank = () => mon({ maxHp: 999, spe: 50 })
 
-describe('M9 連鎖 — 模組關閉零殘留', () => {
-  it('不傳 ext.chain：連鎖槽恆 0、永不 emit chainOpportunity', () => {
+describe('M9 連鎖 — reducer capability fallback', () => {
+  it('不傳 ext.chain：純 reducer 連鎖槽恆 0、永不 emit chainOpportunity', () => {
     let s = createBattleState([mon({ spe: 100 })], [tank()])
     for (let i = 0; i < 5; i++) {
       const r = resolveTurn(s, { type: 'ATTACK', quality: 'perfect' }, { rng: RNG })

@@ -1,40 +1,37 @@
-// M6.0 — 設定 slice + assembleExt（plan/09 §0.3）。純判斷邏輯單測。
+// Runtime preferences plus the read-only legacy v1 module-data boundary.
 import { describe, it, expect } from 'vitest'
 import {
-  defaultSettings, migrateSettings, setModuleEnabledIn, MODULE_IDS,
+  defaultSettings, runtimeSettingsFromV1, mergeRuntimeSettingsIntoLegacyV1,
   defaultPrefs, migratePrefs, setInteractModeIn, isEnhancedSurfaceEnabled, interactModeOf,
   setAttackInputVariantIn, attackInputVariantOf,
   setJuiceIn, setHapticsIn, juiceLevelOf, hapticsEnabledOf,
   INTERACT_SURFACES, INTENSITY_BY_MODE,
 } from '@/game/settings'
-import { assembleExt } from '@/store/ext'
-import { EMPTY_EXT, type ExtensionModule } from '@/game/ext/seams'
 
-describe('M6.0 settings slice', () => {
-  it('預設全模組關閉（新玩家＝純 M1.x）', () => {
-    const s = defaultSettings()
-    for (const id of MODULE_IDS) expect(s.modules[id]).toBe(false)
+describe('Ticket 06 runtime settings boundary', () => {
+  it('projects preferences without exposing legacy module booleans', () => {
+    const runtime = runtimeSettingsFromV1({
+      schemaVersion: 1,
+      modules: { synergy: false, heldItems: false, encounterSkills: true },
+      prefs: { recordReplays: true },
+    })
+
+    expect(runtime.prefs.recordReplays).toBe(true)
+    expect(runtime).not.toHaveProperty('modules')
   })
 
-  it('migrateSettings 防壞檔：非物件 → 全關', () => {
-    expect(migrateSettings(null).modules.heldItems).toBe(false)
-    expect(migrateSettings('garbage').modules.synergy).toBe(false)
-    expect(migrateSettings(42).modules.evolution).toBe(false)
-  })
+  it('updates prefs while preserving the legacy modules subtree and unknown rollback data', () => {
+    const modules = { synergy: false, heldItems: 'legacy-value', encounterSkills: true }
+    const unknown = { nested: ['keep', 7] }
+    const legacy = { schemaVersion: 1, modules, unknown, prefs: { recordReplays: false } }
+    const settings = { ...defaultSettings(), prefs: { ...defaultPrefs(), recordReplays: true } }
 
-  it('migrateSettings 只認 true、未知鍵忽略、缺漏補關', () => {
-    const m = migrateSettings({ modules: { heldItems: true, chain: 1, bogus: 'x' } }).modules
-    expect(m.heldItems).toBe(true) // 認 true
-    expect(m.chain).toBe(false) // 非布林 true → 關
-    expect(m.synergy).toBe(false) // 缺漏 → 關
-    expect('bogus' in m).toBe(false) // 未知鍵不滲入
-  })
+    const merged = mergeRuntimeSettingsIntoLegacyV1(legacy, settings)
 
-  it('setModuleEnabledIn 純函數、不改原物件', () => {
-    const a = defaultSettings()
-    const b = setModuleEnabledIn(a, 'evolution', true)
-    expect(a.modules.evolution).toBe(false)
-    expect(b.modules.evolution).toBe(true)
+    expect(merged.modules).toBe(modules)
+    expect(merged.unknown).toBe(unknown)
+    expect(merged.prefs).toEqual(settings.prefs)
+    expect(legacy).toEqual({ schemaVersion: 1, modules, unknown, prefs: { recordReplays: false } })
   })
 })
 
@@ -49,9 +46,8 @@ describe('M22 增強互動性偏好（prefs）', () => {
     expect(defaultSettings().prefs.enhancedInteractivity.mode).toBe('off')
   })
 
-  it('migrateSettings 舊存檔無 prefs → 補預設（off + surfaces 全 true）', () => {
-    const s = migrateSettings({ modules: { chain: true } })
-    expect(s.modules.chain).toBe(true)
+  it('舊 v1 存檔無 prefs → 補預設（off + surfaces 全 true）', () => {
+    const s = runtimeSettingsFromV1({ modules: { chain: true } })
     expect(s.prefs.enhancedInteractivity.mode).toBe('off')
     expect(s.prefs.enhancedInteractivity.surfaces.capture).toBe(true)
   })
@@ -145,7 +141,7 @@ describe('EXT.1 打擊感 juice / 觸覺 haptics 偏好', () => {
   })
 
   it('舊存檔（無 EXT.1 欄）遷移後補 full/true，且不干擾既有 prefs', () => {
-    const s = migrateSettings({ prefs: { enhancedInteractivity: { mode: 'lite' }, recordReplays: true } })
+    const s = runtimeSettingsFromV1({ prefs: { enhancedInteractivity: { mode: 'lite' }, recordReplays: true } })
     expect(s.prefs.juice).toBe('full')
     expect(s.prefs.haptics).toBe(true)
     expect(s.prefs.enhancedInteractivity.mode).toBe('lite') // 既有欄不被覆蓋
@@ -160,24 +156,5 @@ describe('EXT.1 打擊感 juice / 觸覺 haptics 偏好', () => {
     const c = setHapticsIn(a, false)
     expect(a.prefs.haptics).toBe(true)
     expect(c.prefs.haptics).toBe(false)
-  })
-})
-
-describe('M6.0 assembleExt', () => {
-  it('全關 / 空註冊表 → EMPTY_EXT（reducer 行為等同 M1.x）', () => {
-    expect(assembleExt(defaultSettings())).toBe(EMPTY_EXT)
-  })
-
-  it('啟用才收其縫、停用＝不收（零殘留）', () => {
-    const mod: ExtensionModule = {
-      id: 'heldItems',
-      seams: { damageHook: () => 1.3, turnEndTrigger: () => [] },
-    }
-    const off = assembleExt(defaultSettings(), [mod])
-    expect(off.damageHooks).toHaveLength(0) // 預設關 → 不收
-
-    const on = assembleExt(setModuleEnabledIn(defaultSettings(), 'heldItems', true), [mod])
-    expect(on.damageHooks).toHaveLength(1)
-    expect(on.turnEndTriggers).toHaveLength(1)
   })
 })

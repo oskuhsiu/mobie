@@ -7,7 +7,7 @@
 //      一個純 matcher + 套用既有 fieldState 詞彙（terrain/teamStatuses/enemyStatuses，同 M19.d）。
 //   ② 直接傷害僅「專屬招 + 合體技/星擊」家族允許（plan/12 §0）——合體大招透過既有 performAttack 灌 damageMult。
 //   ③ usedComboKeys 戰鬥內暫態（住 BattleState，不回寫 OwnedUnit）。
-//   ④ 可選掛載——combo 模組關閉＝ext.combo undefined＝連鎖不升級、零殘留。
+//   ④ productRuntime 固定與 chain 一起注入；純 reducer 仍只認 ext.combo interface。
 
 import type { BattleMobie, TerrainId, TypeName } from '@/game/types'
 import type { ExtensionModule } from '@/game/ext/seams'
@@ -65,14 +65,13 @@ export function matchCombo(participants: BattleMobie[], defs: ComboDef[], usedKe
   return null
 }
 
-/** 預設合體規則（綁定內建 catalog）。assembleExt 在 combo 模組開啟時注入。 */
+/** 正式合體規則（綁定內建 catalog），由 productRuntime 固定注入。 */
 export const COMBO_RULES: ComboRules = {
   match: (participants, usedKeys) => matchCombo(participants, COMBO_DEFS, usedKeys),
 }
 
 /**
- * 合體技模組：只掛 combo 縫（S5b）。停用＝assembleExt 不收＝ext.combo undefined＝連鎖不升級＝零殘留。
- * 依賴連鎖模組（combo 在 SUBMIT_CHAIN_RESULT 後段判定）；單開 combo 不開 chain＝無連鎖可升級。
+ * 合體技 extension：固定掛入 productRuntime 的 S5b，與 chain 一起生效。
  */
 export const COMBO_MODULE: ExtensionModule = {
   id: 'combo',

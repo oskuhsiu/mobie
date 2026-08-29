@@ -3,8 +3,6 @@ import { describe, it, expect } from 'vitest'
 import { mon } from '@/game/battle/testFixtures'
 import { createBattleState } from '@/game/battle/reducer'
 import { HELD_ITEMS_MODULE, getItem, ITEMS } from '@/game/ext/items'
-import { assembleExt, assembleBattlePrep } from '@/store/ext'
-import { defaultSettings, setModuleEnabledIn } from '@/game/settings'
 
 const build = HELD_ITEMS_MODULE.seams.buildUnit!
 const damage = HELD_ITEMS_MODULE.seams.damageHook!
@@ -87,26 +85,5 @@ describe('M7 道具 S4 turnEnd（剩飯）', () => {
     const state = createBattleState([mon({ heldItemId: 'leftovers', maxHp: 32, currentHp: 31 })], [mon()])
     turnEnd({ state, rng: () => 0 })
     expect(state.player.members[0].currentHp).toBe(32)
-  })
-})
-
-describe('M7 道具掛載閘控（可選式）', () => {
-  it('關閉：ext/prep 不收道具縫（零殘留）', () => {
-    const reg = [HELD_ITEMS_MODULE]
-    const ext = assembleExt(defaultSettings(), reg)
-    const prep = assembleBattlePrep(defaultSettings(), reg)
-    expect(ext.damageHooks).toHaveLength(0)
-    expect(ext.turnEndTriggers).toHaveLength(0)
-    expect(prep.buildUnitHooks).toHaveLength(0)
-  })
-
-  it('開啟：S1 進 prep、S3/S4 進 ext', () => {
-    const on = setModuleEnabledIn(defaultSettings(), 'heldItems', true)
-    const reg = [HELD_ITEMS_MODULE]
-    const ext = assembleExt(on, reg)
-    const prep = assembleBattlePrep(on, reg)
-    expect(ext.damageHooks).toHaveLength(1)
-    expect(ext.turnEndTriggers).toHaveLength(1)
-    expect(prep.buildUnitHooks).toHaveLength(1)
   })
 })

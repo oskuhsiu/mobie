@@ -1,8 +1,7 @@
 // M6.0 — 統一掛載機制（擴充縫 / seams）。設計真相：plan/09 §0。
 //
-// 「可選式掛載」不是每個系統各自 if/else，而是核心定義固定的擴充縫（S1–S8），
-// 模組註冊它要的縫；**停用＝不註冊＝零殘留**。reducer 維持純函數——擴充能力如同
-// `rng` 一樣是「注入的純能力包」（ExtBundle），不是 import 進來的依賴。
+// 核心定義固定擴充縫（S1–S8），productRuntime 永久組裝成熟能力。reducer 維持純函數——
+// 擴充能力如同 `rng` 一樣是注入的純能力包（ExtBundle），不是 import 進來的依賴。
 //
 // 本檔只放「定義」（型別 + 空包）。各縫的實際 wiring 隨其模組所屬里程碑落地：
 //   S3/S4/S5 由 reducer/engine 消費（resolveTurn 吃 ExtBundle）——M6 已接（預設空＝零行為改變）。
@@ -26,14 +25,10 @@ export type SeamId =
   | 'saveSlice' // S8：persistence 獨立命名空間（序列化）
 
 /**
- * 延伸系統模組 id。設定持久化逐一開關，預設全關。
- * wave-1（plan/09 §0.3）：heldItems / synergy / chain / evolution。
- * wave-2（plan/10）：abilities（特性）——M7 與道具共用 S1/S3 引擎。
- * M17（plan/19）：partnerSkills（玩家/訓練師技能）——**非戰鬥 seam 模組**（看穿走顯示層、
- * 加油走 fieldState），不在 MODULE_REGISTRY；此 id 僅供設定頁開關 + UI gating。
- * （連勝塔是 RegionSelect 進入的遊戲模式、非可選掛載模組，故不列入此處。）
+ * Fixed extension identities composed by productRuntime. Partner skills use their own learned-state
+ * authority, while encounter styles are hard-off and therefore absent from this type.
  */
-export type ModuleId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'partnerSkills' | 'combo' | 'encounterSkills'
+export type ExtensionId = 'heldItems' | 'synergy' | 'abilities' | 'chain' | 'evolution' | 'combo'
 
 // ── 各縫的純能力簽章 ────────────────────────────────────────────
 
@@ -74,7 +69,7 @@ export interface TurnEndContext {
  */
 export type TurnEndTrigger = (ctx: TurnEndContext) => BattleEvent[]
 
-/** S5：連鎖規則（M9 由 SUBMIT_CHAIN_RESULT 消費；連鎖模組開啟時注入 ext.chain）。 */
+/** S5：連鎖規則（M9 由 SUBMIT_CHAIN_RESULT 消費）。 */
 export interface ChainRules {
   /** 連鎖最多隻數（暫 3，貼 Mezastar） */
   maxHits: number
@@ -90,9 +85,7 @@ export type PostGrowthHook = (unit: OwnedUnit) => OwnedUnit
 // ── 模組註冊 ────────────────────────────────────────────────────
 
 /**
- * 一個模組填它用到的縫（其餘留空）。
- * 注意：plan/09 §0.3 的 `enabled` 不放這裡——啟用與否是動態設定（settings.modules[id]），
- * 模組 def 本身保持靜態。assembleExt 在組包時才依設定決定收不收。
+ * 一個固定 extension 填它用到的縫（其餘留空）。
  */
 export interface ModuleSeams {
   buildUnit?: BuildUnitHook // S1
@@ -107,7 +100,7 @@ export interface ModuleSeams {
 }
 
 export interface ExtensionModule {
-  id: ModuleId
+  id: ExtensionId
   seams: ModuleSeams
   /** S8：它獨佔的存檔命名空間（如 'mobie.itembag.v1'） */
   ownsSaveSlices?: string[]
@@ -118,15 +111,12 @@ export interface ExtensionModule {
 /**
  * resolveTurn 第三參數 `ext` 的型別：只含「戰中」會被消費的縫（S3/S4/S5）。
  * S1/S2/S6（戰前 / 戰後）由各自呼叫點消費，不在此包。
- * 預設 EMPTY_EXT＝行為與 M1.x 完全一致（既有測試不需改）。reducer 不認識「道具/羈絆」字眼，只認識這些 hook。
+ * Production 一律由 productRuntime 注入固定能力；純 reducer 測試可直接省略 ext。
  */
 export interface ExtBundle {
   damageHooks: DamageHook[] // S3
   turnEndTriggers: TurnEndTrigger[] // S4
-  chain?: ChainRules // S5（undefined = 連鎖關閉）
-  /** M12.d 合體技（連鎖升級變體；undefined = 合體關閉、連鎖不升級）。 */
+  chain?: ChainRules // S5（production productRuntime 保證存在）
+  /** M12.d 合體技（連鎖升級變體；production productRuntime 保證存在）。 */
   combo?: ComboRules
 }
-
-/** 空能力包：不傳 ext 或全模組關閉時用。 */
-export const EMPTY_EXT: ExtBundle = { damageHooks: [], turnEndTriggers: [] }

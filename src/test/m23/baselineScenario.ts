@@ -16,15 +16,10 @@ import { encodeReplay } from '@/game/replay/codec'
 import type { DisplayUnitSnapshot, ReplayInput } from '@/game/replay/types'
 import { makeRng } from '@/game/rng'
 import { defaultPrefs, type GameSettings } from '@/game/settings'
+import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import type { BattleMobie, Move, MoveEffect, TypeName } from '@/game/types'
 import { ReplayRecorder } from '@/store/replayRecorder'
 import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'
-import {
-  applyBattlePrep,
-  assembleBattlePrep,
-  assembleExt,
-  assemblePostGrowth,
-} from '@/store/ext'
 
 export { M23_BASELINE_SCENARIO_ID }
 export const M23_BASELINE_SEED = 'm23-current-parity-v1-seed'
@@ -39,19 +34,19 @@ export const M23_ARTWORK_FIXTURES = {
 export type M23ArtworkFixture = keyof typeof M23_ARTWORK_FIXTURES
 
 export const M23_BASELINE_SETTINGS: GameSettings = {
-  schemaVersion: 1,
-  modules: {
-    heldItems: true,
-    synergy: true,
-    abilities: true,
-    chain: true,
-    evolution: true,
-    partnerSkills: true,
-    combo: true,
-    encounterSkills: false,
-  },
   prefs: { ...defaultPrefs(), recordReplays: true },
 }
+
+export const M23_FIXED_PRODUCT_MODULES = {
+  heldItems: true,
+  synergy: true,
+  abilities: true,
+  chain: true,
+  evolution: true,
+  partnerSkills: true,
+  combo: true,
+  encounterSkills: false,
+} as const
 
 export type M23BaselineCaseId =
   | 'normal-hit-chain-ready'
@@ -82,7 +77,7 @@ export interface M23BaselineCaseResult {
 }
 
 export interface M23ProductConfigurationProof {
-  modules: GameSettings['modules']
+  modules: typeof M23_FIXED_PRODUCT_MODULES
   scanner: 'absent'
   replayRecording: true
   graphicsDefaultAssumption: 'balanced'
@@ -211,33 +206,27 @@ function runCase(definition: CaseDefinition, seed: string, caseIndex: number): M
 }
 
 function configurationProof(): M23ProductConfigurationProof {
-  const prep = assembleBattlePrep(M23_BASELINE_SETTINGS)
-  const ext = assembleExt(M23_BASELINE_SETTINGS)
   const rawTeam = [
     mobie(4, ['fire'], attackMove(10_001, 'fire'), { heldItemId: 'headband', atk: 100 }),
     mobie(7, ['water'], attackMove(10_002, 'water')),
     mobie(1, ['grass'], attackMove(10_003, 'grass')),
   ]
-  const prepared = applyBattlePrep(rawTeam, prep, true)
-  const combo = ext.combo?.match(prepared.team.slice(0, 2), [])
-  const evolutionHooks = assemblePostGrowth(M23_BASELINE_SETTINGS)
-  const evolved = evolutionHooks.reduce(
-    (unit, hook) => hook(unit),
-    createOwnedUnit('m23-baseline-evolution', 1, 16),
-  )
+  const prepared = PRODUCT_RUNTIME.prepareBattleTeams(rawTeam, [])
+  const combo = PRODUCT_RUNTIME.turnExtensions.combo.match(prepared.playerTeam.slice(0, 2), [])
+  const evolved = PRODUCT_RUNTIME.applyPostGrowth(createOwnedUnit('m23-baseline-evolution', 1, 16))
   const rally = PARTNER_SKILLS.find((skill) => skill.id === 'rally')
-  if (!ext.chain || !combo || !rally) throw new Error('M23 baseline fixed product configuration is incomplete')
+  if (!combo || !rally) throw new Error('M23 baseline fixed product configuration is incomplete')
 
   return {
-    modules: { ...M23_BASELINE_SETTINGS.modules },
+    modules: { ...M23_FIXED_PRODUCT_MODULES },
     scanner: 'absent',
     replayRecording: true,
     graphicsDefaultAssumption: 'balanced',
     highReleaseReady: false,
-    synergyModifiers: prepared.modifiers.map((modifier) => modifier.label),
-    heldItemPatchedAttack: prepared.team[0].atk,
-    assignedAbilities: prepared.team.map((unit) => unit.abilityId ?? ''),
-    chainMaxHits: ext.chain.maxHits,
+    synergyModifiers: prepared.playerModifiers.map((modifier) => modifier.label),
+    heldItemPatchedAttack: prepared.playerTeam[0].atk,
+    assignedAbilities: prepared.playerTeam.map((unit) => unit.abilityId ?? ''),
+    chainMaxHits: PRODUCT_RUNTIME.turnExtensions.chain.maxHits,
     comboId: combo.id,
     evolvedSpeciesId: evolved.speciesId,
     partnerStatusCount: teamBuffStatuses(rally).length,
@@ -246,8 +235,7 @@ function configurationProof(): M23ProductConfigurationProof {
 }
 
 function definitions(seed: string): CaseDefinition[] {
-  const ext = assembleExt(M23_BASELINE_SETTINGS)
-  const prep = assembleBattlePrep(M23_BASELINE_SETTINGS)
+  const ext = PRODUCT_RUNTIME.turnExtensions
   const weakNormal = attackMove(11_001, 'normal', 10)
   const normal = attackMove(11_002, 'normal', 55)
   const fire = attackMove(11_003, 'fire', 70)
@@ -257,12 +245,13 @@ function definitions(seed: string): CaseDefinition[] {
     mobie(7, ['water'], attackMove(11_004, 'water', 45), { heldItemId: 'leftovers', spe: 120 }),
     mobie(1, ['grass'], attackMove(11_005, 'grass', 45), { spe: 110 }),
   ]
-  const players = applyBattlePrep(rawPlayers, prep, true).team
-  const foes = applyBattlePrep([
+  const prepared = PRODUCT_RUNTIME.prepareBattleTeams(rawPlayers, [
     mobie(43, ['grass'], weakNormal, { maxHp: 5_000, currentHp: 5_000, spe: 10 }),
     mobie(92, ['ghost'], weakNormal, { maxHp: 5_000, currentHp: 5_000, spe: 10 }),
     mobie(74, ['rock'], weakNormal, { maxHp: 5_000, currentHp: 5_000, spe: 10 }),
-  ], prep, false).team
+  ])
+  const players = prepared.playerTeam
+  const foes = prepared.foeTeam
 
   const normalState = createBattleState(players, foes, ['rain'])
   normalState.chainGauge = 80

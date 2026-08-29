@@ -3,8 +3,6 @@ import { describe, it, expect } from 'vitest'
 import type { TypeName } from '@/game/types'
 import { mon } from '@/game/battle/testFixtures'
 import { ABILITIES_MODULE, ABILITIES, getAbility, abilityForType } from '@/game/ext/abilities'
-import { assembleExt, assembleBattlePrep } from '@/store/ext'
-import { defaultSettings, setModuleEnabledIn } from '@/game/settings'
 
 const build = ABILITIES_MODULE.seams.buildUnit!
 const damage = ABILITIES_MODULE.seams.damageHook!
@@ -69,19 +67,5 @@ describe('M7 特性 S3 damageHook', () => {
   })
   it('無特性：傷害倍率 ×1', () => {
     expect(damage(ctx(mon(), mon(), 2))).toBe(1)
-  })
-})
-
-describe('M7 特性掛載閘控（可選式）', () => {
-  it('關閉：buildUnit 不進 prep、damageHook 不進 ext（零殘留＝無 abilityId）', () => {
-    const reg = [ABILITIES_MODULE]
-    expect(assembleBattlePrep(defaultSettings(), reg).buildUnitHooks).toHaveLength(0)
-    expect(assembleExt(defaultSettings(), reg).damageHooks).toHaveLength(0)
-  })
-  it('開啟：S1 進 prep、S3 進 ext', () => {
-    const on = setModuleEnabledIn(defaultSettings(), 'abilities', true)
-    const reg = [ABILITIES_MODULE]
-    expect(assembleBattlePrep(on, reg).buildUnitHooks).toHaveLength(1)
-    expect(assembleExt(on, reg).damageHooks).toHaveLength(1)
   })
 })

@@ -2,8 +2,8 @@
 // （種族被動 vs 可學主動）。本里程碑以「依主屬性決定論指派」的手寫表給每隻一個特性——
 // 不改 generated species.ts、不連網（同 practiceRegion 的手寫慣例），日後可換成 per-species 表。
 //
-// 閘控設計：abilityId 由本模組的 S1 buildUnit hook 寫到 BattleMobie（只在模組啟用、經 prep
-// 套到對戰雙方）；buildBattleMobie 本身不設 abilityId。故關閉模組＝沒有 abilityId＝S3 找不到特性。
+// abilityId 由固定 product runtime 的 S1 buildUnit hook 寫到 BattleMobie 並套到對戰雙方；
+// buildBattleMobie 本身維持純基礎建構。
 // 與道具同類「加法疊加」（靠數值池上限控平衡，不做來源攔截）。
 // onSwitchIn（如威嚇，需在換人解析步驟內結算）需動 reducer，本里程碑刻意延後。
 
@@ -80,8 +80,8 @@ const abilityDamage: DamageHook = (ctx) => {
 }
 
 /**
- * 特性模組：S1（寫 abilityId + statMod）/ S3（pinch + guard）。複用道具引擎、分語義。
- * 停用＝不收這兩縫、BattleMobie 無 abilityId＝回到無特性的 M1.x 戰鬥。
+ * 特性 extension：S1（寫 abilityId + statMod）/ S3（pinch + guard）。
+ * productRuntime 永久組裝這兩個縫。
  */
 export const ABILITIES_MODULE: ExtensionModule = {
   id: 'abilities',

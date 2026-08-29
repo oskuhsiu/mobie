@@ -5,7 +5,6 @@
 //   ① 只改 canonical speciesId（仍只存 canonical）。
 //   ② 招式維持單一專屬（進化不解鎖新招——moveId 由 species 決定，換種族自然換招但仍是單招）。
 //   ③ 可連跳多階（一場打到 level 36 的綿綿可一次 → 鐵殼 → 巴大蝶）。
-// 停用＝不掛 S6＝升級永不進化＝純 M1.x 成長（零殘留）。
 
 import type { OwnedUnit } from '@/game/types'
 import { SPECIES } from '@/game/data/species'
@@ -35,8 +34,7 @@ const evolutionPostGrowth: PostGrowthHook = (unit) => {
 }
 
 /**
- * 進化模組：只掛 S6（postGrowth）。
- * 停用＝assemblePostGrowth 不收此縫＝升級不檢查進化＝純 M1.x 成長。
+ * 進化 extension：固定掛入 productRuntime 的 S6（postGrowth）。
  */
 export const EVOLUTION_MODULE: ExtensionModule = {
   id: 'evolution',

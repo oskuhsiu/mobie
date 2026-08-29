@@ -22,10 +22,10 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Team-select advice**: reveal a recommended trio with offense/risk reasons, then let the player
   choose and order the three Mobie instead of silently filling the team.
 - **Turn cap** to prevent unwinnable stalemates.
-- **QR cards & library** (M2): scan a card QR (or hand-enter the code) to add a Mobie; browse, import
-  (JSON/CSV), make custom cards, and print QR codes from the in-app library.
-- **3D battle stage** (M3): React-three-fiber stage with user drop-in GLB models (IndexedDB), falling
-  back to PokéAPI billboard sprites.
+- **QR card library** (M2): browse, import (JSON/CSV), make custom cards, and print QR codes. Scanner
+  source is dormant and has no M23 UI/import/camera path.
+- **3D battle stage** (M3): React-three-fiber arena with PokéAPI artwork billboards; Battle/Capture
+  never read custom GLB/GLTF or model storage.
 - **Portable saves** (M5): export your roster/cards (+ optional 3D models) as a `username.save` (zip)
   to your own Google Drive/Files via the iOS share sheet; re-import with old/new detection, consented
   overwrite, and an automatic pre-import backup. **No backend** — your cloud, your file.
@@ -48,12 +48,11 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
   "rally" the whole team — unlocked with SP, separate from creature moves.
 - **Enhanced interactivity** (M22, off by default): optional swipe/circle/hold/rhythm gestures for
   capture and star-strike, for a more hands-on feel.
-- **Optional extension systems**, all off by default and toggled in the in-app **Settings** panel —
-  each is a swappable module hooked onto fixed engine seams, so turning it off leaves zero residue:
-  team synergy, held items, abilities, combo chain, evolution. (The tower is a game *mode*, not a
-  toggle.)
+- **Fixed extension systems** — team synergy, held items, abilities, combo chain, evolution, and
+  partner skills always run through one pure product-runtime seam; Settings only controls real UX
+  preferences. Encounter styles are hard-off.
 - **Focused hub navigation**: title and region-select keep **我的 Mobie** and **更多** at the first
-  level. Scan / library / moves / partner skills / dex / achievements / incubator / models / save /
+  level. Library / moves / partner skills / dex / achievements / incubator / models / save /
   settings remain available in the scrollable secondary menu without competing with the hunt loop.
 - Content: national dex 1–1025 (G1–G9), 16 themed regions (+ arena), 16 cross-type starter cards.
 
@@ -93,15 +92,15 @@ is enabled by `npm install` (the `prepare` script sets `core.hooksPath`) — so 
 src/
   app/        React shell + XState game-machine provider
   game/       Pure domain logic (battle reducer/engine, data, growth, individuality, recommend)
-    ext/      Extension seams (S1–S8) + modules: synergy / items / abilities / chain / evolution /
-              partnerSkills + statPatch (M6/M7/M9/M10/M17)
+    ext/      Extension seams + fixed productRuntime: synergy / items / abilities / chain / combo /
+              evolution; partner skills use learned-state authority
     save/     Portable save file: envelope meta, zip pack/unpack, export/import I/O, backup (M5)
-    settings.ts   Per-system module toggle + enhanced-interactivity prefs (M6/M22)
-  store/      Zustand: battle display, persistent roster, settings+ext assembly, item bag, skill
+    settings.ts   Runtime UX preferences + read-only legacy module-data preservation
+  store/      Zustand: battle display, persistent roster, prefs-only settings, item bag, skill
               points, player skills, tower run, metadata, incubator
   ui/         Screens + components; shared ToolsMenu (title + region hub), MobCard info card,
               move/partner/team/settings/dex/etc. modals, global.css
-  scene/r3f/  scene/models/   3D battle stage + user GLB store (M3)
+  scene/r3f/  scene/models/   Artwork-billboard battle stage + isolated legacy model tooling
   audio/  scene/fx/  input/   Audio, per-type battle FX, QTE + gesture seams
 scripts/gen_dex.mjs   PokéAPI data generator
 plan/                 Existing tracked design docs; local generated specs/tickets are gitignored
@@ -128,13 +127,13 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP) are complete** and browser-verified — **477 Vitest tests**, typecheck,
+M22 a–e (enhanced-interactivity MVP) are complete** and browser-verified — **579 Vitest tests**, typecheck,
 and build all green. Content: national dex 1–1025, 16 regions (+ arena), 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
 1025 species / moves / regions / cards / type-chart entries swept), a **battle-simulation** stress suite
 (hundreds of full seeded battles asserting HP bounds, no-NaN, guaranteed termination, and determinism —
-modules off vs all-on), persistence round-trips, and CDP real-play (arena EXP-only win, wild win →
+the fixed product runtime), persistence round-trips, and CDP real-play (arena EXP-only win, wild win →
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 

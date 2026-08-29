@@ -1,8 +1,6 @@
 // M10 — 進化（S6 postGrowth）測試。用真實 SPECIES 進化資料（gen_dex 由 PokéAPI evolution-chain 派生）。
 import { describe, it, expect } from 'vitest'
 import { evolvedSpeciesId, EVOLUTION_MODULE } from './evolution'
-import { assemblePostGrowth } from '@/store/ext'
-import { defaultSettings, setModuleEnabledIn } from '@/game/settings'
 import { SPECIES } from '@/game/data/species'
 import type { OwnedUnit } from '@/game/types'
 
@@ -54,17 +52,5 @@ describe('M10 進化 — S6 postGrowth 個體欄位全保留（plan/09 §4.3）'
   it('未達等級原樣返回（同參照語意：speciesId 不變）', () => {
     const u = unit({ speciesId: 1, level: 5 })
     expect(hook(u).speciesId).toBe(1)
-  })
-})
-
-describe('M10 進化 — assemblePostGrowth 依 settings 掛載', () => {
-  it('evolution 關閉 → []（升級不進化）', () => {
-    expect(assemblePostGrowth(defaultSettings())).toEqual([])
-  })
-  it('evolution 開啟 → 收 1 個 postGrowth hook', () => {
-    const on = setModuleEnabledIn(defaultSettings(), 'evolution', true)
-    const hooks = assemblePostGrowth(on)
-    expect(hooks).toHaveLength(1)
-    expect(hooks[0](unit({ speciesId: 1, level: 16 })).speciesId).toBe(2)
   })
 })

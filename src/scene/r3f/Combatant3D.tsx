@@ -44,7 +44,7 @@ interface Combatant3DProps {
   base: [number, number, number]
   /** 朝對手的 lunge 位移向量（x,z），由 BattleStage 依站位給 */
   lungeVec: [number, number]
-  /** GLB 預設朝向：player 面相機(0)、foe 背對(π) */
+  /** Billboard 朝向：player 面相機(0)、foe 背對(π) */
   faceY: number
   /** idle 浮動相位，避免雙方同步 */
   bobPhase: number
@@ -53,7 +53,7 @@ interface Combatant3DProps {
   timeScaleRef: { current: number }
 }
 
-/** 場上一隻Mobie：造型（GLB/billboard）+ 撲擊/受擊/倒下/入場動畫。 */
+/** 場上一隻 Mobie：artwork billboard + 撲擊/受擊/倒下/入場動畫。 */
 export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, timeScaleRef }: Combatant3DProps) {
   const group = useRef<Group>(null)
   // 虛擬累積時間（吃 timeScale）：取代 state.clock.elapsedTime 當 idle bob 的時鐘，慢鏡時 bob 同步變慢。
@@ -107,10 +107,10 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, 
     g.scale.setScalar(scale)
   })
 
-  // MobieVisual 自我保護（內含造型載入失敗的邊界），此處無須再外包。
+  // MobieVisual 自我保護（內含 artwork 載入失敗邊界），此處無須再外包。
   return (
     <group ref={group} position={base}>
-      <MobieVisual speciesId={mon.speciesId} artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
+      <MobieVisual artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
     </group>
   )
 }

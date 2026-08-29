@@ -99,7 +99,7 @@ export function computeSynergy(team: BattleMobie[]): NamedModifier[] {
 
 const preBattle: PreBattleHook = computeSynergy
 
-/** 羈絆模組：只掛 S2（preBattleModifiers）。停用＝computeSynergy 不被收＝無任何加成。 */
+/** 羈絆 extension：固定掛入 productRuntime 的 S2（preBattleModifiers）。 */
 export const SYNERGY_MODULE: ExtensionModule = {
   id: 'synergy',
   seams: { preBattleModifiers: preBattle },

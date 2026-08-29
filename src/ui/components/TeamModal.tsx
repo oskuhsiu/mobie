@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRoster } from '@/store/rosterStore'
 import { useBag } from '@/store/bagStore'
-import { useSettings } from '@/store/settingsStore'
 import { getSpecies } from '@/game/data/species'
 import { ITEMS, getItem } from '@/game/ext/items'
 import { abilityForType, getAbility } from '@/game/ext/abilities'
@@ -14,20 +13,14 @@ import { audio } from '@/audio/audioEngine'
 
 /**
  * 隊伍養成頁：替每隻Mobie裝備持有道具（M7）。背包庫存走 mobie.itembag.v1（exactly-once 對帳）。
- * 道具模組關閉時仍可瀏覽，但會提示去設定開啟才會在戰鬥生效（守可選式掛載）。
  */
 export function TeamModal({ onClose }: { onClose: () => void }) {
   const roster = useRoster((s) => s.roster)
   const bag = useBag((s) => s.bag)
   const equip = useBag((s) => s.equip)
-  const itemsOn = useSettings((s) => s.settings.modules.heldItems)
-  const abilitiesOn = useSettings((s) => s.settings.modules.abilities)
   const [openId, setOpenId] = useState<string | null>(null)
   // 點 Mobie 開資訊卡（M16）：用 owner 全顯模式檢視招式/六維/個體/特性/道具。
   const [detail, setDetail] = useState<{ mon: BattleMobie; exp: number } | null>(null)
-  // 哪些相關模組未開（提示去設定開啟）
-  const offModules = [!itemsOn && '持有道具', !abilitiesOn && '特性'].filter(Boolean) as string[]
-
   const choose = async (unitId: string, itemId: string | null) => {
     const ok = await equip(unitId, itemId)
     audio.play(ok ? 'select' : 'defeat')
@@ -62,16 +55,10 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
           <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
 
-        {offModules.length > 0 && (
-          <div className="lib-msg" style={{ marginBottom: 8 }}>
-            ⚠️ {offModules.join(' / ')}模組目前關閉——需到「⚙️ 設定」開啟才會在戰鬥生效。
-          </div>
-        )}
-
         <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {roster.length === 0 && (
             <div className="my-mobies-empty">
-              還沒有夥伴。前往冒險收服 Mobie，或使用「更多」裡的掃卡加入夥伴吧！
+              還沒有夥伴。前往冒險收服 Mobie，或使用「卡庫」建立／匯入卡片吧！
             </div>
           )}
           {roster.map((u) => {

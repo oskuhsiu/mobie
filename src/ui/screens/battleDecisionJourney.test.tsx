@@ -71,7 +71,10 @@ describe('battle decision journey', () => {
       },
     })
 
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_100) })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '跳過開場' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
     expect(useBattleStore.getState().phase).toBe('playerChoice')
     expect(screen.getByRole('button', { name: /火花.*效果絕佳 ×2/ })).toBeTruthy()
 

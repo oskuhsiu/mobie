@@ -8,7 +8,7 @@ import {
 } from '@/test/m23/baselineScenario'
 import { useSettings } from '@/store/settingsStore'
 import { useBattleStore } from '@/store/battleStore'
-import { assembleBattlePrep, assembleExt, assemblePostGrowth } from '@/store/ext'
+import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
 import type { QteQuality } from '@/game/battle/engine'
 import { battleAudioSession } from '@/audio/battleAudioSession'
@@ -120,7 +120,6 @@ function queryOptions(): Partial<M23BaselineDriverOptions> {
 function installFixtureSettings(): void {
   const settings = {
     ...M23_BASELINE_SETTINGS,
-    modules: { ...M23_BASELINE_SETTINGS.modules },
     prefs: {
       ...M23_BASELINE_SETTINGS.prefs,
       enhancedInteractivity: {
@@ -129,12 +128,7 @@ function installFixtureSettings(): void {
       },
     },
   }
-  useSettings.setState({
-    settings,
-    ext: assembleExt(settings),
-    prep: assembleBattlePrep(settings),
-    postGrowth: assemblePostGrowth(settings),
-  })
+  useSettings.setState({ settings })
 }
 
 export function installM23BaselineDriver(): M23BaselineDriver {
@@ -234,7 +228,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       if (!fixture) throw new Error(`Missing baseline turn fixture: ${caseId}`)
       const battle = structuredClone(fixture.initialState)
       if (caseId === 'chain-combo') {
-        battle.chainGauge = useSettings.getState().ext.chain?.gaugeFull ?? 100
+        battle.chainGauge = PRODUCT_RUNTIME.turnExtensions.chain.gaugeFull
       }
       const state = useBattleStore.getState()
       const qualityByCase: Record<M23TurnTransactionCase, QteQuality[]> = {

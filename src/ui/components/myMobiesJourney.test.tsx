@@ -47,7 +47,7 @@ describe('我的 Mobie journey', () => {
     fireEvent.click(screen.getByRole('button', { name: '關閉' }))
 
     fireEvent.click(screen.getByRole('button', { name: '更多' }))
-    expect(await screen.findByRole('button', { name: /掃卡/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /掃卡/ })).toBeNull()
     expect(screen.getByRole('button', { name: /設定/ })).toBeTruthy()
   })
 })

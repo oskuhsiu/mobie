@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
 import { useSettings } from '@/store/settingsStore'
-import { applyBattlePrep } from '@/store/ext'
+import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import { buildBattleMobie } from '@/game/stats'
 import {
   resolveTurn,
@@ -21,7 +21,6 @@ import { lookupRegion } from '@/game/data/regionLookup'
 import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
 import { makeWildEvents } from '@/game/accidents'
 import { makeRng } from '@/game/rng'
-import { rollEncounterProfile, applyProfileToMon } from '@/game/encounterProfile'
 import type { ReplayInput, DisplayUnitSnapshot } from '@/game/replay/types'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
@@ -585,10 +584,6 @@ export function BattleScreen() {
   const choiceFocusRequestId = useBattleStore((s) => s.choiceFocusRequestId)
   // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
   const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean; foeIndex: number } | null>(null)
-  // 已啟用模組組成的注入能力包（plan/09 §0）：ext=戰中縫（S3/S4/S5）、prep=戰前縫（S1/S2）。
-  // 全關＝EMPTY_EXT/EMPTY_PREP＝零行為改變。
-  const ext = useSettings((s) => s.ext)
-  const prep = useSettings((s) => s.prep)
   // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
   const starMode = useSettings((s) => interactModeOf(s.settings, 'starStrike'))
   // M22.f 換人防禦下滑護盾（off＝原 TimingBar）；M22.g 攻擊節奏變體（mash＝原連打）。
@@ -597,8 +592,7 @@ export function BattleScreen() {
   const interactMode = useSettings((s) => s.settings.prefs.enhancedInteractivity.mode)
   // EXT.1 打擊感強度（純字串 selector，只在變動時 re-render）：off＝回退 M22 純 flash+shake / FloatDamage。
   const juice = useSettings((s) => juiceLevelOf(s.settings))
-  // M17 夥伴（訓練師）技能：帳號級、純顯示層。模組關＝行動列不顯示；已習得（起始∪解鎖）才可用。
-  const partnerOn = useSettings((s) => s.settings.modules.partnerSkills)
+  // M17 夥伴（訓練師）技能固定存在；只由已習得集合與每場使用 ledger 限制。
   const learnedSkillIds = usePlayerSkills((s) => s.learnedSkillIds)
   const partnerSkills = useMemo(() => learnedPartnerSkills(learnedSkillIds), [learnedSkillIds])
   // M11 野外意外（wild-only）：戰中地形突變/亂入注入 hook；arena/競技場/連勝塔不注入＝零意外。
@@ -607,9 +601,7 @@ export function BattleScreen() {
     const region = context.regionId ? lookupRegion(context.regionId) : null
     return region?.mode === 'wild' ? makeWildEvents({ terrainPool: WILD_SHIFT_POOL }) : undefined
   }, [context.regionId, context.tower])
-  const extRef = useRef(ext)
   const wildEventsRef = useRef(wildEvents)
-  extRef.current = ext
   wildEventsRef.current = wildEvents
 
   // EXT.3：當前地形 → 視覺 palette（地板色調/環境光/霧/天氣 emitter）。純 display。
@@ -897,14 +889,14 @@ export function BattleScreen() {
     if (context.playerTeam.length === 0 || context.foeTeam.length === 0) {
       throw new Error('Battle requires non-empty player and foe teams')
     }
-    // 戰前縫：S1 道具/特性 statMod（兩方）+ S2 羈絆（只玩家隊）。全關＝原封不動。
-    const { team: players, modifiers } = applyBattlePrep(context.playerTeam.map(buildBattleMobie), prep, true)
-    const prepped = applyBattlePrep(context.foeTeam.map(buildBattleMobie), prep, false)
-    // M12.e 對手技能標籤（display 層 prep，只動對手隊）：依物種決定論指派 0–2 標籤 + 反射被動微調。
-    // 模組關＝不指派＝零殘留。末位視為 boss（較可能宣告合擊）。
-    const foes = useSettings.getState().settings.modules.encounterSkills
-      ? prepped.team.map((m, i) => applyProfileToMon(m, rollEncounterProfile(m.speciesId, i === prepped.team.length - 1)))
-      : prepped.team
+    // One product authority applies fixed items/abilities to both teams and player-only synergy.
+    const prepared = PRODUCT_RUNTIME.prepareBattleTeams(
+      context.playerTeam.map(buildBattleMobie),
+      context.foeTeam.map(buildBattleMobie),
+    )
+    const players = prepared.playerTeam
+    const foes = prepared.foeTeam
+    const modifiers = prepared.playerModifiers
     // 場域地形（M8）：依 region.mode/terrains/randomTerrain 解析；隨機地形以 foe 隊伍 cardId 當 seed
     // 決定論抽（同一場遭遇穩定、不隨 re-render 變動）。arena/無地形＝空＝中性。
     const region = context.regionId ? lookupRegion(context.regionId) : null
@@ -977,7 +969,7 @@ export function BattleScreen() {
       useBattleStore.getState().failBattleInit(error)
       return false
     }
-  }, [context, prep, sessionLifecycle, submitIntent])
+  }, [context, sessionLifecycle, submitIntent])
 
   // 初始化：建出雙方 3 隻隊伍，進場。StrictMode 重跑只會 reuse 同一 logical session。
   useEffect(() => {
@@ -1457,7 +1449,7 @@ export function BattleScreen() {
             battleActionFromReplayInput(turnInput),
             {
               rng: turnRng,
-              ext: extRef.current,
+              ext: PRODUCT_RUNTIME.turnExtensions,
               terrainMultiplier: preparedCase ? undefined : resolveTerrainMult,
               wildEvents: preparedCase ? undefined : wildEventsRef.current,
             },
@@ -1590,13 +1582,13 @@ export function BattleScreen() {
   const startChain = useCallback(() => {
     const b = useBattleStore.getState().battle
     if (!b) return
-    const maxHits = ext.chain?.maxHits ?? 3
+    const maxHits = PRODUCT_RUNTIME.turnExtensions.chain.maxHits
     const participants = chainEligible(b.player, maxHits)
     if (participants.length === 0) return
     audio.play('select')
     setChainSeq({ participants, step: 0, hits: [] })
     useBattleStore.getState().setPhase('chainQte')
-  }, [ext])
+  }, [])
 
   // M9 連鎖：一段 QTE 結束 → 記錄宣告、推進到下一隻；全部跑完才提交
   const onChainQteResult = useCallback((q: QteQuality) => {
@@ -1697,11 +1689,10 @@ export function BattleScreen() {
   const switchable = battle.player.members.some(
     (m, i) => i !== battle.player.activeIndex && m.currentHp > 0 && i !== lockedIndex,
   )
-  // M9 連鎖：模組開啟才顯示連鎖槽；集滿可發動。連鎖槽住 reducer 的 battle.chainGauge（暫態）。
-  const chainOn = !!ext.chain
-  const chainMax = ext.chain?.gaugeFull ?? 100
-  const chainPct = chainOn ? Math.min(100, (battle.chainGauge / chainMax) * 100) : 0
-  const chainReady = chainOn && battle.chainGauge >= chainMax
+  // M9 連鎖固定存在；槽住 reducer 的 battle.chainGauge（暫態）。
+  const chainMax = PRODUCT_RUNTIME.turnExtensions.chain.gaugeFull
+  const chainPct = Math.min(100, (battle.chainGauge / chainMax) * 100)
+  const chainReady = battle.chainGauge >= chainMax
 
   return (
     <motion.div
@@ -1888,16 +1879,14 @@ export function BattleScreen() {
           <span className="star-gauge__pct">{Math.floor(energy)}%</span>
         </div>
 
-        {/* M9 連鎖槽（模組開啟才顯示；集滿亮起可發動連鎖） */}
-        {chainOn && (
-          <div className={`star-gauge chain-gauge ${chainReady ? 'star-gauge--full chain-gauge--full' : ''}`}>
-            <span className="star-gauge__icon">🔗</span>
-            <div className="star-gauge__track">
-              <div className="star-gauge__fill chain-gauge__fill" style={{ width: `${chainPct}%` }} />
-            </div>
-            <span className="star-gauge__pct">{Math.floor(chainPct)}%</span>
+        {/* M9 連鎖槽固定顯示；集滿亮起可發動連鎖。 */}
+        <div className={`star-gauge chain-gauge ${chainReady ? 'star-gauge--full chain-gauge--full' : ''}`}>
+          <span className="star-gauge__icon">🔗</span>
+          <div className="star-gauge__track">
+            <div className="star-gauge__fill chain-gauge__fill" style={{ width: `${chainPct}%` }} />
           </div>
-        )}
+          <span className="star-gauge__pct">{Math.floor(chainPct)}%</span>
+        </div>
 
         <div className="battle-log">
           {log.length === 0 ? (
@@ -1954,8 +1943,8 @@ export function BattleScreen() {
                 </motion.button>
               )}
             </div>
-            {/* M17 夥伴（訓練師）技能列：模組開 + 已習得才顯示。每場一次，純顯示層、不耗回合。 */}
-            {partnerOn && partnerSkills.length > 0 && (
+            {/* M17 夥伴技能固定存在；只顯示已習得技能，每場一次且不耗回合。 */}
+            {partnerSkills.length > 0 && (
               <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>✨ 夥伴技能</span>
                 {partnerSkills.map((skill) => {

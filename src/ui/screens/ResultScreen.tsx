@@ -125,10 +125,9 @@ function WinView({
       </motion.div>
 
       <div style={{ position: 'relative', width: 'min(64vw,300px)', height: 'min(64vw,300px)' }}>
-        {/* 野生Mobie：3D 舞台（GLB/billboard），收服成功時縮沉「進球」 */}
+        {/* 野生 Mobie artwork billboard 舞台，收服成功時縮沉「進球」。 */}
         <Suspense fallback={null}>
           <CaptureStage
-            speciesId={wild.speciesId}
             artworkUrl={wild.artworkUrl}
             shiny={wild.shiny}
             vanish={stage === 'result' && caught}
@@ -298,8 +297,6 @@ export function ResultScreen() {
   const captureUnit = useRoster((s) => s.captureUnit)
   const lastResults = useRoster((s) => s.lastResults)
   const lastEvolutions = useRoster((s) => s.lastEvolutions)
-  // S6 進化縫（evolution 模組開啟才非空）：傳給 grantBattleExp 於升級後套用
-  const postGrowth = useSettings((s) => s.postGrowth)
   const grantedRef = useRef(false)
   useEffect(() => {
     if (!outcome || grantedRef.current) return
@@ -329,12 +326,11 @@ export function ResultScreen() {
       context.playerTeam.map((c) => c.cardId),
       context.foeTeam.map((c) => c.level),
       isWin ? winMult : LOSS_EXP_RATIO,
-      postGrowth,
     ).then(() => {
       const evos = useRoster.getState().lastEvolutions
       if (evos.length > 0) useMeta.getState().recordEvolutions(evos)
     })
-  }, [isWin, outcome, context.regionId, context.playerTeam, context.foeTeam, grantBattleExp, postGrowth])
+  }, [isWin, outcome, context.regionId, context.playerTeam, context.foeTeam, grantBattleExp])
 
   // 進化演出：等捕獲流程結束（或本來就不捕獲）後才播，避免兩段演出疊在一起
   const [evoDone, setEvoDone] = useState(false)
