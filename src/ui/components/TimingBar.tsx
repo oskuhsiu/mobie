@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { qualityFromPointer, QTE_ZONES } from '@/input/qte'
 import type { QteQuality } from '@/game/battle/engine'
+import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 
 /**
  * 觸控 timing QTE：指針來回掃動，點擊停下 → 命中品質。
@@ -12,6 +13,7 @@ export function TimingBar({
   hint = '點擊任意處，停在正中可造成最大傷害！',
   timeoutMs,
   randomOnTimeout = false,
+  paused = false,
 }: {
   onResult: (q: QteQuality) => void
   /** 提示語（攻擊/防禦模式不同） */
@@ -20,11 +22,13 @@ export function TimingBar({
   timeoutMs?: number
   /** 逾時時改用隨機停點，而不是目前指針位置。 */
   randomOnTimeout?: boolean
+  paused?: boolean
 }) {
   const pointerRef = useRef<HTMLDivElement>(null)
   const posRef = useRef(0) // 0..1
   const doneRef = useRef(false)
   const onResultRef = useRef(onResult)
+  const scheduler = usePausableScheduler(paused)
   onResultRef.current = onResult
 
   useEffect(() => {
@@ -34,7 +38,12 @@ export function TimingBar({
     let start = 0
     const period = 1100 // ms 來回一趟
 
-    const tick = (t: number) => {
+    const tick = () => {
+      if (scheduler.isPaused) {
+        if (!doneRef.current) raf = requestAnimationFrame(tick)
+        return
+      }
+      const t = scheduler.now()
       if (!start) start = t
       const phase = ((t - start) % period) / period // 0..1
       // 三角波：0→1→0
@@ -46,7 +55,7 @@ export function TimingBar({
     }
     raf = requestAnimationFrame(tick)
     if (timeoutMs && timeoutMs > 0) {
-      timeout = window.setTimeout(() => {
+      timeout = scheduler.schedule(() => {
         if (doneRef.current) return
         doneRef.current = true
         const pointer = randomOnTimeout ? Math.random() : posRef.current
@@ -55,12 +64,12 @@ export function TimingBar({
     }
     return () => {
       cancelAnimationFrame(raf)
-      if (timeout) window.clearTimeout(timeout)
+      if (timeout) scheduler.cancel(timeout)
     }
-  }, [randomOnTimeout, timeoutMs])
+  }, [randomOnTimeout, scheduler, timeoutMs])
 
   const stop = () => {
-    if (doneRef.current) return
+    if (doneRef.current || scheduler.isPaused) return
     doneRef.current = true
     onResultRef.current(qualityFromPointer(posRef.current))
   }
@@ -94,7 +103,7 @@ export function TimingBar({
           <div className="qte__timeout" aria-hidden>
             <div
               className="qte__timeout-fill"
-              style={{ animationDuration: `${timeoutMs}ms` }}
+              style={{ animationDuration: `${timeoutMs}ms`, animationPlayState: paused ? 'paused' : 'running' }}
             />
           </div>
         )}

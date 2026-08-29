@@ -43,6 +43,7 @@ function transaction(calls: string[], current = () => true): BattleIntentTransac
     begin: (value) => { calls.push(`begin:${value.id}`); return token },
     isCurrent: current,
     completeOnce: (value) => { calls.push(`complete:${value.presentationId}`); return true },
+    cancelOnce: (value, reason) => { calls.push(`cancel:${value.presentationId}:${reason}`); return true },
   }
 }
 
@@ -99,6 +100,28 @@ describe('BattleIntentCoordinator', () => {
 
     await expect(coordinator.submit(intent, snapshot, 'seed')).resolves.toBe('cancelled')
     expect(calls).toEqual(['begin:intro'])
+  })
+
+  it('cancels an unmounted intent once without completing it', async () => {
+    const calls: string[] = []
+    const entered = deferred<void>()
+    const coordinator = new BattleIntentCoordinator({
+      presenter: {
+        present: (_job, signal) => new Promise<PresentationResult>((resolve) => {
+          entered.resolve()
+          signal.addEventListener('abort', () => resolve('cancelled'), { once: true })
+        }),
+      },
+      transaction: transaction(calls),
+    })
+
+    const running = coordinator.submit(intent, snapshot, 'seed')
+    await entered.promise
+    expect(coordinator.cancel('unmount')).toBe(true)
+    expect(coordinator.cancel('unmount')).toBe(false)
+    await expect(running).resolves.toBe('cancelled')
+    expect(calls.filter((call) => call.startsWith('cancel:'))).toEqual(['cancel:4:unmount'])
+    expect(calls.some((call) => call.startsWith('complete:'))).toBe(false)
   })
 
   it('degrades presenter errors into the same safe completion', async () => {

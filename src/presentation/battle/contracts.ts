@@ -146,6 +146,11 @@ export interface PresentationClock {
   race<T>(work: PromiseLike<T>, signal: AbortSignal): Promise<T>
 }
 
+export interface PausablePresentationClock extends PresentationClock {
+  pause(): void
+  resume(): void
+}
+
 export interface CueContext {
   token: TurnPresentationToken
   signal: AbortSignal
@@ -298,6 +303,7 @@ export interface BattleTransactionPort {
   commit(token: TurnPresentationToken, resolution: TurnResolution): boolean
   cancel(token: TurnPresentationToken, reason: CancelReason): void
   resolveFailed?(token: TurnPresentationToken, error: unknown): void
+  recordFailed?(token: TurnPresentationToken, error: unknown): void
 }
 
 export interface BattleIntentPresenterPort {
@@ -308,4 +314,5 @@ export interface BattleIntentTransactionPort {
   begin(intent: BattleIntent): IntentPresentationToken | null
   isCurrent(token: IntentPresentationToken): boolean
   completeOnce(token: IntentPresentationToken): boolean
+  cancelOnce(token: IntentPresentationToken, reason: CancelReason): boolean
 }

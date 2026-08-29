@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useEffect, useRef } from 'react'
 import { useGame } from '@/app/GameProvider'
 import type { Region } from '@/game/types'
 import { REGIONS } from '@/game/data/regions'
@@ -16,6 +17,9 @@ function terrainHint(r: Region): string | null {
 
 export function RegionSelectScreen() {
   const { send } = useGame()
+  const primaryRegionRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => { primaryRegionRef.current?.focus() }, [])
 
   return (
     <div className="col" style={{ flex: 1, gap: 18, minHeight: 0 }}>
@@ -30,6 +34,7 @@ export function RegionSelectScreen() {
 
       {/* 競技場入口：中性地形、純得經驗、不可捕獲，低風險刷經驗 */}
       <motion.button
+        ref={primaryRegionRef}
         className="practice-cta"
         whileTap={{ scale: 0.98 }}
         onClick={() => send({ type: 'SELECT_REGION', regionId: PRACTICE_REGION.id })}

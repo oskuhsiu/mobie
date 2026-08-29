@@ -6,12 +6,14 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
 import { holdCharge, beatSchedule, rhythmTaps } from '@/input/gestures'
 import { INTENSITY_BY_MODE, type InteractMode } from '@/game/settings'
+import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 
 /** lite：長按蓄力環，環填滿即放；放開保留部分蓄力、逾時以目前蓄力放招（絕不卡死）。 */
-export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000 }: {
+export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000, paused = false }: {
   mode: InteractMode
   onCharged: (charge: number) => void
   timeoutMs?: number
+  paused?: boolean
 }) {
   const ringRef = useRef<HTMLDivElement>(null)
   const holdingRef = useRef(false)
@@ -20,6 +22,7 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000 }: {
   const rafRef = useRef(0)
   const doneRef = useRef(false)
   const onChargedRef = useRef(onCharged)
+  const scheduler = usePausableScheduler(paused)
   onChargedRef.current = onCharged
 
   const finish = (charge: number) => {
@@ -33,7 +36,12 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000 }: {
     doneRef.current = false
     accMsRef.current = 0
     lastTsRef.current = 0
-    const tick = (t: number) => {
+    const tick = () => {
+      if (scheduler.isPaused) {
+        if (!doneRef.current) rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+      const t = scheduler.now()
       if (holdingRef.current) {
         if (!lastTsRef.current) lastTsRef.current = t
         accMsRef.current += t - lastTsRef.current
@@ -47,11 +55,11 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000 }: {
       if (!doneRef.current) rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
-    const to = window.setTimeout(() => finish(holdCharge(accMsRef.current, mode)), timeoutMs)
-    return () => { cancelAnimationFrame(rafRef.current); window.clearTimeout(to) }
-  }, [mode, timeoutMs])
+    const to = scheduler.schedule(() => finish(holdCharge(accMsRef.current, mode)), timeoutMs)
+    return () => { cancelAnimationFrame(rafRef.current); scheduler.cancel(to) }
+  }, [mode, scheduler, timeoutMs])
 
-  const down = () => { holdingRef.current = true }
+  const down = () => { if (!scheduler.isPaused) holdingRef.current = true }
   const up = () => { holdingRef.current = false; lastTsRef.current = 0 }
 
   return (
@@ -74,9 +82,10 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000 }: {
 }
 
 /** arcade：節奏點擊（太鼓式）。隨脈動點擊 N 拍，準確度只影響演出、不改傷害；逾時安全放招。 */
-export function RhythmTap({ mode, onDone }: {
+export function RhythmTap({ mode, onDone, paused = false }: {
   mode: InteractMode
   onDone: (accuracy: number) => void
+  paused?: boolean
 }) {
   const ringRef = useRef<HTMLDivElement>(null)
   const tapsRef = useRef<number[]>([])
@@ -85,6 +94,7 @@ export function RhythmTap({ mode, onDone }: {
   const rafRef = useRef(0)
   const doneRef = useRef(false)
   const onDoneRef = useRef(onDone)
+  const scheduler = usePausableScheduler(paused)
   onDoneRef.current = onDone
 
   const finish = () => {
@@ -99,7 +109,12 @@ export function RhythmTap({ mode, onDone }: {
     tapsRef.current = []
     t0Ref.current = 0
     const leadIn = 700
-    const tick = (t: number) => {
+    const tick = () => {
+      if (scheduler.isPaused) {
+        if (!doneRef.current) rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+      const t = scheduler.now()
       if (!t0Ref.current) {
         t0Ref.current = t
         beatsRef.current = beatSchedule(t + leadIn, mode)
@@ -116,12 +131,12 @@ export function RhythmTap({ mode, onDone }: {
     }
     rafRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [mode])
+  }, [mode, scheduler])
 
   const tap = (_e: ReactPointerEvent) => {
-    if (doneRef.current) return
+    if (doneRef.current || scheduler.isPaused) return
     // 用 performance.now() 與 rAF 時戳同源，確保節奏判定一致
-    tapsRef.current.push(performance.now())
+    tapsRef.current.push(scheduler.now())
     if (ringRef.current) ringRef.current.style.boxShadow = '0 0 30px 10px rgba(255,122,224,0.9)'
   }
 

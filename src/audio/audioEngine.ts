@@ -2,6 +2,8 @@
 // Tone.js 只在 unlock()（iOS 首次觸控）時才動態 import，不進主 bundle。
 // 戰鬥邏輯只認識這個介面，不綁 Tone。
 
+import { PausableScheduler } from '@/presentation/battle/PausableScheduler'
+
 export type SfxId =
   | 'select' | 'attack' | 'hit' | 'super' | 'crit'
   | 'faint' | 'switch' | 'lowhp' | 'victory' | 'defeat' | 'capture'
@@ -25,8 +27,14 @@ export interface AudioEngine {
   starStampTick(): void
   /** EXT.2 星擊三拍：拍3 sub-bass 下潛 + 噪音爆（衝擊）。 */
   starImpactBoom(): void
+  /** 立即靜音並取消尚未播放的戰鬥 SFX。 */
+  cancelBattleSfx(): void
+  pauseBattleSfx(): void
+  resumeBattleSfx(): void
   startBgm(): void
   stopBgm(): void
+  pauseBgm(): void
+  resumeBgm(): void
   /** 0..1，越高越緊張（低血量）：調暗 BGM 濾波 + 觸發警報嗶 */
   setIntensity(level: number): void
 }
@@ -67,8 +75,15 @@ class ToneAudioEngine implements AudioEngine {
   private bgmLeadStartTime = Number.NEGATIVE_INFINITY
   private bgmBassStartTime = Number.NEGATIVE_INFINITY
   private bgmStarted = false
+  private bgmPaused = false
   private intensity = 0
   private lastAlarm = 0
+  private starTransients = new Set<{
+    nodes: any[]
+    timer: number
+  }>()
+  private readonly starTransientScheduler = new PausableScheduler()
+  private battleSfxPaused = false
 
   isReady() { return this.ready }
 
@@ -98,6 +113,7 @@ class ToneAudioEngine implements AudioEngine {
       this.build()
       this.ready = true
       this.startBgm()
+      if (this.battleSfxPaused) void (this.Tone.getContext().rawContext as AudioContext).suspend()
     } catch (e) {
       // 音效失敗絕不影響遊戲
       console.warn('[audio] unlock failed', e)
@@ -159,6 +175,7 @@ class ToneAudioEngine implements AudioEngine {
       this.bassSeq.start(0)
       tr.start()
       this.bgmStarted = true
+      if (this.bgmPaused) tr.pause()
     } catch (e) { console.warn('[audio] bgm', e) }
   }
 
@@ -169,6 +186,25 @@ class ToneAudioEngine implements AudioEngine {
       tr.stop()
       this.seq.stop(); this.bassSeq.stop()
       this.bgmStarted = false
+      this.bgmPaused = false
+    } catch { /* noop */ }
+  }
+
+  pauseBgm() {
+    if (this.bgmPaused) return
+    this.bgmPaused = true
+    if (!this.ready || !this.bgmStarted) return
+    try {
+      this.Tone!.getTransport().pause()
+    } catch { /* noop */ }
+  }
+
+  resumeBgm() {
+    if (!this.bgmPaused) return
+    this.bgmPaused = false
+    if (!this.ready || !this.bgmStarted) return
+    try {
+      this.Tone!.getTransport().start()
     } catch { /* noop */ }
   }
 
@@ -177,6 +213,61 @@ class ToneAudioEngine implements AudioEngine {
     const T = this.Tone!
     const now = T.now()
     notes.forEach((n, i) => this.sfxLead.triggerAttackRelease(n, dur, now + i * step, vel))
+  }
+
+  private trackStarTransient(nodes: any[], lifetimeMs: number) {
+    const transient = {
+      nodes,
+      timer: 0,
+    }
+    transient.timer = this.starTransientScheduler.schedule(
+      () => this.disposeStarTransient(transient),
+      lifetimeMs,
+    )
+    this.starTransients.add(transient)
+  }
+
+  private disposeStarTransient(transient: { nodes: any[]; timer: number }) {
+    this.starTransientScheduler.cancel(transient.timer)
+    this.starTransients.delete(transient)
+    for (const node of transient.nodes) {
+      try { node.dispose() } catch { /* noop */ }
+    }
+  }
+
+  private cancelInstrument(instrument: any, now: number) {
+    if (!instrument) return
+    try { instrument.envelope?.cancel(now) } catch { /* noop */ }
+    try { instrument.frequency?.cancelScheduledValues(now) } catch { /* noop */ }
+    try { instrument.triggerRelease(now) } catch { /* noop */ }
+  }
+
+  cancelBattleSfx() {
+    if (!this.ready) return
+    try {
+      const now = this.Tone!.now()
+      this.cancelInstrument(this.sfxLead, now)
+      this.cancelInstrument(this.sfxNoise, now)
+      this.cancelInstrument(this.fxLead, now)
+      this.cancelInstrument(this.fxNoise, now)
+      for (const transient of [...this.starTransients]) this.disposeStarTransient(transient)
+    } catch { /* noop */ }
+  }
+
+  pauseBattleSfx() {
+    if (this.battleSfxPaused) return
+    this.battleSfxPaused = true
+    this.starTransientScheduler.pause()
+    if (!this.ready) return
+    try { void (this.Tone!.getContext().rawContext as AudioContext).suspend() } catch { /* noop */ }
+  }
+
+  resumeBattleSfx() {
+    if (!this.battleSfxPaused) return
+    this.battleSfxPaused = false
+    this.starTransientScheduler.resume()
+    if (!this.ready) return
+    try { void this.Tone!.getContext().rawContext.resume() } catch { /* noop */ }
   }
 
   // ── EXT.2 星擊三拍音效（全程序化、即用即拋暫態節點，dispose 防洩漏；失敗絕不影響遊戲）──
@@ -195,7 +286,7 @@ class ToneAudioEngine implements AudioEngine {
       }).connect(trem)
       f.frequency.rampTo(8000, 0.68, now)
       noise.triggerAttackRelease(0.7, now)
-      setTimeout(() => { try { noise.dispose(); trem.dispose(); f.dispose() } catch { /* noop */ } }, 1300)
+      this.trackStarTransient([noise, trem, f], 1300)
     } catch (e) { console.warn('[audio] starChargeSweep', e) }
   }
 
@@ -218,7 +309,7 @@ class ToneAudioEngine implements AudioEngine {
       bass.triggerAttackRelease('C1', '4n', now) // sub-bass 下潛
       this.fxNoise.triggerAttackRelease('4n', now, 0.95) // 噪音爆
       this.arp(['C6', 'G6'], 0.04, '32n', 0.6) // 一抹亮頂
-      setTimeout(() => { try { bass.dispose() } catch { /* noop */ } }, 1200)
+      this.trackStarTransient([bass], 1200)
     } catch (e) { console.warn('[audio] starImpactBoom', e) }
   }
 

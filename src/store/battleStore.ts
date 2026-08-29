@@ -3,13 +3,16 @@ import type { BattleMobie, TerrainId } from '@/game/types'
 import { createBattleState, upsertStatus, type BattleEvent, type BattleState, type Side, type SupportOutcome, type StatusEffect } from '@/game/battle/reducer'
 import type { DisplayUnitSnapshot, ReplayInput, ReplayTurn } from '@/game/replay/types'
 import { ReplayRecorder } from '@/store/replayRecorder'
-import { createBattleIdentity } from '@/presentation/battle/battleIdentity'
+import {
+  createBattleIdentity,
+  sameBattleSession,
+  samePresentationToken,
+} from '@/presentation/battle/battleIdentity'
 import type {
   BattleIntent,
   BattleSessionToken,
   IntentFeedEntry,
   IntentPresentationToken,
-  PresentationToken,
   TurnPresentationToken,
   TryRecordStatus,
   TurnInput,
@@ -23,7 +26,14 @@ export type BattlePhase =
   | 'statusQte' // M19.d 變化招：輕量強度 QTE（只影響效果強度、不影響成敗；無 mash）
   | 'switchSelect' | 'defenseQte'
   | 'chainQte' // M9 連鎖：對 eligible 隊友依序跑連續 QTE
-  | 'busy' | 'won' | 'lost'
+  | 'busy' | 'error' | 'won' | 'lost'
+
+export interface BattleRuntimeError {
+  kind: 'resolve' | 'init'
+  message: string
+  detail: string
+  requestId: number
+}
 
 /** 一次受擊的視覺效果（低頻：每次攻擊一次，走 React state 沒問題） */
 export interface HitFx {
@@ -58,15 +68,17 @@ export interface BattleIntentPresentation {
   safePointFeed: readonly IntentFeedEntry[]
 }
 
-const samePresentation = (left: PresentationToken, right: PresentationToken): boolean =>
-  left.battleSessionId === right.battleSessionId
-  && left.resultFingerprint === right.resultFingerprint
-  && left.presentationId === right.presentationId
-  && left.purpose === right.purpose
+export type InterruptedBattleIntent = Pick<
+  BattleIntentPresentation,
+  'intent' | 'baseLog' | 'safePointFeed'
+>
 
-const sameSession = (left: BattleSessionToken, right: BattleSessionToken): boolean =>
-  left.battleSessionId === right.battleSessionId
-  && left.resultFingerprint === right.resultFingerprint
+const currentSession = (
+  session: BattleRuntimeSession | null,
+  token: BattleSessionToken,
+): session is BattleRuntimeSession => Boolean(session && !session.retired && sameBattleSession(session.token, token))
+
+const errorDetail = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 const cloneBattle = (battle: BattleState): BattleState => ({
   ...battle,
@@ -103,6 +115,13 @@ export interface BattleSessionInit {
   snapshot: DisplayUnitSnapshot[]
   createdAt: number
   forceNew?: boolean
+  attemptToken?: BattleSessionToken
+  identityFactory?: () => BattleSessionToken
+}
+
+export interface BattleSessionAttempt {
+  logicalBattleKey: object
+  battleSeed: string
   identityFactory?: () => BattleSessionToken
 }
 
@@ -120,6 +139,49 @@ export interface BattleRuntimeSession {
   replayFinished: boolean
   completedIntentIds: ReadonlySet<BattleIntent['id']>
   partnerSkillIdsUsed: ReadonlySet<string>
+  interruptedIntent: InterruptedBattleIntent | null
+  retired: boolean
+}
+
+function settleIntentSafePoint(
+  session: BattleRuntimeSession,
+  choiceFocusRequestId: number,
+  presentation: InterruptedBattleIntent,
+) {
+  const completedIntentIds = new Set(session.completedIntentIds)
+  completedIntentIds.add(presentation.intent.id)
+  return {
+    phase: 'playerChoice' as const,
+    log: appendFeed(presentation.baseLog, presentation.safePointFeed),
+    banner: null,
+    choiceFocusRequestId: choiceFocusRequestId + 1,
+    session: { ...session, completedIntentIds, interruptedIntent: null },
+  }
+}
+
+function createRuntimeSession({
+  logicalBattleKey,
+  token,
+  battleSeed,
+  recorder,
+}: Pick<BattleRuntimeSession, 'logicalBattleKey' | 'token' | 'battleSeed' | 'recorder'>): BattleRuntimeSession {
+  return {
+    logicalBattleKey,
+    token,
+    nextPresentationId: 1,
+    endSent: false,
+    battleSeed,
+    rngCursor: 0,
+    recorder,
+    recordedPresentationIds: new Set(),
+    pendingReplay: null,
+    replayWarningShown: false,
+    replayFinished: false,
+    completedIntentIds: new Set(),
+    partnerSkillIdsUsed: new Set(),
+    interruptedIntent: null,
+    retired: false,
+  }
 }
 
 export interface BattleSessionEnsureResult {
@@ -171,13 +233,19 @@ interface BattleUiState {
   intentPresentation: BattleIntentPresentation | null
   /** Monotonic request used by React to restore focus after an intent reaches its safe point. */
   choiceFocusRequestId: number
+  battleError: BattleRuntimeError | null
   /** Non-persisted logical battle runtime; survives BattleScreen remounts. */
   session: BattleRuntimeSession | null
 
   init: (playerMembers: BattleMobie[], foeMembers: BattleMobie[], terrains?: TerrainId[]) => void
+  beginSessionAttempt: (attempt: BattleSessionAttempt) => BattleSessionToken
   ensureBattleSession: (init: BattleSessionInit) => BattleSessionEnsureResult
   acquireTurnPresentationToken: () => TurnPresentationToken | null
   isSessionCurrent: (token: BattleSessionToken) => boolean
+  fenceSession: (token: BattleSessionToken) => boolean
+  failTurnOnce: (token: TurnPresentationToken, error: unknown) => boolean
+  recordFailedOnce: (token: TurnPresentationToken, error: unknown) => boolean
+  failBattleInit: (error: unknown) => void
   tryRecordTurnOnce: (
     token: TurnPresentationToken,
     input: ReplayInput,
@@ -212,6 +280,8 @@ interface BattleUiState {
   intentPushFeed: (token: IntentPresentationToken, entry: IntentFeedEntry) => void
   intentSetBanner: (token: IntentPresentationToken, banner: string | null) => void
   completeIntentOnce: (token: IntentPresentationToken) => boolean
+  cancelIntentOnce: (token: IntentPresentationToken, reason: string) => boolean
+  completeInterruptedIntentOnce: (token: BattleSessionToken) => boolean
 }
 
 export const useBattleStore = create<BattleUiState>((set, get) => ({
@@ -231,6 +301,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   presentation: null,
   intentPresentation: null,
   choiceFocusRequestId: 0,
+  battleError: null,
   session: null,
 
   init: (playerMembers, foeMembers, terrains) =>
@@ -239,14 +310,35 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       phase: 'intro', log: [], banner: null,
       hitFx: null, fxCounter: 0, captured: null,
       support: null, energy: 0, chain: 0, combo: null, lockedIndex: null, revealedFoes: [],
-      presentation: null, intentPresentation: null, choiceFocusRequestId: 0, session: null,
+      presentation: null, intentPresentation: null, choiceFocusRequestId: 0, battleError: null, session: null,
     }),
+
+  beginSessionAttempt: (attempt) => {
+    const token = (attempt.identityFactory ?? createBattleIdentity)()
+    const session = createRuntimeSession({
+      logicalBattleKey: attempt.logicalBattleKey,
+      token,
+      battleSeed: attempt.battleSeed,
+      recorder: new ReplayRecorder(),
+    })
+    set({
+      presentation: null,
+      intentPresentation: null,
+      banner: null,
+      hitFx: null,
+      support: null,
+      combo: null,
+      session,
+    })
+    return token
+  },
 
   ensureBattleSession: (init) => {
     const current = get()
     if (
       !init.forceNew
       && current.session?.logicalBattleKey === init.logicalBattleKey
+      && !current.session.retired
       && current.battle
     ) {
       return {
@@ -256,8 +348,15 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       }
     }
 
-    const token = (init.identityFactory ?? createBattleIdentity)()
-    const recorder = new ReplayRecorder()
+    const attemptSession = init.attemptToken
+      && current.session
+      && !current.session.retired
+      && current.session.logicalBattleKey === init.logicalBattleKey
+      && sameBattleSession(current.session.token, init.attemptToken)
+      ? current.session
+      : null
+    const token = attemptSession?.token ?? (init.identityFactory ?? createBattleIdentity)()
+    const recorder = attemptSession?.recorder ?? new ReplayRecorder()
     if (init.recordReplay) {
       recorder.start({
         battleSeed: init.battleSeed,
@@ -267,21 +366,12 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
         createdAt: init.createdAt,
       })
     }
-    const session: BattleRuntimeSession = {
+    const session = createRuntimeSession({
       logicalBattleKey: init.logicalBattleKey,
       token,
-      nextPresentationId: 1,
-      endSent: false,
       battleSeed: init.battleSeed,
-      rngCursor: 0,
       recorder,
-      recordedPresentationIds: new Set(),
-      pendingReplay: null,
-      replayWarningShown: false,
-      replayFinished: false,
-      completedIntentIds: new Set(),
-      partnerSkillIdsUsed: new Set(),
-    }
+    })
     set({
       battle: createBattleState(init.playerMembers, init.foeMembers, init.terrains),
       phase: 'intro',
@@ -299,6 +389,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       presentation: null,
       intentPresentation: null,
       choiceFocusRequestId: 0,
+      battleError: null,
       session,
     })
     return { created: true, token, battleSeed: init.battleSeed }
@@ -307,7 +398,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   acquireTurnPresentationToken: () => {
     const state = get()
     const session = state.session
-    if (!session || state.intentPresentation) return null
+    if (!session || session.retired || state.intentPresentation || state.battleError) return null
     const token: TurnPresentationToken = {
       ...session.token,
       presentationId: session.nextPresentationId,
@@ -319,28 +410,117 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
 
   isSessionCurrent: (token) => {
     const session = get().session
-    return Boolean(session && sameSession(session.token, token))
+    return currentSession(session, token)
   },
+
+  fenceSession: (token) => {
+    let fenced = false
+    set((s) => {
+      if (!s.session || !sameBattleSession(s.session.token, token)) return {}
+      s.session.recorder.disableAfterFailure()
+      fenced = true
+      return {
+        presentation: null,
+        intentPresentation: null,
+        banner: null,
+        hitFx: null,
+        support: null,
+        combo: null,
+        session: { ...s.session, retired: true, pendingReplay: null },
+      }
+    })
+    return fenced
+  },
+
+  failTurnOnce: (token, error) => {
+    let failed = false
+    set((s) => {
+      if (!currentSession(s.session, token) || s.battleError) return {}
+      if (s.presentation && !samePresentationToken(s.presentation.token, token)) return {}
+      failed = true
+      return {
+        phase: 'error',
+        presentation: null,
+        intentPresentation: null,
+        banner: null,
+        hitFx: null,
+        support: null,
+        combo: null,
+        battleError: {
+          kind: 'resolve',
+          message: '戰鬥處理發生錯誤，請重新開始本場戰鬥。',
+          detail: errorDetail(error),
+          requestId: 1,
+        },
+        session: { ...s.session, pendingReplay: null },
+      }
+    })
+    return failed
+  },
+
+  recordFailedOnce: (token, error) => {
+    let warned = false
+    set((s) => {
+      if (!currentSession(s.session, token) || s.session.replayWarningShown) return {}
+      s.session.recorder.disableAfterFailure()
+      const recordedPresentationIds = new Set(s.session.recordedPresentationIds)
+      recordedPresentationIds.add(token.presentationId)
+      warned = true
+      const warning = `⚠️ 本場回放錄製已停用，戰鬥仍會繼續（${errorDetail(error)}）`
+      return {
+        presentation: s.presentation && samePresentationToken(s.presentation.token, token)
+          ? { ...s.presentation, log: [...s.presentation.log.slice(-4), warning] }
+          : s.presentation,
+        session: {
+          ...s.session,
+          recordedPresentationIds,
+          pendingReplay: null,
+          replayWarningShown: true,
+        },
+      }
+    })
+    return warned
+  },
+
+  failBattleInit: (error) =>
+    set((s) => ({
+      phase: 'error',
+      presentation: null,
+      intentPresentation: null,
+      banner: null,
+      battleError: {
+        kind: 'init',
+        message: '戰鬥重新初始化失敗，請再試一次或離開。',
+        detail: errorDetail(error),
+        requestId: (s.battleError?.requestId ?? 0) + 1,
+      },
+      session: s.session ? { ...s.session, pendingReplay: null } : null,
+    })),
 
   tryRecordTurnOnce: (token, input, events) => {
     const session = get().session
-    if (!session || !sameSession(session.token, token)) return 'failed'
+    if (!currentSession(session, token)) return 'failed'
     if (session.recordedPresentationIds.has(token.presentationId)) return 'already-recorded'
-    const recordedPresentationIds = new Set(session.recordedPresentationIds)
-    recordedPresentationIds.add(token.presentationId)
     const result = session.recorder.prepareTurn(input, events)
     const failed = result.status === 'failed'
-    const warn = failed && !session.replayWarningShown
-    set({
-      session: {
-        ...session,
+    let published = false
+    let warn = false
+    set((s) => {
+      if (!currentSession(s.session, token) || s.session.recordedPresentationIds.has(token.presentationId)) return {}
+      const recordedPresentationIds = new Set(s.session.recordedPresentationIds)
+      recordedPresentationIds.add(token.presentationId)
+      warn = failed && !s.session.replayWarningShown
+      published = true
+      return { session: {
+        ...s.session,
         recordedPresentationIds,
         pendingReplay: result.status === 'prepared'
           ? { presentationId: token.presentationId, turn: result.turn }
           : null,
-        replayWarningShown: session.replayWarningShown || failed,
-      },
+        replayWarningShown: s.session.replayWarningShown || failed,
+      } }
     })
+    if (!published) return 'failed'
     if (warn) get().presentationPushLog(token, '⚠️ 本場回放錄製已停用，戰鬥仍會繼續')
     if (result.status === 'prepared') return 'recorded'
     if (result.status === 'failed') return 'failed'
@@ -349,7 +529,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
 
   finishReplayOnce: (token, outcome) => {
     const session = get().session
-    if (!session || !sameSession(session.token, token) || session.replayFinished) return false
+    if (!currentSession(session, token) || session.replayFinished) return false
     set({ session: { ...session, replayFinished: true } })
     void session.recorder.finish(outcome)
     return true
@@ -357,7 +537,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
 
   markEndSentOnce: (token) => {
     const session = get().session
-    if (!session || !sameSession(session.token, token) || session.endSent) return false
+    if (!currentSession(session, token) || session.endSent) return false
     set({ session: { ...session, endSent: true } })
     return true
   },
@@ -381,6 +561,8 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
     set((s) => {
       if (
         !s.session
+        || s.session.retired
+        || s.battleError
         || !s.battle
         || s.phase !== 'playerChoice'
         || s.presentation
@@ -421,9 +603,9 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
 
   beginPresentation: (token, before, input) =>
     set((s) => {
-      if (!s.session || !sameSession(s.session.token, token)) return {}
+      if (!currentSession(s.session, token) || s.battleError) return {}
       if (s.intentPresentation) return {}
-      if (s.presentation && !samePresentation(s.presentation.token, token)) return {}
+      if (s.presentation && !samePresentationToken(s.presentation.token, token)) return {}
       const star = input.type === 'ATTACK' && input.starStrike === true
       return {
         phase: 'busy',
@@ -446,7 +628,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   presentationSetMemberHp: (token, side, index, hp) =>
     set((s) => {
       const projection = s.presentation
-      if (!projection || !samePresentation(projection.token, token)) return {}
+      if (!projection || !samePresentationToken(projection.token, token)) return {}
       const sideState = projection.battle[side]
       const members = sideState.members.map((member, memberIndex) =>
         memberIndex === index ? { ...member, currentHp: hp } : member,
@@ -462,7 +644,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   presentationSetActiveIndex: (token, side, index) =>
     set((s) => {
       const projection = s.presentation
-      if (!projection || !samePresentation(projection.token, token)) return {}
+      if (!projection || !samePresentationToken(projection.token, token)) return {}
       return {
         presentation: {
           ...projection,
@@ -475,30 +657,30 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
     }),
 
   presentationSetBanner: (token, banner) =>
-    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+    set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? { presentation: { ...s.presentation, banner } }
       : {}),
   presentationPushLog: (token, message) =>
-    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+    set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? { presentation: { ...s.presentation, log: [...s.presentation.log.slice(-4), message] } }
       : {}),
   presentationShowHit: (token, fx) =>
     set((s) => {
       const projection = s.presentation
-      if (!projection || !samePresentation(projection.token, token)) return {}
+      if (!projection || !samePresentationToken(projection.token, token)) return {}
       const fxCounter = projection.fxCounter + 1
       return { presentation: { ...projection, hitFx: { ...fx, id: fxCounter }, fxCounter } }
     }),
   presentationSetSupport: (token, support) =>
-    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+    set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? { presentation: { ...s.presentation, support } }
       : {}),
   presentationSetCombo: (token, combo) =>
-    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+    set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? { presentation: { ...s.presentation, combo } }
       : {}),
   presentationClearTransient: (token) =>
-    set((s) => s.presentation && samePresentation(s.presentation.token, token)
+    set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? {
           presentation: {
             ...s.presentation,
@@ -511,23 +693,21 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       : {}),
   isPresentationCurrent: (token) => {
     const projection = get().presentation
-    return Boolean(projection && samePresentation(projection.token, token))
+    return Boolean(projection && samePresentationToken(projection.token, token))
   },
   commitTurn: (token, resolution) => {
     let result: CommitTurnResult = { committed: false }
-    const currentSession = get().session
-    const stagedReplay = currentSession
-      && sameSession(currentSession.token, token)
-      && currentSession.pendingReplay?.presentationId === token.presentationId
-      ? { recorder: currentSession.recorder, turn: currentSession.pendingReplay.turn }
+    const runtimeSession = get().session
+    const stagedReplay = currentSession(runtimeSession, token)
+      && runtimeSession.pendingReplay?.presentationId === token.presentationId
+      ? { recorder: runtimeSession.recorder, turn: runtimeSession.pendingReplay.turn }
       : null
     set((s) => {
       const projection = s.presentation
       if (
         !projection
-        || !samePresentation(projection.token, token)
-        || !s.session
-        || !sameSession(s.session.token, token)
+        || !samePresentationToken(projection.token, token)
+        || !currentSession(s.session, token)
         || s.battle !== resolution.before
       ) return {}
 
@@ -575,7 +755,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   },
   cancelPresentation: (token, phase = 'playerChoice') =>
     set((s) => {
-      if (!s.presentation || !samePresentation(s.presentation.token, token)) return {}
+      if (!s.presentation || !samePresentationToken(s.presentation.token, token)) return {}
       return {
         presentation: null,
         phase,
@@ -583,7 +763,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
         hitFx: null,
         support: null,
         combo: null,
-        session: s.session && sameSession(s.session.token, token)
+        session: currentSession(s.session, token)
           ? { ...s.session, pendingReplay: null }
           : s.session,
       }
@@ -594,6 +774,8 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
     set((s) => {
       if (
         !s.session
+        || s.session.retired
+        || s.battleError
         || !s.battle
         || s.presentation
         || s.intentPresentation
@@ -629,11 +811,11 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
 
   isIntentPresentationCurrent: (token) => {
     const current = get().intentPresentation
-    return Boolean(current && samePresentation(current.token, token))
+    return Boolean(current && samePresentationToken(current.token, token))
   },
 
   intentPushFeed: (token, entry) =>
-    set((s) => s.intentPresentation && samePresentation(s.intentPresentation.token, token)
+    set((s) => s.intentPresentation && samePresentationToken(s.intentPresentation.token, token)
       ? {
           intentPresentation: {
             ...s.intentPresentation,
@@ -643,7 +825,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       : {}),
 
   intentSetBanner: (token, banner) =>
-    set((s) => s.intentPresentation && samePresentation(s.intentPresentation.token, token)
+    set((s) => s.intentPresentation && samePresentationToken(s.intentPresentation.token, token)
       ? { intentPresentation: { ...s.intentPresentation, banner } }
       : {}),
 
@@ -653,23 +835,52 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       const presentation = s.intentPresentation
       if (
         !presentation
-        || !samePresentation(presentation.token, token)
-        || !s.session
-        || !sameSession(s.session.token, token)
+        || !samePresentationToken(presentation.token, token)
+        || !currentSession(s.session, token)
         || s.session.completedIntentIds.has(presentation.intent.id)
       ) return {}
 
-      const completedIntentIds = new Set(s.session.completedIntentIds)
-      completedIntentIds.add(presentation.intent.id)
       completed = true
       return {
-        phase: 'playerChoice',
-        log: appendFeed(presentation.baseLog, presentation.safePointFeed),
-        banner: null,
+        ...settleIntentSafePoint(s.session, s.choiceFocusRequestId, presentation),
         intentPresentation: null,
-        choiceFocusRequestId: s.choiceFocusRequestId + 1,
-        session: { ...s.session, completedIntentIds },
       }
+    })
+    return completed
+  },
+
+  cancelIntentOnce: (token) => {
+    let cancelled = false
+    set((s) => {
+      if (
+        !s.intentPresentation
+        || !samePresentationToken(s.intentPresentation.token, token)
+        || !currentSession(s.session, token)
+      ) return {}
+      cancelled = true
+      return {
+        intentPresentation: null,
+        banner: null,
+        session: {
+          ...s.session,
+          interruptedIntent: {
+            intent: s.intentPresentation.intent,
+            baseLog: s.intentPresentation.baseLog,
+            safePointFeed: s.intentPresentation.safePointFeed,
+          },
+        },
+      }
+    })
+    return cancelled
+  },
+
+  completeInterruptedIntentOnce: (token) => {
+    let completed = false
+    set((s) => {
+      if (!currentSession(s.session, token) || !s.session.interruptedIntent) return {}
+      const interrupted = s.session.interruptedIntent
+      completed = true
+      return settleIntentSafePoint(s.session, s.choiceFocusRequestId, interrupted)
     })
     return completed
   },

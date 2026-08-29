@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { gameMachine, INITIAL_GAME_CONTEXT } from './gameMachine'
 import { createBattleIdentity, type BattleIdentityCrypto } from '@/presentation/battle/battleIdentity'
 import { classifyResultIdentity } from '@/presentation/battle/resultIdentity'
+import { PLAYER_CARDS } from '@/game/data/playerCards'
 
 function battleActor() {
   const snapshot = gameMachine.resolveState({
@@ -81,6 +82,31 @@ describe('gameMachine result handoff', () => {
     actor.send({ type: 'PLAY_AGAIN' })
     expect(actor.getSnapshot().context.battleResult).toBeNull()
     expect(actor.getSnapshot().context.outcome).toBeNull()
+    actor.stop()
+  })
+
+  it('aborts battle to regions without recording an outcome and clears encounter/tower runtime', () => {
+    const cards = PLAYER_CARDS.slice(0, 3)
+    const snapshot = gameMachine.resolveState({
+      value: 'battle',
+      context: {
+        ...INITIAL_GAME_CONTEXT,
+        regionId: 'verdant-forest',
+        foeTeam: cards,
+        playerTeam: cards,
+        outcome: null,
+        battleResult: null,
+        captured: true,
+        tower: { ascension: 1, floor: 2, seed: 'tower', teamCards: cards },
+      },
+    })
+    const actor = createActor(gameMachine, { snapshot }).start()
+    actor.send({ type: 'ABORT_BATTLE' })
+
+    expect(actor.getSnapshot().value).toBe('regionSelect')
+    expect(actor.getSnapshot().context).toMatchObject({
+      foeTeam: [], playerTeam: [], outcome: null, battleResult: null, captured: false, tower: null,
+    })
     actor.stop()
   })
 })

@@ -47,6 +47,7 @@ export type GameEvent =
   | { type: 'BACK' }
   | { type: 'SELECT_TEAM'; cards: Card[] }
   | ({ type: 'END_BATTLE' } & BattleResultHandoff)
+  | { type: 'ABORT_BATTLE' }
   | { type: 'SET_CAPTURED'; captured: boolean }
   | { type: 'PLAY_AGAIN' }
   | { type: 'TO_REGIONS' }
@@ -168,6 +169,7 @@ export const gameMachine = setup({
     battle: {
       on: {
         END_BATTLE: { target: 'result', actions: 'recordOutcome' },
+        ABORT_BATTLE: { target: 'regionSelect', actions: 'resetEncounter' },
       },
     },
     result: {

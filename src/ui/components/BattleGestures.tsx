@@ -7,12 +7,14 @@ import { swipeFromPointer, swipeShieldQuality, type Pt } from '@/input/gestures'
 import type { InteractMode } from '@/game/settings'
 import type { QteQuality } from '@/game/battle/engine'
 import { normPt } from '@/ui/components/gestureUtil'
+import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 
 /** 下滑拉護盾：向下快滑抬起護盾 → 依速度給 QteQuality；逾時以 normal 安全結束（絕不卡死）。 */
-export function ShieldSwipe({ mode, onResult, timeoutMs = 5000 }: {
+export function ShieldSwipe({ mode, onResult, timeoutMs = 5000, paused = false }: {
   mode: InteractMode
   onResult: (q: QteQuality) => void
   timeoutMs?: number
+  paused?: boolean
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const rectRef = useRef<DOMRect | null>(null)
@@ -21,6 +23,7 @@ export function ShieldSwipe({ mode, onResult, timeoutMs = 5000 }: {
   const draggingRef = useRef(false)
   const doneRef = useRef(false)
   const onResultRef = useRef(onResult)
+  const scheduler = usePausableScheduler(paused)
   onResultRef.current = onResult
 
   const finish = (q: QteQuality) => {
@@ -31,19 +34,19 @@ export function ShieldSwipe({ mode, onResult, timeoutMs = 5000 }: {
 
   useEffect(() => {
     doneRef.current = false
-    const t = window.setTimeout(() => finish('normal'), timeoutMs)
-    return () => window.clearTimeout(t)
+    const t = scheduler.schedule(() => finish('normal'), timeoutMs)
+    return () => scheduler.cancel(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeoutMs])
+  }, [scheduler, timeoutMs])
 
   const down = (e: ReactPointerEvent) => {
-    if (doneRef.current || !surfaceRef.current) return
+    if (doneRef.current || scheduler.isPaused || !surfaceRef.current) return
     draggingRef.current = true
     rectRef.current = surfaceRef.current.getBoundingClientRect()
     samplesRef.current = [normPt(rectRef.current, e)]
   }
   const move = (e: ReactPointerEvent) => {
-    if (!draggingRef.current || doneRef.current || !rectRef.current) return
+    if (!draggingRef.current || doneRef.current || scheduler.isPaused || !rectRef.current) return
     const p = normPt(rectRef.current, e)
     samplesRef.current.push(p)
     // 護盾隨下滑上抬（rAF 級別低頻，直寫 DOM 不過 state）
@@ -52,6 +55,7 @@ export function ShieldSwipe({ mode, onResult, timeoutMs = 5000 }: {
   const up = () => {
     if (!draggingRef.current || doneRef.current) return
     draggingRef.current = false
+    if (scheduler.isPaused) return
     finish(swipeShieldQuality(swipeFromPointer(samplesRef.current), mode))
   }
 

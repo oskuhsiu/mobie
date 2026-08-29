@@ -3,6 +3,7 @@ import type {
   BattleDisplaySnapshot,
   BattleIntentPresenterPort,
   BattleIntentTransactionPort,
+  CancelReason,
   IntentPresentationToken,
   IntentSkipSource,
   IntentSubmissionResult,
@@ -18,6 +19,7 @@ interface ActiveIntent {
   token: IntentPresentationToken
   controller: AbortController
   skipSource: IntentSkipSource | null
+  cancelReason: CancelReason | null
   completionAttempted: boolean
 }
 
@@ -45,6 +47,7 @@ export class BattleIntentCoordinator {
       token,
       controller: new AbortController(),
       skipSource: null,
+      cancelReason: null,
       completionAttempted: false,
     }
     this.active = active
@@ -68,7 +71,14 @@ export class BattleIntentCoordinator {
       if (active.skipSource !== null) {
         return this.completeCurrent(active) ? 'skipped' : 'cancelled'
       }
-      if (presentation === 'cancelled' || active.controller.signal.aborted) return 'cancelled'
+      if (active.cancelReason !== null) {
+        this.cancelCurrent(active, active.cancelReason)
+        return 'cancelled'
+      }
+      if (presentation === 'cancelled' || active.controller.signal.aborted) {
+        this.cancelCurrent(active, 'superseded')
+        return 'cancelled'
+      }
       if (!this.completeCurrent(active)) return 'cancelled'
       return presentation
     } finally {
@@ -78,7 +88,7 @@ export class BattleIntentCoordinator {
 
   skip(source: IntentSkipSource): boolean {
     const active = this.active
-    if (!active || active.skipSource !== null || active.completionAttempted) return false
+    if (!active || active.skipSource !== null || active.cancelReason !== null || active.completionAttempted) return false
     active.skipSource = source
     try {
       active.controller.abort('skip')
@@ -88,11 +98,33 @@ export class BattleIntentCoordinator {
     return true
   }
 
+  cancel(reason: CancelReason): boolean {
+    const active = this.active
+    if (!active || active.skipSource !== null || active.cancelReason !== null || active.completionAttempted) return false
+    active.cancelReason = reason
+    try {
+      active.controller.abort(reason)
+    } catch {
+      // The token-fenced transaction cancellation remains authoritative.
+    }
+    return true
+  }
+
   private completeCurrent(active: ActiveIntent): boolean {
     if (active.completionAttempted || !this.isCurrent(active.token)) return false
     active.completionAttempted = true
     try {
       return this.options.transaction.completeOnce(active.token)
+    } catch {
+      return false
+    }
+  }
+
+  private cancelCurrent(active: ActiveIntent, reason: CancelReason): boolean {
+    if (active.completionAttempted || !this.isCurrent(active.token)) return false
+    active.completionAttempted = true
+    try {
+      return this.options.transaction.cancelOnce(active.token, reason)
     } catch {
       return false
     }

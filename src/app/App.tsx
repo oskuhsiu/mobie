@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { GameProvider, useGame } from '@/app/GameProvider'
 import { useRoster } from '@/store/rosterStore'
 import { useMeta } from '@/store/metaStore'
@@ -11,10 +11,31 @@ import { CardSelectScreen } from '@/ui/screens/CardSelectScreen'
 import { BattleScreen } from '@/ui/screens/BattleScreen'
 import { ResultScreen } from '@/ui/screens/ResultScreen'
 import { TowerSetupScreen } from '@/ui/screens/TowerSetupScreen'
+import { endRegisteredBattleLifecycle } from '@/presentation/battle/battleLifecycleBridge'
+import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'
 
 export function Stage() {
   const game = useGame()
   const { value, context } = game
+  const [devBattleMounted, setDevBattleMounted] = useState(true)
+
+  useEffect(() => {
+    if (
+      !import.meta.env.DEV
+      || new URLSearchParams(window.location.search).get('m23Scenario') !== M23_BASELINE_SCENARIO_ID
+    ) return
+    const unmount = () => {
+      endRegisteredBattleLifecycle('unmount')
+      setDevBattleMounted(false)
+    }
+    const remount = () => setDevBattleMounted(true)
+    window.addEventListener('mobie:m23-unmount-battle', unmount)
+    window.addEventListener('mobie:m23-remount-battle', remount)
+    return () => {
+      window.removeEventListener('mobie:m23-unmount-battle', unmount)
+      window.removeEventListener('mobie:m23-remount-battle', remount)
+    }
+  }, [])
 
   // 依區域主題化背景
   const region = context.regionId ? lookupRegion(context.regionId) : null
@@ -32,7 +53,7 @@ export function Stage() {
         {value === 'towerSetup' && <TowerSetupScreen />}
         {value === 'encounter' && <EncounterScreen />}
         {value === 'cardSelect' && <CardSelectScreen />}
-        {value === 'battle' && <BattleScreen />}
+        {value === 'battle' && devBattleMounted && <BattleScreen />}
         {value === 'result' && <ResultScreen />}
       </div>
     </div>

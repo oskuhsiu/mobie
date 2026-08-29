@@ -11,6 +11,8 @@ import { useBattleStore } from '@/store/battleStore'
 import { assembleBattlePrep, assembleExt, assemblePostGrowth } from '@/store/ext'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
 import type { QteQuality } from '@/game/battle/engine'
+import { battleAudioSession } from '@/audio/battleAudioSession'
+import { battleBgmSession } from '@/audio/battleBgmSession'
 import {
   M23BattleDiagnostics,
   type M23DiagnosticsSnapshot,
@@ -20,7 +22,9 @@ import {
   M23_GRAPHICS_OPTIONS,
   M23_MOTION_OPTIONS,
   M23_TURN_TRANSACTION_CASES,
+  M23_FAILURE_STAGES,
   type M23Checkpoint,
+  type M23FailureStage,
   type M23MotionPreference,
   type M23PoolCount,
   type M23PresentationTraceEvent,
@@ -50,10 +54,23 @@ export interface M23BaselineDriver {
     phase: ReturnType<typeof useBattleStore.getState>['phase']
     energy: number
     lockedIndex: number | null
-    session: { token: BattleSessionToken; nextPresentationId: number; endSent: boolean } | null
+    error: ReturnType<typeof useBattleStore.getState>['battleError']
+    session: {
+      token: BattleSessionToken
+      nextPresentationId: number
+      endSent: boolean
+      retired: boolean
+      recorderActive: boolean
+    } | null
   }
   takeQteQuality: (actual: QteQuality) => QteQuality
   activeTransactionCase: () => M23TurnTransactionCase | null
+  injectFailure: (stage: M23FailureStage, count?: number) => void
+  consumeFailure: (stage: M23FailureStage) => boolean
+  audioState: () => {
+    sfx: ReturnType<typeof battleAudioSession.snapshot>
+    bgm: ReturnType<typeof battleBgmSession.snapshot>
+  }
   prepareArtworkFixture: (fixture: M23ArtworkFixture) => void
   checkpoint: (cue: string, checkpoint?: M23Checkpoint) => Promise<void>
   step: (count?: number) => void
@@ -138,6 +155,12 @@ export function installM23BaselineDriver(): M23BaselineDriver {
   let resumeWaiters: Array<() => void> = []
   let qteQualityQueue: QteQuality[] = []
   let activeTransactionCase: M23TurnTransactionCase | null = null
+  const failures: Record<M23FailureStage, number> = {
+    'battle-data': 0,
+    resolve: 0,
+    recorder: 0,
+    'retry-init': 0,
+  }
 
   const configure = (patch: Partial<M23BaselineDriverOptions> = {}): M23BaselineDriverOptions => {
     if (patch.scenarioId !== undefined && patch.scenarioId !== M23_BASELINE_SCENARIO_ID) {
@@ -246,11 +269,14 @@ export function installM23BaselineDriver(): M23BaselineDriver {
         combo: null,
         lockedIndex: null,
         presentation: null,
+        intentPresentation: null,
+        battleError: null,
         session: state.session ? {
           ...state.session,
           battleSeed: `${options.seed}|${caseId}`,
           rngCursor: 0,
           pendingReplay: null,
+          retired: false,
         } : null,
       })
     },
@@ -261,15 +287,28 @@ export function installM23BaselineDriver(): M23BaselineDriver {
         phase: state.phase,
         energy: state.energy,
         lockedIndex: state.lockedIndex,
+        error: state.battleError,
         session: state.session ? {
           token: state.session.token,
           nextPresentationId: state.session.nextPresentationId,
           endSent: state.session.endSent,
+          retired: state.session.retired,
+          recorderActive: state.session.recorder.active,
         } : null,
       }
     },
     takeQteQuality: (actual) => qteQualityQueue.shift() ?? actual,
     activeTransactionCase: () => activeTransactionCase,
+    injectFailure: (stage, count = 1) => {
+      if (!M23_FAILURE_STAGES.includes(stage)) throw new Error(`Unknown failure stage: ${stage}`)
+      failures[stage] += positiveInteger(count, 'failure count')
+    },
+    consumeFailure: (stage) => {
+      if (failures[stage] <= 0) return false
+      failures[stage] -= 1
+      return true
+    },
+    audioState: () => ({ sfx: battleAudioSession.snapshot(), bgm: battleBgmSession.snapshot() }),
     prepareArtworkFixture: (fixture) => {
       const state = useBattleStore.getState()
       if (!state.battle) throw new Error('A live battle is required before preparing artwork')
@@ -319,6 +358,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       stepPermits = 0
       qteQualityQueue = []
       activeTransactionCase = null
+      for (const stage of M23_FAILURE_STAGES) failures[stage] = 0
       diagnostics.reset()
     },
     dispose: () => {

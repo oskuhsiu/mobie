@@ -3,6 +3,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from '@/app/App'
 import '@/ui/styles/global.css'
+import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -12,7 +13,7 @@ createRoot(document.getElementById('root')!).render(
 
 if (
   import.meta.env.DEV
-  && new URLSearchParams(window.location.search).get('m23Scenario') === 'm23-current-parity-v1'
+  && new URLSearchParams(window.location.search).get('m23Scenario') === M23_BASELINE_SCENARIO_ID
 ) {
   void import('@/dev/m23/installBaselineDriver').then(({ installM23BaselineDriver }) => {
     installM23BaselineDriver()

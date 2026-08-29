@@ -1,4 +1,4 @@
-import type { BattleSessionToken } from './contracts'
+import type { BattleSessionToken, PresentationToken } from './contracts'
 
 export type BattleIdentity = BattleSessionToken
 
@@ -22,4 +22,29 @@ export function createBattleIdentity(
     battleSessionId: random128BitId(crypto),
     resultFingerprint: random128BitId(crypto),
   }
+}
+
+export function sameBattleSession(
+  left: BattleSessionToken | null | undefined,
+  right: BattleSessionToken,
+): boolean {
+  return Boolean(
+    left
+    && left.battleSessionId === right.battleSessionId
+    && left.resultFingerprint === right.resultFingerprint,
+  )
+}
+
+export function samePresentationToken(
+  left: PresentationToken | null | undefined,
+  right: PresentationToken,
+): boolean {
+  if (
+    !left
+    || !sameBattleSession(left, right)
+    || left.presentationId !== right.presentationId
+    || left.purpose !== right.purpose
+  ) return false
+  return left.purpose === 'turn'
+    || (right.purpose === 'intent' && left.intentId === right.intentId)
 }

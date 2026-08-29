@@ -36,6 +36,35 @@ function reset(phase: 'intro' | 'playerChoice' = 'intro') {
 }
 
 describe('battleStore intent presentation', () => {
+  it('defers an unmounted intent safe point until the same session remounts', () => {
+    reset()
+    const token = useBattleStore.getState().beginIntentPresentation(intro)!
+    useBattleStore.getState().intentPushFeed(token, intro.foeEntrance)
+
+    expect(useBattleStore.getState().cancelIntentOnce(token, 'unmount')).toBe(true)
+    expect(useBattleStore.getState().cancelIntentOnce(token, 'unmount')).toBe(false)
+    expect(useBattleStore.getState()).toMatchObject({
+      phase: 'intro',
+      log: [],
+      intentPresentation: null,
+    })
+    expect(useBattleStore.getState().session?.completedIntentIds.has('intro')).toBe(false)
+
+    expect(useBattleStore.getState().completeInterruptedIntentOnce(token)).toBe(true)
+    expect(useBattleStore.getState().completeInterruptedIntentOnce(token)).toBe(false)
+    expect(useBattleStore.getState()).toMatchObject({
+      phase: 'playerChoice',
+      log: [
+        intro.foeEntrance.message,
+        intro.playerEntrance.message,
+        intro.terrain?.feed[0]?.message,
+        intro.synergy?.feed[0]?.message,
+      ],
+      choiceFocusRequestId: 1,
+    })
+    expect(useBattleStore.getState().session?.completedIntentIds.has('intro')).toBe(true)
+  })
+
   it('converges partial and skipped intro playback on one display-only safe point', () => {
     reset()
     useBattleStore.setState({ energy: 37 })

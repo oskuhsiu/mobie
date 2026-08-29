@@ -58,9 +58,10 @@ function validAccessibility(): Record<string, unknown> {
 }
 
 describe('M23 metrics evidence', () => {
-  it('keeps unavoidable entry-point mirrors aligned with the typed DEV contract', () => {
+  it('keeps the harness mirror aligned and entry points wired to the typed DEV contract', () => {
     const harness = readFileSync(new URL('../../../scripts/m23-baseline.mjs', import.meta.url), 'utf8')
     const main = readFileSync(new URL('../../main.tsx', import.meta.url), 'utf8')
+    const app = readFileSync(new URL('../../app/App.tsx', import.meta.url), 'utf8')
     const strings = (block: string) => [...block.matchAll(/'([^']+)'/g)].map((match) => match[1])
     const arrayBlock = (name: string) => new RegExp(String.raw`const ${name} = \[([\s\S]*?)\]`).exec(harness)?.[1] ?? ''
     const setBlock = (name: string) => new RegExp(String.raw`const ${name} = new Set\(\[([\s\S]*?)\]\)`).exec(harness)?.[1] ?? ''
@@ -69,7 +70,11 @@ describe('M23 metrics evidence', () => {
     expect(strings(arrayBlock('REQUIRED_CHECKPOINTS'))).toEqual([...M23_REQUIRED_CHECKPOINTS])
     expect(strings(setBlock('GRAPHICS'))).toEqual([...M23_GRAPHICS_OPTIONS])
     expect(strings(setBlock('MOTION'))).toEqual([...M23_MOTION_OPTIONS])
-    expect(main).toContain(`.get('m23Scenario') === '${M23_BASELINE_SCENARIO_ID}'`)
+    for (const entryPoint of [main, app]) {
+      expect(entryPoint).toContain("import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'")
+      expect(entryPoint).toMatch(/\.get\('m23Scenario'\)\s*[!=]==?\s*M23_BASELINE_SCENARIO_ID/)
+      expect(entryPoint).not.toContain(`'${M23_BASELINE_SCENARIO_ID}'`)
+    }
   })
 
   it('parses the required environment, diagnostics, and separated frame cadence', () => {

@@ -1,4 +1,5 @@
-import type { PresentationClock as PresentationClockContract } from './contracts'
+import type { PausablePresentationClock } from './contracts'
+import { PausableScheduler } from './PausableScheduler'
 
 export function presentationAbortError(reason?: unknown): DOMException {
   if (reason instanceof DOMException && reason.name === 'AbortError') return reason
@@ -9,16 +10,26 @@ export function isPresentationAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
-export class RealPresentationClock implements PresentationClockContract {
+export class RealPresentationClock implements PausablePresentationClock {
+  private readonly scheduler = new PausableScheduler()
+
+  pause(): void {
+    this.scheduler.pause()
+  }
+
+  resume(): void {
+    this.scheduler.resume()
+  }
+
   wait(ms: number, signal: AbortSignal): Promise<void> {
     if (signal.aborted) return Promise.reject(presentationAbortError(signal.reason))
     return new Promise((resolve, reject) => {
-      const timer = globalThis.setTimeout(() => {
+      const timer = this.scheduler.schedule(() => {
         signal.removeEventListener('abort', onAbort)
         resolve()
-      }, Math.max(0, ms))
+      }, ms)
       const onAbort = () => {
-        globalThis.clearTimeout(timer)
+        this.scheduler.cancel(timer)
         signal.removeEventListener('abort', onAbort)
         reject(presentationAbortError(signal.reason))
       }

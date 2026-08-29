@@ -92,6 +92,11 @@ export class ReplayRecorder {
     this.tryRecord(input, events)
   }
 
+  /** Token-owning store uses this when an adapter throws outside the normal no-throw boundary. */
+  disableAfterFailure(): void {
+    this.disable()
+  }
+
   /** 結束錄製 → 組 ReplayLog（不持久化，純資料）。無 base/無回合 → null。 */
   build(outcome: 'win' | 'lose'): ReplayLog | null {
     if (this.failed || !this.base || this.turns.length === 0) return null

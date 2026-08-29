@@ -1,4 +1,5 @@
 import { compileBattleCues } from './compileBattleCues'
+import { samePresentationToken } from './battleIdentity'
 import { isPresentationAbort, RealPresentationClock } from './PresentationClock'
 import type {
   BattleCue,
@@ -6,10 +7,11 @@ import type {
   CueContext,
   IntentCueContext,
   IntentPresentationJob,
+  PausablePresentationClock,
   PresentationContext,
-  PresentationClock,
   PresentationJob,
   PresentationResult,
+  PresentationToken,
   TurnPresentationJob,
 } from './contracts'
 
@@ -27,13 +29,16 @@ export interface BattleDirectorOptions {
   handler: BattleCueHandler
   intentHandler?: BattleIntentHandler
   lifecycle: BattleDirectorLifecycle
-  clock?: PresentationClock
+  clock?: PausablePresentationClock
   compile?: (job: TurnPresentationJob) => readonly BattleCue[]
 }
 
 export class BattleDirector {
-  private readonly clock: PresentationClock
+  private readonly clock: PausablePresentationClock
   private readonly compile: (job: TurnPresentationJob) => readonly BattleCue[]
+  private activeToken: PresentationToken | null = null
+  private pendingClockState: { token: PresentationToken; paused: boolean } | null = null
+  private clockPaused = false
 
   constructor(private readonly options: BattleDirectorOptions) {
     this.clock = options.clock ?? new RealPresentationClock()
@@ -41,6 +46,13 @@ export class BattleDirector {
   }
 
   async present(job: PresentationJob, signal: AbortSignal): Promise<PresentationResult> {
+    this.activeToken = job.token
+    if (this.pendingClockState && samePresentationToken(this.pendingClockState.token, job.token)) {
+      this.clockPaused = this.pendingClockState.paused
+      this.pendingClockState = null
+    }
+    if (this.clockPaused) this.clock.pause()
+    else this.clock.resume()
     const context: PresentationContext = { token: job.token, signal, clock: this.clock }
     try {
       if (job.kind === 'intent') {
@@ -74,6 +86,28 @@ export class BattleDirector {
       } catch {
         // Reset is best-effort and must not change the transaction result.
       }
+      if (samePresentationToken(this.activeToken, job.token)) this.activeToken = null
     }
   }
+
+  pause(token: PresentationToken): boolean {
+    if (!samePresentationToken(this.activeToken, token)) {
+      this.pendingClockState = { token, paused: true }
+      return true
+    }
+    this.clockPaused = true
+    this.clock.pause()
+    return true
+  }
+
+  resume(token: PresentationToken): boolean {
+    if (!samePresentationToken(this.activeToken, token)) {
+      this.pendingClockState = { token, paused: false }
+      return true
+    }
+    this.clockPaused = false
+    this.clock.resume()
+    return true
+  }
+
 }

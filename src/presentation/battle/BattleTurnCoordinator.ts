@@ -89,9 +89,17 @@ export class BattleTurnCoordinator {
         return 'failed'
       }
 
-      // Public recorder adapter is deliberately no-throw. A failed status degrades
-      // replay persistence only; the already-resolved canonical turn is never rerun.
-      this.options.tryRecordOnce(active.token, input, resolution.events)
+      // Recorder failure degrades replay only. Contain even a contract-breaking
+      // adapter throw so the already-resolved turn is never rerun or stranded busy.
+      try {
+        this.options.tryRecordOnce(active.token, input, resolution.events)
+      } catch (error) {
+        if (this.isCurrent(active.token)) this.notifyRecordFailed(active.token, error)
+      }
+      if (!this.isCurrent(active.token)) {
+        this.requestCancel(active, 'stale')
+        return 'cancelled'
+      }
 
       const job: TurnPresentationJob = {
         kind: 'turn',
@@ -165,6 +173,14 @@ export class BattleTurnCoordinator {
       this.options.transaction.resolveFailed?.(token, error)
     } catch {
       // Failure notification is best-effort; cancellation still releases the turn.
+    }
+  }
+
+  private notifyRecordFailed(token: TurnPresentationToken, error: unknown): void {
+    try {
+      this.options.transaction.recordFailed?.(token, error)
+    } catch {
+      // Replay failure notification cannot block presentation or canonical commit.
     }
   }
 

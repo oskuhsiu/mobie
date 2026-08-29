@@ -7,6 +7,7 @@ import type {
   BattleCue,
   BattleTransactionPort,
   CancelReason,
+  PausablePresentationClock,
   PresentationResult,
   TurnPresentationToken,
   TurnPresentationJob,
@@ -117,6 +118,70 @@ describe('BattleTurnCoordinator', () => {
     expect({ resolveCount, recordCount, commitCount }).toEqual({ resolveCount: 1, recordCount: 1, commitCount: 1 })
   })
 
+  it('contains a throwing recorder adapter, reports it once, and still commits', async () => {
+    const calls: string[] = []
+    const coordinator = new BattleTurnCoordinator({
+      acquireToken: () => token,
+      resolve: (_token, _before, input) => resolution(input),
+      tryRecordOnce: () => { throw new Error('recorder escaped its no-throw boundary') },
+      director: { present: async () => { calls.push('present'); return 'completed' } },
+      transaction: {
+        begin: () => undefined,
+        isCurrent: () => true,
+        commit: () => { calls.push('commit'); return true },
+        cancel: () => undefined,
+        recordFailed: () => { calls.push('record-failed') },
+      },
+    })
+
+    await expect(coordinator.submit(before, { type: 'ATTACK' })).resolves.toBe('completed')
+    expect(calls).toEqual(['record-failed', 'present', 'commit'])
+  })
+
+  it('reports a current resolver failure once and never presents or commits', async () => {
+    const calls: string[] = []
+    const coordinator = new BattleTurnCoordinator({
+      acquireToken: () => token,
+      resolve: () => { throw new Error('resolver failed') },
+      tryRecordOnce: () => 'recorded',
+      director: { present: async () => { calls.push('present'); return 'completed' } },
+      transaction: {
+        begin: () => undefined,
+        isCurrent: () => true,
+        commit: () => { calls.push('commit'); return true },
+        cancel: () => { calls.push('cancel') },
+        resolveFailed: () => { calls.push('resolve-failed') },
+      },
+    })
+
+    await expect(coordinator.submit(before, { type: 'ATTACK' })).resolves.toBe('failed')
+    expect(calls).toEqual(['resolve-failed', 'cancel'])
+  })
+
+  it('performs zero failure writes when A becomes stale before its resolver throws', async () => {
+    const calls: string[] = []
+    let current = true
+    const coordinator = new BattleTurnCoordinator({
+      acquireToken: () => token,
+      resolve: () => {
+        current = false
+        throw new Error('late A resolver')
+      },
+      tryRecordOnce: () => 'recorded',
+      director: { present: async () => 'completed' },
+      transaction: {
+        begin: () => undefined,
+        isCurrent: () => current,
+        commit: () => { calls.push('commit'); return true },
+        cancel: () => { calls.push('cancel') },
+        resolveFailed: () => { calls.push('resolve-failed') },
+      },
+    })
+
+    await expect(coordinator.submit(before, { type: 'ATTACK' })).resolves.toBe('failed')
+    expect(calls).toEqual(['cancel'])
+  })
+
   it('rejects a resolution whose semantic outcome disagrees with canonical state', async () => {
     let presented = false
     const coordinator = new BattleTurnCoordinator({
@@ -207,6 +272,28 @@ describe('BattleDirector', () => {
     kind: 'legacy-event', id: 'event:0:memberFainted', eventIndex: 0, before,
     event: { type: 'memberFainted', side: 'foe', index: 0 },
   } as BattleCue
+
+  it('honors a hidden pause requested before presentation starts', async () => {
+    const pause = vi.fn()
+    const resume = vi.fn()
+    const clock: PausablePresentationClock = {
+      pause,
+      resume,
+      wait: async () => undefined,
+      race: async (work) => await work,
+    }
+    const director = new BattleDirector({
+      clock,
+      compile: () => [],
+      handler: { play: async () => undefined },
+      lifecycle: { reset: () => undefined },
+    })
+
+    expect(director.pause(job.token)).toBe(true)
+    await expect(director.present(job, new AbortController().signal)).resolves.toBe('completed')
+    expect(pause).toHaveBeenCalled()
+    expect(resume).not.toHaveBeenCalled()
+  })
 
   it('compiles once, plays sequentially, and resets once', async () => {
     const calls: string[] = []

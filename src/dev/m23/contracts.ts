@@ -32,6 +32,9 @@ export const M23_TURN_TRANSACTION_CASES = [
 ] as const
 export type M23TurnTransactionCase = (typeof M23_TURN_TRANSACTION_CASES)[number]
 
+export const M23_FAILURE_STAGES = ['battle-data', 'resolve', 'recorder', 'retry-init'] as const
+export type M23FailureStage = (typeof M23_FAILURE_STAGES)[number]
+
 export interface M23RendererResources {
   geometries: number
   textures: number

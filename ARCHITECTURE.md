@@ -67,6 +67,8 @@ title → regionSelect → encounter → cardSelect → battle → result
   final member as the featured boss/capture target),
   `playerTeam` (3 Cards), `outcome`, `captured`, and the M11 `tower` run. **It does not run the
   battle** — turn/HP/QTE/switch are handled by `battleStore` + the pure reducer.
+- `ABORT_BATTLE` is the non-result exit from battle: it targets `regionSelect`, clears encounter/tower
+  runtime through `resetEncounter`, and never records an outcome or result handoff.
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
   `ui/components/ToolsMenu`. Its first level is deliberately limited to **我的 Mobie** and **更多**;
   the latter opens a scrollable secondary menu for scan / library / moves / partner skills / dex /
@@ -144,6 +146,15 @@ Two halves, deliberately separated:
    battle area, not pinned to the screen bottom. (Centering uses a full-bleed flex layer, **not** a CSS
    `translate(-50%,-50%)` — framer-motion writes its own `transform` for the scale/opacity entrance and
    would clobber a translate-based centering.)
+
+Battle lifecycle is split by authority. `battleStore` fences canonical session state with the full Web
+Crypto identity pair, owns recoverable resolver/init errors, retires a session before Retry/Leave, and
+rechecks the current session inside recorder publication. React-independent `BattleSessionLifecycle`
+owns only volatile presentation/audio resources. `PausableScheduler` preserves remaining presentation
+and input time while `document.hidden`; the Director, TimingBar, Mash, rhythm/hold, and shield inputs all
+resume rather than auto-submit. `BattleAudioSession` is presentation-token-owned, while
+`BattleBgmSession` is battle-session-owned across turns; old A cleanup cannot cancel or reset B. Retry
+reuses the single battle initializer with `forceNew`, and Leave fences resources before `ABORT_BATTLE`.
 
 **Performance red-line:** high-frequency values (QTE pointer position, future MediaPipe coords) go
 through refs/rAF/DOM or Zustand — **never** React top-level state. See `TimingBar`, `MashMeter`, `FxCanvas`.

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createBattleIdentity, type BattleIdentityCrypto } from './battleIdentity'
+import {
+  createBattleIdentity,
+  sameBattleSession,
+  samePresentationToken,
+  type BattleIdentityCrypto,
+} from './battleIdentity'
 
 describe('createBattleIdentity', () => {
   it('asks Web Crypto for two independent UUIDs', () => {
@@ -33,5 +38,21 @@ describe('createBattleIdentity', () => {
     expect(arrays).toHaveLength(2)
     expect(arrays[0]).not.toBe(arrays[1])
     expect(arrays.every((bytes) => bytes.byteLength === 16)).toBe(true)
+  })
+})
+
+describe('battle identity predicates', () => {
+  const session = { battleSessionId: 'battle', resultFingerprint: 'fingerprint' }
+
+  it('requires both session identity fields', () => {
+    expect(sameBattleSession(session, session)).toBe(true)
+    expect(sameBattleSession({ ...session, resultFingerprint: 'collision' }, session)).toBe(false)
+  })
+
+  it('also distinguishes purpose and intent identity for presentations', () => {
+    const intro = { ...session, presentationId: 1, purpose: 'intent' as const, intentId: 'intro' as const }
+    expect(samePresentationToken(intro, intro)).toBe(true)
+    expect(samePresentationToken({ ...intro, intentId: 'partner:test' }, intro)).toBe(false)
+    expect(samePresentationToken({ ...session, presentationId: 1, purpose: 'turn' }, intro)).toBe(false)
   })
 })
