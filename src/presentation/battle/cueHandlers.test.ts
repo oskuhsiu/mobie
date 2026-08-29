@@ -5,7 +5,7 @@ import { LegacyBattleCueHandler, type BattleCuePorts } from './cueHandlers'
 import { presentationAbortError, RealPresentationClock } from './PresentationClock'
 import type { BattleCue, CueContext, PresentationClock } from './contracts'
 
-const token = { battleSessionId: 'b', resultFingerprint: 'f', presentationId: 1 }
+const token = { battleSessionId: 'b', resultFingerprint: 'f', presentationId: 1, purpose: 'turn' as const }
 
 function damageCue() {
   const before = createBattleState([mon()], [mon()])

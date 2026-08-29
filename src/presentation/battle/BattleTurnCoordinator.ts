@@ -1,8 +1,8 @@
 import type {
-  BattleDirectorPort,
+  BattleTurnDirectorPort,
   BattleTransactionPort,
   CancelReason,
-  PresentationToken,
+  TurnPresentationToken,
   TryRecordStatus,
   TurnInput,
   TurnPresentationJob,
@@ -12,15 +12,15 @@ import type {
 import type { BattleState } from '@/game/battle/reducer'
 
 export interface BattleTurnCoordinatorOptions {
-  acquireToken(): PresentationToken | null
-  resolve(token: PresentationToken, before: BattleState, input: TurnInput): TurnResolution
-  tryRecordOnce(token: PresentationToken, input: TurnInput, events: TurnResolution['events']): TryRecordStatus
-  director: BattleDirectorPort
+  acquireToken(): TurnPresentationToken | null
+  resolve(token: TurnPresentationToken, before: BattleState, input: TurnInput): TurnResolution
+  tryRecordOnce(token: TurnPresentationToken, input: TurnInput, events: TurnResolution['events']): TryRecordStatus
+  director: BattleTurnDirectorPort
   transaction: BattleTransactionPort
 }
 
 interface ActiveTurn {
-  token: PresentationToken
+  token: TurnPresentationToken
   controller: AbortController
   cancelRequested: boolean
   commitStarted: boolean
@@ -152,7 +152,7 @@ export class BattleTurnCoordinator {
     }
   }
 
-  private isCurrent(token: PresentationToken): boolean {
+  private isCurrent(token: TurnPresentationToken): boolean {
     try {
       return this.options.transaction.isCurrent(token)
     } catch {
@@ -160,7 +160,7 @@ export class BattleTurnCoordinator {
     }
   }
 
-  private notifyResolveFailed(token: PresentationToken, error: unknown): void {
+  private notifyResolveFailed(token: TurnPresentationToken, error: unknown): void {
     try {
       this.options.transaction.resolveFailed?.(token, error)
     } catch {

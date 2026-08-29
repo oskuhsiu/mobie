@@ -34,9 +34,9 @@ describe('battleStore runtime session', () => {
     const key = {}
     const first = init(key)
     const runtime = useBattleStore.getState().session
-    const token1 = useBattleStore.getState().acquirePresentationToken()
+    const token1 = useBattleStore.getState().acquireTurnPresentationToken()
     const second = init(key, identityB)
-    const token2 = useBattleStore.getState().acquirePresentationToken()
+    const token2 = useBattleStore.getState().acquireTurnPresentationToken()
 
     expect(first).toMatchObject({ created: true, token: identityA })
     expect(second).toMatchObject({ created: false, token: identityA })
@@ -52,9 +52,9 @@ describe('battleStore runtime session', () => {
   it('creates a new pair for a new key or explicit forceNew and fences same-id collisions', () => {
     const key = {}
     init(key, identityA)
-    const oldToken = useBattleStore.getState().acquirePresentationToken()!
+    const oldToken = useBattleStore.getState().acquireTurnPresentationToken()!
     init({}, identityB)
-    const collisionToken = useBattleStore.getState().acquirePresentationToken()!
+    const collisionToken = useBattleStore.getState().acquireTurnPresentationToken()!
 
     expect(useBattleStore.getState().isSessionCurrent(oldToken)).toBe(false)
     expect(useBattleStore.getState().isSessionCurrent(collisionToken)).toBe(true)
@@ -79,7 +79,7 @@ describe('battleStore runtime session', () => {
     init({}, identityA)
     useBattleStore.setState({ energy: 100, chain: 4 })
     const before = useBattleStore.getState().battle!
-    const token = useBattleStore.getState().acquirePresentationToken()!
+    const token = useBattleStore.getState().acquireTurnPresentationToken()!
     useBattleStore.getState().beginPresentation(token, before, { type: 'ATTACK', starStrike: true })
 
     expect(useBattleStore.getState().presentation).toMatchObject({ energy: 0, chain: 0 })
@@ -91,7 +91,7 @@ describe('battleStore runtime session', () => {
   it('records each token once and emits one token-fenced warning after recorder failure', () => {
     init({}, identityA)
     const before = useBattleStore.getState().battle!
-    const token = useBattleStore.getState().acquirePresentationToken()!
+    const token = useBattleStore.getState().acquireTurnPresentationToken()!
     useBattleStore.getState().beginPresentation(token, before, { type: 'ATTACK' })
     const failure = new Error('copy failed')
     const brokenEvents = new Proxy([] as BattleEvent[], {
@@ -108,7 +108,7 @@ describe('battleStore runtime session', () => {
 
   it('finishes replay and marks END_BATTLE once per session', () => {
     init({}, identityA)
-    const token = useBattleStore.getState().acquirePresentationToken()!
+    const token = useBattleStore.getState().acquireTurnPresentationToken()!
     expect(useBattleStore.getState().finishReplayOnce(token, 'win')).toBe(true)
     expect(useBattleStore.getState().finishReplayOnce(token, 'win')).toBe(false)
     expect(useBattleStore.getState().markEndSentOnce(token)).toBe(true)
@@ -119,7 +119,7 @@ describe('battleStore runtime session', () => {
     const logicalKey = {}
     init(logicalKey, identityA)
     const before = useBattleStore.getState().battle!
-    const cancelled = useBattleStore.getState().acquirePresentationToken()!
+    const cancelled = useBattleStore.getState().acquireTurnPresentationToken()!
     useBattleStore.getState().beginPresentation(cancelled, before, { type: 'ATTACK' })
     expect(useBattleStore.getState().tryRecordTurnOnce(cancelled, { type: 'ATTACK' }, [damageEvent])).toBe('recorded')
     expect(useBattleStore.getState().session?.recorder.build('win')).toBeNull()
@@ -128,7 +128,7 @@ describe('battleStore runtime session', () => {
     expect(useBattleStore.getState().session).toMatchObject({ rngCursor: 0, pendingReplay: null })
     expect(useBattleStore.getState().session?.recorder.build('win')).toBeNull()
 
-    const committed = useBattleStore.getState().acquirePresentationToken()!
+    const committed = useBattleStore.getState().acquireTurnPresentationToken()!
     useBattleStore.getState().beginPresentation(committed, before, { type: 'ATTACK' })
     expect(useBattleStore.getState().tryRecordTurnOnce(committed, { type: 'ATTACK' }, [damageEvent])).toBe('recorded')
     const result = useBattleStore.getState().commitTurn(committed, {

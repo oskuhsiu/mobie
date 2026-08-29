@@ -1,15 +1,26 @@
 import type { BattleEvent, BattleState, Side } from '@/game/battle/reducer'
 import type { ReplayInput } from '@/game/replay/types'
-import type { BattleMobie, Move } from '@/game/types'
+import type { BattleMobie, Move, TerrainId } from '@/game/types'
 
 export interface BattleSessionToken {
   battleSessionId: string
   resultFingerprint: string
 }
 
-export interface PresentationToken extends BattleSessionToken {
+interface PresentationTokenBase extends BattleSessionToken {
   presentationId: number
 }
+
+export interface TurnPresentationToken extends PresentationTokenBase {
+  purpose: 'turn'
+}
+
+export interface IntentPresentationToken extends PresentationTokenBase {
+  purpose: 'intent'
+  intentId: BattleIntent['id']
+}
+
+export type PresentationToken = TurnPresentationToken | IntentPresentationToken
 
 export type TurnInput = ReplayInput
 
@@ -42,7 +53,7 @@ export interface TurnResolution {
 
 export interface TurnPresentationJob {
   kind: 'turn'
-  token: PresentationToken
+  token: TurnPresentationToken
   before: BattleState
   input: TurnInput
   events: readonly BattleEvent[]
@@ -50,12 +61,104 @@ export interface TurnPresentationJob {
   turn: number
 }
 
+export interface IntentFeedEntry {
+  id: string
+  message: string
+}
+
+export interface IntroIntentSection {
+  banner: string
+  feed: readonly IntentFeedEntry[]
+}
+
+export interface IntroIntent {
+  kind: 'intro'
+  id: 'intro'
+  foeEntrance: IntentFeedEntry
+  playerEntrance: IntentFeedEntry
+  terrain: IntroIntentSection | null
+  synergy: IntroIntentSection | null
+}
+
+export type PartnerResultEffect = 'reveal-foe' | 'team-status'
+
+export interface PartnerSkillResultIntent {
+  kind: 'partner-result'
+  id: `partner:${string}`
+  skillId: string
+  banner: string
+  feed: IntentFeedEntry
+  effects: readonly PartnerResultEffect[]
+}
+
+export type BattleIntent = IntroIntent | PartnerSkillResultIntent
+
+export interface BattleUnitView {
+  instanceId: string
+  side: Side
+  slot: number
+  speciesId: number
+  artworkUrl: string
+  displayName: string
+  level: number
+  hp: number
+  maxHp: number
+  shiny: boolean
+  heldItemId?: string
+  abilityId?: string
+}
+
+export interface StatusView {
+  stat: 'atk' | 'def' | 'spa' | 'spd'
+  multiplier: number
+  remaining: number
+  source: number
+  label: string
+}
+
+export interface FieldMarkView {
+  key: string
+  label: string
+  icon: string
+  remaining: number
+}
+
+export interface BattleDisplaySnapshot {
+  player: { members: readonly BattleUnitView[]; activeIndex: number }
+  foe: { members: readonly BattleUnitView[]; activeIndex: number }
+  terrainIds: readonly TerrainId[]
+  sideStatuses: { player: readonly StatusView[]; foe: readonly StatusView[] }
+  fieldMarks: readonly FieldMarkView[]
+}
+
+export interface IntentPresentationJob {
+  kind: 'intent'
+  token: IntentPresentationToken
+  intent: BattleIntent
+  snapshot: BattleDisplaySnapshot
+  visualSeed: string
+}
+
+export type PresentationJob = TurnPresentationJob | IntentPresentationJob
+
 export interface PresentationClock {
   wait(ms: number, signal: AbortSignal): Promise<void>
   race<T>(work: PromiseLike<T>, signal: AbortSignal): Promise<T>
 }
 
 export interface CueContext {
+  token: TurnPresentationToken
+  signal: AbortSignal
+  clock: PresentationClock
+}
+
+export interface IntentCueContext {
+  token: IntentPresentationToken
+  signal: AbortSignal
+  clock: PresentationClock
+}
+
+export interface PresentationContext {
   token: PresentationToken
   signal: AbortSignal
   clock: PresentationClock
@@ -137,6 +240,8 @@ export type BattleCue =
 export type CancelReason = 'unmount' | 'superseded' | 'stale' | 'skip' | 'context-lost'
 export type PresentationResult = 'completed' | 'degraded' | 'cancelled'
 export type TurnSubmissionResult = PresentationResult | 'ignored' | 'failed'
+export type IntentSkipSource = 'touch' | 'enter' | 'escape'
+export type IntentSubmissionResult = PresentationResult | 'skipped' | 'ignored' | 'failed'
 export type TryRecordStatus = 'recorded' | 'already-recorded' | 'disabled' | 'failed'
 
 export interface DamageScenePort {
@@ -180,13 +285,27 @@ export interface BattleCueHandler {
 }
 
 export interface BattleDirectorPort {
+  present(job: PresentationJob, signal: AbortSignal): Promise<PresentationResult>
+}
+
+export interface BattleTurnDirectorPort {
   present(job: TurnPresentationJob, signal: AbortSignal): Promise<PresentationResult>
 }
 
 export interface BattleTransactionPort {
-  begin(token: PresentationToken, before: BattleState, input: TurnInput): void
-  isCurrent(token: PresentationToken): boolean
-  commit(token: PresentationToken, resolution: TurnResolution): boolean
-  cancel(token: PresentationToken, reason: CancelReason): void
-  resolveFailed?(token: PresentationToken, error: unknown): void
+  begin(token: TurnPresentationToken, before: BattleState, input: TurnInput): void
+  isCurrent(token: TurnPresentationToken): boolean
+  commit(token: TurnPresentationToken, resolution: TurnResolution): boolean
+  cancel(token: TurnPresentationToken, reason: CancelReason): void
+  resolveFailed?(token: TurnPresentationToken, error: unknown): void
+}
+
+export interface BattleIntentPresenterPort {
+  present(job: IntentPresentationJob, signal: AbortSignal): Promise<PresentationResult>
+}
+
+export interface BattleIntentTransactionPort {
+  begin(intent: BattleIntent): IntentPresentationToken | null
+  isCurrent(token: IntentPresentationToken): boolean
+  completeOnce(token: IntentPresentationToken): boolean
 }

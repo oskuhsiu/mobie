@@ -4,8 +4,8 @@ import type { TurnResolution } from '@/presentation/battle/contracts'
 import { useBattleStore } from './battleStore'
 
 const sessionToken = { battleSessionId: 'battle-a', resultFingerprint: 'fingerprint-a' }
-const token = { ...sessionToken, presentationId: 1 }
-const stale = { ...sessionToken, presentationId: 0 }
+const token = { ...sessionToken, presentationId: 1, purpose: 'turn' as const }
+const stale = { ...sessionToken, presentationId: 0, purpose: 'turn' as const }
 
 function turnResolution(before: ReturnType<typeof createBattleState>, nextState = { ...before, turn: before.turn + 1 }): TurnResolution {
   return {
@@ -84,7 +84,7 @@ describe('battleStore presentation shadow', () => {
     const canonical = useBattleStore.getState().battle!
     useBattleStore.getState().beginPresentation(token, canonical, { type: 'ATTACK' })
     useBattleStore.getState().beginPresentation(
-      { battleSessionId: 'battle-a', resultFingerprint: 'fingerprint-b', presentationId: 1 },
+      { battleSessionId: 'battle-a', resultFingerprint: 'fingerprint-b', presentationId: 1, purpose: 'turn' },
       { ...canonical, turn: 99 },
       { type: 'ATTACK' },
     )

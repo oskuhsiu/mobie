@@ -131,7 +131,14 @@ Two halves, deliberately separated:
    battleStore exposes a token-owned shadow for HP/active/feed while canonical `BattleState`, energy,
    lock, combo, phase, replay finish, and `END_BATTLE` remain unchanged until `commitTurn`. Its
    non-persisted runtime session owns the Web Crypto result identity pair, seeded RNG, replay recorder,
-   and monotonic presentation counter across component remounts. The reducer stays pure. The move
+   and monotonic presentation counter across component remounts. Turn jobs and display-only intent jobs
+   share one `BattleDirector` cancellation/degradation/reset seam. Intro and already-committed Partner
+   results use separately tagged intent tokens, an immutable post-commit display snapshot, and an
+   intent-only log/banner shadow;
+   `BattleIntentCoordinator` can only begin, fence, and complete that display projection, so it has no
+   `BattleState`, energy, recorder, canonical turn commit, or `END_BATTLE` interface. Intro skip publishes
+   one precomputed terrain/synergy feed safe point, while Partner usage and reveal/team-status mutation
+   commit atomically in the runtime store before its result intent begins. The reducer stays pure. The move
    picker stays in the bottom strip, but timing-critical inputs (attack QTE,
    mash-charge, defense/chain QTE) render in a centered `.battle-action` overlay so they sit in the
    battle area, not pinned to the screen bottom. (Centering uses a full-bleed flex layer, **not** a CSS

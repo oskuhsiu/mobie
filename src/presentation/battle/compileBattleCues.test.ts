@@ -4,7 +4,7 @@ import type { ReplayInput } from '@/game/replay/types'
 import { compileBattleCues } from './compileBattleCues'
 import type { TurnPresentationJob } from './contracts'
 
-const token = { battleSessionId: 'battle', resultFingerprint: 'fingerprint', presentationId: 1 }
+const token = { battleSessionId: 'battle', resultFingerprint: 'fingerprint', presentationId: 1, purpose: 'turn' as const }
 
 function job(input: ReplayInput, events: readonly BattleEvent[]): TurnPresentationJob {
   return {

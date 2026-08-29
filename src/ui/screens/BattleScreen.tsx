@@ -45,12 +45,20 @@ import { getAbility } from '@/game/ext/abilities'
 import { audio } from '@/audio/audioEngine'
 import type { M23Checkpoint, M23PresentationTraceStage } from '@/dev/m23/contracts'
 import { BattleDirector } from '@/presentation/battle/BattleDirector'
+import { BattleIntentCoordinator } from '@/presentation/battle/BattleIntentCoordinator'
+import { BattleIntentPresenter } from '@/presentation/battle/BattleIntentPresenter'
 import { BattleTurnCoordinator } from '@/presentation/battle/BattleTurnCoordinator'
 import { LegacyBattleCueHandler, type BattleCuePorts } from '@/presentation/battle/cueHandlers'
 import { battleActionFromReplayInput } from '@/presentation/battle/turnInput'
 import type {
+  BattleDisplaySnapshot,
+  BattleIntent,
   CueContext,
+  IntentSkipSource,
+  IntroIntent,
+  PartnerSkillResultIntent,
   PresentationToken,
+  TurnPresentationToken,
   TurnCommitMeta,
   TurnResolution,
 } from '@/presentation/battle/contracts'
@@ -58,7 +66,6 @@ import type {
 // 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
 const BattleStage = lazy(() => import('@/scene/r3f/BattleStage'))
 
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
 const SUPPORT_LABEL: Record<SupportOutcome, string> = {
   attackUp: '⚡ 攻擊力上升！',
@@ -107,8 +114,9 @@ function tracePresentation(
   detail: { cueId?: string; detail?: string; turn?: number } = {},
 ): void {
   baselineDriver()?.recordPresentationEvent({
-    transactionId: `${token.battleSessionId}:${token.resultFingerprint}:${token.presentationId}`,
+    transactionId: `${token.battleSessionId}:${token.resultFingerprint}:${token.purpose}:${token.presentationId}`,
     presentationId: token.presentationId,
+    purpose: token.purpose,
     stage,
     ...detail,
   })
@@ -176,21 +184,55 @@ function checkpointForEvent(event: BattleEvent): M23Checkpoint | undefined {
   }
 }
 
-// M14.c：把一方 BattleMobie[] 轉成回放用的 DisplayUnitSnapshot[]（只取畫面/FX 分派要的穩定欄位）。
-function teamSnapshot(side: Side, members: BattleMobie[]): DisplayUnitSnapshot[] {
-  return members.map((m, slot) => ({
+function stableUnitProjection(side: Side, member: BattleMobie, slot: number) {
+  return {
     instanceId: `${side}:${slot}`,
     side,
     slot,
-    speciesId: m.speciesId,
-    displayName: m.nameZh,
-    level: m.level,
-    maxHp: m.maxHp,
-    initialHp: m.currentHp,
-    shiny: m.shiny,
-    ...(m.heldItemId ? { heldItemId: m.heldItemId } : {}),
-    ...(m.abilityId ? { abilityId: m.abilityId } : {}),
+    speciesId: member.speciesId,
+    displayName: member.nameZh,
+    level: member.level,
+    maxHp: member.maxHp,
+    shiny: member.shiny,
+    ...(member.heldItemId ? { heldItemId: member.heldItemId } : {}),
+    ...(member.abilityId ? { abilityId: member.abilityId } : {}),
+  }
+}
+
+// M14.c：把一方 BattleMobie[] 轉成回放用的 DisplayUnitSnapshot[]（只取畫面/FX 分派要的穩定欄位）。
+function teamSnapshot(side: Side, members: BattleMobie[]): DisplayUnitSnapshot[] {
+  return members.map((member, slot) => ({
+    ...stableUnitProjection(side, member, slot),
+    initialHp: member.currentHp,
   }))
+}
+
+function battleDisplaySnapshot(battle: BattleState): BattleDisplaySnapshot {
+  const side = (sideName: Side) => ({
+    activeIndex: battle[sideName].activeIndex,
+    members: battle[sideName].members.map((member, slot) => ({
+      ...stableUnitProjection(sideName, member, slot),
+      artworkUrl: member.artworkUrl,
+      hp: member.currentHp,
+    })),
+  })
+  const statuses = (values: BattleState['field']['teamStatuses']) => values.map((status) => ({
+    stat: status.stat,
+    multiplier: status.mult,
+    remaining: status.remaining,
+    source: status.source,
+    label: status.label,
+  }))
+  return {
+    player: side('player'),
+    foe: side('foe'),
+    terrainIds: [...battle.field.terrainEffects.current],
+    sideStatuses: {
+      player: statuses(battle.field.teamStatuses),
+      foe: statuses(battle.field.enemyStatuses),
+    },
+    fieldMarks: battle.field.comboCastEffects.map((mark) => ({ ...mark })),
+  }
 }
 
 /** 浮傷數字：3D 場景之上的 DOM 疊層，依 FX_POS 對齊在受擊方上方。 */
@@ -452,6 +494,7 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, onPick 
             <motion.button
               key={i}
               className={`move-slot ${mv.category === 'status' ? 'move-slot--status' : ''}`}
+              data-battle-action="move"
               style={{ ['--mv' as string]: typeColor(mv.type) }}
               whileTap={{ scale: 0.96 }}
               aria-label={`${mv.nameZh}，${decision.label}`}
@@ -480,6 +523,7 @@ export function SwitchAction({ switchable, onPick }: { switchable: boolean; onPi
     <div className="switch-action">
       <motion.button
         className="btn btn--ghost"
+        data-battle-action="switch"
         style={{ fontSize: 16, padding: '12px 22px' }}
         whileTap={switchable ? { scale: 0.96 } : undefined}
         disabled={!switchable}
@@ -500,14 +544,21 @@ export function BattleScreen() {
   const { context, send } = useGame()
   const battle = useBattleStore((s) => s.presentation?.battle ?? s.battle)
   const phase = useBattleStore((s) => s.phase)
-  const banner = useBattleStore((s) => s.presentation ? s.presentation.banner : s.banner)
+  const intentPresentation = useBattleStore((s) => s.intentPresentation)
+  const banner = useBattleStore((s) => s.intentPresentation
+    ? s.intentPresentation.banner
+    : s.presentation ? s.presentation.banner : s.banner)
   const hitFx = useBattleStore((s) => s.presentation ? s.presentation.hitFx : s.hitFx)
   const support = useBattleStore((s) => s.presentation ? s.presentation.support : s.support)
   const energy = useBattleStore((s) => s.presentation ? s.presentation.energy : s.energy)
   const combo = useBattleStore((s) => s.presentation ? s.presentation.combo : s.combo)
-  const log = useBattleStore((s) => s.presentation ? s.presentation.log : s.log)
+  const log = useBattleStore((s) => s.intentPresentation
+    ? s.intentPresentation.log
+    : s.presentation ? s.presentation.log : s.log)
   const lockedIndex = useBattleStore((s) => s.presentation ? s.presentation.lockedIndex : s.lockedIndex)
   const revealedFoes = useBattleStore((s) => s.revealedFoes)
+  const partnerSkillIdsUsed = useBattleStore((s) => s.session?.partnerSkillIdsUsed)
+  const choiceFocusRequestId = useBattleStore((s) => s.choiceFocusRequestId)
   // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
   const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean; foeIndex: number } | null>(null)
   // 已啟用模組組成的注入能力包（plan/09 §0）：ext=戰中縫（S3/S4/S5）、prep=戰前縫（S1/S2）。
@@ -584,6 +635,9 @@ export function BattleScreen() {
   }
   const initedRef = useRef(false)
   const turnCoordinatorRef = useRef<BattleTurnCoordinator | null>(null)
+  const presentationDirectorRef = useRef<BattleDirector | null>(null)
+  const battleRootRef = useRef<HTMLDivElement>(null)
+  const introSkipRef = useRef<HTMLButtonElement>(null)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
@@ -594,12 +648,103 @@ export function BattleScreen() {
   const [chainSeq, setChainSeq] = useState<{ participants: number[]; step: number; hits: ChainHit[] } | null>(null)
   // M22 星擊增強互動：開啟蓄力/節奏手勢的暫態（off 模式恆 false、不渲染手勢）
   const [starCharging, setStarCharging] = useState(false)
-  // M17 夥伴技能「每場一次」預算：本場已用過的技能 id（display state，不持久化）
-  const [partnerUsed, setPartnerUsed] = useState<string[]>([])
   // EXT.1.f C2 脈衝引導：選招處「👇 選一個招式」提示。首玩（localStorage 旗標未設）或閒置 N 秒才顯示，
   // 玩家一出手即記旗標並收起；純 display、可由 juice='off' 關閉、不碰 reducer。
   const [showChoiceGuide, setShowChoiceGuide] = useState(false)
   const guideSeenRef = useRef(typeof localStorage !== 'undefined' && localStorage.getItem('mz.guide.choiceSeen') === '1')
+
+  const intentPresenter = useMemo(() => new BattleIntentPresenter({
+    display: {
+      setBanner: (message, cueContext) => {
+        useBattleStore.getState().intentSetBanner(cueContext.token, message)
+      },
+      appendFeed: (entry, cueContext) => {
+        useBattleStore.getState().intentPushFeed(cueContext.token, entry)
+        tracePresentation(cueContext.token, 'feed', { cueId: entry.id, detail: cueContext.token.intentId })
+      },
+      playPartnerEffect: (effect, cueContext) => {
+        if (!useBattleStore.getState().isIntentPresentationCurrent(cueContext.token)) return
+        if (effect === 'reveal-foe') {
+          fxRef.current?.flash('#7ae0ff', 0.3)
+          fxRef.current?.ring({ ...FX_POS.foe, color: '#7ae0ff' })
+          fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 14, kind: 'spark' })
+        } else {
+          fxRef.current?.flash('#ffd23f', 0.3)
+          fxRef.current?.ring({ ...FX_POS.player, color: '#ffd23f' })
+          fxRef.current?.burst({ ...FX_POS.player, color: '#ffd23f', count: 16, kind: 'spark' })
+        }
+      },
+    },
+  }), [])
+
+  const intentCoordinator = useMemo(() => new BattleIntentCoordinator({
+    presenter: {
+      present: (job, signal) => {
+        tracePresentation(job.token, 'present', { detail: job.intent.kind })
+        const director = presentationDirectorRef.current
+        if (!director) throw new Error('Battle Director is unavailable')
+        return director.present(job, signal)
+      },
+    },
+    transaction: {
+      begin: (intent) => {
+        const token = useBattleStore.getState().beginIntentPresentation(intent)
+        if (token) tracePresentation(token, 'begin', { detail: intent.kind })
+        return token
+      },
+      isCurrent: (token) => useBattleStore.getState().isIntentPresentationCurrent(token),
+      completeOnce: (token) => {
+        const completed = useBattleStore.getState().completeIntentOnce(token)
+        if (completed) {
+          tracePresentation(token, 'complete', { detail: token.intentId })
+          void baselineDriver()?.checkpoint('phase:player-choice', 'player-choice')
+        }
+        return completed
+      },
+    },
+  }), [])
+
+  const submitIntent = useCallback((
+    intent: BattleIntent,
+    snapshot: BattleDisplaySnapshot,
+    visualSeed: string,
+  ) => (
+    intentCoordinator.submit(intent, snapshot, visualSeed)
+  ), [intentCoordinator])
+
+  const requestIntroSkip = useCallback((source: IntentSkipSource) => {
+    const token = useBattleStore.getState().intentPresentation?.token
+    if (!token || token.intentId !== 'intro' || !intentCoordinator.skip(source)) return false
+    tracePresentation(token, 'skip', { detail: source })
+    return true
+  }, [intentCoordinator])
+
+  const introPresentationId = intentPresentation?.intent.kind === 'intro'
+    ? intentPresentation.token.presentationId
+    : null
+
+  useEffect(() => {
+    if (introPresentationId !== null) introSkipRef.current?.focus()
+  }, [introPresentationId])
+
+  useEffect(() => {
+    if (introPresentationId === null) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || (event.key !== 'Enter' && event.key !== 'Escape')) return
+      event.preventDefault()
+      requestIntroSkip(event.key === 'Enter' ? 'enter' : 'escape')
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [introPresentationId, requestIntroSkip])
+
+  useEffect(() => {
+    if (choiceFocusRequestId === 0) return
+    const root = battleRootRef.current
+    const next = root?.querySelector<HTMLButtonElement>('.move-slot:not(:disabled)')
+      ?? root?.querySelector<HTMLButtonElement>('[data-battle-action]:not(:disabled)')
+    next?.focus()
+  }, [choiceFocusRequestId])
 
   // 初始化：建出雙方 3 隻隊伍，進場
   useEffect(() => {
@@ -638,33 +783,34 @@ export function BattleScreen() {
       createdAt,
     })
     if (!ensured.created) return
-    setPartnerUsed([]) // M17：每場一次預算只在 logical init 重置
-    ;(async () => {
-      await wait(700)
-      s.pushLog(`對手派出了 ${foes[0].nameZh}！`)
-      await wait(280)
-      s.pushLog(`上吧，${players[0].nameZh}！`)
-      // 開場地形揭示（plan/11 §1.3）：有地形才演 banner
-      if (terrainDefs.length > 0) {
-        await wait(220)
-        s.setBanner(`${terrainDefs.map((d) => d.icon).join('')} 場域地形：${terrainDefs.map((d) => d.name).join(' + ')}`)
-        s.pushLog(`場域地形：${terrainDefs.map((d) => `${d.icon}${d.name}`).join(' + ')}（影響對應屬性招式威力）`)
-        await wait(1100)
-        s.setBanner(null)
-        await wait(140)
-      }
-      if (modifiers.length > 0) {
-        await wait(220)
-        s.setBanner(`✦ 羈絆發動！ ${modifiers.map((m) => m.icon).join(' ')}`)
-        for (const m of modifiers) s.pushLog(`羈絆：${m.label}`)
-        await wait(1000)
-        s.setBanner(null)
-        await wait(140)
-      }
-      await baselineDriver()?.checkpoint('phase:player-choice', 'player-choice')
-      s.setPhase('playerChoice')
-    })()
-  }, [context, prep])
+    const introIntent: IntroIntent = {
+      kind: 'intro',
+      id: 'intro',
+      foeEntrance: { id: 'intro:foe-entrance', message: `對手派出了 ${foes[0].nameZh}！` },
+      playerEntrance: { id: 'intro:player-entrance', message: `上吧，${players[0].nameZh}！` },
+      terrain: terrainDefs.length > 0
+        ? {
+            banner: `${terrainDefs.map((d) => d.icon).join('')} 場域地形：${terrainDefs.map((d) => d.name).join(' + ')}`,
+            feed: [{
+              id: 'intro:terrain',
+              message: `場域地形：${terrainDefs.map((d) => `${d.icon}${d.name}`).join(' + ')}（影響對應屬性招式威力）`,
+            }],
+          }
+        : null,
+      synergy: modifiers.length > 0
+        ? {
+            banner: `✦ 羈絆發動！ ${modifiers.map((m) => m.icon).join(' ')}`,
+            feed: modifiers.map((modifier, index) => ({
+              id: `intro:synergy:${index}`,
+              message: `羈絆：${modifier.label}`,
+            })),
+          }
+        : null,
+    }
+    const initializedBattle = useBattleStore.getState().battle
+    if (!initializedBattle) return
+    void submitIntent(introIntent, battleDisplaySnapshot(initializedBattle), `${ensured.battleSeed}:intro`)
+  }, [context, prep, submitIntent])
 
   useEffect(() => () => {
     turnCoordinatorRef.current?.cancel('unmount')
@@ -1042,7 +1188,7 @@ export function BattleScreen() {
     [createCuePorts],
   )
 
-  const resetPresentationVisuals = useCallback((token: PresentationToken) => {
+  const resetPresentationVisuals = useCallback((token: TurnPresentationToken) => {
     useBattleStore.getState().presentationClearTransient(token)
     cinematicRef.current?.resume()
     stageRef.current?.resetPresentation()
@@ -1055,6 +1201,7 @@ export function BattleScreen() {
 
   const presentationDirector = useMemo(() => new BattleDirector({
     handler: presentationCueHandler,
+    intentHandler: intentPresenter,
     lifecycle: {
       beforeCue: (cue, cueContext) => {
         const cueEvent = 'event' in cue ? cue.event : undefined
@@ -1068,13 +1215,20 @@ export function BattleScreen() {
           ? baselineDriver()?.checkpoint(`event:${cueEvent.type}`, checkpointForEvent(cueEvent))
           : undefined
       },
-      degraded: (_error, cueContext) => { resetPresentationVisuals(cueContext.token) },
-      reset: (cueContext) => {
-        cinematicRef.current?.resume()
-        useBattleStore.getState().presentationClearTransient(cueContext.token)
+      degraded: (_error, job) => {
+        if (job.kind === 'turn') resetPresentationVisuals(job.token)
+      },
+      reset: (job) => {
+        if (job.kind === 'intent') {
+          useBattleStore.getState().intentSetBanner(job.token, null)
+        } else {
+          cinematicRef.current?.resume()
+          useBattleStore.getState().presentationClearTransient(job.token)
+        }
       },
     },
-  }), [presentationCueHandler, resetPresentationVisuals])
+  }), [intentPresenter, presentationCueHandler, resetPresentationVisuals])
+  presentationDirectorRef.current = presentationDirector
 
   const submitTurn = useCallback(async (input: ReplayInput) => {
     const before = useBattleStore.getState().battle
@@ -1082,7 +1236,7 @@ export function BattleScreen() {
 
     if (!turnCoordinatorRef.current) {
       turnCoordinatorRef.current = new BattleTurnCoordinator({
-        acquireToken: () => useBattleStore.getState().acquirePresentationToken(),
+        acquireToken: () => useBattleStore.getState().acquireTurnPresentationToken(),
         resolve: (token, current, turnInput): TurnResolution => {
           const session = useBattleStore.getState().session
           if (!session || !useBattleStore.getState().isSessionCurrent(token)) {
@@ -1243,41 +1397,49 @@ export function BattleScreen() {
     void runPlayerTurn(pendingQualityRef.current, count)
   }, [runPlayerTurn])
 
-  // M17 夥伴技能發動（每場一次、純顯示層）：看穿＝設 revealedFoes + 揭露演出；
-  // 訓練師加油（support）＝灌注全隊增益到 field.teamStatuses（複用 M19.d，零 reducer 改動）。
-  // **不進 reducer、不耗回合、對手不回擊**——維持 playerChoice 相位。
+  // Partner gameplay authority 先原子提交 reveal/team status 與每場一次預算；
+  // intent coordinator 只拿 display receipt 演出，不持有回合、能量、recorder 或 outcome 權限。
   const activatePartnerSkill = useCallback((skill: PartnerSkillDef) => {
-    const store = useBattleStore.getState
-    const b = store().battle
-    if (!b || partnerUsed.includes(skill.id)) return
-    audio.play('select')
-    let banner: string | null = null
-    if (skill.reveal) {
-      const idx = b.foe.activeIndex
-      store().revealFoe(idx)
-      banner = '🔍 看穿了對手！'
-      store().pushLog(`看穿了對手的 ${b.foe.members[idx].nameZh}！招式與數值現形`)
-      fxRef.current?.flash('#7ae0ff', 0.3)
-      fxRef.current?.ring({ ...FX_POS.foe, color: '#7ae0ff' })
-      fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 14, kind: 'spark' })
-    }
+    const store = useBattleStore.getState()
+    const battleState = store.battle
+    if (!battleState) return
     const statuses = teamBuffStatuses(skill)
-    if (statuses.length > 0) {
-      store().applyTeamStatuses(statuses)
-      banner = `${skill.icon} ${skill.name}！`
-      store().pushLog(`${skill.name}！全隊氣勢提升（攻擊・特攻 ↑）`)
-      fxRef.current?.flash('#ffd23f', 0.3)
-      fxRef.current?.ring({ ...FX_POS.player, color: '#ffd23f' })
-      fxRef.current?.burst({ ...FX_POS.player, color: '#ffd23f', count: 16, kind: 'spark' })
+    const revealFoeIndex = skill.reveal ? battleState.foe.activeIndex : undefined
+    const receipt = store.commitPartnerSkillOnce({
+      skillId: skill.id,
+      revealFoeIndex,
+      teamStatuses: statuses,
+    })
+    if (!receipt) return
+
+    audio.play('select')
+    const revealedName = receipt.revealedFoeIndex === null
+      ? null
+      : battleState.foe.members[receipt.revealedFoeIndex]?.nameZh
+    const intent: PartnerSkillResultIntent = {
+      kind: 'partner-result',
+      id: `partner:${skill.id}`,
+      skillId: skill.id,
+      banner: receipt.teamStatusCount > 0 ? `${skill.icon} ${skill.name}！` : '🔍 看穿了對手！',
+      feed: {
+        id: `partner:${skill.id}:result`,
+        message: receipt.teamStatusCount > 0
+          ? `${skill.name}！全隊氣勢提升（攻擊・特攻 ↑）`
+          : `看穿了對手的 ${revealedName ?? 'Mobie'}！招式與數值現形`,
+      },
+      effects: [
+        ...(receipt.revealedFoeIndex === null ? [] : ['reveal-foe' as const]),
+        ...(receipt.teamStatusCount > 0 ? ['team-status' as const] : []),
+      ],
     }
-    setPartnerUsed((prev) => (prev.includes(skill.id) ? prev : [...prev, skill.id]))
-    // 仍停在 playerChoice（不耗回合）→ 主動清掉提示 banner，避免一直掛著。
-    if (banner) {
-      store().setBanner(banner)
-      const shown = banner
-      setTimeout(() => { if (store().banner === shown) store().setBanner(null) }, 1500)
-    }
-  }, [partnerUsed])
+    const committedStore = useBattleStore.getState()
+    if (!committedStore.battle) return
+    void submitIntent(
+      intent,
+      battleDisplaySnapshot(committedStore.battle),
+      `${committedStore.session?.battleSeed ?? skill.id}:partner:${skill.id}`,
+    )
+  }, [submitIntent])
 
   if (!battle) return <div className="center" style={{ flex: 1 }}>準備戰鬥…</div>
 
@@ -1294,6 +1456,7 @@ export function BattleScreen() {
 
   return (
     <motion.div
+      ref={battleRootRef}
       className={`col${juice !== 'off' ? ' battle-enter' : ''}`}
       style={{ flex: 1, position: 'relative' }}
       animate={rootShake}
@@ -1333,6 +1496,16 @@ export function BattleScreen() {
       <div className="col battle-fg" style={{ flex: 1, position: 'relative', zIndex: 10 }}>
       {/* 場域地形徽章（頂部置中常駐；中性/無地形不顯示） */}
       <TerrainChip terrainIds={battle.field.terrainEffects.current} />
+      {intentPresentation?.intent.kind === 'intro' && (
+        <button
+          ref={introSkipRef}
+          type="button"
+          className="btn btn--ghost battle-intro-skip"
+          onClick={() => { requestIntroSkip('touch') }}
+        >
+          跳過開場
+        </button>
+      )}
 
       {/* ★ 星擊球：能量滿 + 輪到玩家選招時，於戰鬥區中央大特效顯示；點了即放（不放就點技能槽照常）。
           M22 增強互動：off→點擊即放（原樣）；lite/arcade→點擊改開蓄力/節奏手勢，完成才放招。 */}
@@ -1341,6 +1514,7 @@ export function BattleScreen() {
           {energy >= 100 && phase === 'playerChoice' && !starCharging && (
             <motion.button
               className="star-orb"
+              data-battle-action="star"
               initial={{ opacity: 0, scale: 0.4 }}
               animate={{ opacity: 1, scale: [1, 1.08, 1] }}
               exit={{ opacity: 0, scale: 0.4 }}
@@ -1513,6 +1687,7 @@ export function BattleScreen() {
               {chainReady && (
                 <motion.button
                   className="btn btn--chain" style={{ fontSize: 16, padding: '12px 22px' }}
+                  data-battle-action="chain"
                   initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
                   transition={{ duration: 1.1, repeat: Infinity }}
                   whileTap={{ scale: 0.95 }}
@@ -1527,11 +1702,12 @@ export function BattleScreen() {
               <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>✨ 夥伴技能</span>
                 {partnerSkills.map((skill) => {
-                  const used = partnerUsed.includes(skill.id)
+                  const used = partnerSkillIdsUsed?.has(skill.id) ?? false
                   return (
                     <motion.button
                       key={skill.id}
                       className="btn btn--ghost btn--sm"
+                      data-battle-action="partner"
                       whileTap={used ? undefined : { scale: 0.95 }}
                       disabled={used}
                       title={skill.desc}

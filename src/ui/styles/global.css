@@ -743,6 +743,11 @@ body {
 }
 .battle-log__line { color: var(--text); }
 .battle-log__line--dim { color: var(--text-dim); }
+.battle-intro-skip {
+  position: absolute; z-index: 20; top: 10px; left: 12px;
+  min-width: 112px; min-height: 44px;
+  background: rgba(5, 9, 24, 0.76); backdrop-filter: blur(8px);
+}
 
 /* ============ 練習場入口 ============ */
 .practice-cta {

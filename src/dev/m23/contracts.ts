@@ -57,11 +57,14 @@ export type M23PresentationTraceStage =
   | 'finish'
   | 'end'
   | 'cancel'
+  | 'skip'
+  | 'complete'
 
 /** DEV-only exactly-once trace used by the real-Chrome M23 transaction gate. */
 export interface M23PresentationTraceEvent {
   transactionId: string
   presentationId: number
+  purpose: 'turn' | 'intent'
   stage: M23PresentationTraceStage
   cueId?: string
   detail?: string

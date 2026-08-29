@@ -8,14 +8,14 @@ import type {
   BattleTransactionPort,
   CancelReason,
   PresentationResult,
-  PresentationToken,
+  TurnPresentationToken,
   TurnPresentationJob,
   TurnResolution,
 } from './contracts'
 
 const before = createBattleState([mon()], [mon()])
-const token: PresentationToken = {
-  battleSessionId: 'battle', resultFingerprint: 'fingerprint', presentationId: 7,
+const token: TurnPresentationToken = {
+  battleSessionId: 'battle', resultFingerprint: 'fingerprint', presentationId: 7, purpose: 'turn',
 }
 
 function resolution(input: ReplayInput): TurnResolution {
