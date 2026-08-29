@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
@@ -36,7 +36,8 @@ import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { WeatherCanvas } from '@/scene/fx/WeatherCanvas'
 import { playMoveFx, resolveFx, typePalette } from '@/scene/fx/fxCatalog'
-import type { StageHandle } from '@/scene/r3f/BattleStage'
+import { BattleSceneHost } from '@/scene/battle/host/BattleSceneHost'
+import type { BattleSceneHandle } from '@/scene/battle/contracts'
 import { resolveTerrainPalette } from '@/scene/r3f/terrainVisual'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
@@ -54,6 +55,14 @@ import { LegacyBattleCueHandler, type BattleCuePorts } from '@/presentation/batt
 import { battleActionFromReplayInput } from '@/presentation/battle/turnInput'
 import { sameBattleSession } from '@/presentation/battle/battleIdentity'
 import { registerBattleLifecycleEnd } from '@/presentation/battle/battleLifecycleBridge'
+import { normalizedBattleAnchor } from '@/presentation/battle/battleAnchors'
+import {
+  rendererIsReady,
+  rendererAttemptId,
+  type BattleRendererState,
+  type GraphicsPreference,
+  type RendererFallbackReason,
+} from '@/presentation/battle/rendering'
 import type {
   BattleDisplaySnapshot,
   BattleIntent,
@@ -69,9 +78,7 @@ import type {
 } from '@/presentation/battle/contracts'
 import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 import { BattleErrorPanel } from '@/ui/battle/BattleErrorPanel'
-
-// 3D 戰鬥舞台：較重（three/R3F），lazy 載入避免拖慢 title/region 等畫面
-const BattleStage = lazy(() => import('@/scene/r3f/BattleStage'))
+import { BattleRenderGate } from '@/ui/battle/BattleRenderGate'
 
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
 const SUPPORT_LABEL: Record<SupportOutcome, string> = {
@@ -88,8 +95,8 @@ const hpToneClass = (frac: number, prefix: string) =>
   frac > 0.5 ? '' : frac > 0.2 ? `${prefix}--mid` : `${prefix}--low`
 // FxCanvas 上的概略打點位置（對齊版面：敵方上、我方下）
 const FX_POS: Record<Side, { nx: number; ny: number }> = {
-  foe: { nx: 0.72, ny: 0.22 },
-  player: { nx: 0.3, ny: 0.62 },
+  foe: normalizedBattleAnchor('foe', 'impact'),
+  player: normalizedBattleAnchor('player', 'impact'),
 }
 const ATTACK_QTE_TIMEOUT_MS = 10000
 // 連打蓄力視窗：原本 950ms 太短（玩測回饋「給的時間超級少」），放寬到 2.8s 讓連點真的衝得起來。
@@ -561,7 +568,12 @@ export function SwitchAction({ switchable, onPick }: { switchable: boolean; onPi
   )
 }
 
-export function BattleScreen() {
+export interface BattleScreenProps {
+  /** Storage-independent renderer input. Production omits it and receives Auto. */
+  graphicsPreference?: GraphicsPreference
+}
+
+export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps = {}) {
   const { context, send } = useGame()
   const battle = useBattleStore((s) => s.presentation?.battle ?? s.battle)
   const phase = useBattleStore((s) => s.phase)
@@ -582,6 +594,15 @@ export function BattleScreen() {
   const battleError = useBattleStore((s) => s.battleError)
   const partnerSkillIdsUsed = useBattleStore((s) => s.session?.partnerSkillIdsUsed)
   const choiceFocusRequestId = useBattleStore((s) => s.choiceFocusRequestId)
+  const devRendererOptions = import.meta.env.DEV ? baselineDriver()?.options : undefined
+  const requestedGraphics = devRendererOptions?.graphics ?? graphicsPreference
+  const rendererFailure = devRendererOptions?.rendererFailure ?? null
+  const [battleDataReady, setBattleDataReady] = useState(false)
+  const [rendererState, setRendererState] = useState<BattleRendererState | null>(null)
+  const currentRendererAttemptId = runtimeSession
+    ? rendererAttemptId(runtimeSession.token)
+    : null
+  const rendererReady = rendererState?.attemptId === currentRendererAttemptId && rendererIsReady(rendererState)
   // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
   const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean; foeIndex: number } | null>(null)
   // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
@@ -610,12 +631,16 @@ export function BattleScreen() {
     () => resolveTerrainPalette(battle?.field.terrainEffects.current ?? []),
     [battle?.field.terrainEffects.current],
   )
-  // 天氣粒子密度（juice 分級）：full=100% / reduced≈30% / off=0（整層不掛＝嚴格回 M22 基線）。
-  const weatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
+  // Graphics controls cost; juice remains an independent presentation-intensity ceiling.
+  const graphicsWeatherDensity = !rendererReady
+    ? 0
+    : rendererState?.tier === 'high' ? 1 : rendererState?.tier === 'balanced' ? 0.3 : 0.2
+  const juiceWeatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
+  const weatherDensity = graphicsWeatherDensity * juiceWeatherDensity
 
   const fxRef = useRef<FxHandle>(null)
   const damageRef = useRef<DamageNumbersHandle>(null)
-  const stageRef = useRef<StageHandle>(null)
+  const stageRef = useRef<BattleSceneHandle>(null)
   const rootShake = useAnimationControls()
   // EXT.1：juice 走 ref 供 presentation ports 讀最新值，不重建整條 director。
   const juiceRef = useRef(juice)
@@ -840,12 +865,35 @@ export function BattleScreen() {
   }, [introPresentationId, requestIntroSkip])
 
   useEffect(() => {
-    if (choiceFocusRequestId === 0) return
+    if (choiceFocusRequestId === 0 || !rendererReady) return
     const root = battleRootRef.current
     const next = root?.querySelector<HTMLButtonElement>('.move-slot:not(:disabled)')
       ?? root?.querySelector<HTMLButtonElement>('[data-battle-action]:not(:disabled)')
     next?.focus()
-  }, [choiceFocusRequestId])
+  }, [choiceFocusRequestId, rendererReady])
+
+  const handleRendererStateChange = useCallback((
+    token: BattleSessionToken,
+    next: BattleRendererState,
+  ) => {
+    if (!useBattleStore.getState().isSessionCurrent(token)) return
+    setRendererState((current) => (
+      current?.attemptId === next.attemptId
+      && current.phase === next.phase
+      && current.tier === next.tier
+      && current.fallbackReason === next.fallbackReason
+        ? current
+        : next
+    ))
+    if (import.meta.env.DEV) baselineDriver()?.recordRendererState(next)
+  }, [])
+
+  const handleRendererFallback = useCallback((
+    token: BattleSessionToken,
+    reason: RendererFallbackReason,
+  ) => {
+    useBattleStore.getState().latchRendererCompatibility(token, reason)
+  }, [])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -975,7 +1023,7 @@ export function BattleScreen() {
   useEffect(() => {
     if (initedRef.current) return
     initedRef.current = true
-    initializeBattle(false)
+    setBattleDataReady(initializeBattle(false))
   }, [context.foeTeam.length, context.playerTeam.length, initializeBattle])
 
   useEffect(() => {
@@ -1656,6 +1704,8 @@ export function BattleScreen() {
     if (retryingRef.current) return
     retryingRef.current = true
     setRetrying(true)
+    setBattleDataReady(false)
+    setRendererState(null)
     const store = useBattleStore.getState()
     const previous = store.session?.token
     if (previous) {
@@ -1663,7 +1713,7 @@ export function BattleScreen() {
       sessionLifecycle.end(previous, 'retry')
     }
     turnCoordinatorRef.current = null
-    initializeBattle(true)
+    setBattleDataReady(initializeBattle(true))
     retryingRef.current = false
     setRetrying(false)
   }, [initializeBattle, sessionLifecycle])
@@ -1678,10 +1728,14 @@ export function BattleScreen() {
     send({ type: 'ABORT_BATTLE' })
   }, [send, sessionLifecycle])
 
-  if (!battle) {
+  if (!battleDataReady || !battle || !runtimeSession) {
     return battleError
       ? <BattleErrorPanel error={battleError} retrying={retrying} onRetry={retryBattle} onLeave={leaveBattle} />
-      : <div className="center" style={{ flex: 1 }}>準備戰鬥…</div>
+      : (
+          <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+            <BattleRenderGate state="battle-data-loading" />
+          </div>
+        )
   }
 
   const player = battle.player.members[battle.player.activeIndex]
@@ -1701,22 +1755,31 @@ export function BattleScreen() {
       style={{ flex: 1, position: 'relative' }}
       animate={rootShake}
     >
-      {/* 3D 戰鬥舞台（背景層）：兩隻在場Mobie + 地台/光照/相機。EXT.3：off 不給 palette＝基線色/無霧。 */}
-      <Suspense fallback={null}>
-        <BattleStage
-          ref={stageRef}
-          player={player}
-          foe={foe}
-          palette={juice === 'off' ? undefined : terrainPalette}
-          onRenderedFrame={import.meta.env.DEV ? (at) => baselineDriver()?.recordRenderedFrame(at) : undefined}
-          onRendererDiagnostics={import.meta.env.DEV ? (resources) => {
-            const driver = baselineDriver()
-            driver?.recordRendererResources(resources)
-            const pools = fxRef.current?.diagnostics?.()
-            if (pools) driver?.recordPools(pools)
-          } : undefined}
-        />
-      </Suspense>
+      {/* Three-free host owns lazy next boot and one-way compatibility fallback. */}
+      <BattleSceneHost
+        key={currentRendererAttemptId!}
+        ref={stageRef}
+        snapshot={{
+          player,
+          foe,
+          palette: juice === 'off' ? undefined : terrainPalette,
+          outcome: battle.winner,
+        }}
+        sessionToken={runtimeSession.token}
+        preference={requestedGraphics}
+        paused={documentHidden}
+        latchedFallback={runtimeSession.rendererFallbackReason}
+        onStateChange={handleRendererStateChange}
+        onFallback={handleRendererFallback}
+        devFailure={import.meta.env.DEV ? rendererFailure : null}
+        onRenderedFrame={import.meta.env.DEV ? (at) => baselineDriver()?.recordRenderedFrame(at) : undefined}
+        onRendererDiagnostics={import.meta.env.DEV ? (resources) => {
+          const driver = baselineDriver()
+          driver?.recordRendererResources(resources)
+          const pools = fxRef.current?.diagnostics?.()
+          if (pools) driver?.recordPools(pools)
+        } : undefined}
+      />
       {/* EXT.3 天氣持續層（z2，介於 R3F 與 FxCanvas）：off 不掛＝零 rAF、嚴格回 M22 基線。 */}
       {juice !== 'off' && (
         <WeatherCanvas
@@ -1759,7 +1822,7 @@ export function BattleScreen() {
           M22 增強互動：off→點擊即放（原樣）；lite/arcade→點擊改開蓄力/節奏手勢，完成才放招。 */}
       <div className="overlay-center overlay-center--orb">
         <AnimatePresence>
-          {energy >= 100 && phase === 'playerChoice' && !starCharging && (
+          {rendererReady && energy >= 100 && phase === 'playerChoice' && !starCharging && (
             <motion.button
               className="star-orb"
               data-battle-action="star"
@@ -1783,7 +1846,7 @@ export function BattleScreen() {
 
       {/* M22 星擊手勢 overlay（lite 長按蓄力 / arcade 節奏點擊）；off 不渲染＝DOM 零新增 wrapper。
           完成（或逾時）→ 收起手勢 + runStarStrike()（簽名不動、傷害不吃手勢結果）。 */}
-      {starCharging && phase === 'playerChoice' && (
+      {rendererReady && starCharging && phase === 'playerChoice' && (
         starMode === 'arcade' ? (
           <RhythmTap paused={documentHidden} mode={starMode} onDone={() => { setStarCharging(false); void runStarStrike() }} />
         ) : (
@@ -1900,7 +1963,14 @@ export function BattleScreen() {
           )}
         </div>
 
-        {phase === 'playerChoice' && (
+        {phase === 'playerChoice' && !rendererReady && (
+          <div className="battle-command-disabled" role="status" aria-live="polite">
+            <button className="btn" type="button" disabled>戰鬥畫面準備中</button>
+            <span>資料已就緒；renderer ready 後才會開放指令。</span>
+          </div>
+        )}
+
+        {phase === 'playerChoice' && rendererReady && (
           <motion.div className="col center" style={{ gap: 12, width: '100%' }}
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             {/* M19.c 四槽選招：選槽即進 QTE（slotIndex 存進 ref 待解算回合用）。星擊/換人/連鎖另列分離。 */}
@@ -1968,7 +2038,7 @@ export function BattleScreen() {
           </motion.div>
         )}
 
-        {phase === 'switchSelect' && (
+        {phase === 'switchSelect' && rendererReady && (
           <SwitchPanel
             members={battle.player.members}
             activeIndex={battle.player.activeIndex}
@@ -1987,7 +2057,7 @@ export function BattleScreen() {
           改成置中放大的醒目面板，正對玩家視線與拇指。MoveSlots（選招選單）維持在底部不動。 */}
       <div className="battle-action-layer">
       <AnimatePresence>
-        {(phase === 'qte' || phase === 'mash' || phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
+        {rendererReady && (phase === 'qte' || phase === 'mash' || phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
           <motion.div
             className="battle-action"
             initial={{ opacity: 0, y: 14, scale: 0.95 }}

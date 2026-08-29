@@ -10,13 +10,31 @@ interface MobieVisualProps {
 
 /** Artwork-only combatant; Battle/Capture never read custom model storage or GLTF assets. */
 export function MobieVisual({ artworkUrl, shiny }: MobieVisualProps) {
+  const fallback = <ProceduralSilhouette shiny={shiny} />
   // 此元件自我保護，呼叫端（Combatant3D / CaptureStage）無須再外包邊界。
   return (
-    <VisualBoundary key={artworkUrl} fallback={null}>
-      <Suspense fallback={null}>
+    <VisualBoundary key={artworkUrl} fallback={fallback}>
+      <Suspense fallback={fallback}>
         <BillboardSprite url={artworkUrl} shiny={shiny} />
       </Suspense>
     </VisualBoundary>
+  )
+}
+
+/** Stable no-asset fallback used while artwork loads or when decoding fails. */
+function ProceduralSilhouette({ shiny }: { shiny?: boolean }) {
+  const color = shiny ? '#f5d76e' : '#64748b'
+  return (
+    <group position={[0, 1.05, 0]}>
+      <mesh position={[0, -0.2, 0]} scale={[0.78, 1.05, 0.4]}>
+        <sphereGeometry args={[0.82, 18, 14]} />
+        <meshBasicMaterial color={color} transparent opacity={0.88} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 0.75, 0]}>
+        <sphereGeometry args={[0.55, 18, 14]} />
+        <meshBasicMaterial color={color} transparent opacity={0.9} toneMapped={false} />
+      </mesh>
+    </group>
   )
 }
 

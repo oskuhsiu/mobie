@@ -20,6 +20,24 @@ export default defineConfig(({ command }) => ({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    manifest: true,
+    rollupOptions: {
+      output: {
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          const normalized = id.replaceAll('\\', '/')
+          if (
+            normalized.includes('/node_modules/three/')
+            || normalized.includes('/node_modules/three-stdlib/')
+            || normalized.includes('/node_modules/@react-three/')
+          ) return 'three-vendor'
+          if (normalized.includes('/src/scene/battle/compat/')) return 'battle-compatibility'
+          return undefined
+        },
+      },
+    },
+  },
   test: {
     globals: true,
     environment: 'node',

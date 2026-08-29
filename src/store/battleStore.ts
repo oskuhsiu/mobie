@@ -18,6 +18,7 @@ import type {
   TurnInput,
   TurnResolution,
 } from '@/presentation/battle/contracts'
+import type { RendererFallbackReason } from '@/presentation/battle/rendering'
 
 export type { Side }
 
@@ -140,6 +141,7 @@ export interface BattleRuntimeSession {
   completedIntentIds: ReadonlySet<BattleIntent['id']>
   partnerSkillIdsUsed: ReadonlySet<string>
   interruptedIntent: InterruptedBattleIntent | null
+  rendererFallbackReason: RendererFallbackReason | null
   retired: boolean
 }
 
@@ -180,6 +182,7 @@ function createRuntimeSession({
     completedIntentIds: new Set(),
     partnerSkillIdsUsed: new Set(),
     interruptedIntent: null,
+    rendererFallbackReason: null,
     retired: false,
   }
 }
@@ -242,6 +245,7 @@ interface BattleUiState {
   ensureBattleSession: (init: BattleSessionInit) => BattleSessionEnsureResult
   acquireTurnPresentationToken: () => TurnPresentationToken | null
   isSessionCurrent: (token: BattleSessionToken) => boolean
+  latchRendererCompatibility: (token: BattleSessionToken, reason: RendererFallbackReason) => boolean
   fenceSession: (token: BattleSessionToken) => boolean
   failTurnOnce: (token: TurnPresentationToken, error: unknown) => boolean
   recordFailedOnce: (token: TurnPresentationToken, error: unknown) => boolean
@@ -411,6 +415,16 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   isSessionCurrent: (token) => {
     const session = get().session
     return currentSession(session, token)
+  },
+
+  latchRendererCompatibility: (token, reason) => {
+    let latched = false
+    set((s) => {
+      if (!currentSession(s.session, token) || s.session.rendererFallbackReason) return {}
+      latched = true
+      return { session: { ...s.session, rendererFallbackReason: reason } }
+    })
+    return latched
   },
 
   fenceSession: (token) => {

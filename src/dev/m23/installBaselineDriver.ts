@@ -10,6 +10,7 @@ import { useSettings } from '@/store/settingsStore'
 import { useBattleStore } from '@/store/battleStore'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
+import type { BattleRendererState } from '@/presentation/battle/rendering'
 import type { QteQuality } from '@/game/battle/engine'
 import { battleAudioSession } from '@/audio/battleAudioSession'
 import { battleBgmSession } from '@/audio/battleBgmSession'
@@ -21,11 +22,13 @@ import {
   M23_BASELINE_SCENARIO_ID,
   M23_GRAPHICS_OPTIONS,
   M23_MOTION_OPTIONS,
+  M23_RENDERER_FAILURES,
   M23_TURN_TRANSACTION_CASES,
   M23_FAILURE_STAGES,
   type M23Checkpoint,
   type M23FailureStage,
   type M23MotionPreference,
+  type M23RendererFailure,
   type M23PoolCount,
   type M23PresentationTraceEvent,
   type M23RendererResources,
@@ -38,6 +41,7 @@ export interface M23BaselineDriverOptions {
   seed: string
   viewport: { width: number; height: number }
   graphics: M23RequestedGraphics
+  rendererFailure: M23RendererFailure | null
   motion: M23MotionPreference
   cueStep: number | 'run'
 }
@@ -61,6 +65,7 @@ export interface M23BaselineDriver {
       endSent: boolean
       retired: boolean
       recorderActive: boolean
+      rendererFallbackReason: BattleRendererState['fallbackReason']
     } | null
   }
   takeQteQuality: (actual: QteQuality) => QteQuality
@@ -78,6 +83,7 @@ export interface M23BaselineDriver {
   setActivity: (active: boolean) => void
   recordRenderedFrame: (at: number) => void
   recordRendererResources: (resources: M23RendererResources) => void
+  recordRendererState: (state: BattleRendererState) => void
   recordPools: (pools: Record<string, M23PoolCount>) => void
   beginCast: (at: number) => void
   recordCastImpact: (at: number) => void
@@ -89,6 +95,7 @@ export interface M23BaselineDriver {
 
 const GRAPHICS = new Set<M23RequestedGraphics>(M23_GRAPHICS_OPTIONS)
 const MOTION = new Set<M23MotionPreference>(M23_MOTION_OPTIONS)
+const RENDERER_FAILURES = new Set<M23RendererFailure>(M23_RENDERER_FAILURES)
 
 function positiveInteger(value: number, name: string): number {
   if (!Number.isInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer`)
@@ -101,6 +108,7 @@ function queryOptions(): Partial<M23BaselineDriverOptions> {
   const width = Number(query.get('width'))
   const height = Number(query.get('height'))
   const graphics = query.get('graphics') as M23RequestedGraphics | null
+  const rendererFailure = query.get('rendererFailure') as M23RendererFailure | null
   const motion = query.get('motion') as M23MotionPreference | null
   const cue = query.get('cueStep')
   return {
@@ -110,6 +118,7 @@ function queryOptions(): Partial<M23BaselineDriverOptions> {
       ? { viewport: { width, height } }
       : {}),
     ...(graphics && GRAPHICS.has(graphics) ? { graphics } : {}),
+    ...(rendererFailure && RENDERER_FAILURES.has(rendererFailure) ? { rendererFailure } : {}),
     ...(motion && MOTION.has(motion) ? { motion } : {}),
     ...(cue === 'run' ? { cueStep: 'run' as const } : cue !== null && Number.isInteger(Number(cue)) && Number(cue) >= 0
       ? { cueStep: Number(cue) }
@@ -139,6 +148,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     seed: M23_BASELINE_SEED,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     graphics: 'auto',
+    rendererFailure: null,
     motion: 'full',
     cueStep: 'run',
     ...queryOptions(),
@@ -164,6 +174,9 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     positiveInteger(viewport.width, 'viewport.width')
     positiveInteger(viewport.height, 'viewport.height')
     if (patch.graphics !== undefined && !GRAPHICS.has(patch.graphics)) throw new Error(`Unknown graphics request: ${patch.graphics}`)
+    if (patch.rendererFailure !== undefined && patch.rendererFailure !== null && !RENDERER_FAILURES.has(patch.rendererFailure)) {
+      throw new Error(`Unknown renderer failure: ${patch.rendererFailure}`)
+    }
     if (patch.motion !== undefined && !MOTION.has(patch.motion)) throw new Error(`Unknown motion request: ${patch.motion}`)
     if (patch.cueStep !== undefined && patch.cueStep !== 'run' && (!Number.isInteger(patch.cueStep) || patch.cueStep < 0)) {
       throw new Error('cueStep must be run or a non-negative integer')
@@ -173,6 +186,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     diagnostics.configure(options.graphics, options.motion)
     document.documentElement.dataset.m23Scenario = options.scenarioId
     document.documentElement.dataset.m23Graphics = options.graphics
+    document.documentElement.dataset.m23RendererFailure = options.rendererFailure ?? ''
     document.documentElement.dataset.m23Motion = options.motion
     installFixtureSettings()
     return { ...options, viewport: { ...options.viewport } }
@@ -288,6 +302,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
           endSent: state.session.endSent,
           retired: state.session.retired,
           recorderActive: state.session.recorder.active,
+          rendererFallbackReason: state.session.rendererFallbackReason,
         } : null,
       }
     },
@@ -342,6 +357,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     setActivity: (active) => diagnostics.setActivity(active),
     recordRenderedFrame: (at) => diagnostics.recordRenderedFrame(at),
     recordRendererResources: (resources) => diagnostics.recordRendererResources(resources),
+    recordRendererState: (state) => diagnostics.recordRendererState(state),
     recordPools: (pools) => diagnostics.recordPools(pools),
     beginCast: (at) => diagnostics.beginCast(at),
     recordCastImpact: (at) => diagnostics.recordCastImpact(at),
@@ -362,6 +378,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       for (const resolve of waiters) resolve()
       delete document.documentElement.dataset.m23Scenario
       delete document.documentElement.dataset.m23Graphics
+      delete document.documentElement.dataset.m23RendererFailure
       delete document.documentElement.dataset.m23Motion
       if (window.__MOBIE_M23_BASELINE__ === driver) delete window.__MOBIE_M23_BASELINE__
     },

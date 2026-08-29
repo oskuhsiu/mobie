@@ -40,6 +40,23 @@ function resolution(before: ReturnType<typeof createBattleState>): TurnResolutio
 }
 
 describe('battleStore session lifecycle', () => {
+  it('latches renderer compatibility by full token across same-session remounts', () => {
+    const logicalKey = {}
+    init(logicalKey, identityA)
+
+    expect(useBattleStore.getState().latchRendererCompatibility(identityB, 'context-lost')).toBe(false)
+    expect(useBattleStore.getState().latchRendererCompatibility(identityA, 'context-lost')).toBe(true)
+    expect(useBattleStore.getState().latchRendererCompatibility(identityA, 'shader-error')).toBe(false)
+    expect(useBattleStore.getState().session?.rendererFallbackReason).toBe('context-lost')
+
+    const reused = init(logicalKey, identityA)
+    expect(reused.created).toBe(false)
+    expect(useBattleStore.getState().session?.rendererFallbackReason).toBe('context-lost')
+
+    init({}, identityB)
+    expect(useBattleStore.getState().session?.rendererFallbackReason).toBeNull()
+  })
+
   it('creates a fresh retry identity before preparation and starts that recorder once on completion', () => {
     const logicalKey = {}
     init(logicalKey, identityA)

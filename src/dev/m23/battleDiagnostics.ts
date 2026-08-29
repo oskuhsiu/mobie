@@ -6,6 +6,13 @@ import type {
   M23RendererResources,
   M23RequestedGraphics,
 } from './contracts'
+import {
+  resolveGraphicsPreference,
+  type BattleRendererPhase,
+  type BattleRendererState,
+  type EffectiveGraphicsTier,
+  type RendererFallbackReason,
+} from '@/presentation/battle/rendering'
 
 export interface M23DiagnosticsSnapshot {
   activeFrameGapsMs: number[]
@@ -15,7 +22,14 @@ export interface M23DiagnosticsSnapshot {
   pools: Record<string, M23PoolCount>
   dpr: number
   requestedGraphics: M23RequestedGraphics
-  effectiveTier: 'legacy-fixed'
+  effectiveTier: EffectiveGraphicsTier
+  rendererState: BattleRendererPhase
+  rendererFallbackReason: RendererFallbackReason | null
+  rendererTransitions: Array<{
+    phase: BattleRendererPhase
+    tier: EffectiveGraphicsTier
+    reason: RendererFallbackReason | null
+  }>
   motion: M23MotionPreference
   activeCue: string | null
   checkpoints: M23Checkpoint[]
@@ -53,6 +67,10 @@ export class M23BattleDiagnostics {
   private firstCastStartedAt: number | null = null
   private firstCastLatencyMs: number | null = null
   private presentationTrace: M23PresentationTraceEvent[] = []
+  private effectiveTier: EffectiveGraphicsTier
+  private rendererState: BattleRendererPhase = 'renderer-booting'
+  private rendererFallbackReason: RendererFallbackReason | null = null
+  private rendererTransitions: M23DiagnosticsSnapshot['rendererTransitions'] = []
   private observer: PerformanceObserver | null = null
   private peakAssetComplexity: Record<string, number> = {
     peakImageElements: 0,
@@ -71,6 +89,7 @@ export class M23BattleDiagnostics {
     private requestedGraphics: M23RequestedGraphics,
     private motion: M23MotionPreference,
   ) {
+    this.effectiveTier = resolveGraphicsPreference(requestedGraphics).tier
     if (typeof PerformanceObserver === 'undefined') return
     try {
       this.observer = new PerformanceObserver((list) => {
@@ -89,6 +108,7 @@ export class M23BattleDiagnostics {
 
   configure(graphics: M23RequestedGraphics, motion: M23MotionPreference): void {
     this.requestedGraphics = graphics
+    this.effectiveTier = resolveGraphicsPreference(graphics).tier
     this.motion = motion
   }
 
@@ -147,6 +167,24 @@ export class M23BattleDiagnostics {
     )
   }
 
+  recordRendererState(state: BattleRendererState): void {
+    const next = {
+      phase: state.phase,
+      tier: state.tier,
+      reason: state.fallbackReason,
+    }
+    const previous = this.rendererTransitions.at(-1)
+    if (
+      previous?.phase === next.phase
+      && previous.tier === next.tier
+      && previous.reason === next.reason
+    ) return
+    this.effectiveTier = state.tier
+    this.rendererState = state.phase
+    this.rendererFallbackReason = state.fallbackReason
+    this.rendererTransitions.push(next)
+  }
+
   recordPools(pools: Record<string, M23PoolCount>): void {
     this.pools = { ...this.pools, ...pools }
   }
@@ -164,6 +202,10 @@ export class M23BattleDiagnostics {
     this.firstCastStartedAt = null
     this.firstCastLatencyMs = null
     this.presentationTrace = []
+    this.effectiveTier = resolveGraphicsPreference(this.requestedGraphics).tier
+    this.rendererState = 'renderer-booting'
+    this.rendererFallbackReason = null
+    this.rendererTransitions = []
     this.peakAssetComplexity = {
       peakImageElements: 0,
       peakDecodedPixels: 0,
@@ -205,8 +247,8 @@ export class M23BattleDiagnostics {
       this.peakAssetComplexity[name] = Math.max(this.peakAssetComplexity[name] ?? 0, amount)
     }
     const limitations = [
-      'Requested graphics is recorded only; the current renderer remains legacy fixed DPR/always-loop.',
       'Minimum supported device is not selected; Auto is conservatively treated as Balanced and High is not release-ready.',
+      'Adaptive rolling-frame governor calibration remains release-qualification work.',
     ]
     if (this.observer === null) limitations.push('Long Task API is unavailable in this browser.')
     if (
@@ -222,9 +264,14 @@ export class M23BattleDiagnostics {
       longTasks: this.longTasks.map((task) => ({ ...task })),
       rendererResources: { ...this.rendererResources },
       pools: Object.fromEntries(Object.entries(this.pools).map(([name, pool]) => [name, { ...pool }])),
-      dpr: window.devicePixelRatio || 1,
+      dpr: this.effectiveTier === 'high'
+        ? Math.min(window.devicePixelRatio || 1, 1.5)
+        : 1,
       requestedGraphics: this.requestedGraphics,
-      effectiveTier: 'legacy-fixed',
+      effectiveTier: this.effectiveTier,
+      rendererState: this.rendererState,
+      rendererFallbackReason: this.rendererFallbackReason,
+      rendererTransitions: this.rendererTransitions.map((transition) => ({ ...transition })),
       motion: this.motion,
       activeCue: this.activeCue,
       checkpoints: [...this.checkpoints],

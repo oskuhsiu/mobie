@@ -69,7 +69,7 @@ async function collectBattleChunks() {
       name: entry.name,
       bytes: bytes.length,
       gzipBytes: gzipSync(bytes).length,
-      battleRelevant: /^(BattleStage|CaptureStage|MobieVisual|index)-/.test(entry.name),
+      battleRelevant: /^(NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
     })
   }
   if (!files.some((file) => file.battleRelevant)) throw new Error('No battle-relevant production chunk was found in dist/assets')

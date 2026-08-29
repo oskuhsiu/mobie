@@ -1,10 +1,12 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Vector3, PerspectiveCamera } from 'three'
-import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
-import type { TerrainPalette } from './terrainVisual'
-import type { M23RendererResources } from '@/dev/m23/contracts'
+import { projectBattleAnchor } from '@/presentation/battle/battleAnchors'
+import type {
+  BattleSceneHandle,
+  NextBattleSceneProps,
+} from '@/scene/battle/contracts'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { Combatant3D, makeAnim, LUNGE_DUR, SHAKE_DUR, ENTER_DUR, type MonAnim } from './Combatant3D'
 
@@ -14,35 +16,6 @@ const PLAYER_BASE: [number, number, number] = [-1.15, 0, 0.2]
 const FOE_BASE: [number, number, number] = [1.15, 0, -1.8]
 const PLAYER_LUNGE: [number, number] = [0.95, -0.9]
 const FOE_LUNGE: [number, number] = [-0.95, 0.9]
-
-/** BattleScreen 透過此 handle 觸發 3D 演出（與 FxCanvas 同模式：imperative、不過 React state）。 */
-export interface StageHandle {
-  /** 撲擊（攻擊出手方往對手方向衝） */
-  lunge: (side: Side) => void
-  /** 受擊反應：抖動，strength 放大幅度（會心/效果絕佳更大） */
-  hitReact: (side: Side, strength?: number) => void
-  /** 倒下（傾倒淡沉） */
-  faint: (side: Side) => void
-  /** 換上/入場（從上落下 + 彈跳放大，並清除倒下狀態） */
-  enter: (side: Side) => void
-  /** EXT.2 慢鏡：設舞台時間倍率（1＝正常、<1＝慢鏡）。只動 3D（FxCanvas/Tone real-time）。 */
-  setTimeScale: (scale: number) => void
-  /** 取消 presentation 時清除所有暫態姿勢，不改目前顯示的戰鬥成員。 */
-  resetPresentation: () => void
-}
-
-export type RendererDiagnostics = M23RendererResources
-
-interface BattleStageProps {
-  player: BattleMobie
-  foe: BattleMobie
-  /** EXT.3：地形視覺 palette（地板色調/環境光/霧）。未給＝neutral 基線。 */
-  palette?: TerrainPalette
-  /** Ticket 01 DEV instrumentation. Omitted in production usage. */
-  onRenderedFrame?: (at: number) => void
-  /** Ticket 01 DEV instrumentation. Omitted in production usage. */
-  onRendererDiagnostics?: (diagnostics: RendererDiagnostics) => void
-}
 
 // 取景目標與「target→相機」方向（沿用原本的俯角構圖，只動距離）。
 const LOOK_AT = new Vector3(0, 1.05, -0.55)
@@ -73,7 +46,7 @@ function CameraRig() {
   return null
 }
 
-function DiagnosticsProbe({ onRenderedFrame, onRendererDiagnostics }: Pick<BattleStageProps, 'onRenderedFrame' | 'onRendererDiagnostics'>) {
+function DiagnosticsProbe({ onRenderedFrame, onRendererDiagnostics }: Pick<NextBattleSceneProps, 'onRenderedFrame' | 'onRendererDiagnostics'>) {
   const frame = useRef(0)
   useFrame(({ gl }) => {
     onRenderedFrame?.(performance.now())
@@ -90,13 +63,59 @@ function DiagnosticsProbe({ onRenderedFrame, onRendererDiagnostics }: Pick<Battl
   return null
 }
 
-const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleStage({
-  player,
-  foe,
-  palette,
+function RendererLifecycle({ onReady, onFatal, devShaderFailure }: Pick<
+  NextBattleSceneProps,
+  'onReady' | 'onFatal' | 'devShaderFailure'
+>) {
+  const { gl } = useThree()
+  const ready = useRef(false)
+  const failed = useRef(false)
+  const onReadyRef = useRef(onReady)
+  const onFatalRef = useRef(onFatal)
+  onReadyRef.current = onReady
+  onFatalRef.current = onFatal
+
+  useLayoutEffect(() => {
+    const canvas = gl.domElement
+    const previousShaderError = gl.debug.onShaderError
+    const onShaderError = () => {
+      if (failed.current) return
+      failed.current = true
+      onFatalRef.current('shader-error')
+    }
+    const onContextLost = (event: Event) => {
+      event.preventDefault()
+      if (failed.current) return
+      failed.current = true
+      onFatalRef.current('context-lost')
+    }
+    canvas.addEventListener('webglcontextlost', onContextLost)
+    gl.debug.checkShaderErrors = true
+    gl.debug.onShaderError = onShaderError
+    if (devShaderFailure) {
+      onShaderError()
+    } else if (!ready.current) {
+      ready.current = true
+      onReadyRef.current()
+    }
+    return () => {
+      canvas.removeEventListener('webglcontextlost', onContextLost)
+      if (gl.debug.onShaderError === onShaderError) gl.debug.onShaderError = previousShaderError
+    }
+  }, [devShaderFailure, gl])
+  return null
+}
+
+const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function BattleStage({
+  snapshot,
+  tier,
+  onReady,
+  onFatal,
   onRenderedFrame,
   onRendererDiagnostics,
+  devShaderFailure,
 }, ref) {
+  const { player, foe, palette } = snapshot
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
   // EXT.2 慢鏡倍率：imperative 寫入、Combatant3D 每幀讀（不過 React state）。
   const timeScaleRef = useRef(1)
@@ -130,18 +149,21 @@ const BattleStage = forwardRef<StageHandle, BattleStageProps>(function BattleSta
         }
         timeScaleRef.current = 1
       },
+      projectAnchor: (side, anchor, viewport) => projectBattleAnchor(side, anchor, viewport),
     }),
     [],
   )
 
   return (
     <Canvas
-      dpr={[1, 2]}
+      className="battle-next-canvas"
+      dpr={[1, tier === 'high' ? 1.5 : 1]}
       frameloop="always"
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       camera={{ position: [0, 2.95, 6.4], fov: 40 }}
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
     >
+      <RendererLifecycle onReady={onReady} onFatal={onFatal} devShaderFailure={devShaderFailure} />
       {palette?.fog && <fog attach="fog" args={[palette.fog.color, palette.fog.near, palette.fog.far]} />}
       {(onRenderedFrame || onRendererDiagnostics) && (
         <DiagnosticsProbe onRenderedFrame={onRenderedFrame} onRendererDiagnostics={onRendererDiagnostics} />

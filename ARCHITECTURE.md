@@ -42,6 +42,7 @@ store/      Zustand: battleStore (display), rosterStore (persistence), prefs-onl
 ui/         React screens + components + global.css + type metadata
 audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
+scene/battle/ Three-free renderer contracts + host, DOM compatibility adapter, provisional next entry
 scene/r3f/  React-three-fiber 3D battle/capture stage (M3, lazy three)
 scene/models/  Legacy custom-model tooling; Battle/Capture never import or read it
 input/      QTE seam (qualityFromPointer / zones)
@@ -52,7 +53,8 @@ transaction seam and may import its pure contracts/runtime identity helpers. `pr
 `game/` never import React, scene, or UI. Extension modules are pure data + pure hook functions;
 `game/ext/productRuntime.ts` permanently composes mature battle capabilities behind one interface.
 Writable settings never participate in gameplay assembly. Keeping domain logic pure makes the battle
-system testable and the animation layer swappable.
+system testable and the animation layer swappable. `scene/battle/host/BattleSceneHost.tsx` is the only
+battle-route dynamic Three entry; main, presentation, DOM boot, and compatibility graphs are Three-free.
 
 ## 3. Screen flow (XState — `game/machine/gameMachine.ts`)
 
@@ -156,6 +158,21 @@ and input time while `document.hidden`; the Director, TimingBar, Mash, rhythm/ho
 resume rather than auto-submit. `BattleAudioSession` is presentation-token-owned, while
 `BattleBgmSession` is battle-session-owned across turns; old A cleanup cannot cancel or reset B. Retry
 reuses the single battle initializer with `forceNew`, and Leave fences resources before `ABORT_BATTLE`.
+
+Renderer lifecycle is a separate display-only seam. `BattleSceneHost` receives a storage-independent
+`GraphicsPreference` (`auto`/missing → Balanced, explicit High capped at DPR 1.5, or Compatibility),
+loads `NextBattleScene` explicitly, and exposes one stable `BattleSceneHandle` while swapping child
+adapters. Data loading and renderer boot are observable DOM states; commands mount only after next or
+compatibility readiness. Chunk rejection, 8-second readiness timeout, WebGL unsupported, shader fatal,
+and context loss all latch compatibility in the non-persisted session. Late ready/restore events and
+same-session remounts cannot upgrade it; Retry creates a fresh token and may probe again. The DOM
+compatibility adapter reuses the same HUD, FxCanvas, WeatherCanvas, store projection, and coordinator,
+so renderer changes never rerun resolver/input or duplicate canonical commit.
+
+`vite build` emits a manifest plus explicit `NextBattleScene`, `CaptureStage`, Three-vendor, and
+compatibility categories. Rollup's explicit-only manual chunks keep Three out of the main and
+compatibility static graphs. Legacy ModelManager/Save model chunks remain isolated Ticket 22 work and
+are not dependencies of the battle/capture graphs.
 
 **Performance red-line:** high-frequency values (QTE pointer position, future MediaPipe coords) go
 through refs/rAF/DOM or Zustand — **never** React top-level state. See `TimingBar`, `MashMeter`, `FxCanvas`.

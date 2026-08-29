@@ -17,4 +17,23 @@ describe('Ticket 06 production truth edges', () => {
     expect(tools).not.toMatch(/CardScannerModal|open\('scan'\)|掃卡/)
     expect(combatant).not.toMatch(/GLTFLoader|useModelUrl|modelStore|\.glb|\.gltf/)
   })
+
+  it('keeps the battle host, boot gate, and compatibility graph Three-free', () => {
+    const battleScreen = source('../../ui/screens/BattleScreen.tsx')
+    const host = source('../../scene/battle/host/BattleSceneHost.tsx')
+    const probe = source('../../scene/battle/host/capabilityProbe.ts')
+    const compatibility = source('../../scene/battle/compat/CompatibilityBattleScene.tsx')
+    const gate = source('../../ui/battle/BattleRenderGate.tsx')
+    const rendererCss = source('../../ui/styles/battleRenderer.css')
+    const nextEntry = source('../../scene/battle/next/NextBattleScene.tsx')
+
+    for (const owner of [host, probe, compatibility, gate]) {
+      expect(owner).not.toMatch(/from ['"](?:three|@react-three)|import\(['"](?:three|@react-three)/)
+    }
+    expect(battleScreen).toContain("from '@/scene/battle/host/BattleSceneHost'")
+    expect(battleScreen).not.toMatch(/import\(['"]@\/scene\/r3f\/BattleStage/)
+    expect(nextEntry).toContain("from '@/scene/r3f/BattleStage'")
+    expect(compatibility).toContain('data-renderer-paused')
+    expect(rendererCss).toMatch(/data-renderer-paused=.*animation-play-state:\s*paused/s)
+  })
 })

@@ -1,0 +1,143 @@
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import type { Side } from '@/game/battle/reducer'
+import type { BattleAnchorKind, BattleScreenPoint, BattleViewport } from '@/presentation/battle/battleAnchors'
+import { projectBattleAnchor } from '@/presentation/battle/battleAnchors'
+import type { BattleSceneHandle, BattleSceneSnapshot } from '@/scene/battle/contracts'
+import '@/ui/styles/battleRenderer.css'
+
+type MotionState = 'idle' | 'lunge' | 'hit' | 'faint' | 'enter'
+type CombatantState = { mode: MotionState; version: number }
+
+const INITIAL_STATE: Record<Side, CombatantState> = {
+  player: { mode: 'idle', version: 0 },
+  foe: { mode: 'idle', version: 0 },
+}
+
+function initialOf(name: string): string {
+  return [...name.trim()][0] ?? '?'
+}
+
+interface CompatibilityBattleSceneProps {
+  snapshot: BattleSceneSnapshot
+  paused: boolean
+}
+
+interface CompatibilityCombatantProps {
+  side: Side
+  name: string
+  artworkUrl: string
+  shiny?: boolean
+  state: CombatantState
+  onMotionEnd: () => void
+}
+
+function CompatibilityCombatant({ side, name, artworkUrl, shiny, state, onMotionEnd }: CompatibilityCombatantProps) {
+  const [artworkFailed, setArtworkFailed] = useState(!artworkUrl)
+  const initial = initialOf(name)
+
+  useEffect(() => {
+    setArtworkFailed(!artworkUrl)
+  }, [artworkUrl])
+
+  return (
+    <div
+      className={`battle-renderer__combatant battle-renderer__combatant--${side}`}
+      data-battle-combatant={side}
+      data-compat-state={state.mode}
+      role="img"
+      aria-label={`${side === 'player' ? '我方' : '對手'} ${name}`}
+    >
+      <div
+        key={`${side}-${state.version}`}
+        className={`battle-renderer__combatant-motion battle-renderer__combatant-motion--${state.mode}`}
+        onAnimationEnd={onMotionEnd}
+      >
+        <div className={`battle-renderer__artwork ${shiny ? 'battle-renderer__artwork--shiny' : ''}`}>
+          {artworkFailed ? (
+            <div className="battle-renderer__silhouette" aria-hidden="true">
+              <span>{initial}</span>
+            </div>
+          ) : (
+            <img
+              src={artworkUrl}
+              alt=""
+              className="battle-renderer__image"
+              draggable={false}
+              onError={() => setArtworkFailed(true)}
+            />
+          )}
+        </div>
+      </div>
+      <span className="battle-renderer__combatant-name">{name}</span>
+    </div>
+  )
+}
+
+export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, CompatibilityBattleSceneProps>(function CompatibilityBattleScene({ snapshot, paused }, ref) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [states, setStates] = useState<Record<Side, CombatantState>>({
+    player: { ...INITIAL_STATE.player },
+    foe: { ...INITIAL_STATE.foe },
+  })
+
+  const setMode = (side: Side, mode: MotionState) => {
+    setStates((previous) => ({
+      ...previous,
+      [side]: { mode, version: previous[side].version + 1 },
+    }))
+  }
+
+  useImperativeHandle(ref, () => ({
+    lunge: (side) => setMode(side, 'lunge'),
+    hitReact: (side) => setMode(side, 'hit'),
+    faint: (side) => setMode(side, 'faint'),
+    enter: (side) => setMode(side, 'enter'),
+    setTimeScale: (scale) => {
+      const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1
+      rootRef.current?.style.setProperty('--battle-renderer-duration-scale', String(1 / safeScale))
+    },
+    resetPresentation: () => {
+      rootRef.current?.style.setProperty('--battle-renderer-duration-scale', '1')
+      setStates((previous) => ({
+        player: { mode: 'idle', version: previous.player.version + 1 },
+        foe: { mode: 'idle', version: previous.foe.version + 1 },
+      }))
+    },
+    projectAnchor: (side: Side, anchor: BattleAnchorKind, viewport: BattleViewport): BattleScreenPoint =>
+      projectBattleAnchor(side, anchor, viewport),
+  }), [])
+
+  return (
+    <div
+      ref={rootRef}
+      className="battle-renderer battle-renderer--compatibility"
+      data-renderer-surface="compatibility"
+      data-renderer-state="compatibility-ready"
+      data-renderer-paused={paused ? 'true' : 'false'}
+    >
+      <p className="battle-renderer__note" role="status">已切換相容模式，戰鬥仍可繼續。</p>
+      <div className="battle-renderer__arena" aria-label="相容模式戰鬥場景">
+        <CompatibilityCombatant
+          side="foe"
+          name={snapshot.foe.nameZh}
+          artworkUrl={snapshot.foe.artworkUrl}
+          shiny={snapshot.foe.shiny}
+          state={states.foe}
+          onMotionEnd={() => states.foe.mode !== 'faint' && setMode('foe', 'idle')}
+        />
+        <CompatibilityCombatant
+          side="player"
+          name={snapshot.player.nameZh}
+          artworkUrl={snapshot.player.artworkUrl}
+          shiny={snapshot.player.shiny}
+          state={states.player}
+          onMotionEnd={() => states.player.mode !== 'faint' && setMode('player', 'idle')}
+        />
+      </div>
+    </div>
+  )
+})
+
+CompatibilityBattleScene.displayName = 'CompatibilityBattleScene'
+
+export default CompatibilityBattleScene
