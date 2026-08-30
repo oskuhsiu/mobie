@@ -49,7 +49,7 @@ describe('battleStore presentation shadow', () => {
     const canonical = store.battle!
     store.beginPresentation(token, canonical, { type: 'ATTACK' })
     store.presentationSetMemberHp(token, 'foe', 0, 42)
-    store.presentationPushLog(token, '造成傷害')
+    store.presentationPushFeed(token, { id: 'damage:result', text: '造成傷害' })
     store.presentationShowHit(token, {
       target: 'foe', amount: 58, crit: false, effText: null, missed: false,
     })
@@ -59,7 +59,7 @@ describe('battleStore presentation shadow', () => {
     expect(state.battle!.foe.members[0].currentHp).toBe(100)
     expect(state.presentation!.battle).not.toBe(canonical)
     expect(state.presentation!.battle.foe.members[0].currentHp).toBe(42)
-    expect(state.presentation!.log).toContain('造成傷害')
+    expect(state.presentation!.log.map((entry) => entry.text)).toContain('造成傷害')
     expect(state.presentation!.hitFx).toMatchObject({ id: 1, amount: 58 })
   })
 
@@ -96,7 +96,7 @@ describe('battleStore presentation shadow', () => {
     const canonical = useBattleStore.getState().battle!
     const next = { ...createBattleState([mon()], [mon()]), turn: 2 }
     useBattleStore.getState().beginPresentation(token, canonical, { type: 'ATTACK' })
-    useBattleStore.getState().presentationPushLog(token, '結果')
+    useBattleStore.getState().presentationPushFeed(token, { id: 'damage:result', text: '結果' })
     useBattleStore.getState().presentationSetBanner(token, '暫態')
     useBattleStore.getState().presentationShowHit(token, {
       target: 'foe', amount: 1, crit: false, effText: null, missed: false,
@@ -105,12 +105,13 @@ describe('battleStore presentation shadow', () => {
 
     const committed = useBattleStore.getState()
     expect(committed.battle).toBe(next)
-    expect(committed.log).toContain('結果')
+    expect(committed.log.map((entry) => entry.text)).toContain('結果')
     expect(committed.fxCounter).toBe(1)
     expect({ energy: committed.energy, chain: committed.chain, lockedIndex: committed.lockedIndex })
       .toEqual({ energy: 14, chain: 1, lockedIndex: null })
     expect(committed.presentation).toBeNull()
     expect({ banner: committed.banner, hitFx: committed.hitFx }).toEqual({ banner: null, hitFx: null })
+    expect(committed.choiceFocusRequestId).toBe(1)
 
     expect(useBattleStore.getState().commitTurn(token, turnResolution(next, { ...next, turn: 99 }))).toEqual({ committed: false })
     expect(useBattleStore.getState().battle!.turn).toBe(2)
@@ -161,6 +162,31 @@ describe('battleStore presentation shadow', () => {
       presentation: null, phase: 'intro', battle: canonical,
       banner: null, hitFx: null, support: null, combo: null,
     })
+  })
+
+  it('keeps full history, deduplicates semantic ids, and discards cancelled projection entries', () => {
+    const store = useBattleStore.getState()
+    const canonical = store.battle!
+    for (let index = 1; index <= 10; index += 1) {
+      store.pushFeed({ id: `seed:${index}`, text: `戰況 ${index}` })
+    }
+    store.pushFeed({ id: 'seed:10', text: '不應重複' })
+
+    expect(useBattleStore.getState().log).toHaveLength(10)
+    expect(useBattleStore.getState().log.at(-1)).toMatchObject({
+      id: expect.stringContaining('seed:10'),
+      text: '戰況 10',
+      announce: true,
+    })
+
+    store.beginPresentation(token, canonical, { type: 'ATTACK' })
+    store.presentationPushFeed(token, { id: 'damage:result', text: '未提交結果' })
+    store.presentationPushFeed(token, { id: 'damage:result', text: '不應重複' })
+    expect(useBattleStore.getState().presentation?.log).toHaveLength(11)
+
+    store.cancelPresentation(token)
+    expect(useBattleStore.getState().log).toHaveLength(10)
+    expect(useBattleStore.getState().log.some((entry) => entry.text === '未提交結果')).toBe(false)
   })
 
   it('a fresh legacy init clears an active projection and runtime session', () => {

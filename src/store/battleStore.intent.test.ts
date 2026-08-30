@@ -52,16 +52,14 @@ describe('battleStore intent presentation', () => {
 
     expect(useBattleStore.getState().completeInterruptedIntentOnce(token)).toBe(true)
     expect(useBattleStore.getState().completeInterruptedIntentOnce(token)).toBe(false)
-    expect(useBattleStore.getState()).toMatchObject({
-      phase: 'playerChoice',
-      log: [
-        intro.foeEntrance.message,
-        intro.playerEntrance.message,
-        intro.terrain?.feed[0]?.message,
-        intro.synergy?.feed[0]?.message,
-      ],
-      choiceFocusRequestId: 1,
-    })
+    expect(useBattleStore.getState()).toMatchObject({ phase: 'playerChoice', choiceFocusRequestId: 1 })
+    expect(useBattleStore.getState().log.map((entry) => entry.text)).toEqual([
+      intro.foeEntrance.message,
+      intro.playerEntrance.message,
+      intro.terrain?.feed[0]?.message,
+      intro.synergy?.feed[0]?.message,
+    ])
+    expect(new Set(useBattleStore.getState().log.map((entry) => entry.id)).size).toBe(4)
     expect(useBattleStore.getState().session?.completedIntentIds.has('intro')).toBe(true)
   })
 
@@ -76,7 +74,7 @@ describe('battleStore intent presentation', () => {
     expect(token).toMatchObject({ purpose: 'intent', intentId: 'intro', presentationId: 1 })
     expect(useBattleStore.getState().acquireTurnPresentationToken()).toBeNull()
     useBattleStore.getState().intentPushFeed(token, intro.foeEntrance)
-    expect(useBattleStore.getState().intentPresentation?.log).toEqual([intro.foeEntrance.message])
+    expect(useBattleStore.getState().intentPresentation?.log.map((entry) => entry.text)).toEqual([intro.foeEntrance.message])
     expect(useBattleStore.getState().log).toEqual([])
 
     const stale = { ...token, presentationId: token.presentationId + 1 }
@@ -93,7 +91,7 @@ describe('battleStore intent presentation', () => {
       choiceFocusRequestId: 1,
       intentPresentation: null,
     })
-    expect(after.log).toEqual([
+    expect(after.log.map((entry) => entry.text)).toEqual([
       intro.foeEntrance.message,
       intro.playerEntrance.message,
       intro.terrain?.feed[0]?.message,
@@ -144,7 +142,7 @@ describe('battleStore intent presentation', () => {
     expect(useBattleStore.getState()).toMatchObject({ phase: 'busy', battle: committed.battle, energy: 52 })
     expect(useBattleStore.getState().completeIntentOnce(token)).toBe(true)
     expect(useBattleStore.getState()).toMatchObject({ phase: 'playerChoice', battle: committed.battle, energy: 52 })
-    expect(useBattleStore.getState().log).toEqual([intent.feed.message])
+    expect(useBattleStore.getState().log.map((entry) => entry.text)).toEqual([intent.feed.message])
     expect(useBattleStore.getState().session).toMatchObject({ rngCursor: 0, endSent: false })
   })
 })

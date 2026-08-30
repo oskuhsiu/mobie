@@ -10,6 +10,7 @@ import { useSettings } from '@/store/settingsStore'
 import { useBattleStore } from '@/store/battleStore'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
+import type { BattleFeedEntry } from '@/presentation/battle/contracts'
 import type { BattleRendererState } from '@/presentation/battle/rendering'
 import type { QteQuality } from '@/game/battle/engine'
 import { battleAudioSession } from '@/audio/battleAudioSession'
@@ -54,6 +55,8 @@ export interface M23BaselineDriver {
   prepareCheckpoint: (checkpoint: 'player-choice' | 'qte' | 'star' | 'terrain' | 'terrain-rain' | 'switch') => void
   prepareTransactionCase: (caseId: M23TurnTransactionCase) => void
   battleState: () => ReturnType<typeof useBattleStore.getState>['battle']
+  feed: () => readonly BattleFeedEntry[]
+  prepareFeedHistory: (count?: number) => void
   runtimeState: () => {
     phase: ReturnType<typeof useBattleStore.getState>['phase']
     energy: number
@@ -289,6 +292,17 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       })
     },
     battleState: () => useBattleStore.getState().battle,
+    feed: () => useBattleStore.getState().log.map((entry) => ({ ...entry })),
+    prepareFeedHistory: (count = 10) => {
+      const total = positiveInteger(count, 'feed count')
+      for (let index = 1; index <= total; index += 1) {
+        useBattleStore.getState().pushFeed({
+          id: `evidence:${index}`,
+          text: `測試戰況 ${index}`,
+          kind: 'event',
+        })
+      }
+    },
     runtimeState: () => {
       const state = useBattleStore.getState()
       return {

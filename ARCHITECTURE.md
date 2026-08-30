@@ -139,16 +139,19 @@ Two halves, deliberately separated:
    and monotonic presentation counter across component remounts. Turn jobs and display-only intent jobs
    share one `BattleDirector` cancellation/degradation/reset seam. Intro and already-committed Partner
    results use separately tagged intent tokens, an immutable post-commit display snapshot, and an
-   intent-only log/banner shadow;
+   intent-only feed/banner shadow. The feed is a full-session `BattleFeedEntry[]`; producer-owned IDs
+   combine the session identity, presentation ID, and cue/intent-local ID, so duplicate projection writes
+   are idempotent and cancelled turns cannot leak entries. `BattleFeed` keeps visible latest/history
+   separate from its one-shot live projection, so opening the drawer never re-announces or deletes data;
    `BattleIntentCoordinator` can only begin, fence, and complete that display projection, so it has no
    `BattleState`, energy, recorder, canonical turn commit, or `END_BATTLE` interface. Intro skip publishes
    one precomputed terrain/synergy feed safe point, while Partner usage and reveal/team-status mutation
-   commit atomically in the runtime store before its result intent begins. The reducer stays pure. The move
-   picker stays in the bottom strip, but timing-critical inputs (attack QTE,
-   mash-charge, defense/chain QTE) render in a centered `.battle-action` overlay so they sit in the
-   battle area, not pinned to the screen bottom. (Centering uses a full-bleed flex layer, **not** a CSS
-   `translate(-50%,-50%)` — framer-motion writes its own `transform` for the scale/opacity entrance and
-   would clobber a translate-based centering.)
+   commit atomically in the runtime store before its result intent begins. The reducer stays pure.
+   `BattleScreen` composes one renderer-independent DOM shell: a clipped stage containing the host/FX/HUD
+   and a sibling command deck. Player choice, normal timing QTE, mash, busy, and next choice replace the
+   same command body; the scene never owns focus. Remaining defense/chain/status legacy inputs still use
+   the centered `.battle-action` overlay until their complete Ticket 09 migration. Centering there uses a
+   full-bleed flex layer, **not** CSS translate, because framer-motion owns the animated transform.
 
 Battle lifecycle is split by authority. `battleStore` fences canonical session state with the full Web
 Crypto identity pair, owns recoverable resolver/init errors, retires a session before Retry/Leave, and

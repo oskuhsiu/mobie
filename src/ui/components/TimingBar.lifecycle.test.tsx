@@ -29,4 +29,16 @@ describe('pausable battle input clock', () => {
     await act(() => vi.advanceTimersByTimeAsync(1))
     expect(onResult).toHaveBeenCalledOnce()
   })
+
+  it('accepts one keyboard result and fences the following pointer event', () => {
+    const onResult = vi.fn()
+    const view = render(<TimingBar onResult={onResult} />)
+    const input = view.getByRole('button')
+
+    fireEvent.keyDown(input, { key: 'Enter', repeat: true })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.pointerDown(input)
+
+    expect(onResult).toHaveBeenCalledOnce()
+  })
 })

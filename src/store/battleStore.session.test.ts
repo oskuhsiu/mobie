@@ -103,7 +103,7 @@ describe('battleStore runtime session', () => {
 
     expect(useBattleStore.getState().tryRecordTurnOnce(token, { type: 'ATTACK' }, brokenEvents)).toBe('failed')
     expect(useBattleStore.getState().tryRecordTurnOnce(token, { type: 'ATTACK' }, [])).toBe('already-recorded')
-    expect(useBattleStore.getState().presentation?.log.filter((line) => line.includes('回放錄製已停用'))).toHaveLength(1)
+    expect(useBattleStore.getState().presentation?.log.filter((entry) => entry.text.includes('回放錄製已停用'))).toHaveLength(1)
   })
 
   it('finishes replay and marks END_BATTLE once per session', () => {

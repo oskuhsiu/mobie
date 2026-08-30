@@ -66,6 +66,16 @@ export interface IntentFeedEntry {
   message: string
 }
 
+export type BattleFeedKind = 'system' | 'event' | 'result' | 'warning'
+
+/** Renderer-independent, full-session battle history projection. */
+export interface BattleFeedEntry {
+  id: string
+  kind: BattleFeedKind
+  text: string
+  announce: boolean
+}
+
 export interface IntroIntentSection {
   banner: string
   feed: readonly IntentFeedEntry[]

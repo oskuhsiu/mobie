@@ -9,6 +9,7 @@ import {
   samePresentationToken,
 } from '@/presentation/battle/battleIdentity'
 import type {
+  BattleFeedEntry,
   BattleIntent,
   BattleSessionToken,
   IntentFeedEntry,
@@ -49,7 +50,7 @@ export interface HitFx {
 export interface BattlePresentationProjection {
   token: TurnPresentationToken
   battle: BattleState
-  log: string[]
+  log: BattleFeedEntry[]
   banner: string | null
   hitFx: HitFx | null
   support: SupportOutcome | null
@@ -63,16 +64,23 @@ export interface BattlePresentationProjection {
 export interface BattleIntentPresentation {
   token: IntentPresentationToken
   intent: BattleIntent
-  baseLog: string[]
-  log: string[]
+  baseLog: BattleFeedEntry[]
+  log: BattleFeedEntry[]
   banner: string | null
   safePointFeed: readonly IntentFeedEntry[]
 }
 
 export type InterruptedBattleIntent = Pick<
   BattleIntentPresentation,
-  'intent' | 'baseLog' | 'safePointFeed'
+  'token' | 'intent' | 'baseLog' | 'safePointFeed'
 >
+
+export interface BattleFeedInput {
+  id: string
+  text: string
+  kind?: BattleFeedEntry['kind']
+  announce?: boolean
+}
 
 const currentSession = (
   session: BattleRuntimeSession | null,
@@ -100,8 +108,49 @@ function safePointFeedOf(intent: BattleIntent): readonly IntentFeedEntry[] {
   }
 }
 
-function appendFeed(log: readonly string[], feed: readonly IntentFeedEntry[]): string[] {
-  return feed.reduce<string[]>((current, entry) => [...current.slice(-4), entry.message], [...log])
+function appendFeedEntries(
+  log: readonly BattleFeedEntry[],
+  entries: readonly BattleFeedEntry[],
+): BattleFeedEntry[] {
+  const ids = new Set(log.map((entry) => entry.id))
+  return entries.reduce<BattleFeedEntry[]>((current, entry) => {
+    if (ids.has(entry.id)) return current
+    ids.add(entry.id)
+    return [...current, entry]
+  }, [...log])
+}
+
+function presentationFeedEntry(
+  token: TurnPresentationToken | IntentPresentationToken,
+  input: BattleFeedInput,
+): BattleFeedEntry {
+  return {
+    id: `${token.battleSessionId}:${token.resultFingerprint}:${token.purpose}:${token.presentationId}:${input.id}`,
+    kind: input.kind ?? 'event',
+    text: input.text,
+    announce: input.announce ?? true,
+  }
+}
+
+function sessionFeedEntry(token: BattleSessionToken, input: BattleFeedInput): BattleFeedEntry {
+  return {
+    id: `${token.battleSessionId}:${token.resultFingerprint}:session:${input.id}`,
+    kind: input.kind ?? 'event',
+    text: input.text,
+    announce: input.announce ?? true,
+  }
+}
+
+function appendIntentFeed(
+  log: readonly BattleFeedEntry[],
+  token: IntentPresentationToken,
+  feed: readonly IntentFeedEntry[],
+): BattleFeedEntry[] {
+  return appendFeedEntries(log, feed.map((entry) => presentationFeedEntry(token, {
+    id: entry.id,
+    text: entry.message,
+    kind: 'system',
+  })))
 }
 
 export interface BattleSessionInit {
@@ -154,7 +203,7 @@ function settleIntentSafePoint(
   completedIntentIds.add(presentation.intent.id)
   return {
     phase: 'playerChoice' as const,
-    log: appendFeed(presentation.baseLog, presentation.safePointFeed),
+    log: appendIntentFeed(presentation.baseLog, presentation.token, presentation.safePointFeed),
     banner: null,
     choiceFocusRequestId: choiceFocusRequestId + 1,
     session: { ...session, completedIntentIds, interruptedIntent: null },
@@ -213,7 +262,7 @@ interface BattleUiState {
   /** canonical 戰鬥態；turn coordinator 只在 presentation 完成後原子提交。 */
   battle: BattleState | null
   phase: BattlePhase
-  log: string[]
+  log: BattleFeedEntry[]
   banner: string | null
   hitFx: HitFx | null
   fxCounter: number
@@ -258,7 +307,7 @@ interface BattleUiState {
   finishReplayOnce: (token: TurnPresentationToken, outcome: 'win' | 'lose') => boolean
   markEndSentOnce: (token: TurnPresentationToken) => boolean
   setPhase: (p: BattlePhase) => void
-  pushLog: (msg: string) => void
+  pushFeed: (entry: BattleFeedInput) => void
   setBanner: (b: string | null) => void
   setSupport: (o: SupportOutcome | null) => void
   /** M17 看穿：標記某對手 index 已揭露（M16 不呼叫；exactly-once 去重）。 */
@@ -271,7 +320,7 @@ interface BattleUiState {
   presentationSetMemberHp: (token: TurnPresentationToken, side: Side, index: number, hp: number) => void
   presentationSetActiveIndex: (token: TurnPresentationToken, side: Side, index: number) => void
   presentationSetBanner: (token: TurnPresentationToken, banner: string | null) => void
-  presentationPushLog: (token: TurnPresentationToken, message: string) => void
+  presentationPushFeed: (token: TurnPresentationToken, entry: BattleFeedInput) => void
   presentationShowHit: (token: TurnPresentationToken, fx: Omit<HitFx, 'id'>) => void
   presentationSetSupport: (token: TurnPresentationToken, support: SupportOutcome | null) => void
   presentationSetCombo: (token: TurnPresentationToken, combo: number | null) => void
@@ -483,7 +532,14 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       const warning = `⚠️ 本場回放錄製已停用，戰鬥仍會繼續（${errorDetail(error)}）`
       return {
         presentation: s.presentation && samePresentationToken(s.presentation.token, token)
-          ? { ...s.presentation, log: [...s.presentation.log.slice(-4), warning] }
+          ? {
+              ...s.presentation,
+              log: appendFeedEntries(s.presentation.log, [presentationFeedEntry(token, {
+                id: 'replay-warning',
+                text: warning,
+                kind: 'warning',
+              })]),
+            }
           : s.presentation,
         session: {
           ...s.session,
@@ -535,7 +591,11 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       } }
     })
     if (!published) return 'failed'
-    if (warn) get().presentationPushLog(token, '⚠️ 本場回放錄製已停用，戰鬥仍會繼續')
+    if (warn) get().presentationPushFeed(token, {
+      id: 'replay-warning',
+      text: '⚠️ 本場回放錄製已停用，戰鬥仍會繼續',
+      kind: 'warning',
+    })
     if (result.status === 'prepared') return 'recorded'
     if (result.status === 'failed') return 'failed'
     return 'disabled'
@@ -557,7 +617,9 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   },
 
   setPhase: (phase) => set({ phase }),
-  pushLog: (msg) => set((s) => ({ log: [...s.log.slice(-4), msg] })),
+  pushFeed: (entry) => set((s) => !s.session ? {} : ({
+    log: appendFeedEntries(s.log, [sessionFeedEntry(s.session.token, entry)]),
+  })),
   setBanner: (banner) => set({ banner }),
   setSupport: (support) => set({ support }),
   revealFoe: (index) => set((s) => (s.revealedFoes.includes(index) ? {} : { revealedFoes: [...s.revealedFoes, index] })),
@@ -674,9 +736,14 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
     set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? { presentation: { ...s.presentation, banner } }
       : {}),
-  presentationPushLog: (token, message) =>
+  presentationPushFeed: (token, entry) =>
     set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
-      ? { presentation: { ...s.presentation, log: [...s.presentation.log.slice(-4), message] } }
+      ? {
+          presentation: {
+            ...s.presentation,
+            log: appendFeedEntries(s.presentation.log, [presentationFeedEntry(token, entry)]),
+          },
+        }
       : {}),
   presentationShowHit: (token, fx) =>
     set((s) => {
@@ -748,6 +815,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
         battle: resolution.nextState,
         phase: outcome ? (outcome.winner === 'player' ? 'won' : 'lost') : 'playerChoice',
         log: projection.log,
+        choiceFocusRequestId: outcome ? s.choiceFocusRequestId : s.choiceFocusRequestId + 1,
         fxCounter: projection.fxCounter,
         energy,
         chain,
@@ -833,7 +901,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       ? {
           intentPresentation: {
             ...s.intentPresentation,
-            log: appendFeed(s.intentPresentation.log, [entry]),
+            log: appendIntentFeed(s.intentPresentation.log, s.intentPresentation.token, [entry]),
           },
         }
       : {}),
@@ -878,6 +946,7 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
         session: {
           ...s.session,
           interruptedIntent: {
+            token: s.intentPresentation.token,
             intent: s.intentPresentation.intent,
             baseLog: s.intentPresentation.baseLog,
             safePointFeed: s.intentPresentation.safePointFeed,

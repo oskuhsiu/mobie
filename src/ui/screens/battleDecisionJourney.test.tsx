@@ -77,6 +77,10 @@ describe('battle decision journey', () => {
     })
     expect(useBattleStore.getState().phase).toBe('playerChoice')
     expect(screen.getByRole('button', { name: /火花.*效果絕佳 ×2/ })).toBeTruthy()
+    expect(document.querySelector('[data-battle-shell]')).toBeTruthy()
+    expect(screen.getByText(/回合 1/)).toBeTruthy()
+    expect(screen.getByRole('meter', { name: /妙蛙種子 HP/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /妙蛙種子，出戰中，HP/ })).toBeTruthy()
 
     await act(async () => { await vi.advanceTimersByTimeAsync(8_001) })
     expect(useBattleStore.getState().phase).toBe('playerChoice')
@@ -92,7 +96,53 @@ describe('battle decision journey', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /火花.*效果絕佳 ×2/ }))
     expect(useBattleStore.getState().phase).toBe('qte')
-    expect(screen.getByText(/10秒內點擊任意處/)).toBeTruthy()
+    const qte = screen.getByRole('button', { name: /10秒內點擊任意處/ })
+    expect(qte.closest('.battle-command-body')).toBeTruthy()
+    expect(document.querySelector('[data-battle-stage]')?.contains(qte)).toBe(false)
+    expect(document.activeElement).toBe(qte)
+  })
+
+  it('returns normal attack focus through QTE, busy feed, and the next legal move', async () => {
+    vi.useFakeTimers()
+    renderGameJourney({
+      state: 'battle',
+      context: {
+        regionId: 'practice',
+        playerTeam: [
+          { cardId: 'focus-player-1', speciesId: 4, level: 16 },
+          { cardId: 'focus-player-2', speciesId: 25, level: 16 },
+          { cardId: 'focus-player-3', speciesId: 133, level: 16 },
+        ],
+        foeTeam: [
+          { cardId: 'focus-foe-1', speciesId: 1, level: 10 },
+          { cardId: 'focus-foe-2', speciesId: 7, level: 10 },
+          { cardId: 'focus-foe-3', speciesId: 10, level: 10 },
+        ],
+      },
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '跳過開場' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    const selectedMove = screen.getByRole('button', { name: /火花/ })
+    fireEvent.click(selectedMove)
+    const qte = screen.getByRole('button', { name: /10秒內點擊任意處/ })
+    fireEvent.pointerDown(qte)
+
+    const mash = screen.getByRole('button', { name: /連打蓄力/ })
+    expect(document.activeElement).toBe(mash)
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_801) })
+
+    expect(useBattleStore.getState().phase).toBe('busy')
+    expect(document.activeElement).toBe(document.querySelector('[data-battle-feed-focus]'))
+    for (let second = 0; second < 20 && useBattleStore.getState().phase !== 'playerChoice'; second += 1) {
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+    }
+
+    expect(useBattleStore.getState().phase).toBe('playerChoice')
+    expect(useBattleStore.getState().battle?.turn).toBe(2)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: /火花/ }))
   })
 
   it('waits beyond the former eight-second boundary for an explicit move choice', () => {
@@ -132,6 +182,30 @@ describe('battle decision journey', () => {
     fireEvent.keyDown(window, { key })
     fireEvent.keyDown(window, { key })
 
+    expect(onPick).toHaveBeenCalledTimes(1)
+    expect(onPick).toHaveBeenCalledWith(0)
+  })
+
+  it('lets hover and focus update only DOM state, then accepts a tap/key race once', () => {
+    const onPick = vi.fn()
+    render(
+      <MoveSlots
+        moves={moves}
+        defenderTypes={['normal']}
+        playerSpeed={100}
+        foeSpeed={100}
+        onPick={onPick}
+      />,
+    )
+
+    const move = screen.getByRole('button', { name: /撞擊/ })
+    fireEvent.pointerEnter(move)
+    fireEvent.focus(move)
+    expect(onPick).not.toHaveBeenCalled()
+    expect(screen.getByTestId('move-consequence-summary').textContent).toContain('撞擊')
+
+    fireEvent.click(move)
+    fireEvent.keyDown(window, { key: '1' })
     expect(onPick).toHaveBeenCalledTimes(1)
     expect(onPick).toHaveBeenCalledWith(0)
   })

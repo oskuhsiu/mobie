@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
-import { useBattleStore, type Side, type HitFx } from '@/store/battleStore'
+import { useBattleStore, type BattleFeedInput, type Side, type HitFx } from '@/store/battleStore'
 import { useSettings } from '@/store/settingsStore'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import { buildBattleMobie } from '@/game/stats'
@@ -78,7 +78,9 @@ import type {
 } from '@/presentation/battle/contracts'
 import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 import { BattleErrorPanel } from '@/ui/battle/BattleErrorPanel'
+import { BattleFeed } from '@/ui/battle/BattleFeed'
 import { BattleRenderGate } from '@/ui/battle/BattleRenderGate'
+import '@/ui/styles/battle.css'
 
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
 const SUPPORT_LABEL: Record<SupportOutcome, string> = {
@@ -138,6 +140,12 @@ function tracePresentation(
     ...detail,
   })
 }
+
+const resultFeedInput = (cueId: string, text: string): BattleFeedInput => ({
+  id: `${cueId}:result`,
+  text,
+  kind: 'result',
+})
 
 function playCurrentBattleSfx(callback: () => void): boolean {
   return battleAudioSession.playCurrent(callback)
@@ -283,14 +291,21 @@ function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
   )
 }
 
-/** 場域地形小徽章（常駐 HUD）：顯示目前生效地形 icon + 名稱；中性/無地形不顯示。 */
-function TerrainChip({ terrainIds }: { terrainIds: TerrainId[] }) {
+/** Shared field projection: initiative and turn are always truthful; neutral terrain collapses. */
+function FieldStatusBar({ terrainIds, initiative, turn }: {
+  terrainIds: TerrainId[]
+  initiative: string
+  turn: number
+}) {
   const defs = terrainDefsOf(terrainIds)
-  if (defs.length === 0) return null
   return (
-    <div className="terrain-chip" title="場域地形：影響該屬性招式的威力">
+    <div className="battle-field-bar" data-field-status aria-label={`${initiative}，回合 ${turn}`}>
+      <strong className="battle-field-bar__initiative">{initiative}</strong>
+      <span className="battle-field-bar__turn">回合 {turn}</span>
       {defs.map((d) => (
-        <span key={d.id} className="terrain-chip__item">{d.icon} {d.name}</span>
+        <span key={d.id} className="battle-field-bar__terrain" title="場域地形：影響該屬性招式的威力">
+          {d.icon} {d.name}
+        </span>
       ))}
     </div>
   )
@@ -309,12 +324,17 @@ function TeamTray({ members, activeIndex, align, onPick }: {
         return (
           <button
             key={i}
+            type="button"
             className={`tray__pip ${i === activeIndex ? 'tray__pip--active' : ''} ${fainted ? 'tray__pip--out' : ''}`}
             title={`${m.nameZh}（看資訊卡）`}
+            aria-label={`${m.nameZh}，${i === activeIndex ? '出戰中，' : ''}HP ${Math.ceil(Math.max(0, m.currentHp))} / ${m.maxHp}${fainted ? '，已倒下' : ''}`}
+            aria-current={i === activeIndex ? 'true' : undefined}
             onClick={() => onPick?.(i)}
           >
-            <div className={`tray__fill ${tone}`} style={{ width: `${frac * 100}%` }} />
-            {fainted && <span className="tray__x">✕</span>}
+            <span className="tray__visual" aria-hidden="true">
+              <span className={`tray__fill ${tone}`} style={{ width: `${frac * 100}%` }} />
+              {fainted && <span className="tray__x">✕</span>}
+            </span>
           </button>
         )
       })}
@@ -329,12 +349,11 @@ function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boole
   const item = getItem(mon.heldItemId)
   const ability = getAbility(mon.abilityId)
   return (
-    <div
+    <button
+      type="button"
       className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}
       onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      style={{ cursor: 'pointer' }}
+      aria-label={`${label}，等級 ${mon.level}，HP ${Math.ceil(Math.max(0, mon.currentHp))} / ${mon.maxHp}，開啟資訊卡`}
     >
       <div className="hp-plate__top">
         <span className="hp-plate__name">{label}</span>
@@ -342,7 +361,15 @@ function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boole
         {ability && <span className="battle-badge" title={ability.desc}>{ability.icon} {ability.name}</span>}
         {item && <span className="battle-badge" title={item.name}>{item.icon}</span>}
       </div>
-      <div className="hp-plate__track">
+      <div
+        className="hp-plate__track"
+        role="meter"
+        aria-label={`${label} HP`}
+        aria-valuemin={0}
+        aria-valuemax={mon.maxHp}
+        aria-valuenow={Math.ceil(Math.max(0, mon.currentHp))}
+        aria-valuetext={`${Math.ceil(Math.max(0, mon.currentHp))} / ${mon.maxHp}`}
+      >
         <motion.div
           className={`hpbar__fill ${tone}`}
           initial={false}
@@ -353,7 +380,7 @@ function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boole
       {owner && (
         <div className="hp-plate__num">{Math.ceil(Math.max(0, mon.currentHp))} / {mon.maxHp}</div>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -429,7 +456,11 @@ function MashMeter({ onDone, paused = false }: { onDone: (count: number) => void
     return () => scheduler.cancel(timer)
   }, [onDone, scheduler])
 
-  const tap = (e: ReactPointerEvent<HTMLDivElement>) => {
+  useEffect(() => {
+    fieldRef.current?.focus()
+  }, [])
+
+  const registerTap = (clientX?: number, clientY?: number) => {
     if (doneRef.current || paused) return
     const c = (countRef.current += 1)
     const tier = chargeTier(c)
@@ -445,16 +476,31 @@ function MashMeter({ onDone, paused = false }: { onDone: (count: number) => void
       const rect = field.getBoundingClientRect()
       const r = pool.children[ripIdxRef.current++ % pool.children.length] as HTMLDivElement | undefined
       if (r) {
-        r.style.left = `${e.clientX - rect.left}px`
-        r.style.top = `${e.clientY - rect.top}px`
+        r.style.left = `${clientX === undefined ? rect.width / 2 : clientX - rect.left}px`
+        r.style.top = `${clientY === undefined ? rect.height / 2 : clientY - rect.top}px`
         r.classList.remove('is-on'); void r.offsetWidth; r.classList.add('is-on')
       }
       field.classList.remove('is-hit'); void field.offsetWidth; field.classList.add('is-hit')
     }
   }
 
+  const tap = (e: ReactPointerEvent<HTMLDivElement>) => registerTap(e.clientX, e.clientY)
+
   return (
-    <div ref={fieldRef} className="tap-field tap-field--charge" onPointerDown={tap} role="button" tabIndex={0}>
+    <div
+      ref={fieldRef}
+      className="tap-field tap-field--charge"
+      onPointerDown={tap}
+      onKeyDown={(event) => {
+        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return
+        event.preventDefault()
+        registerTap()
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="連打蓄力，重複點擊或按 Enter、空白鍵"
+      data-battle-input
+    >
       <div className="tap-field__glow" aria-hidden />
       <div className="tap-field__ripples" ref={ripRef} aria-hidden>
         {Array.from({ length: 8 }).map((_, i) => <div key={i} className="tap-field__ripple" />)}
@@ -487,17 +533,20 @@ export interface MoveSlotsProps {
   defenderTypes: TypeName[]
   playerSpeed: number
   foeSpeed: number
+  showInitiative?: boolean
   onPick: (slot: number) => void
 }
 
-export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, onPick }: MoveSlotsProps) {
+export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showInitiative = true, onPick }: MoveSlotsProps) {
   // 用 ref 鎖「已選定」：避免點擊與鍵盤輸入競合、或重複觸發兩次出招。
   const pickedRef = useRef(false)
+  const [summarySlot, setSummarySlot] = useState(0)
   const pick = useCallback((slot: number) => {
-    if (pickedRef.current) return
-    if (slot < 0 || slot >= moves.length) return
+    if (pickedRef.current) return false
+    if (slot < 0 || slot >= moves.length) return false
     pickedRef.current = true
     onPick(slot)
+    return true
   }, [moves.length, onPick])
 
   // 四鍵 / 方向鍵映射（plan/17 §1.1）。只在本面板掛載期間監聽。
@@ -512,10 +561,23 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, onPick 
     return () => window.removeEventListener('keydown', onKey)
   }, [moves.length, pick])
 
+  const summaryMove = moves[summarySlot] ?? moves[0]
+  const summaryDecision = summaryMove ? moveDecisionPresentation(summaryMove, defenderTypes) : null
+  const summaryStats = summaryMove?.category === 'status'
+    ? summaryMove.effect?.duration
+      ? `持續 ${summaryMove.effect.duration} 回合，命中 ${summaryMove.accuracy}%`
+      : `命中 ${summaryMove.accuracy}%`
+    : summaryMove ? `威力 ${summaryMove.power}，命中 ${summaryMove.accuracy}%` : ''
+
   return (
     <div className="move-choice">
-      <div className="move-initiative">{initiativePresentation(playerSpeed, foeSpeed)}</div>
-      <div className="move-grid" style={{ gridTemplateColumns: moves.length <= 1 ? '1fr' : 'repeat(2, 1fr)' }}>
+      {showInitiative && <div className="move-initiative">{initiativePresentation(playerSpeed, foeSpeed)}</div>}
+      <div className="move-choice__summary" data-testid="move-consequence-summary">
+        {summaryMove && summaryDecision
+          ? `${summaryMove.nameZh}：${summaryDecision.label}；${summaryStats}`
+          : '目前沒有可用招式'}
+      </div>
+      <div className="move-grid" data-move-count={moves.length}>
         {moves.map((mv, i) => {
           const decision = moveDecisionPresentation(mv, defenderTypes)
           return (
@@ -523,10 +585,13 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, onPick 
               key={i}
               className={`move-slot ${mv.category === 'status' ? 'move-slot--status' : ''}`}
               data-battle-action="move"
+              data-move-slot={i}
               style={{ ['--mv' as string]: typeColor(mv.type) }}
               whileTap={{ scale: 0.96 }}
               aria-label={`${mv.nameZh}，${decision.label}`}
-              onClick={() => { audio.play('select'); pick(i) }}
+              onPointerEnter={() => setSummarySlot(i)}
+              onFocus={() => setSummarySlot(i)}
+              onClick={() => { if (pick(i)) audio.play('select') }}
             >
               <span className="move-slot__key">{i + 1}</span>
               <span className="move-slot__name">{mv.nameZh}</span>
@@ -680,6 +745,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const presentationDirectorRef = useRef<BattleDirector | null>(null)
   const resetPresentationRef = useRef<(token: PresentationToken) => void>(() => undefined)
   const battleRootRef = useRef<HTMLDivElement | null>(null)
+  const battleFeedRef = useRef<HTMLDivElement | null>(null)
   const introSkipRef = useRef<HTMLButtonElement>(null)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
@@ -865,12 +931,17 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   }, [introPresentationId, requestIntroSkip])
 
   useEffect(() => {
-    if (choiceFocusRequestId === 0 || !rendererReady) return
+    if (choiceFocusRequestId === 0 || !rendererReady || phase !== 'playerChoice') return
     const root = battleRootRef.current
-    const next = root?.querySelector<HTMLButtonElement>('.move-slot:not(:disabled)')
+    const next = root?.querySelector<HTMLButtonElement>(`[data-move-slot="${pendingSlotRef.current}"]:not(:disabled)`)
+      ?? root?.querySelector<HTMLButtonElement>('.move-slot:not(:disabled)')
       ?? root?.querySelector<HTMLButtonElement>('[data-battle-action]:not(:disabled)')
     next?.focus()
-  }, [choiceFocusRequestId, rendererReady])
+  }, [choiceFocusRequestId, phase, rendererReady])
+
+  useEffect(() => {
+    if (phase === 'busy') battleFeedRef.current?.focus()
+  }, [phase])
 
   const handleRendererStateChange = useCallback((
     token: BattleSessionToken,
@@ -1058,6 +1129,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     b0: BattleState,
     e: BattleEvent,
     cueContext: CueContext,
+    cueId: string,
   ) => {
     if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
     const store = useBattleStore.getState
@@ -1068,7 +1140,10 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     const setActiveIndex = (side: Side, index: number) =>
       store().presentationSetActiveIndex(cueContext.token, side, index)
     const setBanner = (value: string | null) => store().presentationSetBanner(cueContext.token, value)
-    const pushLog = (message: string) => store().presentationPushLog(cueContext.token, message)
+    const pushFeed = (message: string) => store().presentationPushFeed(
+      cueContext.token,
+      resultFeedInput(cueId, message),
+    )
     const showHit = (fx: Omit<HitFx, 'id'>) => store().presentationShowHit(cueContext.token, fx)
     const clearFx = () => store().presentationClearTransient(cueContext.token)
     const setSupport = (value: SupportOutcome | null) => store().presentationSetSupport(cueContext.token, value)
@@ -1082,7 +1157,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
       playAudio(() => audio.play('faint'))
       haptic('faint')
-      pushLog(`${prefix}${m.nameZh} 倒下了！`)
+      pushFeed(`${prefix}${m.nameZh} 倒下了！`)
       await delay(620)
     } else if (e.type === 'heal') {
       const m = monAt(b0, e.side, e.index)
@@ -1092,7 +1167,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       playAudio(() => audio.play('select'))
       const prefix = e.side === 'foe' ? '對手的 ' : ''
       setBanner(`${src?.icon ?? '✨'} ${prefix}${m.nameZh} 回復了 ${e.amount} HP`)
-      pushLog(`${prefix}${m.nameZh} 回復 ${e.amount} HP（${src?.name ?? e.source}）`)
+      pushFeed(`${prefix}${m.nameZh} 回復 ${e.amount} HP（${src?.name ?? e.source}）`)
       await delay(720)
       setBanner(null)
       await delay(120)
@@ -1119,7 +1194,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         playAudio(() => audio.play('super'))
         setBanner(`🌿 ${e.label}`)
       }
-      pushLog(`${prefix}${m.nameZh}：${e.label}`)
+      pushFeed(`${prefix}${m.nameZh}：${e.label}`)
       await delay(820)
       setBanner(null)
       await delay(140)
@@ -1127,7 +1202,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       if (e.kind === 'terrainShift' && e.terrainId) {
         const def = lookupTerrain(e.terrainId)
         setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
-        pushLog(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
+        pushFeed(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
         const shiftColor = juiceRef.current === 'off' ? '#a07aff' : resolveTerrainPalette([e.terrainId]).particleColor
         fxRef.current?.flash(shiftColor, 0.35)
         fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: shiftColor })
@@ -1148,7 +1223,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         playAudio(() => audio.play('hit'))
         haptic('hit')
         setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
-        pushLog(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
+        pushFeed(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
         await delay(820)
         clearFx()
         setBanner(null)
@@ -1171,7 +1246,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         : e.defenseQuality === 'good' ? '防禦成功！'
           : e.defenseQuality === 'normal' ? '勉強防禦' : '防禦失敗…'
       setBanner(pct > 0 ? `${label}　減傷 ${pct}%` : label)
-      pushLog(`${label}（減傷 ${pct}%）`)
+      pushFeed(`${label}（減傷 ${pct}%）`)
       await delay(640)
       setBanner(null)
       await delay(110)
@@ -1181,19 +1256,19 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       playAudio(() => audio.play('select'))
       await delay(950)
       playAudio(() => audio.play(outcome === 'dud' ? 'select' : 'super'))
-      pushLog(`支援輪盤：${SUPPORT_LABEL[outcome]}`)
+      pushFeed(`支援輪盤：${SUPPORT_LABEL[outcome]}`)
       await delay(800)
       setSupport(null)
       await delay(150)
     } else if (e.type === 'battleEnded' && e.reason === 'timeout') {
       setBanner('達回合上限！依剩餘血量判定勝負')
-      pushLog('回合數達上限，依雙方剩餘血量判定勝負')
+      pushFeed('回合數達上限，依雙方剩餘血量判定勝負')
       await delay(1150)
       setBanner(null)
       await delay(150)
     } else if (e.type === 'chainOpportunity') {
       setBanner('🔗 連鎖就緒！')
-      pushLog('連鎖槽集滿！可發動連鎖攻擊')
+      pushFeed('連鎖槽集滿！可發動連鎖攻擊')
       playAudio(() => audio.play('super'))
       fxRef.current?.flash('#7ae0ff', 0.3)
       await delay(680)
@@ -1207,7 +1282,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     } else if (e.type === 'comboCast') {
       setBanner(`${e.icon} 合體技「${e.name}」！`)
       const eff = e.castKind === 'infuseTerrain' ? '灌注場域' : e.castKind === 'teamBuff' ? '全隊增益' : '弱化敵方'
-      pushLog(`${e.icon} 合體技「${e.name}」發動：${eff}（${e.remaining} 回合）`)
+      pushFeed(`${e.icon} 合體技「${e.name}」發動：${eff}（${e.remaining} 回合）`)
       playAudio(() => audio.play('crit'))
       fxRef.current?.flash('#ffe14a', 0.6)
       fxRef.current?.ring({ ...FX_POS.player, color: '#ffe14a' })
@@ -1294,19 +1369,22 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         const e = cue.event
         const store = useBattleStore.getState()
         const setBanner = (value: string | null) => store.presentationSetBanner(cueContext.token, value)
-        const pushLog = (message: string) => store.presentationPushLog(cueContext.token, message)
+        const pushFeed = (message: string) => store.presentationPushFeed(
+          cueContext.token,
+          resultFeedInput(cue.id, message),
+        )
         if (e.missed) {
           setBanner('攻擊沒有命中…')
-          pushLog(`${cue.attacker.nameZh} 的攻擊落空了！`)
+          pushFeed(`${cue.attacker.nameZh} 的攻擊落空了！`)
         } else if (e.effectiveness === 0) {
           setBanner('沒有效果…')
-          pushLog(`對 ${cue.defender.nameZh} 完全沒有效果…`)
+          pushFeed(`對 ${cue.defender.nameZh} 完全沒有效果…`)
         } else {
           const bits: string[] = []
           if (e.crit) bits.push('會心一擊！')
           if (e.effectivenessText) bits.push(e.effectivenessText)
           setBanner(bits.join('　') || null)
-          pushLog(`對 ${cue.defender.nameZh} 造成 ${e.amount} 點傷害`)
+          pushFeed(`對 ${cue.defender.nameZh} 造成 ${e.amount} 點傷害`)
         }
         tracePresentation(cueContext.token, 'feed', { cueId: cue.id, detail: 'result' })
       },
@@ -1345,7 +1423,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       },
     },
     legacy: {
-      play: (cue, cueContext) => playLegacyEvent(cue.before, cue.event, cueContext),
+      play: (cue, cueContext) => playLegacyEvent(cue.before, cue.event, cueContext, cue.id),
     },
     action: {
       starPrelude: async (_cue, cueContext) => {
@@ -1402,7 +1480,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         const store = useBattleStore.getState()
         if (cue.event.reason === 'timeout') {
           store.presentationSetBanner(cueContext.token, '達回合上限！依剩餘血量判定勝負')
-          store.presentationPushLog(cueContext.token, '回合數達上限，依雙方剩餘血量判定勝負')
+          store.presentationPushFeed(cueContext.token, {
+            id: `${cue.id}:timeout`,
+            text: '回合數達上限，依雙方剩餘血量判定勝負',
+            kind: 'result',
+          })
           tracePresentation(cueContext.token, 'feed', { cueId: cue.id, detail: 'timeout' })
           await cueContext.clock.wait(1150, cueContext.signal)
           store.presentationSetBanner(cueContext.token, null)
@@ -1751,10 +1833,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   return (
     <motion.div
       ref={battleRootRef}
-      className={`col${juice !== 'off' ? ' battle-enter' : ''}`}
-      style={{ flex: 1, position: 'relative' }}
+      className={`battle-shell${juice !== 'off' ? ' battle-enter' : ''}`}
+      data-battle-shell
       animate={rootShake}
     >
+      <section className="battle-stage" data-battle-stage aria-label="戰鬥場景">
       {/* Three-free host owns lazy next boot and one-way compatibility fallback. */}
       <BattleSceneHost
         key={currentRendererAttemptId!}
@@ -1796,9 +1879,14 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       {juice === 'off' ? <FloatDamage hitFx={hitFx} /> : <DamageNumbers ref={damageRef} />}
 
       {/* 前景 HUD（疊在 3D 之上） */}
-      <div className="col battle-fg" style={{ flex: 1, position: 'relative', zIndex: 10 }}>
-      {/* 場域地形徽章（頂部置中常駐；中性/無地形不顯示） */}
-      <TerrainChip terrainIds={battle.field.terrainEffects.current} />
+      <div className="battle-stage__hud">
+      <div className="battle-head-safe battle-head-safe--player" data-head-safe="player" aria-hidden="true" />
+      <div className="battle-head-safe battle-head-safe--foe" data-head-safe="foe" aria-hidden="true" />
+      <FieldStatusBar
+        terrainIds={battle.field.terrainEffects.current}
+        initiative={initiativePresentation(player.spe, foe.spe)}
+        turn={battle.turn}
+      />
       {intentPresentation?.intent.kind === 'intro' && (
         <button
           ref={introSkipRef}
@@ -1854,7 +1942,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         )
       )}
       {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
-      <div className="row" style={{ justifyContent: 'flex-end' }}>
+      <div className="battle-combatant-hud battle-combatant-hud--foe">
         <div className="combat-hud combat-hud--foe">
           <HpPlate mon={foe} owner={false} label={`對手的 ${foe.nameZh}`}
             onOpen={() => setCardView({ mon: foe, owner: false, foeIndex: battle.foe.activeIndex })} />
@@ -1922,7 +2010,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       </div>
 
       {/* 我方：HP 牌與隊伍狀態（畫面下方左側），marginTop:auto 把後段推到底部 */}
-      <div className="row" style={{ justifyContent: 'flex-start', marginTop: 'auto' }}>
+      <div className="battle-combatant-hud battle-combatant-hud--player">
         <div className="combat-hud combat-hud--player">
           <HpPlate mon={player} owner label={player.nameZh}
             onOpen={() => setCardView({ mon: player, owner: true, foeIndex: -1 })} />
@@ -1931,12 +2019,25 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         </div>
       </div>
 
+      </div>
+      </section>
+
       {/* 底部控制區 */}
-      <div className="col center" style={{ gap: 12, marginTop: 14, minHeight: 120 }}>
+      <section className="battle-command-deck" aria-label="戰鬥指令">
+        <div className="battle-command-deck__header">
+        <div className="battle-resource-strip" aria-label="戰鬥資源">
         {/* 星擊能量槽（極簡細條） */}
         <div className={`star-gauge ${energy >= 100 ? 'star-gauge--full' : ''}`}>
-          <span className="star-gauge__icon">★</span>
-          <div className="star-gauge__track">
+          <span className="star-gauge__icon">★ 星擊</span>
+          <div
+            className="star-gauge__track"
+            role="meter"
+            aria-label="星擊能量"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.floor(energy)}
+            aria-valuetext={`${Math.floor(energy)}%`}
+          >
             <div className="star-gauge__fill" style={{ width: `${energy}%` }} />
           </div>
           <span className="star-gauge__pct">{Math.floor(energy)}%</span>
@@ -1944,24 +2045,26 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
 
         {/* M9 連鎖槽固定顯示；集滿亮起可發動連鎖。 */}
         <div className={`star-gauge chain-gauge ${chainReady ? 'star-gauge--full chain-gauge--full' : ''}`}>
-          <span className="star-gauge__icon">🔗</span>
-          <div className="star-gauge__track">
+          <span className="star-gauge__icon">🔗 連鎖</span>
+          <div
+            className="star-gauge__track"
+            role="meter"
+            aria-label="連鎖能量"
+            aria-valuemin={0}
+            aria-valuemax={chainMax}
+            aria-valuenow={Math.min(battle.chainGauge, chainMax)}
+            aria-valuetext={`${Math.floor(chainPct)}%`}
+          >
             <div className="star-gauge__fill chain-gauge__fill" style={{ width: `${chainPct}%` }} />
           </div>
           <span className="star-gauge__pct">{Math.floor(chainPct)}%</span>
         </div>
-
-        <div className="battle-log">
-          {log.length === 0 ? (
-            <span className="battle-log__line--dim">戰鬥開始！</span>
-          ) : (
-            log.map((line, i) => (
-              <div key={i} className={`battle-log__line ${i < log.length - 1 ? 'battle-log__line--dim' : ''}`}>
-                {line}
-              </div>
-            ))
-          )}
         </div>
+
+        <BattleFeed ref={battleFeedRef} entries={log} />
+
+        </div>
+        <div className="battle-command-body" data-command-phase={phase} aria-busy={phase === 'busy'}>
 
         {phase === 'playerChoice' && !rendererReady && (
           <div className="battle-command-disabled" role="status" aria-live="polite">
@@ -1971,7 +2074,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         )}
 
         {phase === 'playerChoice' && rendererReady && (
-          <motion.div className="col center" style={{ gap: 12, width: '100%' }}
+          <motion.div className="battle-command-choice"
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             {/* M19.c 四槽選招：選槽即進 QTE（slotIndex 存進 ref 待解算回合用）。星擊/換人/連鎖另列分離。 */}
             {/* M19.d：變化招走輕量強度 QTE（statusQte，無 mash）；攻擊招走命中 QTE→mash。 */}
@@ -1982,6 +2085,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
               defenderTypes={foe.types}
               playerSpeed={player.spe}
               foeSpeed={foe.spe}
+              showInitiative={false}
               onPick={(slot) => {
                 pendingSlotRef.current = slot
                 if (!guideSeenRef.current) {
@@ -2015,7 +2119,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
             </div>
             {/* M17 夥伴技能固定存在；只顯示已習得技能，每場一次且不耗回合。 */}
             {partnerSkills.length > 0 && (
-              <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="row battle-partner-actions" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>✨ 夥伴技能</span>
                 {partnerSkills.map((skill) => {
                   const used = partnerSkillIdsUsed?.has(skill.id) ?? false
@@ -2038,32 +2142,12 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           </motion.div>
         )}
 
-        {phase === 'switchSelect' && rendererReady && (
-          <SwitchPanel
-            members={battle.player.members}
-            activeIndex={battle.player.activeIndex}
-            lockedIndex={lockedIndex}
-            onPick={(i) => { setPendingSwitch(i); useBattleStore.getState().setPhase('defenseQte') }}
-            onCancel={() => useBattleStore.getState().setPhase('playerChoice')}
-          />
-        )}
-
-        {(phase === 'busy' || phase === 'intro') && (
-          <div className="hpbar__num" style={{ height: 46, display: 'grid', placeItems: 'center' }}>…</div>
-        )}
-      </div>
-
-      {/* 計時類輸入（QTE / 連打 / 防禦 / 連鎖）抬到戰鬥區中央：原本擠在最底「看不太到、不好點」，
-          改成置中放大的醒目面板，正對玩家視線與拇指。MoveSlots（選招選單）維持在底部不動。 */}
-      <div className="battle-action-layer">
-      <AnimatePresence>
-        {rendererReady && (phase === 'qte' || phase === 'mash' || phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
+        {rendererReady && (phase === 'qte' || phase === 'mash') && (
           <motion.div
-            className="battle-action"
-            initial={{ opacity: 0, y: 14, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.18 }}
+            className="battle-input-surface"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
           >
             {phase === 'qte' && (
               <TimingBar
@@ -2082,6 +2166,39 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
             {phase === 'mash' && (attackVariant === 'rhythm'
               ? <RhythmTap paused={documentHidden} mode={interactMode} onDone={(acc) => onMashDone(rhythmToMashCount(acc))} />
               : <MashMeter paused={documentHidden} onDone={onMashDone} />)}
+          </motion.div>
+        )}
+
+        {phase === 'switchSelect' && rendererReady && (
+          <SwitchPanel
+            members={battle.player.members}
+            activeIndex={battle.player.activeIndex}
+            lockedIndex={lockedIndex}
+            onPick={(i) => { setPendingSwitch(i); useBattleStore.getState().setPhase('defenseQte') }}
+            onCancel={() => useBattleStore.getState().setPhase('playerChoice')}
+          />
+        )}
+
+        {(phase === 'busy' || phase === 'intro') && (
+          <div className="battle-command-busy" role="status">
+            <span aria-hidden="true">•••</span>
+            {phase === 'intro' ? '準備戰鬥' : '正在結算本回合'}
+          </div>
+        )}
+        </div>
+      </section>
+
+      {/* Ticket 09 will migrate the remaining non-normal QTEs into the command deck. */}
+      <div className="battle-action-layer">
+      <AnimatePresence>
+        {rendererReady && (phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
+          <motion.div
+            className="battle-action"
+            initial={{ opacity: 0, y: 14, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.18 }}
+          >
             {phase === 'statusQte' && (
               <TimingBar
                 paused={documentHidden}
@@ -2113,7 +2230,6 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           </motion.div>
         )}
       </AnimatePresence>
-      </div>
       </div>
 
       {/* M16 資訊卡：點 HpPlate/TeamTray 開（自己全顯、對手深度遮罩待 M17 看穿） */}

@@ -3,7 +3,7 @@
 // **runStarStrike 簽名不動**：手勢只是「儀式」，不改星擊傷害；中斷/逾時皆安全放招（絕不卡死）。
 // 不沿用攻擊連打（MashMeter）＝避免肌肉記憶重複（plan/22 §2.2 Q1 codex）。
 
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef } from 'react'
 import { holdCharge, beatSchedule, rhythmTaps } from '@/input/gestures'
 import { INTENSITY_BY_MODE, type InteractMode } from '@/game/settings'
 import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
@@ -87,8 +87,10 @@ export function RhythmTap({ mode, onDone, paused = false }: {
   onDone: (accuracy: number) => void
   paused?: boolean
 }) {
+  const surfaceRef = useRef<HTMLDivElement>(null)
   const ringRef = useRef<HTMLDivElement>(null)
   const tapsRef = useRef<number[]>([])
+  const keyHeldRef = useRef(false)
   const beatsRef = useRef<number[]>([])
   const t0Ref = useRef(0)
   const rafRef = useRef(0)
@@ -133,7 +135,11 @@ export function RhythmTap({ mode, onDone, paused = false }: {
     return () => cancelAnimationFrame(rafRef.current)
   }, [mode, scheduler])
 
-  const tap = (_e: ReactPointerEvent) => {
+  useEffect(() => {
+    surfaceRef.current?.focus()
+  }, [])
+
+  const tap = () => {
     if (doneRef.current || scheduler.isPaused) return
     // 用 performance.now() 與 rAF 時戳同源，確保節奏判定一致
     tapsRef.current.push(scheduler.now())
@@ -141,7 +147,26 @@ export function RhythmTap({ mode, onDone, paused = false }: {
   }
 
   return (
-    <div className="gesture-surface gesture-surface--star" onPointerDown={tap} role="button" tabIndex={0}>
+    <div
+      ref={surfaceRef}
+      className="gesture-surface gesture-surface--star"
+      onPointerDown={tap}
+      onKeyDown={(event) => {
+        if (event.repeat || keyHeldRef.current || (event.key !== 'Enter' && event.key !== ' ')) return
+        event.preventDefault()
+        keyHeldRef.current = true
+        tap()
+      }}
+      onKeyUp={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        keyHeldRef.current = false
+      }}
+      onBlur={() => { keyHeldRef.current = false }}
+      role="button"
+      tabIndex={0}
+      data-battle-input
+    >
       <div className="star-charge">
         <div ref={ringRef} className="star-charge__ring star-charge__ring--beat" />
         <span className="star-charge__star">★</span>

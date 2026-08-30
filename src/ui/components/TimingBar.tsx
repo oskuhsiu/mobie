@@ -24,6 +24,7 @@ export function TimingBar({
   randomOnTimeout?: boolean
   paused?: boolean
 }) {
+  const surfaceRef = useRef<HTMLDivElement>(null)
   const pointerRef = useRef<HTMLDivElement>(null)
   const posRef = useRef(0) // 0..1
   const doneRef = useRef(false)
@@ -68,6 +69,10 @@ export function TimingBar({
     }
   }, [randomOnTimeout, scheduler, timeoutMs])
 
+  useEffect(() => {
+    surfaceRef.current?.focus()
+  }, [])
+
   const stop = () => {
     if (doneRef.current || scheduler.isPaused) return
     doneRef.current = true
@@ -79,7 +84,20 @@ export function TimingBar({
 
   // 點擊範圍放大成戰鬥中心一整圈（半透明白 blur 光暈提示），點圈內任意處都算停指針。
   return (
-    <div className="tap-field tap-field--timing" onPointerDown={stop} role="button" tabIndex={0}>
+    <div
+      ref={surfaceRef}
+      className="tap-field tap-field--timing"
+      onPointerDown={stop}
+      onKeyDown={(event) => {
+        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return
+        event.preventDefault()
+        stop()
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={hint}
+      data-battle-input
+    >
       <div className="tap-field__glow" aria-hidden />
       <div className="tap-field__inner qte">
         <div className="qte__hint">{hint}</div>
