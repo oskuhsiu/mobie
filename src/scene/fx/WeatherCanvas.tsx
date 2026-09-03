@@ -19,6 +19,8 @@ export interface WeatherCanvasProps {
   overlay?: WeatherOverlay
   /** 0..1 粒子密度（juice：full=1 / reduced≈0.3 / off=0＝整層不掛）。 */
   density: number
+  /** Stops the battle-scoped animation clock while the document is hidden. */
+  paused?: boolean
   /** z 序：介於 R3F(0) 與 FxCanvas(5) 之間。 */
   zIndex?: number
   /** Ticket 01 DEV instrumentation. The pool is bounded by BASE_COUNT for its emitter. */
@@ -39,10 +41,10 @@ const BASE_COUNT: Record<WeatherEmitter, number> = {
 const TWO_PI = Math.PI * 2
 const rand = (a: number, b: number) => a + Math.random() * (b - a)
 
-export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, zIndex = 2, onPoolDiagnostics }: WeatherCanvasProps) {
+export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, paused = false, zIndex = 2, onPoolDiagnostics }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const cfg = useRef({ emitter, color, sparkAccent, overlay, density })
-  cfg.current = { emitter, color, sparkAccent, overlay, density }
+  const cfg = useRef({ emitter, color, sparkAccent, overlay, density, paused })
+  cfg.current = { emitter, color, sparkAccent, overlay, density, paused }
   // emitter 切換時清空粒子池（terrainShift 過場），讓新天氣重新長出。
   const prevEmitter = useRef(emitter)
   // 由主 effect 掛上、由 props 變更 effect 呼叫，喚醒可能已 idle-stop 的迴圈。
@@ -208,6 +210,10 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
       const c = cfg.current
       const em = c.emitter
       const active = c.density > 0 && (em !== 'none' || !!c.overlay)
+      if (c.paused) {
+        running = false
+        return
+      }
       ctx.clearRect(0, 0, w, h)
       if (!active) {
         diagnosticsRef.current?.({ live: 0, capacity: BASE_COUNT[em] })
@@ -248,6 +254,11 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
 
     const kick = () => {
       const c = cfg.current
+      if (c.paused) {
+        cancelAnimationFrame(raf)
+        running = false
+        return
+      }
       const active = c.density > 0 && (c.emitter !== 'none' || !!c.overlay)
       if (active && !running) { running = true; raf = requestAnimationFrame(tick) }
     }
@@ -261,7 +272,7 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, z
   }, [])
 
   // props 變更（terrain 切換、juice 調整）→ 重新喚醒可能已 idle-stop 的迴圈。
-  useEffect(() => { kickRef.current?.() }, [emitter, color, sparkAccent, overlay, density])
+  useEffect(() => { kickRef.current?.() }, [emitter, color, sparkAccent, overlay, density, paused])
 
   return (
     <canvas

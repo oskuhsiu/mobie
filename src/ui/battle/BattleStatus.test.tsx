@@ -46,4 +46,21 @@ describe('battle status disclosure', () => {
     expect(document.activeElement).toBe(more)
     expect(onRestore).toHaveBeenCalledTimes(1)
   })
+
+  it('shows one field mark outside wide landscape and keeps all marks in overflow', () => {
+    const view = render(<FieldStatusBar
+      terrainIds={[]}
+      initiative="你先攻"
+      turn={2}
+      windowClass="phone-portrait"
+      fieldMarks={[
+        { key: 'one', label: '第一標記', icon: '①', remaining: 4 },
+        { key: 'two', label: '第二標記', icon: '②', remaining: 3 },
+        { key: 'three', label: '第三標記', icon: '③', remaining: 2 },
+      ]}
+    />)
+
+    expect(view.container.querySelectorAll('.battle-field-bar__mark')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '展開全部 3 個場域標記' }).textContent).toBe('+2')
+  })
 })

@@ -59,6 +59,10 @@ export function ShieldSwipe({ mode, onResult, timeoutMs = 5000, paused = false }
     finish(swipeShieldQuality(swipeFromPointer(samplesRef.current), mode))
   }
 
+  useEffect(() => {
+    surfaceRef.current?.focus()
+  }, [])
+
   return (
     <div
       ref={surfaceRef}
@@ -67,8 +71,15 @@ export function ShieldSwipe({ mode, onResult, timeoutMs = 5000, paused = false }
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
+      onKeyDown={(event) => {
+        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return
+        event.preventDefault()
+        if (!scheduler.isPaused) finish('normal')
+      }}
       role="button"
       tabIndex={0}
+      aria-label="換人防禦，向下滑動，或按 Enter、空白鍵以普通品質防禦"
+      data-battle-input
     >
       <div ref={shieldRef} className="shield-icon">🛡</div>
       <div className="gesture-hint">👇 向下快滑拉起護盾！</div>

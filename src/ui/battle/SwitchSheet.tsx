@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import type { BattleMobie } from '@/game/types'
+import { useDialogFocusTrap } from '@/ui/accessibility/useDialogFocusTrap'
 import type { SwitchAvailability } from './BattleActionModel'
 
 const hpToneClass = (fraction: number) => (
@@ -48,24 +49,19 @@ export function SwitchSheet({
   onPick: (index: number) => void
   onCancel: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
   const firstRef = useRef<HTMLButtonElement>(null)
 
-  useEffect(() => {
-    firstRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      onCancel()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onCancel])
+  useDialogFocusTrap({ dialogRef, initialFocusRef: firstRef, onEscape: onCancel })
 
   return (
     <motion.div
+      ref={dialogRef}
       className="switch-panel"
       role="dialog"
+      aria-modal="true"
       aria-label="選擇換上的夥伴"
+      tabIndex={-1}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
     >

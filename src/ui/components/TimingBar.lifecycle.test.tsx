@@ -19,11 +19,13 @@ describe('pausable battle input clock', () => {
     const onResult = vi.fn()
     const view = render(<TimingBar paused timeoutMs={100} onResult={onResult} />)
 
+    expect(requestAnimationFrame).not.toHaveBeenCalled()
     await act(() => vi.advanceTimersByTimeAsync(1_000))
     fireEvent.pointerDown(view.getByRole('button'))
     expect(onResult).not.toHaveBeenCalled()
 
     view.rerender(<TimingBar paused={false} timeoutMs={100} onResult={onResult} />)
+    expect(requestAnimationFrame).toHaveBeenCalledOnce()
     await act(() => vi.advanceTimersByTimeAsync(99))
     expect(onResult).not.toHaveBeenCalled()
     await act(() => vi.advanceTimersByTimeAsync(1))

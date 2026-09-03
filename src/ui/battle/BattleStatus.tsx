@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { ComboCastMark, Side, StatusEffect } from '@/game/battle/reducer'
 import { terrainDefsOf } from '@/game/data/terrains'
 import type { TerrainId } from '@/game/types'
+import type { BattleWindowClass } from './BattleLayout'
 import { displaySourceName } from './BattleHudAdapter'
 
 interface StatusViewItem {
@@ -148,16 +149,19 @@ export function FieldStatusBar({
   initiative,
   turn,
   fieldMarks,
+  windowClass = 'wide-landscape',
   onOverflowRestore,
 }: {
   terrainIds: TerrainId[]
   initiative: string
   turn: number
   fieldMarks: readonly ComboCastMark[]
+  windowClass?: BattleWindowClass
   onOverflowRestore?: () => void
 }) {
   const terrains = terrainDefsOf(terrainIds)
   const marks = fieldMarks.map(fieldMarkView)
+  const visibleMarkCount = windowClass === 'wide-landscape' ? 2 : 1
   return (
     <div className="battle-field-bar" data-field-status aria-label={`${initiative}，回合 ${turn}`}>
       <strong className="battle-field-bar__initiative">{initiative}</strong>
@@ -167,7 +171,7 @@ export function FieldStatusBar({
           {terrain.icon} {terrain.name}
         </span>
       ))}
-      {marks.slice(0, 2).map((mark) => (
+      {marks.slice(0, visibleMarkCount).map((mark) => (
         <span
           key={mark.key}
           className="battle-field-bar__mark"
@@ -176,12 +180,12 @@ export function FieldStatusBar({
           <span aria-hidden="true">{mark.icon}</span> {mark.label} {mark.remaining}
         </span>
       ))}
-      {marks.length > 2 && (
+      {marks.length > visibleMarkCount && (
         <StatusOverflow
           buttonLabel={`展開全部 ${marks.length} 個場域標記`}
           dialogLabel="完整場域標記"
           items={marks}
-          hiddenCount={marks.length - 2}
+          hiddenCount={marks.length - visibleMarkCount}
           onRestore={onOverflowRestore}
         />
       )}

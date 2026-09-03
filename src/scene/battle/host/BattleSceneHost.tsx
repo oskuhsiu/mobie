@@ -38,6 +38,7 @@ export interface BattleSceneHostProps {
   sessionToken: BattleSessionToken
   preference: GraphicsPreference
   paused: boolean
+  reducedMotion: boolean
   latchedFallback: RendererFallbackReason | null
   onStateChange: (token: BattleSessionToken, state: BattleRendererState) => void
   onFallback: (token: BattleSessionToken, reason: RendererFallbackReason) => void
@@ -55,6 +56,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   sessionToken,
   preference,
   paused,
+  reducedMotion,
   latchedFallback,
   onStateChange,
   onFallback,
@@ -164,6 +166,10 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       data-renderer-state={state.phase}
       data-renderer-tier={state.tier}
       data-renderer-fallback={state.fallbackReason ?? undefined}
+      data-battle-camera-shot="wide"
+      data-battle-shake={reducedMotion ? '0' : 'enabled'}
+      data-battle-bob={reducedMotion ? '0' : 'enabled'}
+      data-reduced-motion={reducedMotion ? 'true' : 'false'}
     >
       {state.phase !== 'compatibility-ready' && NextScene && (
         <BattleSceneBoundary onFatal={(error) => fatal(classifyRendererError(error))}>
@@ -171,6 +177,8 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
             ref={nextRef}
             snapshot={snapshot}
             tier={state.tier === 'high' ? 'high' : 'balanced'}
+            paused={paused}
+            reducedMotion={reducedMotion}
             onReady={() => send({ type: 'NEXT_READY', attemptId })}
             onFatal={fatal}
             onRenderedFrame={onRenderedFrame}
@@ -180,7 +188,12 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
         </BattleSceneBoundary>
       )}
       {state.phase === 'compatibility-ready' && (
-        <CompatibilityBattleScene ref={compatibilityRef} snapshot={snapshot} paused={paused} />
+        <CompatibilityBattleScene
+          ref={compatibilityRef}
+          snapshot={snapshot}
+          paused={paused}
+          reducedMotion={reducedMotion}
+        />
       )}
       {state.phase === 'renderer-booting' && <BattleRenderGate state="renderer-booting" />}
     </div>

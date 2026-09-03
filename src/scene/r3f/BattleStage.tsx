@@ -114,6 +114,8 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   onRenderedFrame,
   onRendererDiagnostics,
   devShaderFailure,
+  paused,
+  reducedMotion,
 }, ref) {
   const { player, foe, palette } = snapshot
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
@@ -124,12 +126,12 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
     ref,
     () => ({
       lunge: (side) => {
-        anim.current[side].lungeT = LUNGE_DUR
+        anim.current[side].lungeT = reducedMotion ? 0 : LUNGE_DUR
       },
       hitReact: (side, strength = 1) => {
         const a = anim.current[side]
-        a.shakeT = SHAKE_DUR
-        a.shakeMag = 0.16 * strength
+        a.shakeT = reducedMotion ? 0 : SHAKE_DUR
+        a.shakeMag = reducedMotion ? 0 : 0.16 * strength
       },
       faint: (side) => {
         anim.current[side].fainted = true
@@ -151,14 +153,14 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       },
       projectAnchor: (side, anchor, viewport) => projectBattleAnchor(side, anchor, viewport),
     }),
-    [],
+    [reducedMotion],
   )
 
   return (
     <Canvas
       className="battle-next-canvas"
       dpr={[1, tier === 'high' ? 1.5 : 1]}
-      frameloop="always"
+      frameloop={paused ? 'never' : 'always'}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       camera={{ position: [0, 2.95, 6.4], fov: 40 }}
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
@@ -185,6 +187,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
         faceY={Math.PI}
         bobPhase={Math.PI}
         timeScaleRef={timeScaleRef}
+        reducedMotion={reducedMotion}
       />
       <Combatant3D
         side="player"
@@ -195,6 +198,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
         faceY={0}
         bobPhase={0}
         timeScaleRef={timeScaleRef}
+        reducedMotion={reducedMotion}
       />
     </Canvas>
   )

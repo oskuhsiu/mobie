@@ -20,6 +20,7 @@ function initialOf(name: string): string {
 interface CompatibilityBattleSceneProps {
   snapshot: BattleSceneSnapshot
   paused: boolean
+  reducedMotion: boolean
 }
 
 interface CompatibilityCombatantProps {
@@ -73,7 +74,7 @@ function CompatibilityCombatant({ side, name, artworkUrl, shiny, state, onMotion
   )
 }
 
-export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, CompatibilityBattleSceneProps>(function CompatibilityBattleScene({ snapshot, paused }, ref) {
+export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, CompatibilityBattleSceneProps>(function CompatibilityBattleScene({ snapshot, paused, reducedMotion }, ref) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [states, setStates] = useState<Record<Side, CombatantState>>({
     player: { ...INITIAL_STATE.player },
@@ -88,8 +89,8 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
   }
 
   useImperativeHandle(ref, () => ({
-    lunge: (side) => setMode(side, 'lunge'),
-    hitReact: (side) => setMode(side, 'hit'),
+    lunge: (side) => setMode(side, reducedMotion ? 'idle' : 'lunge'),
+    hitReact: (side) => setMode(side, reducedMotion ? 'idle' : 'hit'),
     faint: (side) => setMode(side, 'faint'),
     enter: (side) => setMode(side, 'enter'),
     setTimeScale: (scale) => {
@@ -105,7 +106,7 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
     },
     projectAnchor: (side: Side, anchor: BattleAnchorKind, viewport: BattleViewport): BattleScreenPoint =>
       projectBattleAnchor(side, anchor, viewport),
-  }), [])
+  }), [reducedMotion])
 
   return (
     <div
@@ -114,6 +115,7 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
       data-renderer-surface="compatibility"
       data-renderer-state="compatibility-ready"
       data-renderer-paused={paused ? 'true' : 'false'}
+      data-reduced-motion={reducedMotion ? 'true' : 'false'}
     >
       <p className="battle-renderer__note" role="status">已切換相容模式，戰鬥仍可繼續。</p>
       <div className="battle-renderer__arena" aria-label="相容模式戰鬥場景">

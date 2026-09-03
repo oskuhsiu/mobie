@@ -34,6 +34,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Complete battle command deck** (M23 Ticket 09): switch, Star, fixed chain/combo, learned Partner
   actions, MobCard gating, side/field statuses, and fixed ability/item source cues share truthful
   phase, resource, disabled, overflow, and accessibility semantics.
+- **Responsive, accessible battle input** (M23 Ticket 10): five mutually exclusive viewport classes,
+  44/56px targets, keyboard-complete QTEs, trapped/restored dialog focus, hidden/resume clocks, and an
+  OS-level reduced-motion ceiling keep the full command journey playable under narrow and zoomed layouts.
 - **Portable saves** (M5): export your roster/cards (+ optional 3D models) as a `username.save` (zip)
   to your own Google Drive/Files via the iOS share sheet; re-import with old/new detection, consented
   overwrite, and an automatic pre-import backup. **No backend** — your cloud, your file.
@@ -136,8 +139,8 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–09 are complete** and browser-verified —
-**622 Vitest tests**, typecheck, and build all green. Content: national dex 1–1025, 16 regions (+ arena),
+M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–10 are complete** and browser-verified —
+**641 Vitest tests**, typecheck, and build are green. Content: national dex 1–1025, 16 regions (+ arena),
 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
@@ -147,8 +150,8 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-**Next:** M23 Ticket 10 completes the five-viewport, keyboard/focus, 200% zoom, reduced-motion, and
-hidden/resume battle matrix. Sparse initial loadouts and the M22 f–j interaction backlog remain later
+**Next:** M23 Ticket 11 builds the neutral world/camera tracer behind the existing semantic HUD and
+responsive/reduced-motion contracts. Sparse initial loadouts and the M22 f–j interaction backlog remain later
 work. M4 (MediaPipe motion-control QTE) remains skipped by the owner. **Owner-only leftover:** M18.e
 renames the repo directory + git remote (`pokemon-mezastar` → `mobie`). See `plan/CHECKLIST.md` for the
 milestone breakdown and `handoff.md` for the live working state.

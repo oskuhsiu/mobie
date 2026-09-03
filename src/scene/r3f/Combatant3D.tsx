@@ -51,10 +51,11 @@ interface Combatant3DProps {
   /** EXT.2 慢鏡倍率（1＝正常、<1＝慢鏡）。所有 delta 乘上它＋自 track 虛擬時間給 idle bob，
    *  讓「時停」連待機浮動都慢下來不穿幫。FxCanvas/Tone 不走這條、保持 real-time。 */
   timeScaleRef: { current: number }
+  reducedMotion: boolean
 }
 
 /** 場上一隻 Mobie：artwork billboard + 撲擊/受擊/倒下/入場動畫。 */
-export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, timeScaleRef }: Combatant3DProps) {
+export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, timeScaleRef, reducedMotion }: Combatant3DProps) {
   const group = useRef<Group>(null)
   // 虛擬累積時間（吃 timeScale）：取代 state.clock.elapsedTime 當 idle bob 的時鐘，慢鏡時 bob 同步變慢。
   const tRef = useRef(0)
@@ -79,7 +80,7 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, 
       scale = 1 - p * 0.5
     } else {
       anim.faintT = 0
-      y += Math.sin(t * 1.6 + bobPhase) * 0.05 // idle 浮動
+      if (!reducedMotion) y += Math.sin(t * 1.6 + bobPhase) * 0.05
 
       if (anim.lungeT > 0) {
         anim.lungeT = Math.max(0, anim.lungeT - delta)
@@ -96,7 +97,7 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, 
       }
     }
 
-    if (anim.shakeT > 0) {
+    if (!reducedMotion && anim.shakeT > 0) {
       anim.shakeT = Math.max(0, anim.shakeT - delta)
       const k = anim.shakeT / SHAKE_DUR
       x += Math.sin(anim.shakeT * 70) * anim.shakeMag * k

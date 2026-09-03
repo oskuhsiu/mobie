@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { MoveSlots, SwitchAction } from '@/ui/screens/BattleScreen'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { MashMeter, MoveSlots, SwitchAction } from '@/ui/screens/BattleScreen'
 import type { Move } from '@/game/types'
 import { renderGameJourney } from '@/test/renderGameJourney'
 import { useBattleStore } from '@/store/battleStore'
@@ -13,6 +13,11 @@ vi.mock('@/audio/audioEngine', () => ({
     play: vi.fn(),
     unlock: vi.fn().mockResolvedValue(undefined),
     setIntensity: vi.fn(),
+    pauseBgm: vi.fn(),
+    resumeBgm: vi.fn(),
+    cancelBattleSfx: vi.fn(),
+    pauseBattleSfx: vi.fn(),
+    resumeBattleSfx: vi.fn(),
     playMoveSound: vi.fn(),
     starChargeSweep: vi.fn(),
     starStampTick: vi.fn(),
@@ -51,6 +56,7 @@ describe('battle decision journey', () => {
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('keeps the real battle in player choice, updates for the active foe, then enters QTE only after a pick', async () => {
@@ -144,6 +150,50 @@ describe('battle decision journey', () => {
     expect(useBattleStore.getState().phase).toBe('playerChoice')
     expect(useBattleStore.getState().battle?.turn).toBe(2)
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /火花/ }))
+  })
+
+  it('pauses the live QTE clock while document.hidden and resumes its preserved remainder', async () => {
+    vi.useFakeTimers()
+    let hidden = false
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+    try {
+      renderGameJourney({
+        state: 'battle',
+        context: {
+          regionId: 'practice',
+          playerTeam: [
+            { cardId: 'hidden-player-1', speciesId: 4, level: 16 },
+            { cardId: 'hidden-player-2', speciesId: 25, level: 16 },
+            { cardId: 'hidden-player-3', speciesId: 133, level: 16 },
+          ],
+          foeTeam: [
+            { cardId: 'hidden-foe-1', speciesId: 1, level: 10 },
+            { cardId: 'hidden-foe-2', speciesId: 7, level: 10 },
+            { cardId: 'hidden-foe-3', speciesId: 10, level: 10 },
+          ],
+        },
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '跳過開場' }))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      fireEvent.click(screen.getByRole('button', { name: /火花/ }))
+      expect(useBattleStore.getState().phase).toBe('qte')
+
+      hidden = true
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+      await act(() => vi.advanceTimersByTimeAsync(11_000))
+      expect(useBattleStore.getState().phase).toBe('qte')
+
+      hidden = false
+      await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+      await act(() => vi.advanceTimersByTimeAsync(9_900))
+      expect(useBattleStore.getState().phase).toBe('qte')
+      await act(() => vi.advanceTimersByTimeAsync(200))
+      expect(useBattleStore.getState().phase).toBe('mash')
+    } finally {
+      Reflect.deleteProperty(document, 'hidden')
+    }
   })
 
   it('projects the complete choice HUD and blocks MobCard when an input surface owns the command body', async () => {
@@ -328,5 +378,134 @@ describe('battle decision journey', () => {
 
     expect(screen.getByRole('button', { name: '換人' })).toBeTruthy()
     expect(screen.getByText('放棄本回合攻擊並承受對手攻擊')).toBeTruthy()
+  })
+
+  it('counts one mash tap per physical key press', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const onDone = vi.fn()
+    render(<MashMeter onDone={onDone} />)
+    const input = screen.getByRole('button')
+
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.keyDown(input, { key: 'Enter', repeat: true })
+    fireEvent.keyUp(input, { key: 'Enter' })
+    fireEvent.keyDown(input, { key: ' ' })
+    fireEvent.keyUp(input, { key: ' ' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    fireEvent.keyUp(input, { key: 'Enter' })
+    await act(() => vi.advanceTimersByTimeAsync(2_800))
+
+    expect(onDone).toHaveBeenCalledWith(3)
+  })
+
+  it('preserves the mash timeout while hidden', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const onDone = vi.fn()
+    const view = render(<MashMeter paused onDone={onDone} />)
+
+    await act(() => vi.advanceTimersByTimeAsync(5_000))
+    expect(onDone).not.toHaveBeenCalled()
+    view.rerender(<MashMeter paused={false} onDone={onDone} />)
+    await act(() => vi.advanceTimersByTimeAsync(2_799))
+    expect(onDone).not.toHaveBeenCalled()
+    await act(() => vi.advanceTimersByTimeAsync(1))
+    expect(onDone).toHaveBeenCalledWith(0)
+  })
+
+  it('traps MobCard and switch focus, then restores each exact invoker', async () => {
+    vi.useFakeTimers()
+    renderGameJourney({
+      state: 'battle',
+      context: {
+        regionId: 'practice',
+        playerTeam: [
+          { cardId: 'dialog-player-1', speciesId: 4, level: 16 },
+          { cardId: 'dialog-player-2', speciesId: 25, level: 16 },
+          { cardId: 'dialog-player-3', speciesId: 133, level: 16 },
+        ],
+        foeTeam: [
+          { cardId: 'dialog-foe-1', speciesId: 1, level: 10 },
+          { cardId: 'dialog-foe-2', speciesId: 7, level: 10 },
+          { cardId: 'dialog-foe-3', speciesId: 10, level: 10 },
+        ],
+      },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '跳過開場' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    const playerPips = document.querySelectorAll<HTMLButtonElement>('.battle-combatant-hud--player .tray__pip')
+    const cardInvoker = playerPips[1]
+    fireEvent.click(cardInvoker)
+    const card = screen.getByRole('dialog', { name: /完整資訊/ })
+    const close = within(card).getByRole('button', { name: '關閉' })
+    expect(document.activeElement).toBe(close)
+    expect(document.querySelector<HTMLElement>('[data-battle-stage]')?.inert).toBe(true)
+    expect(document.querySelector<HTMLElement>('.battle-command-deck')?.inert).toBe(true)
+    fireEvent.keyDown(window, { key: '1' })
+    expect(useBattleStore.getState().phase).toBe('playerChoice')
+    expect(screen.getByRole('dialog', { name: /完整資訊/ })).toBe(card)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(document.activeElement).toBe(cardInvoker)
+
+    const switchInvoker = screen.getByRole('button', { name: '換人' })
+    fireEvent.click(switchInvoker)
+    const sheet = screen.getByRole('dialog', { name: '選擇換上的夥伴' })
+    const sheetButtons = within(sheet).getAllByRole('button')
+    const firstLegal = sheetButtons[0]
+    const cancel = within(sheet).getByRole('button', { name: '取消' })
+    expect(document.activeElement).toBe(firstLegal)
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(cancel)
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(firstLegal)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(screen.queryByRole('dialog', { name: '選擇換上的夥伴' })).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '換人' }))
+  })
+
+  it('restores the MobCard invoker after a phase-forced close returns to choice', async () => {
+    vi.useFakeTimers()
+    renderGameJourney({
+      state: 'battle',
+      context: {
+        regionId: 'practice',
+        playerTeam: [
+          { cardId: 'forced-card-player-1', speciesId: 4, level: 16 },
+          { cardId: 'forced-card-player-2', speciesId: 25, level: 16 },
+          { cardId: 'forced-card-player-3', speciesId: 133, level: 16 },
+        ],
+        foeTeam: [
+          { cardId: 'forced-card-foe-1', speciesId: 1, level: 10 },
+          { cardId: 'forced-card-foe-2', speciesId: 7, level: 10 },
+          { cardId: 'forced-card-foe-3', speciesId: 10, level: 10 },
+        ],
+      },
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '跳過開場' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    const invoker = document.querySelectorAll<HTMLButtonElement>('.battle-combatant-hud--player .tray__pip')[1]
+    fireEvent.click(invoker)
+    expect(screen.getByRole('dialog', { name: /完整資訊/ })).toBeTruthy()
+
+    act(() => useBattleStore.getState().setPhase('busy'))
+    expect(document.activeElement).toBe(document.querySelector('[data-battle-feed-focus]'))
+    act(() => useBattleStore.getState().setPhase('playerChoice'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    expect(document.activeElement).toBe(invoker)
   })
 })

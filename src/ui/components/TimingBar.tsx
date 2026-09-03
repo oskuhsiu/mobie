@@ -27,6 +27,7 @@ export function TimingBar({
   const surfaceRef = useRef<HTMLDivElement>(null)
   const pointerRef = useRef<HTMLDivElement>(null)
   const posRef = useRef(0) // 0..1
+  const startRef = useRef<number | null>(null)
   const doneRef = useRef(false)
   const onResultRef = useRef(onResult)
   const scheduler = usePausableScheduler(paused)
@@ -34,27 +35,8 @@ export function TimingBar({
 
   useEffect(() => {
     doneRef.current = false
-    let raf = 0
+    startRef.current = null
     let timeout = 0
-    let start = 0
-    const period = 1100 // ms 來回一趟
-
-    const tick = () => {
-      if (scheduler.isPaused) {
-        if (!doneRef.current) raf = requestAnimationFrame(tick)
-        return
-      }
-      const t = scheduler.now()
-      if (!start) start = t
-      const phase = ((t - start) % period) / period // 0..1
-      // 三角波：0→1→0
-      posRef.current = phase < 0.5 ? phase * 2 : 2 - phase * 2
-      if (pointerRef.current) {
-        pointerRef.current.style.left = `${posRef.current * 100}%`
-      }
-      if (!doneRef.current) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
     if (timeoutMs && timeoutMs > 0) {
       timeout = scheduler.schedule(() => {
         if (doneRef.current) return
@@ -64,10 +46,26 @@ export function TimingBar({
       }, timeoutMs)
     }
     return () => {
-      cancelAnimationFrame(raf)
       if (timeout) scheduler.cancel(timeout)
     }
   }, [randomOnTimeout, scheduler, timeoutMs])
+
+  useEffect(() => {
+    if (paused || doneRef.current) return
+    let raf = 0
+    const period = 1100
+    const tick = () => {
+      if (doneRef.current || scheduler.isPaused) return
+      const t = scheduler.now()
+      if (startRef.current === null) startRef.current = t
+      const phase = ((t - startRef.current) % period) / period
+      posRef.current = phase < 0.5 ? phase * 2 : 2 - phase * 2
+      if (pointerRef.current) pointerRef.current.style.left = `${posRef.current * 100}%`
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [paused, scheduler])
 
   useEffect(() => {
     surfaceRef.current?.focus()

@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import type { BattleMobie, Move, Stats } from '@/game/types'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
@@ -7,6 +8,7 @@ import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { growthProgress } from '@/game/growth'
+import { useDialogFocusTrap } from '@/ui/accessibility/useDialogFocusTrap'
 
 const STAT_ROWS: { key: keyof Stats; label: string }[] = [
   { key: 'hp', label: 'HP' }, { key: 'atk', label: '攻' }, { key: 'def', label: '防' },
@@ -46,18 +48,23 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
   revealed: boolean
   onClose: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
   const showDeep = owner || revealed
   const item = getItem(mon.heldItemId)
   const ability = getAbility(mon.abilityId)
   const ownerGrowth = ownerExp === undefined ? null : growthProgress(mon.level, ownerExp)
+  useDialogFocusTrap({ dialogRef, initialFocusRef: closeRef, onEscape: onClose })
 
   return (
     <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
       <motion.div
+        ref={dialogRef}
         className="modal-card mobcard"
         role="dialog"
         aria-modal="true"
         aria-label={`${mon.nameZh} 完整資訊`}
+        tabIndex={-1}
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -75,7 +82,7 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
               {!owner && <div className="h-sub" style={{ marginTop: 4 }}>{revealed ? '已看穿' : '對手 · 基本面'}</div>}
             </div>
           </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
+          <button ref={closeRef} className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
 
         {owner && ownerExp !== undefined && (

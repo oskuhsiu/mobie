@@ -45,6 +45,11 @@ export interface FxHandle {
   diagnostics?: () => Record<string, M23PoolCount>
 }
 
+export interface FxCanvasProps {
+  reducedMotion?: boolean
+  paused?: boolean
+}
+
 interface P { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; g: number; shape: FxShape; rot: number }
 interface Ring { x: number; y: number; r: number; max: number; color: string; life: number; lw: number; glow: boolean; decay: number; grow: number }
 interface Travel {
@@ -54,8 +59,12 @@ interface Travel {
   onArrive: 'none' | 'burst' | 'burst-ring'
 }
 
-export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
+export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = false, paused = false }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const reducedMotionRef = useRef(reducedMotion)
+  const pausedRef = useRef(paused)
+  reducedMotionRef.current = reducedMotion
+  pausedRef.current = paused
   const stateRef = useRef({
     ctx: null as CanvasRenderingContext2D | null,
     w: 0, h: 0,
@@ -63,6 +72,9 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
     rings: [] as Ring[],
     travels: [] as Travel[],
     flash: { color: '#fff', a: 0 },
+    flashTimes: [] as number[],
+    peakFlashAlpha: 0,
+    maxFlashesPerSecond: 0,
     raf: 0,
     running: false,
   })
@@ -91,6 +103,10 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
     const s = stateRef.current
     const ctx = s.ctx
     if (!ctx) return
+    if (pausedRef.current) {
+      s.running = false
+      return
+    }
     ctx.clearRect(0, 0, s.w, s.h)
 
     // 螢幕閃光
@@ -185,8 +201,19 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
 
   const ensureRunning = () => {
     const s = stateRef.current
+    if (pausedRef.current) return
     if (!s.running) { s.running = true; s.raf = requestAnimationFrame(tick) }
   }
+
+  useEffect(() => {
+    const s = stateRef.current
+    if (paused) {
+      cancelAnimationFrame(s.raf)
+      s.running = false
+      return
+    }
+    if (s.particles.length || s.rings.length || s.travels.length || s.flash.a > 0) ensureRunning()
+  }, [paused])
 
   useImperativeHandle(ref, () => ({
     burst: ({ nx, ny, color, count = 16, power = 1, kind = 'hit', shape = 'dot' }) => {
@@ -202,7 +229,19 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
     },
     flash: (color, alpha = 0.5) => {
       const s = stateRef.current
-      s.flash = { color, a: alpha }
+      const now = performance.now()
+      s.flashTimes = s.flashTimes.filter((at) => now - at < 1_000)
+      if (reducedMotionRef.current && s.flashTimes.length >= 3) return
+      const safeAlpha = reducedMotionRef.current ? Math.min(0.2, alpha) : alpha
+      s.flashTimes.push(now)
+      s.peakFlashAlpha = Math.max(s.peakFlashAlpha, safeAlpha)
+      s.maxFlashesPerSecond = Math.max(s.maxFlashesPerSecond, s.flashTimes.length)
+      s.flash = { color, a: safeAlpha }
+      if (canvasRef.current) {
+        canvasRef.current.dataset.battleFlashAlpha = String(safeAlpha)
+        canvasRef.current.dataset.battlePeakFlashAlpha = String(s.peakFlashAlpha)
+        canvasRef.current.dataset.battleMaxFlashesPerSecond = String(s.maxFlashesPerSecond)
+      }
       ensureRunning()
     },
     travel: ({ from, to, color, accent = color, shape = 'dot', count = 18, power = 1, onArrive = 'burst' }) => {
@@ -250,6 +289,7 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
       s.rings.length = 0
       s.travels.length = 0
       s.flash.a = 0
+      if (canvasRef.current) canvasRef.current.dataset.battleFlashAlpha = '0'
       cancelAnimationFrame(s.raf)
       s.raf = 0
       s.running = false
@@ -268,6 +308,10 @@ export const FxCanvas = forwardRef<FxHandle>((_props, ref) => {
   return (
     <canvas
       ref={canvasRef}
+      data-battle-fx
+      data-battle-flash-alpha="0"
+      data-battle-peak-flash-alpha="0"
+      data-battle-max-flashes-per-second="0"
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}
     />
   )

@@ -15,8 +15,10 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000, paused = fal
   timeoutMs?: number
   paused?: boolean
 }) {
+  const surfaceRef = useRef<HTMLDivElement>(null)
   const ringRef = useRef<HTMLDivElement>(null)
   const holdingRef = useRef(false)
+  const keyHeldRef = useRef(false)
   const accMsRef = useRef(0) // 已累積蓄力 ms（放開保留）
   const lastTsRef = useRef(0)
   const rafRef = useRef(0)
@@ -36,11 +38,16 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000, paused = fal
     doneRef.current = false
     accMsRef.current = 0
     lastTsRef.current = 0
+    const to = scheduler.schedule(() => finish(holdCharge(accMsRef.current, mode)), timeoutMs)
+    return () => scheduler.cancel(to)
+    // finish only reads refs; resetting this input is keyed by mode/timeout, not visibility.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, scheduler, timeoutMs])
+
+  useEffect(() => {
+    if (paused || doneRef.current) return
     const tick = () => {
-      if (scheduler.isPaused) {
-        if (!doneRef.current) rafRef.current = requestAnimationFrame(tick)
-        return
-      }
+      if (doneRef.current || scheduler.isPaused) return
       const t = scheduler.now()
       if (holdingRef.current) {
         if (!lastTsRef.current) lastTsRef.current = t
@@ -55,22 +62,55 @@ export function HoldChargeRing({ mode, onCharged, timeoutMs = 5000, paused = fal
       if (!doneRef.current) rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
-    const to = scheduler.schedule(() => finish(holdCharge(accMsRef.current, mode)), timeoutMs)
-    return () => { cancelAnimationFrame(rafRef.current); scheduler.cancel(to) }
-  }, [mode, scheduler, timeoutMs])
+    return () => cancelAnimationFrame(rafRef.current)
+    // finish only reads refs; pausing must not reset accumulated charge.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, paused, scheduler])
 
-  const down = () => { if (!scheduler.isPaused) holdingRef.current = true }
+  useEffect(() => {
+    surfaceRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    if (!paused) return
+    keyHeldRef.current = false
+    holdingRef.current = false
+    lastTsRef.current = 0
+  }, [paused])
+
+  const down = () => {
+    if (!doneRef.current && !scheduler.isPaused) holdingRef.current = true
+  }
   const up = () => { holdingRef.current = false; lastTsRef.current = 0 }
 
   return (
     <div
+      ref={surfaceRef}
       className="gesture-surface gesture-surface--star"
       onPointerDown={down}
       onPointerUp={up}
       onPointerLeave={up}
       onPointerCancel={up}
+      onKeyDown={(event) => {
+        if (event.repeat || keyHeldRef.current || (event.key !== 'Enter' && event.key !== ' ')) return
+        event.preventDefault()
+        keyHeldRef.current = true
+        down()
+      }}
+      onKeyUp={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        keyHeldRef.current = false
+        up()
+      }}
+      onBlur={() => {
+        keyHeldRef.current = false
+        up()
+      }}
       role="button"
       tabIndex={0}
+      aria-label="星擊蓄力，按住 Enter 或空白鍵蓄力，放開暫停"
+      data-battle-input
     >
       <div className="star-charge">
         <div ref={ringRef} className="star-charge__ring" />
@@ -110,12 +150,13 @@ export function RhythmTap({ mode, onDone, paused = false }: {
     doneRef.current = false
     tapsRef.current = []
     t0Ref.current = 0
+  }, [mode, scheduler])
+
+  useEffect(() => {
+    if (paused || doneRef.current) return
     const leadIn = 700
     const tick = () => {
-      if (scheduler.isPaused) {
-        if (!doneRef.current) rafRef.current = requestAnimationFrame(tick)
-        return
-      }
+      if (doneRef.current || scheduler.isPaused) return
       const t = scheduler.now()
       if (!t0Ref.current) {
         t0Ref.current = t
@@ -133,11 +174,17 @@ export function RhythmTap({ mode, onDone, paused = false }: {
     }
     rafRef.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafRef.current)
-  }, [mode, scheduler])
+    // finish only reads refs; pausing must preserve taps and beat time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, paused, scheduler])
 
   useEffect(() => {
     surfaceRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (paused) keyHeldRef.current = false
+  }, [paused])
 
   const tap = () => {
     if (doneRef.current || scheduler.isPaused) return

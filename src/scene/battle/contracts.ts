@@ -40,6 +40,8 @@ export interface BattleSceneHandle {
 export interface NextBattleSceneProps {
   snapshot: BattleSceneSnapshot
   tier: NextGraphicsTier
+  paused: boolean
+  reducedMotion: boolean
   onReady(): void
   onFatal(reason: RendererFallbackReason): void
   onRenderedFrame?: (at: number) => void

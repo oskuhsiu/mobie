@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { AnimatePresence, motion, useAnimationControls } from 'framer-motion'
+import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { useBattleStore, type BattleFeedInput, type Side, type HitFx } from '@/store/battleStore'
 import { useSettings } from '@/store/settingsStore'
@@ -79,6 +79,7 @@ import type {
 import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 import { BattleErrorPanel } from '@/ui/battle/BattleErrorPanel'
 import { BattleFeed } from '@/ui/battle/BattleFeed'
+import { classifyBattleWindow } from '@/ui/battle/BattleLayout'
 import { damageEffectSourceLabels } from '@/ui/battle/BattleHudAdapter'
 import { BattleRenderGate } from '@/ui/battle/BattleRenderGate'
 import { FieldStatusBar, SideStatusRail } from '@/ui/battle/BattleStatus'
@@ -388,11 +389,12 @@ function HpPlate({ mon, owner, label, interactive, disabledReason, onOpen }: {
 
 /** 連打蓄力：限時內瘋狂點擊累積色階加成（計數走 ref，不過 React state）。
  *  點擊範圍放大成戰鬥中心一整圈（橘色 blur 光暈），每次點擊噴漣漪 + 整圈 thump 強回饋。 */
-function MashMeter({ onDone, paused = false }: { onDone: (count: number) => void; paused?: boolean }) {
+export function MashMeter({ onDone, paused = false }: { onDone: (count: number) => void; paused?: boolean }) {
   const countRef = useRef(0)
   const barRef = useRef<HTMLDivElement>(null)
   const labelRef = useRef<HTMLDivElement>(null)
   const doneRef = useRef(false)
+  const keyHeldRef = useRef(false)
   const fieldRef = useRef<HTMLDivElement>(null)
   const ripRef = useRef<HTMLDivElement>(null)
   const ripIdxRef = useRef(0)
@@ -412,6 +414,10 @@ function MashMeter({ onDone, paused = false }: { onDone: (count: number) => void
   useEffect(() => {
     fieldRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (paused) keyHeldRef.current = false
+  }, [paused])
 
   const registerTap = (clientX?: number, clientY?: number) => {
     if (doneRef.current || paused) return
@@ -445,10 +451,17 @@ function MashMeter({ onDone, paused = false }: { onDone: (count: number) => void
       className="tap-field tap-field--charge"
       onPointerDown={tap}
       onKeyDown={(event) => {
-        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return
+        if (event.repeat || keyHeldRef.current || (event.key !== 'Enter' && event.key !== ' ')) return
         event.preventDefault()
+        keyHeldRef.current = true
         registerTap()
       }}
+      onKeyUp={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        keyHeldRef.current = false
+      }}
+      onBlur={() => { keyHeldRef.current = false }}
       role="button"
       tabIndex={0}
       aria-label="連打蓄力，重複點擊或按 Enter、空白鍵"
@@ -487,10 +500,11 @@ export interface MoveSlotsProps {
   playerSpeed: number
   foeSpeed: number
   showInitiative?: boolean
+  active?: boolean
   onPick: (slot: number) => void
 }
 
-export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showInitiative = true, onPick }: MoveSlotsProps) {
+export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showInitiative = true, active = true, onPick }: MoveSlotsProps) {
   // 用 ref 鎖「已選定」：避免點擊與鍵盤輸入競合、或重複觸發兩次出招。
   const pickedRef = useRef(false)
   const [summarySlot, setSummarySlot] = useState(0)
@@ -504,6 +518,7 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showIni
 
   // 四鍵 / 方向鍵映射（plan/17 §1.1）。只在本面板掛載期間監聽。
   useEffect(() => {
+    if (!active) return
     const onKey = (e: KeyboardEvent) => {
       const slot = SLOT_KEY_MAP[e.key]
       if (slot === undefined || slot >= moves.length) return
@@ -512,7 +527,7 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showIni
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [moves.length, pick])
+  }, [active, moves.length, pick])
 
   const summaryMove = moves[summarySlot] ?? moves[0]
   const summaryDecision = summaryMove ? moveDecisionPresentation(summaryMove, defenderTypes) : null
@@ -533,6 +548,12 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showIni
       <div className="move-grid" data-move-count={moves.length}>
         {moves.map((mv, i) => {
           const decision = moveDecisionPresentation(mv, defenderTypes)
+          const category = mv.category === 'physical' ? '物理' : mv.category === 'special' ? '特殊' : '變化'
+          const stats = mv.category === 'status'
+            ? mv.effect?.duration
+              ? `${mv.effect.label}，持續 ${mv.effect.duration} 回合，命中 ${mv.accuracy}%`
+              : `${mv.effect?.label ?? '輔助效果'}，命中 ${mv.accuracy}%`
+            : `威力 ${mv.power}，命中 ${mv.accuracy}%`
           return (
             <motion.button
               key={i}
@@ -541,7 +562,7 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showIni
               data-move-slot={i}
               style={{ ['--mv' as string]: typeColor(mv.type) }}
               whileTap={{ scale: 0.96 }}
-              aria-label={`${mv.nameZh}，${decision.label}`}
+              aria-label={`${mv.nameZh}，${TYPE_LABEL_ZH[mv.type]}屬性，${category}，${decision.label}，${stats}`}
               onPointerEnter={() => setSummarySlot(i)}
               onFocus={() => setSummarySlot(i)}
               onClick={() => { if (pick(i)) audio.play('select') }}
@@ -550,7 +571,7 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showIni
               <span className="move-slot__name">{mv.nameZh}</span>
               <span className="move-slot__meta">
                 <span className="type-badge" style={{ background: typeColor(mv.type) }}>{TYPE_LABEL_ZH[mv.type]}</span>
-                <span className="move-slot__cat">{mv.category === 'physical' ? '物理' : mv.category === 'special' ? '特殊' : '變化'}</span>
+                <span className="move-slot__cat">{category}</span>
               </span>
               <span className="move-slot__effectiveness">{decision.label}</span>
               {mv.category === 'status'
@@ -597,6 +618,16 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const devRendererOptions = import.meta.env.DEV ? baselineDriver()?.options : undefined
   const requestedGraphics = devRendererOptions?.graphics ?? graphicsPreference
   const rendererFailure = devRendererOptions?.rendererFailure ?? null
+  const prefersReducedMotion = useReducedMotion()
+  const reducedMotion = Boolean(
+    prefersReducedMotion
+    || (devRendererOptions?.motion !== undefined && devRendererOptions.motion !== 'full'),
+  )
+  const [windowClass, setWindowClass] = useState(() => (
+    typeof window === 'undefined'
+      ? 'wide-landscape' as const
+      : classifyBattleWindow(window.innerWidth, window.innerHeight)
+  ))
   const [battleDataReady, setBattleDataReady] = useState(false)
   const [rendererState, setRendererState] = useState<BattleRendererState | null>(null)
   const currentRendererAttemptId = runtimeSession
@@ -636,7 +667,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     ? 0
     : rendererState?.tier === 'high' ? 1 : rendererState?.tier === 'balanced' ? 0.3 : 0.2
   const juiceWeatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
-  const weatherDensity = graphicsWeatherDensity * juiceWeatherDensity
+  const weatherDensity = graphicsWeatherDensity * juiceWeatherDensity * (reducedMotion ? 0.1 : 1)
 
   const fxRef = useRef<FxHandle>(null)
   const damageRef = useRef<DamageNumbersHandle>(null)
@@ -645,6 +676,8 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   // EXT.1：juice 走 ref 供 presentation ports 讀最新值，不重建整條 director。
   const juiceRef = useRef(juice)
   juiceRef.current = juice
+  const reducedMotionRef = useRef(reducedMotion)
+  reducedMotionRef.current = reducedMotion
   // EXT.2 星擊電影化 display state（低頻：每場星擊一次，走一般 state 不違反效能紅線）。
   const [cutIn, setCutIn] = useState<CutInSpec | null>(null)
   const [letterbox, setLetterbox] = useState(false)
@@ -655,7 +688,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     cinematicRef.current = createCinematicCoordinator({
       setCutIn,
       setLetterbox,
-      setTimeScale: (scale) => stageRef.current?.setTimeScale(scale),
+      setTimeScale: (scale) => stageRef.current?.setTimeScale(reducedMotionRef.current ? 1 : scale),
       onCharge: (spec) => {
         const pal = typePalette[spec.type]
         fxRef.current?.converge({ nx: 0.5, ny: 0.5, color: pal.color, count: 40, shape: pal.shape })
@@ -668,7 +701,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         fxRef.current?.shockwave({ nx: 0.5, ny: 0.5, color: pal.color }) // 外層大環
         fxRef.current?.shockwave({ nx: 0.5, ny: 0.5, color: pal.accent, lw: 5 }) // 內層細環
         fxRef.current?.burst({ nx: 0.5, ny: 0.5, color: pal.color, count: 44, power: 2.2, kind: 'spark', shape: pal.shape })
-        rootShake.start({ x: [0, -24, 20, -16, 10, 0], scale: [1, 1.05, 1], transition: { duration: 0.55 } }) // 震動×1.5 + 相機急推
+        if (!reducedMotionRef.current) {
+          void rootShake.start({ x: [0, -24, 20, -16, 10, 0], scale: [1, 1.05, 1], transition: { duration: 0.55 } })
+        }
         playCurrentBattleSfx(() => audio.starImpactBoom())
         haptic('crit')
       },
@@ -680,9 +715,16 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const presentationDirectorRef = useRef<BattleDirector | null>(null)
   const resetPresentationRef = useRef<(token: PresentationToken) => void>(() => undefined)
   const battleRootRef = useRef<HTMLDivElement | null>(null)
+  const battleStageElementRef = useRef<HTMLElement | null>(null)
+  const commandDeckRef = useRef<HTMLElement | null>(null)
+  const commandHeaderRef = useRef<HTMLDivElement | null>(null)
   const battleFeedRef = useRef<HTMLDivElement | null>(null)
   const introSkipRef = useRef<HTMLButtonElement>(null)
   const switchInvokerRef = useRef<HTMLButtonElement | null>(null)
+  const choiceInvokerRestoreRef = useRef<{
+    invoker: HTMLButtonElement | null
+    replacementSelector?: string
+  } | null>(null)
   const cardInvokerRef = useRef<HTMLButtonElement | null>(null)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
@@ -702,6 +744,15 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const [showChoiceGuide, setShowChoiceGuide] = useState(false)
   const guideSeenRef = useRef(typeof localStorage !== 'undefined' && localStorage.getItem('mz.guide.choiceSeen') === '1')
   const lifecycleRef = useRef<BattleSessionLifecycle | null>(null)
+
+  useLayoutEffect(() => {
+    if (battleStageElementRef.current) {
+      battleStageElementRef.current.inert = cardView !== null || phase === 'switchSelect'
+    }
+    if (commandDeckRef.current) commandDeckRef.current.inert = cardView !== null
+    if (commandHeaderRef.current) commandHeaderRef.current.inert = phase === 'switchSelect'
+  }, [cardView, phase])
+
   if (!lifecycleRef.current) {
     const cancelPresentation = (token: PresentationToken, reason: CancelReason) => {
       const store = useBattleStore.getState()
@@ -865,18 +916,61 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [introPresentationId, requestIntroSkip])
 
-  useEffect(() => {
-    if (choiceFocusRequestId === 0 || !rendererReady || phase !== 'playerChoice') return
+  const focusFirstLegalAction = useCallback(() => {
     const root = battleRootRef.current
     const next = root?.querySelector<HTMLButtonElement>(`[data-move-slot="${pendingSlotRef.current}"]:not(:disabled)`)
       ?? root?.querySelector<HTMLButtonElement>('.move-slot:not(:disabled)')
       ?? root?.querySelector<HTMLButtonElement>('[data-battle-action]:not(:disabled)')
     next?.focus()
-  }, [choiceFocusRequestId, phase, rendererReady])
+  }, [])
+
+  useEffect(() => {
+    if (!rendererReady || phase !== 'playerChoice') return
+    const restore = choiceInvokerRestoreRef.current
+    choiceInvokerRestoreRef.current = null
+    const invoker = restore?.invoker
+    if (invoker?.isConnected && !invoker.disabled && invoker.tabIndex >= 0) {
+      invoker.focus()
+      return
+    }
+    if (restore?.replacementSelector) {
+      const replacement = battleRootRef.current
+        ?.querySelector<HTMLButtonElement>(restore.replacementSelector)
+      if (replacement) {
+        replacement.focus()
+        return
+      }
+    }
+    if (restore) {
+      focusFirstLegalAction()
+      return
+    }
+    if (choiceFocusRequestId === 0) return
+    focusFirstLegalAction()
+  }, [choiceFocusRequestId, focusFirstLegalAction, phase, rendererReady])
 
   useEffect(() => {
     if (phase === 'busy') battleFeedRef.current?.focus()
   }, [phase])
+
+  useEffect(() => {
+    const updateWindowClass = () => {
+      setWindowClass(classifyBattleWindow(window.innerWidth, window.innerHeight))
+    }
+    window.addEventListener('resize', updateWindowClass)
+    window.visualViewport?.addEventListener('resize', updateWindowClass)
+    return () => {
+      window.removeEventListener('resize', updateWindowClass)
+      window.visualViewport?.removeEventListener('resize', updateWindowClass)
+    }
+  }, [])
+
+  const restoreInvokerOrAction = useCallback((invoker: HTMLButtonElement | null) => {
+    queueMicrotask(() => {
+      if (invoker?.isConnected && !invoker.disabled && invoker.tabIndex >= 0) invoker.focus()
+      else if (useBattleStore.getState().phase === 'playerChoice') focusFirstLegalAction()
+    })
+  }, [focusFirstLegalAction])
 
   const cardDisabledReason = mobCardDisabledReason(phase)
   const openMobCard = useCallback((side: Side, index: number, invoker: HTMLButtonElement) => {
@@ -888,23 +982,24 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     setCardView(null)
     const invoker = cardInvokerRef.current
     cardInvokerRef.current = null
-    if (useBattleStore.getState().phase === 'playerChoice') queueMicrotask(() => invoker?.focus())
-  }, [])
+    if (useBattleStore.getState().phase === 'playerChoice') restoreInvokerOrAction(invoker)
+  }, [restoreInvokerOrAction])
 
   useEffect(() => {
     if (!cardView || cardDisabledReason === null) return
+    choiceInvokerRestoreRef.current = { invoker: cardInvokerRef.current }
     setCardView(null)
     cardInvokerRef.current = null
   }, [cardDisabledReason, cardView])
 
   const cancelSwitch = useCallback(() => {
+    const invoker = switchInvokerRef.current
+    choiceInvokerRestoreRef.current = {
+      invoker,
+      replacementSelector: '[data-battle-action="switch"]:not(:disabled)',
+    }
     useBattleStore.getState().setPhase('playerChoice')
     switchInvokerRef.current = null
-    queueMicrotask(() => {
-      battleRootRef.current
-        ?.querySelector<HTMLButtonElement>('[data-battle-action="switch"]')
-        ?.focus()
-    })
   }, [])
 
   const handleRendererStateChange = useCallback((
@@ -1183,7 +1278,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           damageRef.current?.spawn({ ...FX_POS[e.side], amount: e.amount ?? 0, crit: false, effectiveness: 1, missed: false })
         }
         fxRef.current?.burst({ ...FX_POS[e.side], color: '#ff9a3c', count: 14, kind: 'puff' })
-        void rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
+        if (!reducedMotionRef.current) {
+          void rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
+        }
         playAudio(() => audio.play('hit'))
         haptic('hit')
         setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
@@ -1259,7 +1356,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       fxRef.current?.flash('#ffe14a', 0.6)
       fxRef.current?.ring({ ...FX_POS.player, color: '#ffe14a' })
       fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 30, power: 1.8, kind: 'spark' })
-      void rootShake.start({ x: [0, -16, 14, -10, 0], transition: { duration: 0.42 } })
+      if (!reducedMotionRef.current) {
+        void rootShake.start({ x: [0, -16, 14, -10, 0], transition: { duration: 0.42 } })
+      }
       await delay(760)
       setBanner(null)
       await delay(140)
@@ -1302,13 +1401,15 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           fxRef.current?.ring({ ...pos, color: recipe.accent })
         }
         const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
-        void rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
+        if (!reducedMotionRef.current) {
+          void rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
+        }
         stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1)
       },
       hitStop: (cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
         const e = cue.event
-        if (e.missed || e.amount <= 0 || juiceRef.current !== 'full') return
+        if (e.missed || e.amount <= 0 || juiceRef.current !== 'full' || reducedMotionRef.current) return
         return cinematicRef.current!.pause(e.crit || e.effectiveness >= 2 ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
       },
       clear: () => undefined,
@@ -1438,7 +1539,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         haptic('crit')
         fxRef.current?.flash('#ffffff', 0.7)
         fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
-        void rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
+        if (!reducedMotionRef.current) {
+          void rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
+        }
         await cueContext.clock.wait(620, cueContext.signal)
         fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
       },
@@ -1828,9 +1931,16 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       ref={battleRootRef}
       className={`battle-shell${juice !== 'off' ? ' battle-enter' : ''}`}
       data-battle-shell
+      data-window-class={windowClass}
+      data-reduced-motion={reducedMotion ? 'true' : 'false'}
       animate={rootShake}
     >
-      <section className="battle-stage" data-battle-stage aria-label="戰鬥場景">
+      <section
+        ref={battleStageElementRef}
+        className="battle-stage"
+        data-battle-stage
+        aria-label="戰鬥場景"
+      >
       {/* Three-free host owns lazy next boot and one-way compatibility fallback. */}
       <BattleSceneHost
         key={currentRendererAttemptId!}
@@ -1844,6 +1954,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         sessionToken={runtimeSession.token}
         preference={requestedGraphics}
         paused={documentHidden}
+        reducedMotion={reducedMotion}
         latchedFallback={runtimeSession.rendererFallbackReason}
         onStateChange={handleRendererStateChange}
         onFallback={handleRendererFallback}
@@ -1864,10 +1975,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           sparkAccent={terrainPalette.sparkAccent}
           overlay={terrainPalette.overlay}
           density={weatherDensity}
+          paused={documentHidden}
           onPoolDiagnostics={import.meta.env.DEV ? (pool) => baselineDriver()?.recordPools({ weather: pool }) : undefined}
         />
       )}
-      <FxCanvas ref={fxRef} />
+      <FxCanvas ref={fxRef} reducedMotion={reducedMotion} paused={documentHidden} />
       {/* EXT.1.b：juice≠off 用富表現飄字層（圖示優先）；off 回退既有 FloatDamage＝M22 基線、DOM 零新增 wrapper。 */}
       {juice === 'off' ? <FloatDamage hitFx={hitFx} /> : <DamageNumbers ref={damageRef} />}
 
@@ -1880,6 +1992,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         initiative={initiativePresentation(player.spe, foe.spe)}
         turn={battle.turn}
         fieldMarks={battle.field.comboCastEffects}
+        windowClass={windowClass}
       />
       {intentPresentation?.intent.kind === 'intro' && (
         <button
@@ -2000,8 +2113,15 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       </section>
 
       {/* 底部控制區 */}
-      <section className="battle-command-deck" aria-label="戰鬥指令">
-        <div className="battle-command-deck__header">
+      <section
+        ref={commandDeckRef}
+        className="battle-command-deck"
+        aria-label="戰鬥指令"
+      >
+        <div
+          ref={commandHeaderRef}
+          className="battle-command-deck__header"
+        >
         <div className="battle-resource-strip" aria-label="戰鬥資源">
         <ResourceAction
           kind="star"
@@ -2057,6 +2177,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
               playerSpeed={player.spe}
               foeSpeed={foe.spe}
               showInitiative={false}
+              active={cardView === null}
               onPick={(slot) => {
                 pendingSlotRef.current = slot
                 if (!guideSeenRef.current) {

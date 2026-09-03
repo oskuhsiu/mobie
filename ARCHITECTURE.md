@@ -330,3 +330,5 @@ tooling remains isolated from those runtime chunks pending its separately owned 
   Ticket 09's deterministic Chrome matrix also covers truthful resource states, learned/absent Partner
   actions, legal/disabled switch states, side/field overflow, fixed-effect source cues, MobCard phase
   gating, forced switch, and win/lose/timeout command semantics.
+  Ticket 10 adds exact five-viewport classification, minimum-target and head-safe metrics, keyboard/focus
+  journeys, hidden/resume clock invariants, a 200%-zoom-equivalent layout run, and reduced-motion diagnostics.
