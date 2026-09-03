@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { mon } from '@/game/battle/testFixtures'
 import { createBattleState } from '@/game/battle/reducer'
-import { HELD_ITEMS_MODULE, getItem, ITEMS } from '@/game/ext/items'
+import { HELD_ITEMS_MODULE, getItem, ITEMS, resolveItemDamageEffect } from '@/game/ext/items'
 
 const build = HELD_ITEMS_MODULE.seams.buildUnit!
 const damage = HELD_ITEMS_MODULE.seams.damageHook!
@@ -52,6 +52,17 @@ describe('M7 道具 S3 damageHook', () => {
   it('無道具 / statMod 道具：傷害倍率 ×1（不誤觸）', () => {
     expect(damage(ctx({}))).toBe(1)
     expect(damage(ctx({ heldItemId: 'headband' }))).toBe(1)
+  })
+
+  it('shares the active source projection with the HUD without duplicating effect rules', () => {
+    expect(resolveItemDamageEffect(ctx({ heldItemId: 'lifeorb' }))).toMatchObject({
+      multiplier: 1.3,
+      source: { id: 'lifeorb', name: '生命寶珠' },
+    })
+    expect(resolveItemDamageEffect(ctx({ heldItemId: 'expertbelt' }, 1))).toEqual({
+      multiplier: 1,
+      source: null,
+    })
   })
 })
 

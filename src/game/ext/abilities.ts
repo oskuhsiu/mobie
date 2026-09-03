@@ -8,7 +8,7 @@
 // onSwitchIn（如威嚇，需在換人解析步驟內結算）需動 reducer，本里程碑刻意延後。
 
 import type { BattleMobie, TypeName } from '@/game/types'
-import type { BuildUnitHook, DamageHook, ExtensionModule } from '@/game/ext/seams'
+import type { BuildUnitHook, DamageHook, DamageHookContext, ExtensionModule } from '@/game/ext/seams'
 import { applyStatMod, createLookup } from '@/game/ext/statPatch'
 
 export type AbilityKind = 'statMod' | 'pinch' | 'guard'
@@ -65,19 +65,32 @@ const abilityBuildUnit: BuildUnitHook = (unit: BattleMobie) => {
   return def?.kind === 'statMod' ? applyStatMod(withId, def.params) : withId
 }
 
-/** S3：攻擊方絕境爆發（pinch）×、防守方厚實（guard）× —— 同一 hook 讀 ctx 雙方自行分流。 */
-const abilityDamage: DamageHook = (ctx) => {
+export interface AbilityDamageEffect {
+  multiplier: number
+  attackerSource: AbilityDef | null
+  defenderSource: AbilityDef | null
+}
+
+/** S3 與 HUD 共用的真實生效判定，避免顯示層重寫特性條件。 */
+export function resolveAbilityDamageEffect(ctx: DamageHookContext): AbilityDamageEffect {
   let mult = 1
+  let attackerSource: AbilityDef | null = null
+  let defenderSource: AbilityDef | null = null
   const atk = getAbility(ctx.attacker.abilityId)
   if (atk?.kind === 'pinch' && ctx.attacker.currentHp <= ctx.attacker.maxHp * (atk.params.threshold ?? 0)) {
     mult *= atk.params.mult ?? 1
+    attackerSource = atk
   }
   const def = getAbility(ctx.defender.abilityId)
   if (def?.kind === 'guard' && ctx.effectiveness >= 2) {
     mult *= def.params.mult ?? 1
+    defenderSource = def
   }
-  return mult
+  return { multiplier: mult, attackerSource, defenderSource }
 }
+
+/** S3：攻擊方絕境爆發（pinch）×、防守方厚實（guard）× —— 同一 hook 讀 ctx 雙方自行分流。 */
+const abilityDamage: DamageHook = (ctx) => resolveAbilityDamageEffect(ctx).multiplier
 
 /**
  * 特性 extension：S1（寫 abilityId + statMod）/ S3（pinch + guard）。

@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import type { TypeName } from '@/game/types'
 import { mon } from '@/game/battle/testFixtures'
-import { ABILITIES_MODULE, ABILITIES, getAbility, abilityForType } from '@/game/ext/abilities'
+import { ABILITIES_MODULE, ABILITIES, getAbility, abilityForType, resolveAbilityDamageEffect } from '@/game/ext/abilities'
 
 const build = ABILITIES_MODULE.seams.buildUnit!
 const damage = ABILITIES_MODULE.seams.damageHook!
@@ -67,5 +67,18 @@ describe('M7 特性 S3 damageHook', () => {
   })
   it('無特性：傷害倍率 ×1', () => {
     expect(damage(ctx(mon(), mon(), 2))).toBe(1)
+  })
+
+  it('shares active attack and guard sources with the HUD', () => {
+    const result = resolveAbilityDamageEffect(ctx(
+      mon({ abilityId: 'pinch_boost', maxHp: 90, currentHp: 30 }),
+      mon({ abilityId: 'guard' }),
+      2,
+    ))
+    expect(result.multiplier).toBeCloseTo(1.2)
+    expect(result).toMatchObject({
+      attackerSource: { id: 'pinch_boost', name: '絕境爆發' },
+      defenderSource: { id: 'guard', name: '厚實' },
+    })
   })
 })

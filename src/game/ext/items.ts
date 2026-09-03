@@ -13,6 +13,7 @@
 import type { BattleMobie } from '@/game/types'
 import type {
   BuildUnitHook,
+  DamageHookContext,
   DamageHook,
   ExtensionModule,
   TurnEndTrigger,
@@ -59,13 +60,21 @@ const itemBuildUnit: BuildUnitHook = (unit: BattleMobie) => {
   return applyStatMod(unit, def.params)
 }
 
-/** S3：傷害結算中段，依攻擊方道具回乘上的純倍率（命玉 ×1.3、達人帶對剋制 ×1.2）。 */
-const itemDamage: DamageHook = (ctx) => {
-  const def = getItem(ctx.attacker.heldItemId)
-  if (!def || def.kind !== 'damageHook') return 1
-  if (def.params.superOnly && ctx.effectiveness < 2) return 1
-  return def.params.mult ?? 1
+export interface ItemDamageEffect {
+  multiplier: number
+  source: ItemDef | null
 }
+
+/** S3 與 HUD 共用的真實生效判定，避免顯示層重寫道具條件。 */
+export function resolveItemDamageEffect(ctx: DamageHookContext): ItemDamageEffect {
+  const def = getItem(ctx.attacker.heldItemId)
+  if (!def || def.kind !== 'damageHook') return { multiplier: 1, source: null }
+  if (def.params.superOnly && ctx.effectiveness < 2) return { multiplier: 1, source: null }
+  return { multiplier: def.params.mult ?? 1, source: def }
+}
+
+/** S3：傷害結算中段，依攻擊方道具回乘上的純倍率（命玉 ×1.3、達人帶對剋制 ×1.2）。 */
+const itemDamage: DamageHook = (ctx) => resolveItemDamageEffect(ctx).multiplier
 
 /** S4：回合末同步段——雙方 active 若持剩飯型道具且未滿血，回血並回報 heal event。 */
 const itemTurnEnd: TurnEndTrigger = ({ state }) => {

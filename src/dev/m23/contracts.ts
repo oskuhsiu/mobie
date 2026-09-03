@@ -38,6 +38,7 @@ export type M23Checkpoint = (typeof M23_REQUIRED_CHECKPOINTS)[number]
 export const M23_TURN_TRANSACTION_CASES = [
   'normal-hit-chain-ready',
   'status-buff',
+  'heal',
   'switch-forced-switch',
   'chain-combo',
   'crit-super-star',
@@ -46,6 +47,17 @@ export const M23_TURN_TRANSACTION_CASES = [
   'timeout',
 ] as const
 export type M23TurnTransactionCase = (typeof M23_TURN_TRANSACTION_CASES)[number]
+
+export const M23_HUD_CASES = [
+  'choice-complete',
+  'choice-absent',
+  'resources-charging',
+  'combo-non-applicable',
+  'switch-one-legal',
+  'switch-disabled',
+  'damage-sources',
+] as const
+export type M23HudCase = (typeof M23_HUD_CASES)[number]
 
 export const M23_FAILURE_STAGES = ['battle-data', 'resolve', 'recorder', 'retry-init'] as const
 export type M23FailureStage = (typeof M23_FAILURE_STAGES)[number]

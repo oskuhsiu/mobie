@@ -354,9 +354,9 @@ body {
 }
 
 /* ============ EXT.1.e：置中 overlay 改 full-bleed flex 層（消除 framer 漂移）============
-   原本 star-orb / battle-banner / support-overlay / combo-overlay 各自用 transform:translate(-50%)
+   原本 battle-banner / support-overlay / combo-overlay 各自用 transform:translate(-50%)
    置中，但 framer-motion 入場動畫會寫 inline transform（scale/y）整個蓋掉那個 translate → 漂移右下。
-   改法（比照已修好的 .battle-action-layer，見 ARCHITECTURE §10）：置中與縱向位置全交給本層 flex+padding，
+   改法：置中與縱向位置全交給本層 flex+padding，
    內層元件不再自帶 position/left/top/transform → framer 可自由 animate scale/y/opacity 不再打架。 */
 .overlay-center {
   position: absolute; inset: 0; pointer-events: none;
@@ -365,7 +365,6 @@ body {
 .overlay-center--banner { z-index: 12; padding-top: 30vh; }
 .overlay-center--support { z-index: 13; padding-top: 38vh; }
 .overlay-center--combo { z-index: 9; padding-top: 30vh; }
-.overlay-center--orb { z-index: 14; padding-top: calc(30vh - 58px); }
 .overlay-center--cutin { z-index: 30; justify-content: center; } /* EXT.2：cut-in 卡片上下置中 */
 
 /* ============ EXT.2 星擊電影化：letterbox + 全螢幕 cut-in ============
@@ -466,31 +465,6 @@ body {
 .mash__fill { height: 100%; width: 0; border-radius: 999px; transition: width 0.05s linear; }
 .mash__tier { font-size: 15px; font-weight: 900; letter-spacing: 0.06em; min-height: 1.2em; }
 
-/* 計時類輸入置中：把 QTE / 連打抬到戰鬥區中央（原本在最底不好看不好點）。
-   用撐滿的 flex 置中「層」定位，而非 transform——否則 framer-motion 的 scale/opacity
-   入場 transform 會蓋掉 translate(-50%,-50%) 置中位移，導致面板右偏溢出。 */
-.battle-action-layer {
-  position: absolute; inset: 0; z-index: 18;
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none; /* 空白處不擋 3D/HUD，互動只在面板上 */
-}
-.battle-action {
-  pointer-events: auto;
-  width: min(94%, 600px);
-  display: flex; flex-direction: column; align-items: center;
-  padding: 14px 16px 18px;
-  border-radius: 22px;
-  background: rgba(8,10,22,0.74);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--stroke);
-  box-shadow: 0 14px 44px rgba(0,0,0,0.55);
-}
-/* 大圓點擊面板（力量/集氣）自帶 blur 光暈圈，不需外層方卡再框一層 */
-.battle-action:has(.tap-field) {
-  width: auto; padding: 0;
-  background: none; border: none; box-shadow: none; backdrop-filter: none;
-}
-
 /* ============ 大圓點擊範圍（力量 timing / 集氣 mash）============
    把可點區放大成戰鬥中心一整圈，半透明 blur 光暈讓玩家一眼看到「這圈都能點」。
    力量＝白、集氣＝橘；高頻互動（漣漪/thump）全走 DOM class 重觸發，不過 React state。 */
@@ -569,50 +543,6 @@ body {
 .support-overlay__result { font-size: clamp(22px, 5vw, 34px); font-weight: 900; margin-top: 4px; }
 .support-overlay__result.is-dud { color: var(--text-dim); }
 
-/* ============ 星擊能量槽 ============ */
-.star-gauge {
-  width: 100%; max-width: 560px;
-  display: flex; align-items: center; gap: 8px;
-}
-.star-gauge__icon { font-size: 14px; color: var(--text-dim); transition: color 0.2s; }
-.star-gauge__track {
-  flex: 1; height: 6px; border-radius: 999px;
-  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.12); overflow: hidden;
-}
-.star-gauge__fill {
-  height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, #5060e1, #9141cb, #ff7ae0);
-  transition: width 0.4s ease;
-}
-.star-gauge__pct { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; }
-.star-gauge--full .star-gauge__icon { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
-.star-gauge--full .star-gauge__track { border-color: var(--accent); box-shadow: 0 0 12px rgba(255,210,63,0.5); }
-.btn--star {
-  background: linear-gradient(180deg, #ff9af0, #9141cb); color: #fff;
-  box-shadow: 0 0 20px rgba(255,122,224,0.6);
-}
-/* ★ 星擊球：能量滿時於戰鬥區中央的大特效施放點（不在技能列） */
-.star-orb {
-  position: relative; pointer-events: auto; cursor: pointer;
-  width: 116px; height: 116px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: radial-gradient(circle at 50% 38%, rgba(255,175,240,0.95), rgba(145,65,203,0.88) 62%, rgba(145,65,203,0.25));
-  box-shadow: 0 0 30px 8px rgba(255,122,224,0.7), 0 0 64px 18px rgba(145,65,203,0.5);
-  border: 2px solid rgba(255,214,255,0.9);
-}
-.star-orb__ring {
-  position: absolute; inset: -11px; border-radius: 50%;
-  border: 2px dashed rgba(255,214,255,0.7);
-  animation: star-orb-spin 4s linear infinite;
-}
-@keyframes star-orb-spin { to { transform: rotate(360deg); } }
-.star-orb__star { font-size: 52px; color: #fff; line-height: 1; text-shadow: 0 0 16px #ff7ae0, 0 2px 4px rgba(0,0,0,0.4); }
-.star-orb__label {
-  position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%);
-  font-size: 14px; font-weight: 900; letter-spacing: 0.1em; color: #ffd0ff; white-space: nowrap;
-  text-shadow: 0 0 10px rgba(255,122,224,0.9);
-}
-
 /* ============ M22 增強互動性手勢 overlay（捕獲甩球 / 畫圈封印） ============ */
 .gesture-surface {
   position: absolute; inset: 0; z-index: 16;
@@ -668,14 +598,7 @@ body {
 .star-charge__star { font-size: 54px; color: #fff; line-height: 1; text-shadow: 0 0 16px #ff7ae0, 0 2px 4px rgba(0,0,0,0.4); }
 .gesture-hint--star { top: 46%; bottom: auto; color: #ffd0ff; text-shadow: 0 0 10px rgba(255,122,224,0.9); }
 
-/* ============ M9 連鎖槽 / 連鎖鈕 / 連段 overlay ============ */
-.chain-gauge__fill { background: linear-gradient(90deg, #2bb6e0, #4dd0c0, #7ae0ff); }
-.chain-gauge--full .star-gauge__icon { color: #7ae0ff; filter: drop-shadow(0 0 6px #7ae0ff); }
-.chain-gauge--full .star-gauge__track { border-color: #7ae0ff; box-shadow: 0 0 12px rgba(122,224,255,0.5); }
-.btn--chain {
-  background: linear-gradient(180deg, #7ae0ff, #2b8fd0); color: #04222e;
-  box-shadow: 0 0 20px rgba(122,224,255,0.6); font-weight: 900;
-}
+/* ============ M9 連鎖連段 overlay ============ */
 .combo-overlay {
   pointer-events: none; text-align: center;
   display: flex; flex-direction: column; align-items: center; line-height: 1;

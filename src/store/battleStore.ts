@@ -28,7 +28,13 @@ export type BattlePhase =
   | 'statusQte' // M19.d 變化招：輕量強度 QTE（只影響效果強度、不影響成敗；無 mash）
   | 'switchSelect' | 'defenseQte'
   | 'chainQte' // M9 連鎖：對 eligible 隊友依序跑連續 QTE
+  | 'starQte'
   | 'busy' | 'error' | 'won' | 'lost'
+
+export interface BattleCommandNotice {
+  kind: 'forced-switch' | 'outcome' | 'timeout'
+  text: string
+}
 
 export interface BattleRuntimeError {
   kind: 'resolve' | 'init'
@@ -59,6 +65,8 @@ export interface BattlePresentationProjection {
   chain: number
   lockedIndex: number | null
   fxCounter: number
+  activeResource: 'star' | 'chain' | null
+  commandNotice: BattleCommandNotice | null
 }
 
 export interface BattleIntentPresentation {
@@ -324,6 +332,7 @@ interface BattleUiState {
   presentationShowHit: (token: TurnPresentationToken, fx: Omit<HitFx, 'id'>) => void
   presentationSetSupport: (token: TurnPresentationToken, support: SupportOutcome | null) => void
   presentationSetCombo: (token: TurnPresentationToken, combo: number | null) => void
+  presentationSetCommandNotice: (token: TurnPresentationToken, notice: BattleCommandNotice | null) => void
   presentationClearTransient: (token: TurnPresentationToken) => void
   isPresentationCurrent: (token: TurnPresentationToken) => boolean
   commitTurn: (token: TurnPresentationToken, resolution: TurnResolution) => CommitTurnResult
@@ -683,11 +692,14 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       if (s.intentPresentation) return {}
       if (s.presentation && !samePresentationToken(s.presentation.token, token)) return {}
       const star = input.type === 'ATTACK' && input.starStrike === true
+      const chainInput = input.type === 'CHAIN'
+      const projectedBattle = cloneBattle(before)
+      if (chainInput) projectedBattle.chainGauge = 0
       return {
         phase: 'busy',
         presentation: {
           token,
-          battle: cloneBattle(before),
+          battle: projectedBattle,
           log: [...s.log],
           banner: s.banner,
           hitFx: s.hitFx ? { ...s.hitFx } : null,
@@ -697,6 +709,8 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
           chain: star ? 0 : s.chain,
           lockedIndex: s.lockedIndex,
           fxCounter: s.fxCounter,
+          activeResource: star ? 'star' : chainInput ? 'chain' : null,
+          commandNotice: null,
         },
       }
     }),
@@ -759,6 +773,10 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
   presentationSetCombo: (token, combo) =>
     set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
       ? { presentation: { ...s.presentation, combo } }
+      : {}),
+  presentationSetCommandNotice: (token, commandNotice) =>
+    set((s) => s.presentation && samePresentationToken(s.presentation.token, token)
+      ? { presentation: { ...s.presentation, commandNotice } }
       : {}),
   presentationClearTransient: (token) =>
     set((s) => s.presentation && samePresentationToken(s.presentation.token, token)

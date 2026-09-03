@@ -6,6 +6,7 @@ import { MoveSlots, SwitchAction } from '@/ui/screens/BattleScreen'
 import type { Move } from '@/game/types'
 import { renderGameJourney } from '@/test/renderGameJourney'
 import { useBattleStore } from '@/store/battleStore'
+import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 
 vi.mock('@/audio/audioEngine', () => ({
   audio: {
@@ -145,6 +146,74 @@ describe('battle decision journey', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /火花/ }))
   })
 
+  it('projects the complete choice HUD and blocks MobCard when an input surface owns the command body', async () => {
+    vi.useFakeTimers()
+    renderGameJourney({
+      state: 'battle',
+      context: {
+        regionId: 'practice',
+        playerTeam: [
+          { cardId: 'matrix-player-1', speciesId: 4, level: 16 },
+          { cardId: 'matrix-player-2', speciesId: 7, level: 16 },
+          { cardId: 'matrix-player-3', speciesId: 1, level: 16 },
+        ],
+        foeTeam: [
+          { cardId: 'matrix-foe-1', speciesId: 1, level: 12 },
+          { cardId: 'matrix-foe-2', speciesId: 7, level: 12 },
+          { cardId: 'matrix-foe-3', speciesId: 10, level: 12 },
+        ],
+      },
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '跳過開場' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    act(() => useBattleStore.setState((state) => state.battle ? {
+      energy: 100,
+      battle: {
+        ...state.battle,
+        chainGauge: PRODUCT_RUNTIME.turnExtensions.chain.gaugeFull,
+        field: {
+          ...state.battle.field,
+          teamStatuses: [
+            { stat: 'atk', mult: 1.2, remaining: 3, source: -1, label: '訓練師加油' },
+            { stat: 'def', mult: 1.2, remaining: 3, source: 1010, label: '防禦提升' },
+            { stat: 'spa', mult: 1.2, remaining: 2, source: -1, label: '精神集中' },
+            { stat: 'spd', mult: 1.2, remaining: 1, source: -1, label: '靈光守護' },
+          ],
+          enemyStatuses: [{ stat: 'def', mult: 0.8, remaining: 2, source: -1, label: '防禦下降' }],
+          comboCastEffects: [
+            { key: 'one', label: '第一標記', icon: '①', remaining: 4 },
+            { key: 'two', label: '第二標記', icon: '②', remaining: 3 },
+            { key: 'three', label: '第三標記', icon: '③', remaining: 2 },
+          ],
+        },
+      },
+    } : {}))
+
+    expect(screen.getByRole('button', { name: '星擊發動' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '連鎖發動' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /看穿/ })).toBeTruthy()
+    expect(screen.getByLabelText('我方全隊狀態')).toBeTruthy()
+    expect(screen.getByLabelText('對手全隊狀態')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '展開全部 3 個場域標記' })).toBeTruthy()
+
+    const playerPlate = document.querySelector<HTMLButtonElement>('.hp-plate--owner')!
+    fireEvent.click(playerPlate)
+    expect(screen.getByRole('dialog', { name: /小火龍.*完整資訊/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '關閉' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /火花/ }))
+    const qte = screen.getByRole('button', { name: /10秒內點擊任意處/ })
+    const disabledPlate = document.querySelector<HTMLButtonElement>('.hp-plate--owner')!
+    expect(disabledPlate.getAttribute('aria-label')).toContain('無法開啟資訊卡：戰鬥輸入進行中')
+    expect(disabledPlate.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(disabledPlate)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(qte.closest('.battle-command-body')).toBeTruthy()
+  })
+
   it('waits beyond the former eight-second boundary for an explicit move choice', () => {
     vi.useFakeTimers()
     const onPick = vi.fn()
@@ -248,7 +317,14 @@ describe('battle decision journey', () => {
   })
 
   it('keeps the switch cost visible before the player chooses it', () => {
-    render(<SwitchAction switchable onPick={vi.fn()} />)
+    render(<SwitchAction
+      availability={{
+        consequence: '放棄本回合攻擊並承受對手攻擊',
+        legalIndices: [1],
+        disabledReason: null,
+      }}
+      onOpen={vi.fn()}
+    />)
 
     expect(screen.getByRole('button', { name: '換人' })).toBeTruthy()
     expect(screen.getByText('放棄本回合攻擊並承受對手攻擊')).toBeTruthy()

@@ -82,10 +82,34 @@ describe('battleStore runtime session', () => {
     const token = useBattleStore.getState().acquireTurnPresentationToken()!
     useBattleStore.getState().beginPresentation(token, before, { type: 'ATTACK', starStrike: true })
 
-    expect(useBattleStore.getState().presentation).toMatchObject({ energy: 0, chain: 0 })
+    expect(useBattleStore.getState().presentation).toMatchObject({
+      energy: 0,
+      chain: 0,
+      activeResource: 'star',
+    })
     expect(useBattleStore.getState()).toMatchObject({ energy: 100, chain: 4 })
     useBattleStore.getState().cancelPresentation(token)
     expect(useBattleStore.getState()).toMatchObject({ energy: 100, chain: 4, phase: 'playerChoice' })
+  })
+
+  it('projects chain consumption only inside the active transaction and restores it on cancel', () => {
+    init({}, identityA)
+    useBattleStore.setState((state) => state.battle ? {
+      battle: { ...state.battle, chainGauge: 100 },
+    } : {})
+    const before = useBattleStore.getState().battle!
+    const token = useBattleStore.getState().acquireTurnPresentationToken()!
+    useBattleStore.getState().beginPresentation(token, before, {
+      type: 'CHAIN', hits: [{ attackerIndex: 0, quality: 'good' }],
+    })
+
+    expect(useBattleStore.getState().presentation).toMatchObject({
+      activeResource: 'chain',
+      battle: { chainGauge: 0 },
+    })
+    expect(useBattleStore.getState().battle?.chainGauge).toBe(100)
+    useBattleStore.getState().cancelPresentation(token)
+    expect(useBattleStore.getState().battle?.chainGauge).toBe(100)
   })
 
   it('records each token once and emits one token-fenced warning after recorder failure', () => {

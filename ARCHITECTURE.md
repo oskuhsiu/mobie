@@ -148,10 +148,11 @@ Two halves, deliberately separated:
    one precomputed terrain/synergy feed safe point, while Partner usage and reveal/team-status mutation
    commit atomically in the runtime store before its result intent begins. The reducer stays pure.
    `BattleScreen` composes one renderer-independent DOM shell: a clipped stage containing the host/FX/HUD
-   and a sibling command deck. Player choice, normal timing QTE, mash, busy, and next choice replace the
-   same command body; the scene never owns focus. Remaining defense/chain/status legacy inputs still use
-   the centered `.battle-action` overlay until their complete Ticket 09 migration. Centering there uses a
-   full-bleed flex layer, **not** CSS translate, because framer-motion owns the animated transform.
+   and a sibling command deck. Player choice, timing/mash/status/defense/chain/Star input, switch select,
+   busy, and outcome states replace the same command body; the scene never owns focus. Pure
+   `BattleActionModel` projections provide phase reasons and switch/resource legality, while semantic
+   `ResourceAction`, `SwitchSheet`, `SideStatusRail`, and `FieldStatusBar` components keep actions and
+   side/field ownership identical across Next and Compatibility renderers.
 
 Battle lifecycle is split by authority. `battleStore` fences canonical session state with the full Web
 Crypto identity pair, owns recoverable resolver/init errors, retires a session before Retry/Leave, and
@@ -309,9 +310,8 @@ tooling remains isolated from those runtime chunks pending its separately owned 
   IP from iPad Safari, or build static files and install as a PWA.
 - **framer-motion clobbers CSS `transform`:** a `motion.*` element that animates `scale`/`y` writes its
   own inline `transform`, overriding any CSS `transform: translate(-50%, …)` used for centering — the
-  element drifts off-center. Center such overlays with a flex layer instead (see `.battle-action-layer`).
-  Four older battle overlays (`star-orb`, `battle-banner`, `support-overlay`, `combo-overlay`) still use
-  translate-based centering under scale animation and may drift slightly — a known follow-up.
+  element drifts off-center. Center cinematic overlays with a separate full-bleed flex layer instead;
+  `battle-banner`, `support-overlay`, `combo-overlay`, and the Star cut-in already follow this pattern.
 
 ## 11. Testing & verification
 
@@ -327,3 +327,6 @@ tooling remains isolated from those runtime chunks pending its separately owned 
 - Responsive visual verification runs in a real local browser at iPad and narrow-phone viewports;
   semantic assertions stay in Vitest so navigation and decision regressions do not depend on pixels.
   Headless battle screens need software WebGL flags when the environment does not provide a GL context.
+  Ticket 09's deterministic Chrome matrix also covers truthful resource states, learned/absent Partner
+  actions, legal/disabled switch states, side/field overflow, fixed-effect source cues, MobCard phase
+  gating, forced switch, and win/lose/timeout command semantics.

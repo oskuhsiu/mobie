@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { displaySourceName } from './BattleHudAdapter'
+import { mon } from '@/game/battle/testFixtures'
+import { damageEffectSourceLabels, displaySourceName } from './BattleHudAdapter'
 
 describe('BattleHudAdapter source display names', () => {
   it.each([
@@ -12,5 +13,13 @@ describe('BattleHudAdapter source display names', () => {
     [{ kind: 'combo', key: '', label: '' } as const, '未知來源'],
   ])('projects %o without exposing reducer provenance', (source, expected) => {
     expect(displaySourceName(source)).toBe(expected)
+  })
+
+  it('projects active damage and guard sources from the shared extension rules', () => {
+    expect(damageEffectSourceLabels(
+      mon({ heldItemId: 'lifeorb', abilityId: 'pinch_boost', maxHp: 90, currentHp: 30 }),
+      mon({ abilityId: 'guard' }),
+      2,
+    )).toEqual(['🔮 生命寶珠強化傷害', '🔥 絕境爆發強化傷害', '🧱 厚實降低傷害'])
   })
 })

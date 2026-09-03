@@ -7,7 +7,8 @@ import {
   type M23BaselineScenarioResult,
 } from '@/test/m23/baselineScenario'
 import { useSettings } from '@/store/settingsStore'
-import { useBattleStore } from '@/store/battleStore'
+import { useBattleStore, type BattleCommandNotice } from '@/store/battleStore'
+import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
 import type { BattleFeedEntry } from '@/presentation/battle/contracts'
@@ -26,8 +27,10 @@ import {
   M23_RENDERER_FAILURES,
   M23_TURN_TRANSACTION_CASES,
   M23_FAILURE_STAGES,
+  M23_HUD_CASES,
   type M23Checkpoint,
   type M23FailureStage,
+  type M23HudCase,
   type M23MotionPreference,
   type M23RendererFailure,
   type M23PoolCount,
@@ -54,12 +57,15 @@ export interface M23BaselineDriver {
   run: (options?: Pick<Partial<M23BaselineDriverOptions>, 'scenarioId' | 'seed'>) => M23BaselineScenarioResult
   prepareCheckpoint: (checkpoint: 'player-choice' | 'qte' | 'star' | 'terrain' | 'terrain-rain' | 'switch') => void
   prepareTransactionCase: (caseId: M23TurnTransactionCase) => void
+  prepareHudCase: (caseId: M23HudCase) => void
   battleState: () => ReturnType<typeof useBattleStore.getState>['battle']
   feed: () => readonly BattleFeedEntry[]
   prepareFeedHistory: (count?: number) => void
   runtimeState: () => {
     phase: ReturnType<typeof useBattleStore.getState>['phase']
     energy: number
+    activeResource: 'star' | 'chain' | null
+    commandNotice: BattleCommandNotice | null
     lockedIndex: number | null
     error: ReturnType<typeof useBattleStore.getState>['battleError']
     session: {
@@ -251,6 +257,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       const qualityByCase: Record<M23TurnTransactionCase, QteQuality[]> = {
         'normal-hit-chain-ready': ['good'],
         'status-buff': ['perfect'],
+        heal: ['good'],
         'switch-forced-switch': ['weak'],
         'chain-combo': ['perfect', 'good', 'normal'],
         'crit-super-star': [],
@@ -291,6 +298,108 @@ export function installM23BaselineDriver(): M23BaselineDriver {
         } : null,
       })
     },
+    prepareHudCase: (caseId) => {
+      if (!M23_HUD_CASES.includes(caseId)) throw new Error(`Unknown M23 HUD case: ${caseId}`)
+      const state = useBattleStore.getState()
+      if (!state.battle) throw new Error('A live battle is required before preparing HUD state')
+      let battle = structuredClone(state.battle)
+      battle.field.teamStatuses = []
+      battle.field.enemyStatuses = []
+      battle.field.comboCastEffects = []
+      battle.usedComboKeys = []
+      battle.winner = null
+      activeTransactionCase = null
+      qteQualityQueue = []
+      let energy = 0
+      let learnedSkillIds: string[] = []
+      let lockedIndex: number | null = null
+
+      if (caseId === 'choice-complete' || caseId === 'switch-one-legal' || caseId === 'switch-disabled') {
+        energy = 100
+        learnedSkillIds = ['rally']
+        battle.chainGauge = PRODUCT_RUNTIME.turnExtensions.chain.gaugeFull
+        const player = battle.player.members[battle.player.activeIndex]
+        const foe = battle.foe.members[battle.foe.activeIndex]
+        player.heldItemId = 'lifeorb'
+        player.abilityId = 'pinch_boost'
+        player.currentHp = Math.max(1, Math.floor(player.maxHp / 3))
+        foe.abilityId = 'guard'
+        delete foe.heldItemId
+        battle.field.teamStatuses = [
+          { stat: 'atk', mult: 1.2, remaining: 3, source: -1, label: '訓練師加油' },
+          { stat: 'def', mult: 1.3, remaining: 2, source: 1010, label: '防禦提升' },
+          { stat: 'spa', mult: 1.2, remaining: 4, source: -1, label: '精神集中' },
+          { stat: 'spd', mult: 1.1, remaining: 1, source: -1, label: '靈光守護' },
+        ]
+        battle.field.enemyStatuses = [
+          { stat: 'def', mult: 0.8, remaining: 2, source: -1, label: '防禦下降' },
+        ]
+        battle.field.comboCastEffects = [
+          { key: 'steam-burst', label: '蒸氣爆破', icon: '♨️', remaining: 4 },
+          { key: 'thunderstorm', label: '雷暴連擊', icon: '⛈️', remaining: 3 },
+          { key: 'frost-veil', label: '霜霰護幕', icon: '❄️', remaining: 2 },
+        ]
+        if (caseId !== 'choice-complete') {
+          battle.player.members[1].currentHp = 0
+          battle.player.members[2].currentHp = Math.max(1, battle.player.members[2].currentHp)
+          if (caseId === 'switch-disabled') lockedIndex = 2
+        }
+      } else if (caseId === 'choice-absent') {
+        for (const side of ['player', 'foe'] as const) {
+          battle[side].members = battle[side].members.map((member) => {
+            const copy = { ...member }
+            delete copy.heldItemId
+            return copy
+          })
+        }
+      } else if (caseId === 'resources-charging') {
+        energy = 38
+        battle.chainGauge = 42
+      } else if (caseId === 'combo-non-applicable') {
+        battle.chainGauge = PRODUCT_RUNTIME.turnExtensions.chain.gaugeFull
+        battle.player.members = battle.player.members.map((member, index) => ({
+          ...member,
+          speciesId: 500 + index,
+          types: ['normal'],
+        }))
+      } else {
+        const scenario = runM23BaselineScenario({ scenarioId: options.scenarioId, seed: options.seed })
+        const fixture = scenario.cases.find((candidate) => candidate.id === 'crit-super-star')
+        if (!fixture) throw new Error('Missing damage source HUD fixture')
+        battle = structuredClone(fixture.initialState)
+        const player = battle.player.members[battle.player.activeIndex]
+        const foe = battle.foe.members[battle.foe.activeIndex]
+        player.heldItemId = 'lifeorb'
+        player.abilityId = 'pinch_boost'
+        player.currentHp = Math.max(1, Math.floor(player.maxHp / 3))
+        foe.abilityId = 'guard'
+        qteQualityQueue = ['good']
+        for (const side of ['player', 'foe'] as const) {
+          battle[side].members = battle[side].members.map((member, index) => ({
+            ...member,
+            artworkUrl: member.artworkUrl
+              || state.battle?.[side].members[index]?.artworkUrl
+              || M23_ARTWORK_FIXTURES['large-texture'],
+          }))
+        }
+      }
+
+      usePlayerSkills.setState({ learnedSkillIds })
+      useBattleStore.setState({
+        battle,
+        phase: 'playerChoice',
+        energy,
+        log: [],
+        banner: null,
+        hitFx: null,
+        support: null,
+        combo: null,
+        lockedIndex,
+        presentation: null,
+        intentPresentation: null,
+        battleError: null,
+      })
+    },
     battleState: () => useBattleStore.getState().battle,
     feed: () => useBattleStore.getState().log.map((entry) => ({ ...entry })),
     prepareFeedHistory: (count = 10) => {
@@ -308,6 +417,8 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       return {
         phase: state.phase,
         energy: state.energy,
+        activeResource: state.presentation?.activeResource ?? null,
+        commandNotice: state.presentation?.commandNotice ?? null,
         lockedIndex: state.lockedIndex,
         error: state.battleError,
         session: state.session ? {

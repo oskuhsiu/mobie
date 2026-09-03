@@ -14,7 +14,7 @@ import {
   type SupportOutcome,
 } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
-import type { BattleMobie, Move, TerrainId, TypeName } from '@/game/types'
+import type { BattleMobie, Move, TypeName } from '@/game/types'
 import { initiativePresentation, moveDecisionPresentation } from '@/game/battle/decisionPresentation'
 import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
@@ -79,7 +79,12 @@ import type {
 import { usePausableScheduler } from '@/ui/battle/usePausableScheduler'
 import { BattleErrorPanel } from '@/ui/battle/BattleErrorPanel'
 import { BattleFeed } from '@/ui/battle/BattleFeed'
+import { damageEffectSourceLabels } from '@/ui/battle/BattleHudAdapter'
 import { BattleRenderGate } from '@/ui/battle/BattleRenderGate'
+import { FieldStatusBar, SideStatusRail } from '@/ui/battle/BattleStatus'
+import { ResourceAction } from '@/ui/battle/ResourceAction'
+import { SwitchAction, SwitchSheet } from '@/ui/battle/SwitchSheet'
+import { mobCardDisabledReason, switchAvailability } from '@/ui/battle/BattleActionModel'
 import '@/ui/styles/battle.css'
 
 const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
@@ -291,29 +296,14 @@ function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
   )
 }
 
-/** Shared field projection: initiative and turn are always truthful; neutral terrain collapses. */
-function FieldStatusBar({ terrainIds, initiative, turn }: {
-  terrainIds: TerrainId[]
-  initiative: string
-  turn: number
-}) {
-  const defs = terrainDefsOf(terrainIds)
-  return (
-    <div className="battle-field-bar" data-field-status aria-label={`${initiative}，回合 ${turn}`}>
-      <strong className="battle-field-bar__initiative">{initiative}</strong>
-      <span className="battle-field-bar__turn">回合 {turn}</span>
-      {defs.map((d) => (
-        <span key={d.id} className="battle-field-bar__terrain" title="場域地形：影響該屬性招式的威力">
-          {d.icon} {d.name}
-        </span>
-      ))}
-    </div>
-  )
-}
-
 /** 底部常駐隊伍 tray：每隻一顆 HP pip，倒下灰階、在場高亮。點 pip 開該隻資訊卡（M16）。 */
-function TeamTray({ members, activeIndex, align, onPick }: {
-  members: BattleMobie[]; activeIndex: number; align: 'start' | 'end'; onPick?: (index: number) => void
+function TeamTray({ members, activeIndex, align, interactive, disabledReason, onPick }: {
+  members: BattleMobie[]
+  activeIndex: number
+  align: 'start' | 'end'
+  interactive: boolean
+  disabledReason: string | null
+  onPick?: (index: number, invoker: HTMLButtonElement) => void
 }) {
   return (
     <div className="tray" style={{ justifyContent: align === 'end' ? 'flex-end' : 'flex-start' }}>
@@ -326,10 +316,12 @@ function TeamTray({ members, activeIndex, align, onPick }: {
             key={i}
             type="button"
             className={`tray__pip ${i === activeIndex ? 'tray__pip--active' : ''} ${fainted ? 'tray__pip--out' : ''}`}
-            title={`${m.nameZh}（看資訊卡）`}
-            aria-label={`${m.nameZh}，${i === activeIndex ? '出戰中，' : ''}HP ${Math.ceil(Math.max(0, m.currentHp))} / ${m.maxHp}${fainted ? '，已倒下' : ''}`}
+            title={interactive ? `${m.nameZh}（看資訊卡）` : disabledReason ?? undefined}
+            aria-label={`${m.nameZh}，${i === activeIndex ? '出戰中，' : ''}HP ${Math.ceil(Math.max(0, m.currentHp))} / ${m.maxHp}${fainted ? '，已倒下' : ''}${interactive ? '，開啟資訊卡' : `，無法開啟資訊卡：${disabledReason}`}`}
             aria-current={i === activeIndex ? 'true' : undefined}
-            onClick={() => onPick?.(i)}
+            aria-disabled={!interactive}
+            tabIndex={interactive ? 0 : -1}
+            onClick={(event) => { if (interactive) onPick?.(i, event.currentTarget) }}
           >
             <span className="tray__visual" aria-hidden="true">
               <span className={`tray__fill ${tone}`} style={{ width: `${frac * 100}%` }} />
@@ -343,7 +335,14 @@ function TeamTray({ members, activeIndex, align, onPick }: {
 }
 
 /** 緊貼立繪的精簡 HP 牌：名稱 + Lv + 血條（自家顯示數字）。放在角色同側，避免看錯誰的血。點開資訊卡（M16）。 */
-function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boolean; label: string; onOpen?: () => void }) {
+function HpPlate({ mon, owner, label, interactive, disabledReason, onOpen }: {
+  mon: BattleMobie
+  owner: boolean
+  label: string
+  interactive: boolean
+  disabledReason: string | null
+  onOpen?: (invoker: HTMLButtonElement) => void
+}) {
   const ratio = Math.max(0, mon.currentHp) / mon.maxHp
   const tone = hpToneClass(ratio, 'hpbar__fill')
   const item = getItem(mon.heldItemId)
@@ -352,14 +351,17 @@ function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boole
     <button
       type="button"
       className={`hp-plate ${owner ? 'hp-plate--owner' : 'hp-plate--foe'}`}
-      onClick={onOpen}
-      aria-label={`${label}，等級 ${mon.level}，HP ${Math.ceil(Math.max(0, mon.currentHp))} / ${mon.maxHp}，開啟資訊卡`}
+      onClick={(event) => { if (interactive) onOpen?.(event.currentTarget) }}
+      aria-disabled={!interactive}
+      tabIndex={interactive ? 0 : -1}
+      title={interactive ? `${label}（開啟資訊卡）` : disabledReason ?? undefined}
+      aria-label={`${label}，等級 ${mon.level}，HP ${Math.ceil(Math.max(0, mon.currentHp))} / ${mon.maxHp}${ability ? `，特性 ${ability.name}` : ''}${item ? `，道具 ${item.name}` : ''}${interactive ? '，開啟資訊卡' : `，無法開啟資訊卡：${disabledReason}`}`}
     >
       <div className="hp-plate__top">
         <span className="hp-plate__name">{label}</span>
         <span className="hpbar__lv">Lv.{mon.level}</span>
         {ability && <span className="battle-badge" title={ability.desc}>{ability.icon} {ability.name}</span>}
-        {item && <span className="battle-badge" title={item.name}>{item.icon}</span>}
+        {item && <span className="battle-badge" title={item.desc}>{item.icon} {item.name}</span>}
       </div>
       <div
         className="hp-plate__track"
@@ -381,55 +383,6 @@ function HpPlate({ mon, owner, label, onOpen }: { mon: BattleMobie; owner: boole
         <div className="hp-plate__num">{Math.ceil(Math.max(0, mon.currentHp))} / {mon.maxHp}</div>
       )}
     </button>
-  )
-}
-
-/** 換人面板：選一個未倒下、非在場、未鎖的隊友換上 */
-function SwitchPanel({ members, activeIndex, lockedIndex, onPick, onCancel }: {
-  members: BattleMobie[]
-  activeIndex: number
-  lockedIndex: number | null
-  onPick: (i: number) => void
-  onCancel: () => void
-}) {
-  return (
-    <motion.div
-      className="switch-panel"
-      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-    >
-      <div className="switch-panel__title">換上哪一隻？</div>
-      <div className="switch-panel__list">
-        {members.map((m, i) => {
-          const fainted = m.currentHp <= 0
-          const isActive = i === activeIndex
-          const locked = i === lockedIndex
-          const disabled = fainted || isActive || locked
-          const frac = Math.max(0, m.currentHp) / m.maxHp
-          const tone = hpToneClass(frac, 'hpbar__fill')
-          const tag = isActive ? '出戰中' : fainted ? '倒下' : locked ? '剛換下' : null
-          return (
-            <button
-              key={i}
-              className="switch-card"
-              disabled={disabled}
-              onClick={() => !disabled && onPick(i)}
-            >
-              <div className="switch-card__art">
-                <img src={m.artworkUrl} alt={m.nameZh} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              </div>
-              <div className="switch-card__name">{m.nameZh} <span className="hpbar__lv">Lv.{m.level}</span></div>
-              <div className="hpbar__track" style={{ height: 8 }}>
-                <div className={`hpbar__fill ${tone}`} style={{ width: `${frac * 100}%` }} />
-              </div>
-              {tag && <span className="switch-card__tag">{tag}</span>}
-            </button>
-          )
-        })}
-      </div>
-      <button className="btn btn--ghost" style={{ alignSelf: 'center', padding: '10px 28px' }} onClick={onCancel}>
-        取消
-      </button>
-    </motion.div>
   )
 }
 
@@ -611,27 +564,7 @@ export function MoveSlots({ moves, defenderTypes, playerSpeed, foeSpeed, showIni
   )
 }
 
-export function SwitchAction({ switchable, onPick }: { switchable: boolean; onPick: () => void }) {
-  return (
-    <div className="switch-action">
-      <motion.button
-        className="btn btn--ghost"
-        data-battle-action="switch"
-        style={{ fontSize: 16, padding: '12px 22px' }}
-        whileTap={switchable ? { scale: 0.96 } : undefined}
-        disabled={!switchable}
-        aria-label="換人"
-        aria-describedby="switch-action-cost"
-        onClick={() => { audio.play('select'); onPick() }}
-      >
-        🔄 換人
-      </motion.button>
-      <div id="switch-action-cost" className="switch-action__cost">
-        放棄本回合攻擊並承受對手攻擊
-      </div>
-    </div>
-  )
-}
+export { SwitchAction } from '@/ui/battle/SwitchSheet'
 
 export interface BattleScreenProps {
   /** Storage-independent renderer input. Production omits it and receives Auto. */
@@ -659,6 +592,8 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const battleError = useBattleStore((s) => s.battleError)
   const partnerSkillIdsUsed = useBattleStore((s) => s.session?.partnerSkillIdsUsed)
   const choiceFocusRequestId = useBattleStore((s) => s.choiceFocusRequestId)
+  const activeResource = useBattleStore((s) => s.presentation?.activeResource ?? null)
+  const commandNotice = useBattleStore((s) => s.presentation?.commandNotice ?? null)
   const devRendererOptions = import.meta.env.DEV ? baselineDriver()?.options : undefined
   const requestedGraphics = devRendererOptions?.graphics ?? graphicsPreference
   const rendererFailure = devRendererOptions?.rendererFailure ?? null
@@ -669,7 +604,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     : null
   const rendererReady = rendererState?.attemptId === currentRendererAttemptId && rendererIsReady(rendererState)
   // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
-  const [cardView, setCardView] = useState<{ mon: BattleMobie; owner: boolean; foeIndex: number } | null>(null)
+  const [cardView, setCardView] = useState<{ side: Side; index: number } | null>(null)
   // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
   const starMode = useSettings((s) => interactModeOf(s.settings, 'starStrike'))
   // M22.f 換人防禦下滑護盾（off＝原 TimingBar）；M22.g 攻擊節奏變體（mash＝原連打）。
@@ -747,6 +682,8 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const battleRootRef = useRef<HTMLDivElement | null>(null)
   const battleFeedRef = useRef<HTMLDivElement | null>(null)
   const introSkipRef = useRef<HTMLButtonElement>(null)
+  const switchInvokerRef = useRef<HTMLButtonElement | null>(null)
+  const cardInvokerRef = useRef<HTMLButtonElement | null>(null)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
@@ -755,8 +692,6 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const pendingSlotRef = useRef(0)
   // M9 連鎖：連續 QTE 序列（participants=參與隊友索引、step=目前第幾段、hits=已收集宣告）
   const [chainSeq, setChainSeq] = useState<{ participants: number[]; step: number; hits: ChainHit[] } | null>(null)
-  // M22 星擊增強互動：開啟蓄力/節奏手勢的暫態（off 模式恆 false、不渲染手勢）
-  const [starCharging, setStarCharging] = useState(false)
   const [documentHidden, setDocumentHidden] = useState(
     typeof document !== 'undefined' && document.hidden,
   )
@@ -943,6 +878,35 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     if (phase === 'busy') battleFeedRef.current?.focus()
   }, [phase])
 
+  const cardDisabledReason = mobCardDisabledReason(phase)
+  const openMobCard = useCallback((side: Side, index: number, invoker: HTMLButtonElement) => {
+    if (mobCardDisabledReason(useBattleStore.getState().phase)) return
+    cardInvokerRef.current = invoker
+    setCardView({ side, index })
+  }, [])
+  const closeMobCard = useCallback(() => {
+    setCardView(null)
+    const invoker = cardInvokerRef.current
+    cardInvokerRef.current = null
+    if (useBattleStore.getState().phase === 'playerChoice') queueMicrotask(() => invoker?.focus())
+  }, [])
+
+  useEffect(() => {
+    if (!cardView || cardDisabledReason === null) return
+    setCardView(null)
+    cardInvokerRef.current = null
+  }, [cardDisabledReason, cardView])
+
+  const cancelSwitch = useCallback(() => {
+    useBattleStore.getState().setPhase('playerChoice')
+    switchInvokerRef.current = null
+    queueMicrotask(() => {
+      battleRootRef.current
+        ?.querySelector<HTMLButtonElement>('[data-battle-action="switch"]')
+        ?.focus()
+    })
+  }, [])
+
   const handleRendererStateChange = useCallback((
     token: BattleSessionToken,
     next: BattleRendererState,
@@ -1049,7 +1013,6 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     }
     setPendingSwitch(null)
     setChainSeq(null)
-    setStarCharging(false)
     setCardView(null)
     const introIntent: IntroIntent = {
       kind: 'intro',
@@ -1104,6 +1067,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       || phase === 'statusQte'
       || phase === 'defenseQte'
       || phase === 'chainQte'
+      || phase === 'starQte'
       || phase === 'busy',
     )
   }, [phase])
@@ -1233,10 +1197,18 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       setActiveIndex(e.side, e.toIndex)
       stageRef.current?.enter(e.side)
       const m = monAt(b0, e.side, e.toIndex)
+      const prefix = e.side === 'foe' ? '對手的 ' : ''
+      if (e.forced) {
+        store().presentationSetCommandNotice(cueContext.token, {
+          kind: 'forced-switch',
+          text: `${prefix}${m.nameZh} 因夥伴倒下自動上場`,
+        })
+      }
       fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffffff' })
       if (e.side === 'player') fxRef.current?.flash('#ffffff', 0.3)
       playAudio(() => audio.play('switch'))
       setBanner(e.side === 'player' ? `上吧，${m.nameZh}！` : `對手派出了 ${m.nameZh}！`)
+      pushFeed(e.forced ? `${prefix}${m.nameZh} 因夥伴倒下自動上場` : `${prefix}${m.nameZh} 換上場`)
       await delay(640)
       setBanner(null)
       await delay(120)
@@ -1384,7 +1356,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           if (e.crit) bits.push('會心一擊！')
           if (e.effectivenessText) bits.push(e.effectivenessText)
           setBanner(bits.join('　') || null)
-          pushFeed(`對 ${cue.defender.nameZh} 造成 ${e.amount} 點傷害`)
+          const projected = store.presentation?.battle
+          const sourceAttacker = projected?.[e.attackerSide].members[e.attackerIndex] ?? cue.attacker
+          const sourceDefender = projected?.[e.targetSide].members[e.targetIndex] ?? cue.defender
+          const sources = damageEffectSourceLabels(sourceAttacker, sourceDefender, e.effectiveness)
+          pushFeed(`對 ${cue.defender.nameZh} 造成 ${e.amount} 點傷害${sources.length > 0 ? `（${sources.join('；')}）` : ''}`)
         }
         tracePresentation(cueContext.token, 'feed', { cueId: cue.id, detail: 'result' })
       },
@@ -1431,6 +1407,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         const store = useBattleStore.getState()
         const projectedBattle = store.presentation?.battle
         if (!projectedBattle) throw new Error('Star prelude requires a current presentation')
+        store.presentationPushFeed(cueContext.token, {
+          id: 'input:star-consumed',
+          text: '星擊能量已消耗，重新開始蓄力',
+          kind: 'system',
+        })
         await cueContext.clock.race(
           baselineDriver()?.checkpoint('action:star', 'star') ?? Promise.resolve(),
           cueContext.signal,
@@ -1465,6 +1446,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
         const store = useBattleStore.getState()
         store.presentationSetBanner(cueContext.token, '🔗 連鎖攻擊！')
+        store.presentationPushFeed(cueContext.token, {
+          id: 'input:chain-consumed',
+          text: '連鎖能量已消耗，重新開始蓄力',
+          kind: 'system',
+        })
         battleAudioSession.play(cueContext.token, () => audio.play('crit'))
         tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'chain' })
         fxRef.current?.flash('#7ae0ff', 0.4)
@@ -1478,6 +1464,12 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       outcome: async (cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
         const store = useBattleStore.getState()
+        store.presentationSetCommandNotice(cueContext.token, {
+          kind: cue.event.reason === 'timeout' ? 'timeout' : 'outcome',
+          text: cue.event.reason === 'timeout'
+            ? '達回合上限，依剩餘 HP 判定勝負'
+            : cue.event.winner === 'player' ? '戰鬥勝利' : '戰鬥失利',
+        })
         if (cue.event.reason === 'timeout') {
           store.presentationSetBanner(cueContext.token, '達回合上限！依剩餘血量判定勝負')
           store.presentationPushFeed(cueContext.token, {
@@ -1822,13 +1814,14 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
 
   const player = battle.player.members[battle.player.activeIndex]
   const foe = battle.foe.members[battle.foe.activeIndex]
-  const switchable = battle.player.members.some(
-    (m, i) => i !== battle.player.activeIndex && m.currentHp > 0 && i !== lockedIndex,
+  const switchProjection = switchAvailability(
+    battle.player.members,
+    battle.player.activeIndex,
+    lockedIndex,
   )
+  const cardMember = cardView ? battle[cardView.side].members[cardView.index] : null
   // M9 連鎖固定存在；槽住 reducer 的 battle.chainGauge（暫態）。
   const chainMax = PRODUCT_RUNTIME.turnExtensions.chain.gaugeFull
-  const chainPct = Math.min(100, (battle.chainGauge / chainMax) * 100)
-  const chainReady = battle.chainGauge >= chainMax
 
   return (
     <motion.div
@@ -1886,6 +1879,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         terrainIds={battle.field.terrainEffects.current}
         initiative={initiativePresentation(player.spe, foe.spe)}
         turn={battle.turn}
+        fieldMarks={battle.field.comboCastEffects}
       />
       {intentPresentation?.intent.kind === 'intro' && (
         <button
@@ -1906,48 +1900,22 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         />
       )}
 
-      {/* ★ 星擊球：能量滿 + 輪到玩家選招時，於戰鬥區中央大特效顯示；點了即放（不放就點技能槽照常）。
-          M22 增強互動：off→點擊即放（原樣）；lite/arcade→點擊改開蓄力/節奏手勢，完成才放招。 */}
-      <div className="overlay-center overlay-center--orb">
-        <AnimatePresence>
-          {rendererReady && energy >= 100 && phase === 'playerChoice' && !starCharging && (
-            <motion.button
-              className="star-orb"
-              data-battle-action="star"
-              initial={{ opacity: 0, scale: 0.4 }}
-              animate={{ opacity: 1, scale: [1, 1.08, 1] }}
-              exit={{ opacity: 0, scale: 0.4 }}
-              transition={{ scale: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.3 } }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => {
-                if (starMode === 'off') { void runStarStrike() }
-                else { audio.play('select'); setStarCharging(true) }
-              }}
-            >
-              <span className="star-orb__ring" />
-              <span className="star-orb__star">★</span>
-              <span className="star-orb__label">星擊發動</span>
-            </motion.button>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* M22 星擊手勢 overlay（lite 長按蓄力 / arcade 節奏點擊）；off 不渲染＝DOM 零新增 wrapper。
-          完成（或逾時）→ 收起手勢 + runStarStrike()（簽名不動、傷害不吃手勢結果）。 */}
-      {rendererReady && starCharging && phase === 'playerChoice' && (
-        starMode === 'arcade' ? (
-          <RhythmTap paused={documentHidden} mode={starMode} onDone={() => { setStarCharging(false); void runStarStrike() }} />
-        ) : (
-          <HoldChargeRing paused={documentHidden} mode={starMode} onCharged={() => { setStarCharging(false); void runStarStrike() }} />
-        )
-      )}
       {/* 敵方：HP 牌與隊伍狀態（畫面上方右側） */}
       <div className="battle-combatant-hud battle-combatant-hud--foe">
         <div className="combat-hud combat-hud--foe">
-          <HpPlate mon={foe} owner={false} label={`對手的 ${foe.nameZh}`}
-            onOpen={() => setCardView({ mon: foe, owner: false, foeIndex: battle.foe.activeIndex })} />
+          <HpPlate
+            mon={foe}
+            owner={false}
+            label={`對手的 ${foe.nameZh}`}
+            interactive={cardDisabledReason === null}
+            disabledReason={cardDisabledReason}
+            onOpen={(invoker) => openMobCard('foe', battle.foe.activeIndex, invoker)}
+          />
           <TeamTray members={battle.foe.members} activeIndex={battle.foe.activeIndex} align="end"
-            onPick={(i) => setCardView({ mon: battle.foe.members[i], owner: false, foeIndex: i })} />
+            interactive={cardDisabledReason === null}
+            disabledReason={cardDisabledReason}
+            onPick={(index, invoker) => openMobCard('foe', index, invoker)} />
+          <SideStatusRail side="foe" statuses={battle.field.enemyStatuses} />
         </div>
       </div>
 
@@ -2012,10 +1980,19 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       {/* 我方：HP 牌與隊伍狀態（畫面下方左側），marginTop:auto 把後段推到底部 */}
       <div className="battle-combatant-hud battle-combatant-hud--player">
         <div className="combat-hud combat-hud--player">
-          <HpPlate mon={player} owner label={player.nameZh}
-            onOpen={() => setCardView({ mon: player, owner: true, foeIndex: -1 })} />
+          <HpPlate
+            mon={player}
+            owner
+            label={player.nameZh}
+            interactive={cardDisabledReason === null}
+            disabledReason={cardDisabledReason}
+            onOpen={(invoker) => openMobCard('player', battle.player.activeIndex, invoker)}
+          />
           <TeamTray members={battle.player.members} activeIndex={battle.player.activeIndex} align="start"
-            onPick={(i) => setCardView({ mon: battle.player.members[i], owner: true, foeIndex: -1 })} />
+            interactive={cardDisabledReason === null}
+            disabledReason={cardDisabledReason}
+            onPick={(index, invoker) => openMobCard('player', index, invoker)} />
+          <SideStatusRail side="player" statuses={battle.field.teamStatuses} />
         </div>
       </div>
 
@@ -2026,45 +2003,39 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       <section className="battle-command-deck" aria-label="戰鬥指令">
         <div className="battle-command-deck__header">
         <div className="battle-resource-strip" aria-label="戰鬥資源">
-        {/* 星擊能量槽（極簡細條） */}
-        <div className={`star-gauge ${energy >= 100 ? 'star-gauge--full' : ''}`}>
-          <span className="star-gauge__icon">★ 星擊</span>
-          <div
-            className="star-gauge__track"
-            role="meter"
-            aria-label="星擊能量"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.floor(energy)}
-            aria-valuetext={`${Math.floor(energy)}%`}
-          >
-            <div className="star-gauge__fill" style={{ width: `${energy}%` }} />
-          </div>
-          <span className="star-gauge__pct">{Math.floor(energy)}%</span>
-        </div>
-
-        {/* M9 連鎖槽固定顯示；集滿亮起可發動連鎖。 */}
-        <div className={`star-gauge chain-gauge ${chainReady ? 'star-gauge--full chain-gauge--full' : ''}`}>
-          <span className="star-gauge__icon">🔗 連鎖</span>
-          <div
-            className="star-gauge__track"
-            role="meter"
-            aria-label="連鎖能量"
-            aria-valuemin={0}
-            aria-valuemax={chainMax}
-            aria-valuenow={Math.min(battle.chainGauge, chainMax)}
-            aria-valuetext={`${Math.floor(chainPct)}%`}
-          >
-            <div className="star-gauge__fill chain-gauge__fill" style={{ width: `${chainPct}%` }} />
-          </div>
-          <span className="star-gauge__pct">{Math.floor(chainPct)}%</span>
-        </div>
+        <ResourceAction
+          kind="star"
+          current={energy}
+          max={100}
+          activating={phase === 'starQte' || activeResource === 'star'}
+          actionable={phase === 'playerChoice' && rendererReady}
+          onActivate={() => {
+            if (starMode === 'off') void runStarStrike()
+            else {
+              audio.play('select')
+              useBattleStore.getState().setPhase('starQte')
+            }
+          }}
+        />
+        <ResourceAction
+          kind="chain"
+          current={battle.chainGauge}
+          max={chainMax}
+          activating={phase === 'chainQte' || activeResource === 'chain'}
+          actionable={phase === 'playerChoice' && rendererReady}
+          onActivate={startChain}
+        />
         </div>
 
         <BattleFeed ref={battleFeedRef} entries={log} />
 
         </div>
-        <div className="battle-command-body" data-command-phase={phase} aria-busy={phase === 'busy'}>
+        <div
+          className="battle-command-body"
+          data-command-phase={phase}
+          data-command-state={commandNotice?.kind ?? phase}
+          aria-busy={phase === 'busy'}
+        >
 
         {phase === 'playerChoice' && !rendererReady && (
           <div className="battle-command-disabled" role="status" aria-live="polite">
@@ -2100,22 +2071,13 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
             />
             <div className="row battle-secondary-actions" style={{ gap: 12, justifyContent: 'center' }}>
               <SwitchAction
-                switchable={switchable}
-                onPick={() => useBattleStore.getState().setPhase('switchSelect')}
+                availability={switchProjection}
+                onOpen={(invoker) => {
+                  audio.play('select')
+                  switchInvokerRef.current = invoker
+                  useBattleStore.getState().setPhase('switchSelect')
+                }}
               />
-              {/* 星擊不在此列：能量滿時改在戰鬥區大特效顯示（見下方 StarStrikeOrb），點了即放。 */}
-              {chainReady && (
-                <motion.button
-                  className="btn btn--chain" style={{ fontSize: 16, padding: '12px 22px' }}
-                  data-battle-action="chain"
-                  initial={{ scale: 0.8 }} animate={{ scale: [1, 1.06, 1] }}
-                  transition={{ duration: 1.1, repeat: Infinity }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={startChain}
-                >
-                  🔗 連鎖
-                </motion.button>
-              )}
             </div>
             {/* M17 夥伴技能固定存在；只顯示已習得技能，每場一次且不耗回合。 */}
             {partnerSkills.length > 0 && (
@@ -2131,6 +2093,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
                       whileTap={used ? undefined : { scale: 0.95 }}
                       disabled={used}
                       title={skill.desc}
+                      aria-label={`${skill.name}${used ? '，本場已使用' : `，${skill.desc}`}`}
                       onClick={() => activatePartnerSkill(skill)}
                     >
                       {skill.icon} {skill.name}{used ? ' ✓' : ''}
@@ -2142,7 +2105,14 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           </motion.div>
         )}
 
-        {rendererReady && (phase === 'qte' || phase === 'mash') && (
+        {rendererReady && (
+          phase === 'qte'
+          || phase === 'mash'
+          || phase === 'statusQte'
+          || phase === 'defenseQte'
+          || phase === 'chainQte'
+          || phase === 'starQte'
+        ) && (
           <motion.div
             className="battle-input-surface"
             initial={{ opacity: 0, y: 10 }}
@@ -2166,39 +2136,6 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
             {phase === 'mash' && (attackVariant === 'rhythm'
               ? <RhythmTap paused={documentHidden} mode={interactMode} onDone={(acc) => onMashDone(rhythmToMashCount(acc))} />
               : <MashMeter paused={documentHidden} onDone={onMashDone} />)}
-          </motion.div>
-        )}
-
-        {phase === 'switchSelect' && rendererReady && (
-          <SwitchPanel
-            members={battle.player.members}
-            activeIndex={battle.player.activeIndex}
-            lockedIndex={lockedIndex}
-            onPick={(i) => { setPendingSwitch(i); useBattleStore.getState().setPhase('defenseQte') }}
-            onCancel={() => useBattleStore.getState().setPhase('playerChoice')}
-          />
-        )}
-
-        {(phase === 'busy' || phase === 'intro') && (
-          <div className="battle-command-busy" role="status">
-            <span aria-hidden="true">•••</span>
-            {phase === 'intro' ? '準備戰鬥' : '正在結算本回合'}
-          </div>
-        )}
-        </div>
-      </section>
-
-      {/* Ticket 09 will migrate the remaining non-normal QTEs into the command deck. */}
-      <div className="battle-action-layer">
-      <AnimatePresence>
-        {rendererReady && (phase === 'statusQte' || phase === 'defenseQte' || phase === 'chainQte') && (
-          <motion.div
-            className="battle-action"
-            initial={{ opacity: 0, y: 14, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.18 }}
-          >
             {phase === 'statusQte' && (
               <TimingBar
                 paused={documentHidden}
@@ -2222,27 +2159,57 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
             {phase === 'chainQte' && chainSeq && (
               <TimingBar
                 paused={documentHidden}
-                key={`chain-${chainSeq.step}`} /* 每段重掛 → 指針動畫重置 */
+                key={`chain-${chainSeq.step}`}
                 hint={`🔗 連鎖 ${chainSeq.step + 1}/${chainSeq.participants.length}　${battle.player.members[chainSeq.participants[chainSeq.step]].nameZh}！抓準時機連續出擊`}
                 onResult={(q) => onChainQteResult(controlledQuality(q))}
               />
             )}
+            {phase === 'starQte' && (starMode === 'arcade'
+              ? <RhythmTap paused={documentHidden} mode={starMode} onDone={() => { void runStarStrike() }} />
+              : <HoldChargeRing paused={documentHidden} mode={starMode} onCharged={() => { void runStarStrike() }} />)}
           </motion.div>
         )}
-      </AnimatePresence>
-      </div>
 
-      {/* M16 資訊卡：點 HpPlate/TeamTray 開（自己全顯、對手深度遮罩待 M17 看穿） */}
-      <AnimatePresence>
-        {cardView && (
-          <MobCard
-            mon={cardView.mon}
-            owner={cardView.owner}
-            revealed={cardView.owner ? true : revealedFoes.includes(cardView.foeIndex)}
-            onClose={() => setCardView(null)}
+        {phase === 'switchSelect' && rendererReady && (
+          <SwitchSheet
+            members={battle.player.members}
+            legalIndices={switchProjection.legalIndices}
+            onPick={(index) => {
+              switchInvokerRef.current = null
+              setPendingSwitch(index)
+              useBattleStore.getState().setPhase('defenseQte')
+            }}
+            onCancel={cancelSwitch}
           />
         )}
-      </AnimatePresence>
+
+        {(phase === 'busy' || phase === 'intro' || phase === 'won' || phase === 'lost' || phase === 'error') && (
+          <div className="battle-command-busy" role="status">
+            <span aria-hidden="true">•••</span>
+            {commandNotice?.text
+              ?? (phase === 'intro' ? '準備戰鬥'
+                : phase === 'won' ? '戰鬥勝利'
+                  : phase === 'lost' ? '戰鬥失利'
+                    : phase === 'error' ? '戰鬥暫停'
+                      : '正在結算本回合')}
+          </div>
+        )}
+        </div>
+      </section>
+
+      {/* M16 資訊卡：點 HpPlate/TeamTray 開（自己全顯、對手深度遮罩待 M17 看穿） */}
+      {cardDisabledReason === null && (
+        <AnimatePresence>
+          {cardView && cardMember && (
+            <MobCard
+              mon={cardMember}
+              owner={cardView.side === 'player'}
+              revealed={cardView.side === 'player' || revealedFoes.includes(cardView.index)}
+              onClose={closeMobCard}
+            />
+          )}
+        </AnimatePresence>
+      )}
 
       {/* ===== EXT.2 星擊電影化：letterbox + 全螢幕 cut-in（純 display，由 cinematicCoordinator 驅動） ===== */}
       <AnimatePresence>

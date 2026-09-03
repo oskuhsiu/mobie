@@ -53,6 +53,7 @@ describe('battleStore presentation shadow', () => {
     store.presentationShowHit(token, {
       target: 'foe', amount: 58, crit: false, effText: null, missed: false,
     })
+    store.presentationSetCommandNotice(token, { kind: 'forced-switch', text: '倒下後自動換上替補' })
 
     const state = useBattleStore.getState()
     expect(state.battle).toBe(canonical)
@@ -61,6 +62,7 @@ describe('battleStore presentation shadow', () => {
     expect(state.presentation!.battle.foe.members[0].currentHp).toBe(42)
     expect(state.presentation!.log.map((entry) => entry.text)).toContain('造成傷害')
     expect(state.presentation!.hitFx).toMatchObject({ id: 1, amount: 58 })
+    expect(state.presentation!.commandNotice).toEqual({ kind: 'forced-switch', text: '倒下後自動換上替補' })
   })
 
   it('makes all stale projection writes, commit, and cancel no-ops', () => {
