@@ -84,9 +84,9 @@ describe('LegacyBattleCueHandler', () => {
     await handler.play(damageCue(), context)
 
     expect(log).toEqual([
-      'scene.begin', 'hud.showMove', 'audio.attack', 'wait:440',
+      'scene.begin', 'hud.showMove', 'audio.attack', 'wait:160',
       'scene.impact', 'hud.applyDamage', 'scene.reaction', 'audio.impact',
-      'audio.move', 'haptic.impact', 'scene.hitStop', 'hud.showResult', 'wait:820',
+      'audio.move', 'haptic.impact', 'scene.hitStop', 'hud.showResult', 'wait:640',
       'scene.clear', 'hud.clear', 'wait:140',
     ])
     expect(signals.length).toBeGreaterThan(0)
@@ -114,8 +114,8 @@ describe('LegacyBattleCueHandler', () => {
   })
 
   it.each([
-    ['440ms windup', new SelectiveClock(1)],
-    ['820ms result', new SelectiveClock(2)],
+    ['160ms windup', new SelectiveClock(1)],
+    ['640ms result', new SelectiveClock(2)],
   ])('aborts promptly during %s', async (_label, clock) => {
     const controller = new AbortController()
     const handler = new LegacyBattleCueHandler(ports(() => undefined))

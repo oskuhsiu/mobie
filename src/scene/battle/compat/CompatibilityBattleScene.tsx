@@ -89,6 +89,16 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
   }
 
   useImperativeHandle(ref, () => ({
+    normalAttack: (cue) => {
+      if (cue.phase === 'anticipate' || cue.phase === 'contact') {
+        setMode(cue.caster, reducedMotion ? 'idle' : 'lunge')
+      } else if (cue.phase === 'hit-react') {
+        setMode(cue.target, reducedMotion ? 'idle' : 'hit')
+      } else {
+        setMode(cue.caster, 'idle')
+        setMode(cue.target, 'idle')
+      }
+    },
     lunge: (side) => setMode(side, reducedMotion ? 'idle' : 'lunge'),
     hitReact: (side) => setMode(side, reducedMotion ? 'idle' : 'hit'),
     faint: (side) => setMode(side, 'faint'),

@@ -7,7 +7,13 @@ import type {
   TurnPresentationJob,
 } from './contracts'
 
-const DAMAGE_TIMING = {
+const NORMAL_ATTACK_TIMING = {
+  windupMs: 160,
+  resultMs: 640,
+  clearMs: 140,
+} as const
+
+const LEGACY_DAMAGE_TIMING = {
   windupMs: 440,
   resultMs: 820,
   clearMs: 140,
@@ -95,10 +101,16 @@ function compileDamage(job: TurnPresentationJob, event: Extract<BattleEvent, { t
   const move = event.resolvedMoveId == null
     ? attacker.move
     : attacker.moves.find((candidate) => candidate.id === event.resolvedMoveId) ?? attacker.move
+  const normalAttack = event.attackerSide === 'foe'
+    || (
+      job.input.type === 'ATTACK'
+      && job.input.starStrike !== true
+      && event.attackerIndex === job.before.player.activeIndex
+    )
   return {
     kind: 'damage', id: `event:${eventIndex}:damageApplied`, eventIndex, event,
     attacker, defender, attackerSide: event.attackerSide, defenderSide: event.targetSide,
-    move, timing: DAMAGE_TIMING,
+    move, normalAttack, timing: normalAttack ? NORMAL_ATTACK_TIMING : LEGACY_DAMAGE_TIMING,
   }
 }
 

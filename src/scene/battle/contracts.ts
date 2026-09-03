@@ -20,6 +20,26 @@ export interface RendererDiagnostics {
   drawCalls: number
 }
 
+export type NormalAttackPhase = 'anticipate' | 'contact' | 'hit-react' | 'recover'
+export type BattleCameraShot = 'wide' | 'caster' | 'impact'
+
+export interface NormalAttackCue {
+  cueId: string
+  owner: string
+  caster: Side
+  target: Side
+  didHit: boolean
+  phase: NormalAttackPhase
+}
+
+export interface BattleSceneDiagnostics {
+  cameraShot: BattleCameraShot
+  cameraOwner: string | null
+  motionPhase: NormalAttackPhase | 'idle'
+  artworkMode: Record<Side, 'artwork' | 'silhouette'>
+  anchors: Record<Side, Record<BattleAnchorKind, BattleScreenPoint>> | null
+}
+
 export interface BattleSceneSnapshot {
   player: BattleMobie
   foe: BattleMobie
@@ -28,6 +48,7 @@ export interface BattleSceneSnapshot {
 }
 
 export interface BattleSceneHandle {
+  normalAttack(cue: NormalAttackCue): void
   lunge(side: Side): void
   hitReact(side: Side, strength?: number): void
   faint(side: Side): void
@@ -46,6 +67,7 @@ export interface NextBattleSceneProps {
   onFatal(reason: RendererFallbackReason): void
   onRenderedFrame?: (at: number) => void
   onRendererDiagnostics?: (diagnostics: RendererDiagnostics) => void
+  onSceneDiagnostics?: (diagnostics: BattleSceneDiagnostics) => void
   /** DEV/test-only typed renderer failure. Production callers omit it. */
   devShaderFailure?: boolean
 }

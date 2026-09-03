@@ -173,6 +173,14 @@ same-session remounts cannot upgrade it; Retry creates a fresh token and may pro
 compatibility adapter reuses the same HUD, FxCanvas, WeatherCanvas, store projection, and coordinator,
 so renderer changes never rerun resolver/input or duplicate canonical commit.
 
+`BattleStage` owns the neutral world, lights, camera, and both combatant rigs in one R3F Canvas. Each rig
+publishes root/center/head/ground/cast/impact world anchors; the stage projects them through the live camera,
+with `presentation/battle/battleAnchors.ts` retained only as a pre-first-frame/compatibility fallback. Normal
+damage cues drive anticipate/contact/hit-react/recover through the scene handle. A cue-owned camera queue
+hands off caster and impact shots and automatically returns to wide; cancellation resets the queue. Reduced
+motion keeps the same cue/anchor semantics while forcing a fixed wide camera and suppressing bob/shake/dolly.
+Artwork billboards and named procedural silhouettes remain storage-independent and share the same rig.
+
 `vite build` emits a manifest plus explicit `NextBattleScene`, `CaptureStage`, Three-vendor, and
 compatibility categories. Rollup's explicit-only manual chunks keep Three out of the main and
 compatibility static graphs. Legacy ModelManager/Save model chunks remain isolated Ticket 22 work and

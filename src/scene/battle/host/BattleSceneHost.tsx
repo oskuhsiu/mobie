@@ -22,6 +22,7 @@ import {
 } from '@/presentation/battle/rendering'
 import { projectBattleAnchor } from '@/presentation/battle/battleAnchors'
 import type {
+  BattleSceneDiagnostics,
   BattleSceneHandle,
   BattleSceneSnapshot,
   NextBattleSceneProps,
@@ -44,6 +45,7 @@ export interface BattleSceneHostProps {
   onFallback: (token: BattleSessionToken, reason: RendererFallbackReason) => void
   onRenderedFrame?: NextBattleSceneProps['onRenderedFrame']
   onRendererDiagnostics?: NextBattleSceneProps['onRendererDiagnostics']
+  onSceneDiagnostics?: NextBattleSceneProps['onSceneDiagnostics']
   /** DEV/test-only; production callers omit this and the default path is used. */
   devFailure?: RendererFailureInjection | null
   timeoutMs?: number
@@ -62,6 +64,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   onFallback,
   onRenderedFrame,
   onRendererDiagnostics,
+  onSceneDiagnostics,
   devFailure = null,
   timeoutMs = 8_000,
 }, ref) {
@@ -76,6 +79,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   const nextRef = useRef<BattleSceneHandle>(null)
   const compatibilityRef = useRef<BattleSceneHandle>(null)
   const [NextScene, setNextScene] = useState<NextSceneComponent | null>(null)
+  const [sceneDiagnostics, setSceneDiagnostics] = useState<BattleSceneDiagnostics | null>(null)
   const initialStateReported = useRef(false)
   const bootTimeoutRef = useRef<number | null>(null)
 
@@ -145,6 +149,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       ? compatibilityRef.current
       : nextRef.current
     return {
+      normalAttack: (cue) => active()?.normalAttack(cue),
       lunge: (side) => active()?.lunge(side),
       hitReact: (side, strength) => active()?.hitReact(side, strength),
       faint: (side) => active()?.faint(side),
@@ -160,13 +165,36 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
     send({ type: 'FALLBACK', attemptId, reason })
   }
 
+  const handleSceneDiagnostics = useCallback((diagnostics: BattleSceneDiagnostics) => {
+    setSceneDiagnostics(diagnostics)
+    onSceneDiagnostics?.(diagnostics)
+  }, [onSceneDiagnostics])
+
+  const nextDiagnostics = state.phase === 'compatibility-ready' ? null : sceneDiagnostics
+
   return (
     <div
       className="battle-scene-host"
       data-renderer-state={state.phase}
       data-renderer-tier={state.tier}
       data-renderer-fallback={state.fallbackReason ?? undefined}
-      data-battle-camera-shot="wide"
+      data-battle-camera-shot={nextDiagnostics?.cameraShot ?? 'wide'}
+      data-battle-camera-owner={nextDiagnostics?.cameraOwner ?? undefined}
+      data-battle-motion-phase={nextDiagnostics?.motionPhase ?? 'idle'}
+      data-battle-artwork-player={nextDiagnostics?.artworkMode.player}
+      data-battle-artwork-foe={nextDiagnostics?.artworkMode.foe}
+      data-battle-anchor-player={nextDiagnostics?.anchors
+        ? JSON.stringify(nextDiagnostics.anchors.player)
+        : undefined}
+      data-battle-anchor-foe={nextDiagnostics?.anchors
+        ? JSON.stringify(nextDiagnostics.anchors.foe)
+        : undefined}
+      data-battle-anchor-player-impact={nextDiagnostics?.anchors
+        ? `${nextDiagnostics.anchors.player.impact.x.toFixed(1)},${nextDiagnostics.anchors.player.impact.y.toFixed(1)}`
+        : undefined}
+      data-battle-anchor-foe-impact={nextDiagnostics?.anchors
+        ? `${nextDiagnostics.anchors.foe.impact.x.toFixed(1)},${nextDiagnostics.anchors.foe.impact.y.toFixed(1)}`
+        : undefined}
       data-battle-shake={reducedMotion ? '0' : 'enabled'}
       data-battle-bob={reducedMotion ? '0' : 'enabled'}
       data-reduced-motion={reducedMotion ? 'true' : 'false'}
@@ -183,6 +211,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
             onFatal={fatal}
             onRenderedFrame={onRenderedFrame}
             onRendererDiagnostics={onRendererDiagnostics}
+            onSceneDiagnostics={handleSceneDiagnostics}
             devShaderFailure={activeDevFailure === 'shader-error'}
           />
         </BattleSceneBoundary>

@@ -37,7 +37,11 @@ import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { WeatherCanvas } from '@/scene/fx/WeatherCanvas'
 import { playMoveFx, resolveFx, typePalette } from '@/scene/fx/fxCatalog'
 import { BattleSceneHost } from '@/scene/battle/host/BattleSceneHost'
-import type { BattleSceneHandle } from '@/scene/battle/contracts'
+import type {
+  BattleSceneDiagnostics,
+  BattleSceneHandle,
+  NormalAttackPhase,
+} from '@/scene/battle/contracts'
 import { resolveTerrainPalette } from '@/scene/r3f/terrainVisual'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
@@ -65,6 +69,7 @@ import {
 } from '@/presentation/battle/rendering'
 import type {
   BattleDisplaySnapshot,
+  DamageCue,
   BattleIntent,
   BattleSessionToken,
   CancelReason,
@@ -725,6 +730,28 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     invoker: HTMLButtonElement | null
     replacementSelector?: string
   } | null>(null)
+
+  const projectedSceneAnchor = useCallback((side: Side, anchor: 'cast' | 'impact') => {
+    const stage = battleStageElementRef.current
+    if (!stage) return FX_POS[side]
+    const { width, height } = stage.getBoundingClientRect()
+    if (width <= 0 || height <= 0) return FX_POS[side]
+    const point = stageRef.current?.projectAnchor(side, anchor, { width, height })
+    return point
+      ? { nx: point.x / width, ny: point.y / height }
+      : FX_POS[side]
+  }, [])
+  const syncHeadSafeRects = useCallback((diagnostics: BattleSceneDiagnostics) => {
+    const stage = battleStageElementRef.current
+    if (!stage || !diagnostics.anchors) return
+    for (const side of ['player', 'foe'] as const) {
+      const marker = stage.querySelector<HTMLElement>(`[data-head-safe="${side}"]`)
+      if (!marker) continue
+      const { x, y } = diagnostics.anchors[side].head
+      marker.style.left = `${x - 50}px`
+      marker.style.top = `${y - 40}px`
+    }
+  }, [])
   const cardInvokerRef = useRef<HTMLButtonElement | null>(null)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
@@ -1365,56 +1392,79 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     }
   }, [rootShake, sessionLifecycle])
 
-  const createCuePorts = useCallback((): BattleCuePorts => ({
-    scene: {
-      begin: (cue, cueContext) => {
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-        stageRef.current?.lunge(cue.attackerSide)
+  const createCuePorts = useCallback((): BattleCuePorts => {
+    const normalAttack = (cue: DamageCue, phase: NormalAttackPhase) => {
+      if (!cue.normalAttack) return false
+      stageRef.current?.normalAttack({
+        cueId: cue.id,
+        owner: 'normal-attack',
+        caster: cue.attackerSide,
+        target: cue.event.targetSide,
+        didHit: !cue.event.missed && cue.event.amount > 0,
+        phase,
+      })
+      return true
+    }
+
+    return {
+      scene: {
+        begin: (cue, cueContext) => {
+          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          if (!normalAttack(cue, 'anticipate')) stageRef.current?.lunge(cue.attackerSide)
+        },
+        impact: async (cue, cueContext) => {
+          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          const e = cue.event
+          if (e.missed || e.amount <= 0) {
+            normalAttack(cue, 'contact')
+            return
+          }
+          const recipe = resolveFx(cue.move)
+          const strong = e.crit || e.effectiveness >= 2
+          const impactDelayMs = playMoveFx(
+            fxRef.current,
+            strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
+            projectedSceneAnchor(e.attackerSide, 'cast'),
+            projectedSceneAnchor(e.targetSide, 'impact'),
+            { reducedMotion: reducedMotionRef.current },
+          )
+          if (impactDelayMs > 0) await cueContext.clock.wait(impactDelayMs, cueContext.signal)
+          normalAttack(cue, 'contact')
+          baselineDriver()?.recordCastImpact(performance.now())
+        },
+        reaction: (cue, cueContext) => {
+          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          const e = cue.event
+          if (e.missed || e.amount <= 0) return
+          const pos = projectedSceneAnchor(e.targetSide, 'impact')
+          const recipe = resolveFx(cue.move)
+          const strong = e.crit || e.effectiveness >= 2
+          const tracedNormalAttack = normalAttack(cue, 'hit-react')
+          if (e.crit) {
+            fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
+            fxRef.current?.ring({ ...pos, color: '#ffd23f' })
+            fxRef.current?.flash('#ffffff', 0.45)
+          } else if (e.effectiveness >= 2) {
+            fxRef.current?.ring({ ...pos, color: recipe.accent })
+          }
+          const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
+          if (!reducedMotionRef.current) {
+            void rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
+          }
+          if (!tracedNormalAttack || strong) stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1)
+        },
+        hitStop: (cue, cueContext) => {
+          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          const e = cue.event
+          if (e.missed || e.amount <= 0 || juiceRef.current !== 'full' || reducedMotionRef.current) return
+          return cinematicRef.current!.pause(e.crit || e.effectiveness >= 2 ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
+        },
+        clear: (cue, cueContext) => {
+          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          normalAttack(cue, 'recover')
+        },
       },
-      impact: async (cue, cueContext) => {
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-        const e = cue.event
-        if (e.missed || e.amount <= 0) return
-        baselineDriver()?.recordCastImpact(performance.now())
-        const recipe = resolveFx(cue.move)
-        const strong = e.crit || e.effectiveness >= 2
-        const impactDelayMs = playMoveFx(
-          fxRef.current,
-          strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
-          FX_POS[e.attackerSide],
-          FX_POS[e.targetSide],
-        )
-        if (impactDelayMs > 0) await cueContext.clock.wait(impactDelayMs, cueContext.signal)
-      },
-      reaction: (cue, cueContext) => {
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-        const e = cue.event
-        if (e.missed || e.amount <= 0) return
-        const pos = FX_POS[e.targetSide]
-        const recipe = resolveFx(cue.move)
-        const strong = e.crit || e.effectiveness >= 2
-        if (e.crit) {
-          fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
-          fxRef.current?.ring({ ...pos, color: '#ffd23f' })
-          fxRef.current?.flash('#ffffff', 0.45)
-        } else if (e.effectiveness >= 2) {
-          fxRef.current?.ring({ ...pos, color: recipe.accent })
-        }
-        const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
-        if (!reducedMotionRef.current) {
-          void rootShake.start({ x: [0, -mag, mag * 0.8, -mag * 0.5, 0], transition: { duration: 0.34 } })
-        }
-        stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1)
-      },
-      hitStop: (cue, cueContext) => {
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-        const e = cue.event
-        if (e.missed || e.amount <= 0 || juiceRef.current !== 'full' || reducedMotionRef.current) return
-        return cinematicRef.current!.pause(e.crit || e.effectiveness >= 2 ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
-      },
-      clear: () => undefined,
-    },
-    hud: {
+      hud: {
       showMove: (cue, cueContext) => {
         const prefix = cue.attackerSide === 'foe' ? '對手的 ' : ''
         useBattleStore.getState().presentationSetBanner(
@@ -1432,8 +1482,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           effText: e.effectivenessText, missed: e.missed,
         })
         if (juiceRef.current !== 'off') {
+          const impact = projectedSceneAnchor(e.targetSide, 'impact')
           damageRef.current?.spawn({
-            ...FX_POS[e.targetSide], amount: e.amount, crit: e.crit,
+            ...impact, amount: e.amount, crit: e.crit,
             effectiveness: e.effectiveness, missed: e.missed,
           })
         }
@@ -1587,8 +1638,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         }
         await cueContext.clock.wait(1100, cueContext.signal)
       },
-    },
-  }), [playLegacyEvent, rootShake, sessionLifecycle])
+      },
+    }
+  }, [playLegacyEvent, projectedSceneAnchor, rootShake, sessionLifecycle])
 
   const presentationCueHandler = useMemo(
     () => new LegacyBattleCueHandler(createCuePorts()),
@@ -1966,6 +2018,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           const pools = fxRef.current?.diagnostics?.()
           if (pools) driver?.recordPools(pools)
         } : undefined}
+        onSceneDiagnostics={syncHeadSafeRects}
       />
       {/* EXT.3 天氣持續層（z2，介於 R3F 與 FxCanvas）：off 不掛＝零 rAF、嚴格回 M22 基線。 */}
       {juice !== 'off' && (

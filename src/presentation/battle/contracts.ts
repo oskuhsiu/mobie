@@ -180,9 +180,9 @@ export interface PresentationContext {
 }
 
 export interface DamageTiming {
-  windupMs: 440
-  resultMs: 820
-  clearMs: 140
+  windupMs: number
+  resultMs: number
+  clearMs: number
 }
 
 export interface DamageCue {
@@ -195,6 +195,7 @@ export interface DamageCue {
   attackerSide: Side
   defenderSide: Side
   move: Move
+  normalAttack: boolean
   timing: DamageTiming
 }
 

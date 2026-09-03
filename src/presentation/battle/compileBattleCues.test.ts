@@ -43,8 +43,33 @@ describe('compileBattleCues', () => {
     if (damage?.kind !== 'damage') throw new Error('expected damage cue')
     expect(damage).toMatchObject({
       attacker: before.player.members[0], defender: before.foe.members[0], move: selected,
-      timing: { windupMs: 440, resultMs: 820, clearMs: 140 },
+      normalAttack: true,
+      timing: { windupMs: 160, resultMs: 640, clearMs: 140 },
     })
+  })
+
+  it('keeps normal camera timing off star, chain, combo, and support damage', () => {
+    const playerDamage: BattleEvent = {
+      type: 'damageApplied', attackerSide: 'player', attackerIndex: 0,
+      targetSide: 'foe', targetIndex: 0, amount: 10, missed: false,
+      crit: false, effectiveness: 1, effectivenessText: null,
+      hpBefore: 100, hpAfter: 90, maxHp: 100,
+    }
+    const foeDamage: BattleEvent = { ...playerDamage, attackerSide: 'foe', targetSide: 'player' }
+    const supportDamage: BattleEvent = { ...playerDamage, attackerIndex: 1 }
+    const before = createBattleState([mon(), mon()], [mon()])
+    const compile = (input: ReplayInput, event: BattleEvent) => {
+      const cue = compileBattleCues({ ...job(input, [event]), before })
+        .find((candidate) => candidate.kind === 'damage')
+      if (cue?.kind !== 'damage') throw new Error('expected damage cue')
+      return cue
+    }
+
+    expect(compile({ type: 'ATTACK' }, playerDamage).normalAttack).toBe(true)
+    expect(compile({ type: 'ATTACK', starStrike: true }, playerDamage).normalAttack).toBe(false)
+    expect(compile({ type: 'CHAIN', hits: [] }, playerDamage).normalAttack).toBe(false)
+    expect(compile({ type: 'ATTACK' }, supportDamage).normalAttack).toBe(false)
+    expect(compile({ type: 'CHAIN', hits: [] }, foeDamage).normalAttack).toBe(true)
   })
 
   it.each<readonly [ReplayInput, readonly string[]]>([

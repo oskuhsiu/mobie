@@ -37,6 +37,7 @@ export type FxPoint = { nx: number; ny: number }
 
 type MoveFxOverride = Partial<Omit<FxRecipe, 'mode'>>
 const FRAME_MS = 1000 / 60
+const REDUCED_TRAVEL_MS = 150
 
 export const typePalette: Record<TypeName, TypePalette> = {
   normal: { color: '#d5d8d4', accent: '#8f938f', shape: 'dot', sound: 'airy' },
@@ -89,9 +90,20 @@ export function getFxImpactDelayMs(recipe: FxRecipe): number {
   return recipe.mode === 'travel' ? Math.ceil((1 / FX_TRAVEL_SPEED) + 1) * FRAME_MS : 0
 }
 
-export function playMoveFx(fx: FxHandle | null | undefined, recipe: FxRecipe, from: FxPoint, to: FxPoint): number {
+export function playMoveFx(
+  fx: FxHandle | null | undefined,
+  recipe: FxRecipe,
+  from: FxPoint,
+  to: FxPoint,
+  options: { reducedMotion?: boolean } = {},
+): number {
   if (!fx) return 0
-  if (recipe.mode === 'travel') {
+  if (recipe.mode === 'travel' && options.reducedMotion) {
+    const count = Math.max(4, Math.ceil(recipe.count / 2))
+    fx.burst({ ...from, color: recipe.color, count, power: 0.6, shape: recipe.shape })
+    fx.burst({ ...to, color: recipe.accent, count, power: 0.6, shape: recipe.shape })
+    if (recipe.ring) fx.ring({ ...to, color: recipe.accent })
+  } else if (recipe.mode === 'travel') {
     fx.travel({
       from,
       to,
@@ -108,5 +120,7 @@ export function playMoveFx(fx: FxHandle | null | undefined, recipe: FxRecipe, fr
     if (recipe.ring) fx.ring({ ...pos, color: recipe.accent })
   }
   if (recipe.flashAlpha > 0) fx.flash(recipe.color, recipe.flashAlpha)
-  return getFxImpactDelayMs(recipe)
+  return recipe.mode === 'travel' && options.reducedMotion
+    ? REDUCED_TRAVEL_MS
+    : getFxImpactDelayMs(recipe)
 }

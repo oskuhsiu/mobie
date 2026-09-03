@@ -1,8 +1,10 @@
-import { useRef } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Group } from 'three'
+import { Group, Object3D } from 'three'
 import type { BattleMobie } from '@/game/types'
 import type { Side } from '@/game/battle/reducer'
+import type { BattleAnchorKind } from '@/presentation/battle/battleAnchors'
+import type { NormalAttackPhase } from '@/scene/battle/contracts'
 import { MobieVisual } from './MobieVisual'
 
 // 一隻在場Mobie的動畫狀態：全部由 BattleStage 以 imperative 方式寫入、
@@ -18,10 +20,21 @@ export interface MonAnim {
   /** 是否倒下（觸發傾倒淡沉）+ 進度 0..1 */
   fainted: boolean
   faintT: number
+  attackPhase: NormalAttackPhase | 'idle'
+  attackT: number
 }
 
 export function makeAnim(): MonAnim {
-  return { lungeT: 0, shakeT: 0, shakeMag: 0, enterT: 0, fainted: false, faintT: 0 }
+  return {
+    lungeT: 0,
+    shakeT: 0,
+    shakeMag: 0,
+    enterT: 0,
+    fainted: false,
+    faintT: 0,
+    attackPhase: 'idle',
+    attackT: 0,
+  }
 }
 
 // 動畫時長（秒）。BattleStage 的 StageHandle 以同名常數 seed 對應的剩餘秒數，
@@ -52,11 +65,36 @@ interface Combatant3DProps {
    *  讓「時停」連待機浮動都慢下來不穿幫。FxCanvas/Tone 不走這條、保持 real-time。 */
   timeScaleRef: { current: number }
   reducedMotion: boolean
+  onArtworkModeChange?: (mode: 'artwork' | 'silhouette') => void
+}
+
+export interface CombatantRigHandle {
+  getAnchor(anchor: BattleAnchorKind): Object3D | null
 }
 
 /** 場上一隻 Mobie：artwork billboard + 撲擊/受擊/倒下/入場動畫。 */
-export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, timeScaleRef, reducedMotion }: Combatant3DProps) {
+export const Combatant3D = forwardRef<CombatantRigHandle, Combatant3DProps>(function Combatant3D({
+  side,
+  mon,
+  anim,
+  base,
+  lungeVec,
+  faceY,
+  bobPhase,
+  timeScaleRef,
+  reducedMotion,
+  onArtworkModeChange,
+}, ref) {
   const group = useRef<Group>(null)
+  const anchors = useRef<Record<BattleAnchorKind, Object3D | null>>({
+    root: null,
+    center: null,
+    head: null,
+    ground: null,
+    cast: null,
+    impact: null,
+  })
+  useImperativeHandle(ref, () => ({ getAnchor: (anchor) => anchors.current[anchor] }), [])
   // 虛擬累積時間（吃 timeScale）：取代 state.clock.elapsedTime 當 idle bob 的時鐘，慢鏡時 bob 同步變慢。
   const tRef = useRef(0)
 
@@ -89,6 +127,24 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, 
         z += lungeVec[1] * curve
       }
 
+      if (anim.attackT > 0) {
+        anim.attackT = Math.max(0, anim.attackT - delta)
+        if (anim.attackT === 0) {
+          anim.attackPhase = 'idle'
+        }
+      }
+      if (anim.attackPhase !== 'idle') {
+        const phaseDistance = anim.attackPhase === 'anticipate' && !reducedMotion
+          ? -0.12
+          : anim.attackPhase === 'contact'
+            ? reducedMotion ? 0 : 0.9
+            : anim.attackPhase === 'recover' && !reducedMotion
+              ? 0.25
+              : 0
+        x += lungeVec[0] * phaseDistance
+        z += lungeVec[1] * phaseDistance
+      }
+
       if (anim.enterT > 0) {
         anim.enterT = Math.max(0, anim.enterT - delta)
         const p = 1 - anim.enterT / ENTER_DUR // 0→1
@@ -111,7 +167,20 @@ export function Combatant3D({ side, mon, anim, base, lungeVec, faceY, bobPhase, 
   // MobieVisual 自我保護（內含 artwork 載入失敗邊界），此處無須再外包。
   return (
     <group ref={group} position={base}>
-      <MobieVisual artworkUrl={mon.artworkUrl} shiny={mon.shiny} />
+      <object3D ref={(node) => { anchors.current.root = node }} position={[0, 0, 0]} />
+      <object3D ref={(node) => { anchors.current.center = node }} position={[0, 1.05, 0]} />
+      <object3D ref={(node) => { anchors.current.head = node }} position={[0, 2.12, 0]} />
+      <object3D ref={(node) => { anchors.current.ground = node }} position={[0, 0.02, 0]} />
+      <object3D ref={(node) => { anchors.current.cast = node }} position={[side === 'player' ? 0.72 : -0.72, 1.2, -0.05]} />
+      <object3D ref={(node) => { anchors.current.impact = node }} position={[0, 1.18, 0.18]} />
+      <MobieVisual
+        artworkUrl={mon.artworkUrl}
+        name={mon.nameZh}
+        shiny={mon.shiny}
+        onModeChange={onArtworkModeChange}
+      />
     </group>
   )
-}
+})
+
+Combatant3D.displayName = 'Combatant3D'

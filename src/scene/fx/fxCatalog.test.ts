@@ -60,4 +60,29 @@ describe('fxCatalog', () => {
     expect(calls).toContain('travel:0.2:0.8:burst-ring:20')
     expect(calls).toContain('burst:0.2:0.6:dot')
   })
+
+  it('replaces reduced-motion travel with short endpoint pulses', () => {
+    const calls: string[] = []
+    const fx = {
+      burst: (o: Parameters<FxHandle['burst']>[0]) => calls.push(`burst:${o.nx}:${o.ny}`),
+      ring: () => calls.push('ring'),
+      flash: () => calls.push('flash'),
+      travel: () => calls.push('travel'),
+      converge: () => undefined,
+      shockwave: () => undefined,
+      clear: () => undefined,
+    } satisfies FxHandle
+    const delay = playMoveFx(
+      fx,
+      resolveFx(move(1021, 'water', 'special')),
+      { nx: 0.2, ny: 0.6 },
+      { nx: 0.8, ny: 0.2 },
+      { reducedMotion: true },
+    )
+
+    expect(delay).toBe(150)
+    expect(calls).toContain('burst:0.2:0.6')
+    expect(calls).toContain('burst:0.8:0.2')
+    expect(calls).not.toContain('travel')
+  })
 })
