@@ -42,7 +42,7 @@ import type {
   BattleSceneHandle,
   NormalAttackPhase,
 } from '@/scene/battle/contracts'
-import { resolveTerrainPalette } from '@/scene/r3f/terrainVisual'
+import { resolveTerrainPalette, resolveTerrainWorld } from '@/scene/r3f/terrainVisual'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
@@ -661,18 +661,19 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const wildEventsRef = useRef(wildEvents)
   wildEventsRef.current = wildEvents
 
-  // EXT.3：當前地形 → 視覺 palette（地板色調/環境光/霧/天氣 emitter）。純 display。
-  // 隨 terrainShift 更新（current 陣列換新參照即重算）；全空/neutral → 基線 palette。
-  const terrainPalette = useMemo(
-    () => resolveTerrainPalette(battle?.field.terrainEffects.current ?? []),
+  // Ticket 12：當前地形 → 一個主程序世界＋最多一個次地形 accent。純 display。
+  const terrainWorld = useMemo(
+    () => resolveTerrainWorld(battle?.field.terrainEffects.current ?? []),
     [battle?.field.terrainEffects.current],
   )
+  const terrainPalette = terrainWorld.primary
   // Graphics controls cost; juice remains an independent presentation-intensity ceiling.
   const graphicsWeatherDensity = !rendererReady
     ? 0
     : rendererState?.tier === 'high' ? 1 : rendererState?.tier === 'balanced' ? 0.3 : 0.2
   const juiceWeatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
   const weatherDensity = graphicsWeatherDensity * juiceWeatherDensity * (reducedMotion ? 0.1 : 1)
+  const terrainVisualIntensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.5 : 0
 
   const fxRef = useRef<FxHandle>(null)
   const damageRef = useRef<DamageNumbersHandle>(null)
@@ -1290,7 +1291,6 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
         pushFeed(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
         const shiftColor = juiceRef.current === 'off' ? '#a07aff' : resolveTerrainPalette([e.terrainId]).particleColor
-        fxRef.current?.flash(shiftColor, 0.35)
         fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: shiftColor })
         playAudio(() => audio.play('super'))
         await delay(950)
@@ -2000,7 +2000,8 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         snapshot={{
           player,
           foe,
-          palette: juice === 'off' ? undefined : terrainPalette,
+          terrainWorld,
+          terrainVisualIntensity,
           outcome: battle.winner,
         }}
         sessionToken={runtimeSession.token}

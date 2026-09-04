@@ -40,6 +40,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Neutral arena camera tracer** (M23 Ticket 11): one R3F scene owns the arena, lights, combatants,
   world-space rig anchors, and reclaimable wide/caster/impact shots. Artwork billboards and named
   procedural silhouettes share the same projection contract, while reduced motion stays wide.
+- **Procedural terrain worlds** (M23 Ticket 12): all 23 terrain IDs resolve to one of eight reusable
+  R3F stage silhouettes with distinct palette, lighting, fog, and bounded weather. Mixed terrain keeps
+  one primary world plus one sparse accent, with a 400ms palette/weather crossfade and tiered detail.
 - **Portable saves** (M5): export your roster/cards (+ optional 3D models) as a `username.save` (zip)
   to your own Google Drive/Files via the iOS share sheet; re-import with old/new detection, consented
   overwrite, and an automatic pre-import backup. **No backend** — your cloud, your file.
@@ -142,8 +145,8 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–11 are complete** and browser-verified —
-**647 Vitest tests**, typecheck, and build are green. Content: national dex 1–1025, 16 regions (+ arena),
+M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–12 are complete** and browser-verified —
+**655 Vitest tests**, typecheck, and build are green. Content: national dex 1–1025, 16 regions (+ arena),
 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
@@ -153,8 +156,8 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-**Next:** M23 Ticket 12 turns all 23 terrain variants into distinct procedural worlds behind the
-existing renderer/camera contract. Sparse initial loadouts and the M22 f–j interaction backlog remain later
+**Next:** M23 Ticket 13 builds the first Three.js VFX runtime tracers behind the existing presentation
+and renderer contracts. Sparse initial loadouts and the M22 f–j interaction backlog remain later
 work. M4 (MediaPipe motion-control QTE) remains skipped by the owner. **Owner-only leftover:** M18.e
 renames the repo directory + git remote (`pokemon-mezastar` → `mobie`). See `plan/CHECKLIST.md` for the
 milestone breakdown and `handoff.md` for the live working state.

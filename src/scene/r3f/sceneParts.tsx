@@ -1,5 +1,20 @@
-import { useMemo } from 'react'
-import { CanvasTexture, DoubleSide, type Texture } from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import {
+  CanvasTexture,
+  Color,
+  DoubleSide,
+  type DirectionalLight,
+  type HemisphereLight,
+  type MeshBasicMaterial,
+  type MeshStandardMaterial,
+  type PointLight,
+  type Texture,
+} from 'three'
+import {
+  TERRAIN_WORLD_TRANSITION_MS,
+  type TerrainPalette,
+} from './terrainVisual'
 
 // 共用場景元件（BattleStage / CaptureStage 共用）。
 // 全程序化幾何 + 燈光，不依賴任何 HDRI/外部資產（offline + 不散布侵權資產）。
@@ -8,12 +23,65 @@ import { CanvasTexture, DoubleSide, type Texture } from 'three'
  * 競技舞台燈光：半球環境光 + 主方向光 + 冷色補光。刻意輕量以顧 iPad 幀率。
  * EXT.3：`ambient`＝terrain palette 的天空色（半球上色），未給＝基線 `#bcd0ff`（neutral）。
  */
-export function StageLights({ ambient = '#bcd0ff' }: { ambient?: string }) {
+interface ColorOwner { color: Color }
+
+export function useTerrainColorCrossfade<T extends ColorOwner>(
+  ref: { current: T | null },
+  targetColor: string,
+) {
+  const from = useRef(new Color(targetColor))
+  const target = useRef(new Color(targetColor))
+  const elapsed = useRef(TERRAIN_WORLD_TRANSITION_MS / 1000)
+
+  useEffect(() => {
+    if (ref.current) from.current.copy(ref.current.color)
+    target.current.set(targetColor)
+    elapsed.current = 0
+  }, [ref, targetColor])
+
+  useFrame((_state, delta) => {
+    const owner = ref.current
+    if (!owner || elapsed.current >= TERRAIN_WORLD_TRANSITION_MS / 1000) return
+    elapsed.current = Math.min(TERRAIN_WORLD_TRANSITION_MS / 1000, elapsed.current + delta)
+    owner.color.lerpColors(
+      from.current,
+      target.current,
+      elapsed.current / (TERRAIN_WORLD_TRANSITION_MS / 1000),
+    )
+  })
+}
+
+export function StageLights({
+  ambient = '#bcd0ff',
+  palette,
+  highDetail = true,
+  intensity = 1,
+}: {
+  ambient?: string
+  palette?: TerrainPalette
+  highDetail?: boolean
+  intensity?: number
+}) {
+  const hemisphere = useRef<HemisphereLight>(null)
+  const key = useRef<DirectionalLight>(null)
+  const rim = useRef<PointLight>(null)
+  useTerrainColorCrossfade(hemisphere, palette?.ambient ?? ambient)
+  useTerrainColorCrossfade(key, palette?.particleColor ?? '#fff4e0')
+  useTerrainColorCrossfade(rim, palette?.featureTint ?? '#7aa2ff')
+  const safeIntensity = Math.min(1, Math.max(0, intensity))
+
   return (
     <>
-      <hemisphereLight args={[ambient, '#1a1230', 0.9]} />
-      <directionalLight position={[3.5, 7, 4]} intensity={1.15} color="#fff4e0" />
-      <pointLight position={[-4, 3, -3]} intensity={28} color="#7aa2ff" distance={18} decay={2} />
+      <hemisphereLight ref={hemisphere} args={['#bcd0ff', '#1a1230', 0.78 + safeIntensity * 0.12]} />
+      <directionalLight ref={key} position={[3.5, 7, 4]} intensity={0.95 + safeIntensity * 0.2} color="#fff4e0" />
+      <pointLight
+        ref={rim}
+        position={[-4, 3, -3]}
+        intensity={(highDetail ? 28 : 12) * safeIntensity}
+        color="#7aa2ff"
+        distance={18}
+        decay={2}
+      />
     </>
   )
 }
@@ -51,20 +119,37 @@ export function Pedestal({
  * 競技場地板：大圓盤 + 同心透視環（傾斜後成橢圓，撐起 3D 深度線索）。
  * EXT.3：`tint`＝terrain palette 地板色調，未給＝基線 `#0a0e22`（neutral）。
  */
-export function ArenaFloor({ tint = '#0a0e22' }: { tint?: string }) {
+export function ArenaFloor({
+  tint = '#0a0e22',
+  featureTint = '#3a4a8c',
+}: {
+  tint?: string
+  featureTint?: string
+}) {
+  const floor = useRef<MeshStandardMaterial>(null)
+  useTerrainColorCrossfade(floor, tint)
+
   return (
     <group rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.23, 0]}>
       <mesh receiveShadow>
         <circleGeometry args={[14, 64]} />
-        <meshStandardMaterial color={tint} roughness={1} metalness={0} />
+        <meshStandardMaterial ref={floor} color="#0a0e22" roughness={1} metalness={0} />
       </mesh>
       {[3, 5.4, 8].map((r) => (
-        <mesh key={r} position={[0, 0, 0.01]}>
-          <ringGeometry args={[r - 0.04, r, 96]} />
-          <meshBasicMaterial color="#3a4a8c" transparent opacity={0.16} side={DoubleSide} />
-        </mesh>
+        <ArenaRing key={r} radius={r} color={featureTint} />
       ))}
     </group>
+  )
+}
+
+function ArenaRing({ radius, color }: { radius: number; color: string }) {
+  const material = useRef<MeshBasicMaterial>(null)
+  useTerrainColorCrossfade(material, color)
+  return (
+    <mesh position={[0, 0, 0.01]}>
+      <ringGeometry args={[radius - 0.04, radius, 96]} />
+      <meshBasicMaterial ref={material} color="#3a4a8c" transparent opacity={0.16} side={DoubleSide} />
+    </mesh>
   )
 }
 

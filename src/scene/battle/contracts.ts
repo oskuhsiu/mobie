@@ -1,6 +1,6 @@
 import type { Side } from '@/game/battle/reducer'
 import type { BattleMobie } from '@/game/types'
-import type { TerrainPalette } from '@/scene/r3f/terrainVisual'
+import type { ResolvedTerrainWorld } from '@/scene/r3f/terrainVisual'
 import type {
   BattleAnchorKind,
   BattleScreenPoint,
@@ -43,7 +43,8 @@ export interface BattleSceneDiagnostics {
 export interface BattleSceneSnapshot {
   player: BattleMobie
   foe: BattleMobie
-  palette?: TerrainPalette
+  terrainWorld: ResolvedTerrainWorld
+  terrainVisualIntensity: number
   outcome: 'player' | 'foe' | null
 }
 

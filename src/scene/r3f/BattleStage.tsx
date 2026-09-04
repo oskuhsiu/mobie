@@ -15,6 +15,7 @@ import type {
   NormalAttackCue,
 } from '@/scene/battle/contracts'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
+import { TerrainWorld } from './TerrainWorld'
 import {
   Combatant3D,
   makeAnim,
@@ -278,7 +279,8 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   paused,
   reducedMotion,
 }, ref) {
-  const { player, foe, palette } = snapshot
+  const { player, foe, terrainWorld, terrainVisualIntensity } = snapshot
+  const palette = terrainWorld.primary
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
   const timeScaleRef = useRef(1)
   const rigs = useRef<Record<Side, CombatantRigHandle | null>>({ player: null, foe: null })
@@ -388,7 +390,9 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
     >
       <RendererLifecycle onReady={onReady} onFatal={onFatal} devShaderFailure={devShaderFailure} />
-      {palette?.fog && <fog attach="fog" args={[palette.fog.color, palette.fog.near, palette.fog.far]} />}
+      {terrainVisualIntensity > 0 && palette.fog && (
+        <fog attach="fog" args={[palette.fog.color, palette.fog.near, palette.fog.far]} />
+      )}
       {(onRenderedFrame || onRendererDiagnostics) && (
         <DiagnosticsProbe
           onRenderedFrame={onRenderedFrame}
@@ -414,8 +418,17 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
         onRecoverEnd={finishRecover}
         onSettled={publish}
       />
-      <StageLights ambient={palette?.ambient} />
-      <ArenaFloor tint={palette?.groundTint} />
+      <StageLights
+        palette={palette}
+        highDetail={tier === 'high'}
+        intensity={terrainVisualIntensity}
+      />
+      <ArenaFloor tint={palette.groundTint} featureTint={palette.featureTint} />
+      <TerrainWorld
+        world={terrainWorld}
+        highDetail={tier === 'high'}
+        intensity={terrainVisualIntensity}
+      />
       <Pedestal position={FOE_BASE} color="#ff7a9c" />
       <Pedestal position={PLAYER_BASE} color="#5b8cff" />
       <group position={FOE_BASE}><BlobShadow /></group>

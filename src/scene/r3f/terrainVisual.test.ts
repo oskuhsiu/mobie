@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { TERRAINS } from '@/game/data/terrains'
 import {
+  TERRAIN_ARCHETYPES,
   TERRAIN_PALETTES,
+  TERRAIN_WORLD_TRANSITION_MS,
   resolveTerrainPalette,
+  resolveTerrainWorld,
+  type TerrainArchetype,
   type WeatherEmitter,
 } from './terrainVisual'
 
@@ -55,6 +59,59 @@ describe('terrainVisual palette 表', () => {
     expect(TERRAIN_PALETTES['psychic-field'].emitter).toBe('mist')
     expect(TERRAIN_PALETTES['psychic-field'].sparkAccent).toMatch(HEX)
   })
+
+  it('23 種 terrain 完整映射到恰好 8 個程序化世界 archetype', () => {
+    const used = new Set<TerrainArchetype>()
+
+    for (const terrain of TERRAINS) {
+      const visual = TERRAIN_PALETTES[terrain.id]
+      expect(TERRAIN_ARCHETYPES, terrain.id).toContain(visual.archetype)
+      expect(visual.horizonTint, terrain.id).toMatch(HEX)
+      expect(visual.featureTint, terrain.id).toMatch(HEX)
+      used.add(visual.archetype)
+    }
+
+    expect(TERRAINS).toHaveLength(23)
+    expect(used).toEqual(new Set(TERRAIN_ARCHETYPES))
+  })
+
+  it('8 個 archetype 遵守 canonical terrain 分組', () => {
+    const expected: Record<TerrainArchetype, string[]> = {
+      arena: ['neutral'],
+      meadow: ['grassland', 'flowerfield', 'strong-winds', 'grassy-field'],
+      wetlands: ['coastal', 'rain', 'swamp'],
+      volcanic: ['volcanic', 'steam'],
+      cavern: ['cavern', 'sandstorm'],
+      storm: ['stormfield', 'electric-field', 'dragons-peak'],
+      spectral: ['haunt', 'mystic', 'psychic-field', 'misty-field', 'fog'],
+      sanctuary: ['holy-ground', 'sunny', 'snowfield'],
+    }
+
+    for (const [archetype, ids] of Object.entries(expected)) {
+      expect(ids.every((id) => TERRAIN_PALETTES[id as keyof typeof TERRAIN_PALETTES].archetype === archetype)).toBe(true)
+    }
+  })
+
+  it('每種 terrain 的 archetype／palette／weather 視覺簽章皆可辨識', () => {
+    const signatures = TERRAINS.map(({ id }) => {
+      const visual = TERRAIN_PALETTES[id]
+      return [
+        visual.archetype,
+        visual.groundTint,
+        visual.horizonTint,
+        visual.featureTint,
+        visual.emitter,
+        visual.particleColor,
+      ].join(':')
+    })
+
+    expect(new Set(signatures).size).toBe(TERRAINS.length)
+  })
+
+  it('terrain world palette/weather 過場固定在規格的 300–500ms', () => {
+    expect(TERRAIN_WORLD_TRANSITION_MS).toBeGreaterThanOrEqual(300)
+    expect(TERRAIN_WORLD_TRANSITION_MS).toBeLessThanOrEqual(500)
+  })
 })
 
 describe('resolveTerrainPalette', () => {
@@ -71,5 +128,36 @@ describe('resolveTerrainPalette', () => {
     expect(resolveTerrainPalette(['neutral', 'volcanic'])).toBe(TERRAIN_PALETTES.volcanic)
     // 混合地形：第一個非 neutral 勝出
     expect(resolveTerrainPalette(['haunt', 'rain'])).toBe(TERRAIN_PALETTES.haunt)
+  })
+})
+
+describe('resolveTerrainWorld', () => {
+  it('第一個非 neutral terrain 決定主世界', () => {
+    expect(resolveTerrainWorld([]).primary).toBe(TERRAIN_PALETTES.neutral)
+    expect(resolveTerrainWorld(['neutral', 'rain']).primary).toBe(TERRAIN_PALETTES.rain)
+    expect(resolveTerrainWorld(['volcanic', 'rain']).primary).toBe(TERRAIN_PALETTES.volcanic)
+  })
+
+  it('複合 terrain 最多投影一個不含 weather emitter 的 secondary accent', () => {
+    const world = resolveTerrainWorld(['neutral', 'rain', 'holy-ground', 'snowfield'])
+
+    expect(world.primary).toBe(TERRAIN_PALETTES.rain)
+    expect(world.secondaryAccent).toEqual({
+      terrainId: 'holy-ground',
+      archetype: TERRAIN_PALETTES['holy-ground'].archetype,
+      color: TERRAIN_PALETTES['holy-ground'].featureTint,
+    })
+    expect(world.secondaryAccent).not.toHaveProperty('emitter')
+  })
+
+  it('忽略重複主 terrain 與 neutral，不製造多餘 accent', () => {
+    expect(resolveTerrainWorld(['rain', 'neutral', 'rain']).secondaryAccent).toBeUndefined()
+  })
+
+  it('runtime unknown id 安全回 neutral，不留下空 world', () => {
+    expect(resolveTerrainWorld(['unknown' as never])).toEqual({
+      primaryId: 'neutral',
+      primary: TERRAIN_PALETTES.neutral,
+    })
   })
 })

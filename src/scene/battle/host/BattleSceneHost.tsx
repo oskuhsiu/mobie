@@ -31,6 +31,7 @@ import { CompatibilityBattleScene } from '@/scene/battle/compat/CompatibilityBat
 import { BattleRenderGate } from '@/ui/battle/BattleRenderGate'
 import { BattleSceneBoundary } from './BattleSceneBoundary'
 import { supportsWebGl } from './capabilityProbe'
+import { TERRAIN_WORLD_TRANSITION_MS } from '@/scene/r3f/terrainVisual'
 
 type NextSceneComponent = ForwardRefExoticComponent<NextBattleSceneProps & RefAttributes<BattleSceneHandle>>
 
@@ -198,6 +199,11 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       data-battle-shake={reducedMotion ? '0' : 'enabled'}
       data-battle-bob={reducedMotion ? '0' : 'enabled'}
       data-reduced-motion={reducedMotion ? 'true' : 'false'}
+      data-terrain-id={snapshot.terrainWorld.primaryId}
+      data-terrain-archetype={snapshot.terrainWorld.primary.archetype}
+      data-terrain-accent={snapshot.terrainWorld.secondaryAccent?.terrainId}
+      data-terrain-visual-intensity={snapshot.terrainVisualIntensity}
+      data-terrain-transition-ms={TERRAIN_WORLD_TRANSITION_MS}
     >
       {state.phase !== 'compatibility-ready' && NextScene && (
         <BattleSceneBoundary onFatal={(error) => fatal(classifyRendererError(error))}>

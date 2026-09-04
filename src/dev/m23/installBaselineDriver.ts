@@ -10,6 +10,8 @@ import { useSettings } from '@/store/settingsStore'
 import { useBattleStore, type BattleCommandNotice } from '@/store/battleStore'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
+import { lookupTerrain } from '@/game/data/terrains'
+import type { TerrainId } from '@/game/types'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
 import type { BattleFeedEntry } from '@/presentation/battle/contracts'
 import type { BattleRendererState } from '@/presentation/battle/rendering'
@@ -56,6 +58,7 @@ export interface M23BaselineDriver {
   configure: (options?: Partial<M23BaselineDriverOptions>) => M23BaselineDriverOptions
   run: (options?: Pick<Partial<M23BaselineDriverOptions>, 'scenarioId' | 'seed'>) => M23BaselineScenarioResult
   prepareCheckpoint: (checkpoint: 'player-choice' | 'qte' | 'star' | 'terrain' | 'terrain-rain' | 'switch') => void
+  prepareTerrain: (terrainIds: readonly TerrainId[]) => void
   prepareTransactionCase: (caseId: M23TurnTransactionCase) => void
   prepareHudCase: (caseId: M23HudCase) => void
   battleState: () => ReturnType<typeof useBattleStore.getState>['battle']
@@ -209,6 +212,26 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     }
   }
 
+  const prepareTerrain = (terrainIds: readonly TerrainId[]): void => {
+    const state = useBattleStore.getState()
+    if (!state.battle) throw new Error('A live battle is required before preparing terrain')
+    for (const terrainId of terrainIds) {
+      if (!lookupTerrain(terrainId)) throw new Error(`Unknown terrain: ${terrainId}`)
+    }
+    useBattleStore.setState({
+      battle: {
+        ...state.battle,
+        field: {
+          ...state.battle.field,
+          terrainEffects: {
+            ...state.battle.field.terrainEffects,
+            current: [...terrainIds],
+          },
+        },
+      },
+      phase: 'playerChoice',
+    })
+  }
   const driver: M23BaselineDriver = {
     active: true,
     options,
@@ -218,22 +241,8 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       seed: runOptions.seed ?? options.seed,
     }),
     prepareCheckpoint: (checkpoint) => {
-      const state = useBattleStore.getState()
-      if (!state.battle) throw new Error('A live battle is required before preparing a checkpoint')
       if (checkpoint === 'terrain' || checkpoint === 'terrain-rain') {
-        useBattleStore.setState({
-          battle: {
-            ...state.battle,
-            field: {
-              ...state.battle.field,
-              terrainEffects: {
-                ...state.battle.field.terrainEffects,
-                current: [checkpoint === 'terrain' ? 'volcanic' : 'rain'],
-              },
-            },
-          },
-          phase: 'playerChoice',
-        })
+        prepareTerrain([checkpoint === 'terrain' ? 'volcanic' : 'rain'])
         return
       }
       if (checkpoint === 'star') {
@@ -244,6 +253,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
         phase: checkpoint === 'qte' ? 'qte' : checkpoint === 'switch' ? 'switchSelect' : 'playerChoice',
       })
     },
+    prepareTerrain,
     prepareTransactionCase: (caseId) => {
       if (!M23_TURN_TRANSACTION_CASES.includes(caseId)) throw new Error(`Unknown turn transaction case: ${caseId}`)
       const scenario = runM23BaselineScenario({ scenarioId: options.scenarioId, seed: options.seed })

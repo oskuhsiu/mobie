@@ -1,5 +1,9 @@
-import { useEffect, useRef } from 'react'
-import type { WeatherEmitter, WeatherOverlay } from '@/scene/r3f/terrainVisual'
+import { useEffect, useRef, useState } from 'react'
+import {
+  TERRAIN_WORLD_TRANSITION_MS,
+  type WeatherEmitter,
+  type WeatherOverlay,
+} from '@/scene/r3f/terrainVisual'
 import type { M23PoolCount } from '@/dev/m23/contracts'
 
 // EXT.3 天氣持續層（plan/EXT.3，圓桌 session-20260630-220524 定案）。
@@ -40,13 +44,31 @@ const BASE_COUNT: Record<WeatherEmitter, number> = {
 
 const TWO_PI = Math.PI * 2
 const rand = (a: number, b: number) => a + Math.random() * (b - a)
+const WEATHER_FADE_HALF_MS = TERRAIN_WORLD_TRANSITION_MS / 2
 
 export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, paused = false, zIndex = 2, onPoolDiagnostics }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const cfg = useRef({ emitter, color, sparkAccent, overlay, density, paused })
-  cfg.current = { emitter, color, sparkAccent, overlay, density, paused }
+  const [visual, setVisual] = useState({ emitter, color, sparkAccent, overlay })
+  const [layerOpacity, setLayerOpacity] = useState(1)
+  const cfg = useRef({ ...visual, density, paused })
+  cfg.current = { ...visual, density, paused }
+
+  useEffect(() => {
+    const unchanged = visual.emitter === emitter
+      && visual.color === color
+      && visual.sparkAccent === sparkAccent
+      && visual.overlay === overlay
+    if (unchanged) return
+
+    setLayerOpacity(0)
+    const timer = window.setTimeout(() => {
+      setVisual({ emitter, color, sparkAccent, overlay })
+      setLayerOpacity(1)
+    }, WEATHER_FADE_HALF_MS)
+    return () => window.clearTimeout(timer)
+  }, [color, emitter, overlay, sparkAccent, visual])
   // emitter 切換時清空粒子池（terrainShift 過場），讓新天氣重新長出。
-  const prevEmitter = useRef(emitter)
+  const prevEmitter = useRef(visual.emitter)
   // 由主 effect 掛上、由 props 變更 effect 呼叫，喚醒可能已 idle-stop 的迴圈。
   const kickRef = useRef<(() => void) | null>(null)
   const diagnosticsRef = useRef(onPoolDiagnostics)
@@ -272,12 +294,23 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, p
   }, [])
 
   // props 變更（terrain 切換、juice 調整）→ 重新喚醒可能已 idle-stop 的迴圈。
-  useEffect(() => { kickRef.current?.() }, [emitter, color, sparkAccent, overlay, density, paused])
+  useEffect(() => { kickRef.current?.() }, [visual, density, paused])
 
   return (
     <canvas
       ref={canvasRef}
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex }}
+      data-weather-emitter={visual.emitter}
+      data-weather-transition-ms={TERRAIN_WORLD_TRANSITION_MS}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex,
+        opacity: layerOpacity,
+        transition: `opacity ${WEATHER_FADE_HALF_MS}ms linear`,
+      }}
     />
   )
 }
