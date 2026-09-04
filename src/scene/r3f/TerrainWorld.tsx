@@ -153,7 +153,7 @@ export function TerrainWorld({ world, highDetail, intensity }: {
   if (intensity <= 0) return null
   const opacity = 0.42 + Math.min(1, intensity) * 0.4
   const specs = WORLD_PRIMITIVES[world.primary.archetype]
-  const detailLimit = intensity < 0.75 ? 4 : highDetail ? specs.length : 6
+  const detailLimit = intensity < 0.3 ? 2 : intensity < 0.75 ? 4 : highDetail ? specs.length : 6
   const visible = specs.slice(0, detailLimit)
 
   return (

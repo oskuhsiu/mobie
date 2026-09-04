@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
 import {
   CanvasTexture,
   Color,
@@ -11,10 +10,8 @@ import {
   type PointLight,
   type Texture,
 } from 'three'
-import {
-  TERRAIN_WORLD_TRANSITION_MS,
-  type TerrainPalette,
-} from './terrainVisual'
+import type { TerrainPalette } from './terrainVisual'
+import { useTerrainTransition } from './terrainTransition'
 
 // 共用場景元件（BattleStage / CaptureStage 共用）。
 // 全程序化幾何 + 燈光，不依賴任何 HDRI/外部資產（offline + 不散布侵權資產）。
@@ -31,24 +28,15 @@ export function useTerrainColorCrossfade<T extends ColorOwner>(
 ) {
   const from = useRef(new Color(targetColor))
   const target = useRef(new Color(targetColor))
-  const elapsed = useRef(TERRAIN_WORLD_TRANSITION_MS / 1000)
 
-  useEffect(() => {
-    if (ref.current) from.current.copy(ref.current.color)
-    target.current.set(targetColor)
-    elapsed.current = 0
-  }, [ref, targetColor])
-
-  useFrame((_state, delta) => {
-    const owner = ref.current
-    if (!owner || elapsed.current >= TERRAIN_WORLD_TRANSITION_MS / 1000) return
-    elapsed.current = Math.min(TERRAIN_WORLD_TRANSITION_MS / 1000, elapsed.current + delta)
-    owner.color.lerpColors(
-      from.current,
-      target.current,
-      elapsed.current / (TERRAIN_WORLD_TRANSITION_MS / 1000),
-    )
-  })
+  useTerrainTransition(
+    targetColor,
+    () => {
+      if (ref.current) from.current.copy(ref.current.color)
+      target.current.set(targetColor)
+    },
+    (progress) => ref.current?.color.lerpColors(from.current, target.current, progress),
+  )
 }
 
 export function StageLights({

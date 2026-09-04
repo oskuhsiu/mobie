@@ -673,7 +673,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     : rendererState?.tier === 'high' ? 1 : rendererState?.tier === 'balanced' ? 0.3 : 0.2
   const juiceWeatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
   const weatherDensity = graphicsWeatherDensity * juiceWeatherDensity * (reducedMotion ? 0.1 : 1)
-  const terrainVisualIntensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.5 : 0
+  const terrainVisualIntensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.5 : 0.2
 
   const fxRef = useRef<FxHandle>(null)
   const damageRef = useRef<DamageNumbersHandle>(null)

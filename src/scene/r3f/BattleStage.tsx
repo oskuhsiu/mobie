@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { PerspectiveCamera, Vector3 } from 'three'
+import { Color, Fog, PerspectiveCamera, Vector3 } from 'three'
 import type { Side } from '@/game/battle/reducer'
 import {
   projectBattleAnchor,
@@ -16,6 +16,8 @@ import type {
 } from '@/scene/battle/contracts'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { TerrainWorld } from './TerrainWorld'
+import type { TerrainPalette } from './terrainVisual'
+import { useTerrainTransition } from './terrainTransition'
 import {
   Combatant3D,
   makeAnim,
@@ -225,6 +227,55 @@ function DiagnosticsProbe({
   return null
 }
 
+function TerrainFog({ palette, intensity }: { palette: TerrainPalette; intensity: number }) {
+  const { scene } = useThree()
+  const initial = useRef({
+    color: palette.fog?.color ?? palette.horizonTint,
+    near: palette.fog?.near ?? 50,
+    far: palette.fog?.far ?? 100,
+  })
+  const fogRef = useRef<Fog | null>(null)
+  const fromColor = useRef(new Color(initial.current.color))
+  const targetColor = useRef(new Color(initial.current.color))
+  const fromRange = useRef({ near: initial.current.near, far: initial.current.far })
+  const targetRange = useRef({ near: initial.current.near, far: initial.current.far })
+
+  useLayoutEffect(() => {
+    const previous = scene.fog
+    const fog = new Fog(initial.current.color, initial.current.near, initial.current.far)
+    scene.fog = fog
+    fogRef.current = fog
+    return () => {
+      fogRef.current = null
+      scene.fog = previous
+    }
+  }, [scene])
+
+  const targetFog = intensity > 0 ? palette.fog : undefined
+  useTerrainTransition(
+    `${targetFog?.color ?? palette.horizonTint}:${targetFog?.near ?? 50}:${targetFog?.far ?? 100}`,
+    () => {
+      const fog = fogRef.current
+      if (!fog) return
+      fromColor.current.copy(fog.color)
+      fromRange.current = { near: fog.near, far: fog.far }
+      targetColor.current.set(targetFog?.color ?? palette.horizonTint)
+      targetRange.current = targetFog
+        ? { near: targetFog.near, far: targetFog.far }
+        : { near: 50, far: 100 }
+    },
+    (progress) => {
+      const fog = fogRef.current
+      if (!fog) return
+      fog.color.lerpColors(fromColor.current, targetColor.current, progress)
+      fog.near = fromRange.current.near + (targetRange.current.near - fromRange.current.near) * progress
+      fog.far = fromRange.current.far + (targetRange.current.far - fromRange.current.far) * progress
+    },
+  )
+
+  return null
+}
+
 function RendererLifecycle({
   onReady,
   onFatal,
@@ -390,9 +441,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       style={{ position: 'absolute', inset: 0, zIndex: 0 }}
     >
       <RendererLifecycle onReady={onReady} onFatal={onFatal} devShaderFailure={devShaderFailure} />
-      {terrainVisualIntensity > 0 && palette.fog && (
-        <fog attach="fog" args={[palette.fog.color, palette.fog.near, palette.fog.far]} />
-      )}
+      <TerrainFog palette={palette} intensity={terrainVisualIntensity} />
       {(onRenderedFrame || onRendererDiagnostics) && (
         <DiagnosticsProbe
           onRenderedFrame={onRenderedFrame}
