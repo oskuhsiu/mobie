@@ -43,6 +43,7 @@ import type {
   NormalAttackPhase,
 } from '@/scene/battle/contracts'
 import { resolveTerrainPalette, resolveTerrainWorld } from '@/scene/r3f/terrainVisual'
+import type { VfxCue } from '@/scene/r3f/vfxRuntime'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
@@ -1264,11 +1265,21 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         ?? (m.move.id === e.moveId ? m.move : getMove(e.moveId))
       const recipe = resolveFx(mv)
       const prefix = e.side === 'foe' ? '對手的 ' : ''
-      stageRef.current?.lunge(e.side)
+      const statusCue = (phase: VfxCue['phase']) => sessionLifecycle.ownsPresentation(cueContext.token) && (stageRef.current?.tracer?.({
+        cueId, owner: `${cueContext.token.battleSessionId}:${cueContext.token.presentationId}`,
+        caster: e.side, target: e.side, recipe: 'status', phase, didHit: true,
+      }) ?? false)
+      const worldStatus = statusCue('anticipate')
+      if (!worldStatus) stageRef.current?.lunge(e.side)
       setBanner(`${prefix}${m.nameZh} 使出 ${mv.nameZh}！`)
       playAudio(() => audio.play('select'))
-      await delay(540)
-      playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
+      await delay(240)
+      if (worldStatus) statusCue('cast')
+      await delay(300)
+      if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+      if (!worldStatus || !statusCue('impact')) {
+        playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
+      }
       playAudio(() => audio.playMoveSound(recipe.sound))
       if (e.effectKind === 'heal' && e.hpAfter != null) {
         setMemberHp(e.side, e.index, e.hpAfter)
@@ -1283,6 +1294,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       }
       pushFeed(`${prefix}${m.nameZh}：${e.label}`)
       await delay(820)
+      if (worldStatus) statusCue('recover')
       setBanner(null)
       await delay(140)
     } else if (e.type === 'wildAccident') {
@@ -1393,6 +1405,14 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   }, [rootShake, sessionLifecycle])
 
   const createCuePorts = useCallback((): BattleCuePorts => {
+    let worldDamageCue: DamageCue | null = null
+    const tracer = (cue: DamageCue, context: CueContext, phase: VfxCue['phase']) => (
+      cue.tracerRecipe !== null && (stageRef.current?.tracer?.({
+        cueId: cue.id, owner: `${context.token.battleSessionId}:${context.token.presentationId}`,
+        caster: cue.attackerSide, target: cue.defenderSide,
+        recipe: cue.tracerRecipe, phase, didHit: !cue.event.missed && cue.event.amount > 0,
+      }) ?? false)
+    )
     const normalAttack = (cue: DamageCue, phase: NormalAttackPhase) => {
       if (!cue.normalAttack) return false
       stageRef.current?.normalAttack({
@@ -1402,6 +1422,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         target: cue.event.targetSide,
         didHit: !cue.event.missed && cue.event.amount > 0,
         phase,
+        delivery: cue.tracerRecipe === 'electric' ? 'projectile' : 'contact',
       })
       return true
     }
@@ -1410,11 +1431,23 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       scene: {
         begin: (cue, cueContext) => {
           if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          worldDamageCue = tracer(cue, cueContext, 'anticipate') ? cue : null
           if (!normalAttack(cue, 'anticipate')) stageRef.current?.lunge(cue.attackerSide)
         },
         impact: async (cue, cueContext) => {
           if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
           const e = cue.event
+          if (tracer(cue, cueContext, 'cast')) {
+            if (cue.tracerRecipe === 'physical') normalAttack(cue, 'travel')
+            await cueContext.clock.wait(reducedMotionRef.current ? 120 : 280, cueContext.signal)
+            if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+            if (tracer(cue, cueContext, 'impact')) {
+              normalAttack(cue, 'contact')
+              baselineDriver()?.recordCastImpact(performance.now())
+              return
+            }
+          }
+          worldDamageCue = null
           if (e.missed || e.amount <= 0) {
             normalAttack(cue, 'contact')
             return
@@ -1440,11 +1473,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           const recipe = resolveFx(cue.move)
           const strong = e.crit || e.effectiveness >= 2
           const tracedNormalAttack = normalAttack(cue, 'hit-react')
-          if (e.crit) {
+          if (e.crit && worldDamageCue !== cue) {
             fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
             fxRef.current?.ring({ ...pos, color: '#ffd23f' })
             fxRef.current?.flash('#ffffff', 0.45)
-          } else if (e.effectiveness >= 2) {
+          } else if (e.effectiveness >= 2 && worldDamageCue !== cue) {
             fxRef.current?.ring({ ...pos, color: recipe.accent })
           }
           const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
@@ -1462,6 +1495,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         clear: (cue, cueContext) => {
           if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
           normalAttack(cue, 'recover')
+          tracer(cue, cueContext, 'recover')
         },
       },
       hud: {
@@ -2002,6 +2036,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           foe,
           terrainWorld,
           terrainVisualIntensity,
+          vfxIntensity: juice === 'full' ? 1 : juice === 'reduced' ? 0.5 : 0,
           outcome: battle.winner,
         }}
         sessionToken={runtimeSession.token}

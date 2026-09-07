@@ -196,6 +196,7 @@ export interface DamageCue {
   defenderSide: Side
   move: Move
   normalAttack: boolean
+  tracerRecipe: 'physical' | 'electric' | null
   timing: DamageTiming
 }
 

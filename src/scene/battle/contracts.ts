@@ -1,6 +1,7 @@
 import type { Side } from '@/game/battle/reducer'
 import type { BattleMobie } from '@/game/types'
 import type { ResolvedTerrainWorld } from '@/scene/r3f/terrainVisual'
+import type { VfxCue } from '@/scene/r3f/vfxRuntime'
 import type {
   BattleAnchorKind,
   BattleScreenPoint,
@@ -20,7 +21,7 @@ export interface RendererDiagnostics {
   drawCalls: number
 }
 
-export type NormalAttackPhase = 'anticipate' | 'contact' | 'hit-react' | 'recover'
+export type NormalAttackPhase = 'anticipate' | 'travel' | 'contact' | 'hit-react' | 'recover'
 export type BattleCameraShot = 'wide' | 'caster' | 'impact'
 
 export interface NormalAttackCue {
@@ -30,6 +31,7 @@ export interface NormalAttackCue {
   target: Side
   didHit: boolean
   phase: NormalAttackPhase
+  delivery?: 'contact' | 'projectile'
 }
 
 export interface BattleSceneDiagnostics {
@@ -45,10 +47,13 @@ export interface BattleSceneSnapshot {
   foe: BattleMobie
   terrainWorld: ResolvedTerrainWorld
   terrainVisualIntensity: number
+  vfxIntensity?: number
   outcome: 'player' | 'foe' | null
 }
 
 export interface BattleSceneHandle {
+  /** Returns true only when the world runtime accepted this committed cue. */
+  tracer?(cue: VfxCue): boolean
   normalAttack(cue: NormalAttackCue): void
   lunge(side: Side): void
   hitReact(side: Side, strength?: number): void

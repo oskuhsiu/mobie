@@ -150,6 +150,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       ? compatibilityRef.current
       : nextRef.current
     return {
+      tracer: (cue) => active()?.tracer?.(cue) ?? false,
       normalAttack: (cue) => active()?.normalAttack(cue),
       lunge: (side) => active()?.lunge(side),
       hitReact: (side, strength) => active()?.hitReact(side, strength),

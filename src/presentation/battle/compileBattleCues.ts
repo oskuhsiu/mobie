@@ -110,7 +110,10 @@ function compileDamage(job: TurnPresentationJob, event: Extract<BattleEvent, { t
   return {
     kind: 'damage', id: `event:${eventIndex}:damageApplied`, eventIndex, event,
     attacker, defender, attackerSide: event.attackerSide, defenderSide: event.targetSide,
-    move, normalAttack, timing: normalAttack ? NORMAL_ATTACK_TIMING : LEGACY_DAMAGE_TIMING,
+    move, normalAttack,
+    tracerRecipe: !normalAttack ? null : move.category === 'physical' ? 'physical'
+      : move.category === 'special' && move.type === 'electric' ? 'electric' : null,
+    timing: normalAttack ? NORMAL_ATTACK_TIMING : LEGACY_DAMAGE_TIMING,
   }
 }
 

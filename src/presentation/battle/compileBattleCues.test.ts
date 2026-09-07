@@ -15,6 +15,23 @@ function job(input: ReplayInput, events: readonly BattleEvent[]): TurnPresentati
 }
 
 describe('compileBattleCues', () => {
+  it.each([
+    ['physical', 'electric', 'physical'],
+    ['special', 'electric', 'electric'],
+    ['special', 'fire', null],
+  ] as const)('selects tracer from resolved %s/%s move, not the default move', (category, type, tracerRecipe) => {
+    const selected = { ...move(type), id: 7, category }
+    const before = createBattleState([mon({ moves: [selected] })], [mon()])
+    const event: BattleEvent = {
+      type: 'damageApplied', attackerSide: 'player', attackerIndex: 0,
+      targetSide: 'foe', targetIndex: 0, amount: 10, missed: false, crit: false,
+      effectiveness: 1, effectivenessText: null, hpBefore: 100, hpAfter: 90,
+      maxHp: 100, resolvedMoveId: 7,
+    }
+    expect(compileBattleCues({ ...job({ type: 'ATTACK' }, [event]), before })[0])
+      .toMatchObject({ kind: 'damage', tracerRecipe })
+  })
+
   it('preserves event order and legacy damage timing/move identity', () => {
     const fallback = { ...move('normal'), id: 1, nameZh: '基礎招' }
     const selected = { ...move('fire'), id: 7, nameZh: '火招' }

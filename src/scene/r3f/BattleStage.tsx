@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Color, Fog, PerspectiveCamera, Vector3 } from 'three'
 import type { Side } from '@/game/battle/reducer'
@@ -16,6 +16,8 @@ import type {
 } from '@/scene/battle/contracts'
 import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { TerrainWorld } from './TerrainWorld'
+import { BattleVfx, type BattleVfxHandle } from './BattleVfx'
+import type { VfxLabControls } from './vfxRuntime'
 import type { TerrainPalette } from './terrainVisual'
 import { useTerrainTransition } from './terrainTransition'
 import {
@@ -53,6 +55,7 @@ const MIN_DIST = 7
 const NARROW_LOOK_AT_Y_OFFSET = 1.095
 const IMPACT_HOLD_SECONDS = 0.28
 const ANCHORS: BattleAnchorKind[] = ['root', 'center', 'head', 'ground', 'cast', 'impact']
+const VfxLab = import.meta.env.DEV ? lazy(() => import('@/dev/m23/VfxLab')) : null
 
 interface SceneBridge {
   projectAnchor?: (side: Side, anchor: BattleAnchorKind, viewport: BattleViewport) => BattleScreenPoint | null
@@ -333,6 +336,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   const { player, foe, terrainWorld, terrainVisualIntensity } = snapshot
   const palette = terrainWorld.primary
   const anim = useRef<Record<Side, MonAnim>>({ player: makeAnim(), foe: makeAnim() })
+  const projectileCaster = useRef<Record<Side, boolean>>({ player: false, foe: false })
   const timeScaleRef = useRef(1)
   const rigs = useRef<Record<Side, CombatantRigHandle | null>>({ player: null, foe: null })
   const queueRef = useRef<CameraQueueState>(EMPTY_CAMERA_QUEUE)
@@ -341,6 +345,11 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   const motionPhaseRef = useRef<BattleSceneDiagnostics['motionPhase']>('idle')
   const artworkModeRef = useRef<BattleSceneDiagnostics['artworkMode']>({ player: 'silhouette', foe: 'silhouette' })
   const bridge = useRef<SceneBridge>({})
+  const vfxRef = useRef<BattleVfxHandle>(null)
+  const labControls = useRef<VfxLabControls>({
+    frozen: false, seed: 13, tier: null, reducedMotion: null, intensity: null, forceFallback: false,
+  })
+  const labEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).has('vfxLab')
   const publish = () => bridge.current.publishDiagnostics?.()
   const setArtworkMode = (side: Side, mode: 'artwork' | 'silhouette') => {
     if (artworkModeRef.current[side] === mode) return
@@ -350,16 +359,17 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   const runNormalAttack = (cue: NormalAttackCue) => {
     const ownership = { cueId: cue.cueId, owner: cue.owner, caster: cue.caster, target: cue.target }
     if (cue.phase === 'anticipate') {
+      projectileCaster.current[cue.caster] = cue.delivery === 'projectile'
       motionPhaseRef.current = cue.phase
       recoverHoldRef.current = 0
       queueRef.current = acquireCamera(queueRef.current, ownership, 'caster')
       anim.current[cue.caster].attackPhase = 'anticipate'
-    } else if (cue.phase === 'contact') {
+    } else if (cue.phase === 'travel' || cue.phase === 'contact') {
       motionPhaseRef.current = cue.phase
       queueRef.current = updateCamera(queueRef.current, cue.cueId, cue.owner, 'impact')
-      impactHoldRef.current = IMPACT_HOLD_SECONDS
-      anim.current[cue.caster].attackPhase = 'contact'
-      if (cue.didHit) anim.current[cue.target].attackPhase = 'hit-react'
+      impactHoldRef.current = cue.phase === 'contact' ? IMPACT_HOLD_SECONDS : 0
+      anim.current[cue.caster].attackPhase = cue.delivery === 'projectile' ? 'idle' : 'contact'
+      if (cue.phase === 'contact' && cue.didHit) anim.current[cue.target].attackPhase = 'hit-react'
     } else if (cue.phase === 'hit-react') {
       motionPhaseRef.current = cue.phase
       anim.current[cue.target].attackPhase = 'hit-react'
@@ -375,7 +385,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       motionPhaseRef.current = cue.phase
       impactHoldRef.current = 0
       recoverHoldRef.current = 0.2
-      anim.current[cue.caster].attackPhase = 'recover'
+      anim.current[cue.caster].attackPhase = projectileCaster.current[cue.caster] ? 'idle' : 'recover'
       anim.current[cue.target].attackPhase = 'recover'
       anim.current[cue.caster].attackT = 0.2
       anim.current[cue.target].attackT = 0.2
@@ -395,7 +405,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
     if (!active || active.shot !== 'impact') return
     queueRef.current = releaseCamera(queueRef.current, active.cueId, active.owner)
     motionPhaseRef.current = 'recover'
-    anim.current[active.caster].attackPhase = 'recover'
+    anim.current[active.caster].attackPhase = projectileCaster.current[active.caster] ? 'idle' : 'recover'
     anim.current[active.target].attackPhase = 'recover'
     anim.current[active.caster].attackT = 0.3
     anim.current[active.target].attackT = 0.3
@@ -403,6 +413,11 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
     publish()
   }
   useImperativeHandle(ref, () => ({
+    tracer: (cue) => {
+      if (!vfxRef.current || (snapshot.vfxIntensity ?? 1) <= 0) return false
+      vfxRef.current.cue(cue)
+      return true
+    },
     normalAttack: runNormalAttack,
     lunge: (side) => { anim.current[side].lungeT = reducedMotion ? 0 : LUNGE_DUR },
     hitReact: (side, strength = 1) => {
@@ -418,6 +433,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
     },
     setTimeScale: (scale) => { timeScaleRef.current = scale },
     resetPresentation: () => {
+      vfxRef.current?.reset()
       for (const side of ['player', 'foe'] as const) Object.assign(anim.current[side], makeAnim())
       timeScaleRef.current = 1
       queueRef.current = resetCamera()
@@ -430,7 +446,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       bridge.current.projectAnchor?.(side, anchor, viewport)
       ?? projectBattleAnchor(side, anchor, viewport)
     ),
-  }), [reducedMotion])
+  }), [reducedMotion, snapshot.vfxIntensity])
   return (
     <Canvas
       className="battle-next-canvas"
@@ -442,6 +458,18 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
     >
       <RendererLifecycle onReady={onReady} onFatal={onFatal} devShaderFailure={devShaderFailure} />
       <TerrainFog palette={palette} intensity={terrainVisualIntensity} />
+      <BattleVfx
+        ref={vfxRef}
+        rigs={rigs}
+        tier={tier}
+        reducedMotion={reducedMotion}
+        intensity={snapshot.vfxIntensity ?? 1}
+        timeScaleRef={timeScaleRef}
+        controlsRef={labEnabled ? labControls : undefined}
+      />
+      {labEnabled && VfxLab && (
+        <Suspense fallback={null}><VfxLab vfxRef={vfxRef} controlsRef={labControls} /></Suspense>
+      )}
       {(onRenderedFrame || onRendererDiagnostics) && (
         <DiagnosticsProbe
           onRenderedFrame={onRenderedFrame}
