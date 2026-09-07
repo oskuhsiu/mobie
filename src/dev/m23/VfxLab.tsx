@@ -9,7 +9,9 @@ import {
   type MutableRefObject,
   type RefObject,
 } from 'react'
-import { getMove } from '@/game/data/moves'
+import { getMove, MOVES } from '@/game/data/moves'
+import { ELEMENT_MOTIFS, resolveMoveRecipe, type MoveOutcome } from '@/presentation/battle/moveRecipe'
+import type { Move, MoveCategory, TypeName } from '@/game/types'
 import { useBattleStore } from '@/store/battleStore'
 import type { BattleVfxDiagnostics, BattleVfxHandle } from '@/scene/r3f/BattleVfx'
 import type { VfxCue, VfxLabControls, VfxRecipe } from '@/scene/r3f/vfxRuntime'
@@ -50,6 +52,48 @@ interface ActiveFrameWindow {
 
 const RECIPES: readonly VfxRecipe[] = ['physical', 'electric', 'status']
 const PHASES: readonly VfxCue['phase'][] = ['anticipate', 'cast', 'impact', 'recover']
+
+interface RecipeScenario {
+  id: string
+  source: 'generated' | 'synthetic-presentation-only'
+  move: Move
+  outcome?: MoveOutcome
+}
+
+const recipeScenarios: RecipeScenario[] = (Object.keys(ELEMENT_MOTIFS) as TypeName[]).flatMap((type) =>
+  (['physical', 'special', 'status'] as MoveCategory[]).map((category) => {
+    const generated = Object.values(MOVES).find((move) => move.type === type && move.category === category)
+    return {
+      id: `${type}-${category}`,
+      source: generated ? 'generated' as const : 'synthetic-presentation-only' as const,
+      move: generated ?? {
+        id: -1, name: `Presentation fixture ${type} ${category}`, nameZh: '展示測試',
+        type, category, power: category === 'status' ? 0 : 70, accuracy: 100,
+        ...(category === 'status' ? { effect: { kind: 'buff' as const, mult: 1.5, label: 'Presentation fixture' } } : {}),
+      },
+    }
+  }),
+)
+recipeScenarios.push(
+  ...[1011, 1042, 1051, 1082, 1032, 2003, 2000, 2004].map((id) => ({
+    id: `move-${id}`, source: 'generated' as const, move: getMove(id),
+  })),
+  ...Object.entries({ normal: {}, miss: { missed: true }, immune: { effectiveness: 0 },
+    crit: { crit: true }, super: { effectiveness: 2 }, resisted: { effectiveness: 0.5 },
+  }).map(([result, outcome]) => ({ id: `result-${result}`, source: 'generated' as const, move: getMove(1010), outcome })),
+  { id: 'effect-debuff', source: 'synthetic-presentation-only',
+    move: { ...getMove(2000), id: -1, effect: { kind: 'buff', mult: 0.7, label: 'Presentation debuff fixture' } } },
+)
+
+interface RecipeMatrixDriver {
+  scenarios(): { id: string; source: RecipeScenario['source']; move: Move; recipe: ReturnType<typeof resolveMoveRecipe> }[]
+  show(id: string, phase?: VfxCue['phase']): Promise<RendererSample>
+  diagnostics(): RendererSample
+  prepareBattle(kind: 'special' | 'status' | 'miss' | 'immune'): void
+}
+declare global {
+  interface Window { __MOBIE_M23_RECIPES__?: RecipeMatrixDriver }
+}
 
 function waitMs(ms: number, signal?: AbortSignal): Promise<boolean> {
   if (signal?.aborted) return Promise.resolve(false)
@@ -205,6 +249,63 @@ export default function VfxLab({ vfxRef, controlsRef }: VfxLabProps) {
     frameTiming,
     runtime: runtimeDiagnostics(vfxRef.current),
   }), [gl, vfxRef])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const driver: RecipeMatrixDriver = {
+      scenarios: () => recipeScenarios.map(({ id, source, move, outcome }) => ({
+        id, source, move, recipe: resolveMoveRecipe(move, outcome),
+      })),
+      diagnostics: () => sample('final', castSerial.current),
+      prepareBattle(kind) {
+        const baseline = window.__MOBIE_M23_BASELINE__
+        if (!baseline) throw new Error('M23 baseline driver required')
+        baseline.prepareTransactionCase(kind === 'status' ? 'status-buff' : 'normal-hit-chain-ready')
+        const current = useBattleStore.getState()
+        if (!current.battle) throw new Error('Active battle required')
+        const battle = structuredClone(current.battle)
+        const move = getMove(kind === 'special' ? 1010 : kind === 'status' ? 2000 : 1000)
+        const fixtureMove = kind === 'miss' ? { ...move, accuracy: 0 } : move
+        const player = battle.player.members[battle.player.activeIndex]
+        player.move = fixtureMove
+        player.moves = [fixtureMove]
+        if (kind === 'immune') battle.foe.members[battle.foe.activeIndex].types = ['ghost']
+        useBattleStore.setState({ battle, phase: 'playerChoice' })
+        controlsRef.current = { ...controlsRef.current, frozen: false }
+        setFrozen(false)
+        setPanelOpen(false)
+        baseline.resume()
+      },
+      async show(id, selectedPhase = 'impact') {
+        if (runningRef.current) throw new Error('Stop the cast run before capturing recipes')
+        const scenario = recipeScenarios.find((candidate) => candidate.id === id)
+        if (!scenario) throw new Error(`Unknown recipe scenario: ${id}`)
+        const handle = vfxRef.current
+        if (!handle) throw new Error('VFX runtime unavailable')
+        const presentation = resolveMoveRecipe(scenario.move, scenario.outcome)
+        handle.reset()
+        controlsRef.current = { ...controlsRef.current, frozen: false }
+        setFrozen(false)
+        setPanelOpen(false)
+        handle.cue({
+          cueId: `recipe-matrix:${id}:${selectedPhase}`, owner: 'recipe-matrix', caster: 'player',
+          target: presentation.effect === 'damage' || presentation.effect === 'debuff' ? 'foe' : 'player',
+          recipe: scenario.move.category === 'status' ? 'status' : scenario.move.category === 'physical' ? 'physical' : 'electric',
+          presentation, phase: selectedPhase, didHit: presentation.result !== 'miss' && presentation.result !== 'immune',
+        })
+        frameWindowRef.current = { active: true, lastAt: performance.now(), frameCount: 0, totalFrameMs: 0, maxFrameMs: 0 }
+        await waitMs(240)
+        controlsRef.current = { ...controlsRef.current, frozen: true }
+        setFrozen(true)
+        await waitMs(40)
+        const frames = frameWindowRef.current
+        frames.active = false
+        return sample('final', ++castSerial.current, { frameCount: frames.frameCount, maxFrameMs: frames.maxFrameMs, meanFrameMs: frames.frameCount ? frames.totalFrameMs / frames.frameCount : 0 })
+      },
+    }
+    window.__MOBIE_M23_RECIPES__ = driver
+    return () => { if (window.__MOBIE_M23_RECIPES__ === driver) delete window.__MOBIE_M23_RECIPES__ }
+  }, [controlsRef, sample, vfxRef])
 
   const cue = useCallback(async (
     selectedRecipe: VfxRecipe = recipe,

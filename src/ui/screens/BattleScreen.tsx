@@ -1,3 +1,4 @@
+import { resolveMoveRecipe } from '@/presentation/battle/moveRecipe'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
@@ -1268,6 +1269,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       const statusCue = (phase: VfxCue['phase']) => sessionLifecycle.ownsPresentation(cueContext.token) && (stageRef.current?.tracer?.({
         cueId, owner: `${cueContext.token.battleSessionId}:${cueContext.token.presentationId}`,
         caster: e.side, target: e.side, recipe: 'status', phase, didHit: true,
+        presentation: resolveMoveRecipe(mv),
       }) ?? false)
       const worldStatus = statusCue('anticipate')
       if (!worldStatus) stageRef.current?.lunge(e.side)
@@ -1284,13 +1286,13 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       if (e.effectKind === 'heal' && e.hpAfter != null) {
         setMemberHp(e.side, e.index, e.hpAfter)
         playAudio(() => audio.play('super'))
-        setBanner(`✨ ${e.label}　+${e.healAmount} HP`)
+        setBanner(`＋ ${e.label}　+${e.healAmount} HP`)
       } else if (e.effectKind === 'buff') {
         playAudio(() => audio.play('super'))
-        setBanner(`▲ ${e.label}（${e.remaining} 回合）`)
+        setBanner(`${(mv.effect?.mult ?? 1) < 1 ? '▼' : '▲'} ${e.label}（${e.remaining} 回合）`)
       } else {
         playAudio(() => audio.play('super'))
-        setBanner(`🌿 ${e.label}`)
+        setBanner(`◎ 場域：${e.label}`)
       }
       pushFeed(`${prefix}${m.nameZh}：${e.label}`)
       await delay(820)
@@ -1410,7 +1412,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       cue.tracerRecipe !== null && (stageRef.current?.tracer?.({
         cueId: cue.id, owner: `${context.token.battleSessionId}:${context.token.presentationId}`,
         caster: cue.attackerSide, target: cue.defenderSide,
-        recipe: cue.tracerRecipe, phase, didHit: !cue.event.missed && cue.event.amount > 0,
+        recipe: cue.tracerRecipe, presentation: cue.presentation, phase, didHit: !cue.event.missed && cue.event.amount > 0,
       }) ?? false)
     )
     const normalAttack = (cue: DamageCue, phase: NormalAttackPhase) => {
@@ -1422,7 +1424,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         target: cue.event.targetSide,
         didHit: !cue.event.missed && cue.event.amount > 0,
         phase,
-        delivery: cue.tracerRecipe === 'electric' ? 'projectile' : 'contact',
+        delivery: cue.presentation.delivery === 'contact' ? 'contact' : 'projectile',
       })
       return true
     }
@@ -1438,7 +1440,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
           const e = cue.event
           if (tracer(cue, cueContext, 'cast')) {
-            if (cue.tracerRecipe === 'physical') normalAttack(cue, 'travel')
+            if (cue.presentation.delivery === 'contact') normalAttack(cue, 'travel')
             await cueContext.clock.wait(reducedMotionRef.current ? 120 : 280, cueContext.signal)
             if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
             if (tracer(cue, cueContext, 'impact')) {
@@ -1449,6 +1451,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           }
           worldDamageCue = null
           if (e.missed || e.amount <= 0) {
+            if (!e.missed && e.effectiveness === 0) {
+              fxRef.current?.ring({ ...projectedSceneAnchor(e.targetSide, 'impact'), color: '#d1d5db' })
+            }
             normalAttack(cue, 'contact')
             return
           }
@@ -1456,7 +1461,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           const strong = e.crit || e.effectiveness >= 2
           const impactDelayMs = playMoveFx(
             fxRef.current,
-            strong ? { ...recipe, count: 24, power: recipe.power * 1.2 } : recipe,
+            strong ? { ...recipe, power: recipe.power * 1.15 } : recipe,
             projectedSceneAnchor(e.attackerSide, 'cast'),
             projectedSceneAnchor(e.targetSide, 'impact'),
             { reducedMotion: reducedMotionRef.current },
@@ -1474,9 +1479,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           const strong = e.crit || e.effectiveness >= 2
           const tracedNormalAttack = normalAttack(cue, 'hit-react')
           if (e.crit && worldDamageCue !== cue) {
-            fxRef.current?.burst({ ...pos, color: '#ffd23f', count: 14, power: 1.6, kind: 'spark' })
             fxRef.current?.ring({ ...pos, color: '#ffd23f' })
-            fxRef.current?.flash('#ffffff', 0.45)
           } else if (e.effectiveness >= 2 && worldDamageCue !== cue) {
             fxRef.current?.ring({ ...pos, color: recipe.accent })
           }

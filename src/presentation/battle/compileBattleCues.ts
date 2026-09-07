@@ -1,3 +1,4 @@
+import { resolveMoveRecipe } from './moveRecipe'
 import type { BattleEvent } from '@/game/battle/reducer'
 import type {
   BattleCue,
@@ -111,8 +112,10 @@ function compileDamage(job: TurnPresentationJob, event: Extract<BattleEvent, { t
     kind: 'damage', id: `event:${eventIndex}:damageApplied`, eventIndex, event,
     attacker, defender, attackerSide: event.attackerSide, defenderSide: event.targetSide,
     move, normalAttack,
-    tracerRecipe: !normalAttack ? null : move.category === 'physical' ? 'physical'
-      : move.category === 'special' && move.type === 'electric' ? 'electric' : null,
+    tracerRecipe: move.category === 'physical' ? 'physical' : 'electric',
+    presentation: resolveMoveRecipe(move, { ...event,
+      star: job.input.type === 'ATTACK' && job.input.starStrike === true && event.attackerSide === 'player',
+    }),
     timing: normalAttack ? NORMAL_ATTACK_TIMING : LEGACY_DAMAGE_TIMING,
   }
 }

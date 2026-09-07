@@ -1,3 +1,4 @@
+import type { MoveRecipe } from '@/presentation/battle/moveRecipe'
 import type { Side } from '@/game/battle/reducer'
 
 export type VfxRecipe = 'physical' | 'electric' | 'status'
@@ -9,6 +10,7 @@ export interface VfxCue {
   caster: Side
   target: Side
   recipe: VfxRecipe
+  presentation?: MoveRecipe
   phase: VfxPhase
   didHit: boolean
 }
@@ -43,6 +45,8 @@ const MAX_DELTA_SECONDS = 0.05
 const ELECTRIC_CAST_SECONDS = 0.28
 
 const RECIPE_CODE: Record<VfxRecipe, number> = { physical: 0, electric: 1, status: 2 }
+const DELIVERY_CODE = { contact: 1, projectile: 2, beam: 3, ground: 4, aura: 5 } as const
+const EFFECT_CODE = { damage: 0, heal: 1, buff: 2, debuff: 3, terrain: 4 } as const
 const PHASE_CODE: Record<VfxPhase, number> = { anticipate: 0, cast: 1, impact: 2, recover: 3 }
 
 function hash(text: string): number {
@@ -66,6 +70,8 @@ function random01(seed: number): number {
  * the R3F view once per frame; callers only mutate the runtime through cue/step.
  */
 export class VfxRuntime {
+  readonly presentation = new Float32Array(VFX_PARTICLE_CAPACITY * 4)
+  private readonly cuePresentation: (MoveRecipe | undefined)[] = Array(CUE_CAPACITY).fill(undefined)
   readonly active = new Uint8Array(VFX_PARTICLE_CAPACITY)
   readonly recipe = new Uint8Array(VFX_PARTICLE_CAPACITY)
   readonly stage = new Uint8Array(VFX_PARTICLE_CAPACITY)
@@ -126,9 +132,9 @@ export class VfxRuntime {
       return
     }
     if (cue.phase === 'impact') this.emitterActive[slot] = 0
-    if (cue.phase === 'impact' && !cue.didHit) return
+    if (cue.phase === 'impact' && (cue.presentation?.result === 'miss' || (!cue.didHit && cue.presentation?.result !== 'immune'))) return
 
-    if (cue.recipe === 'electric' && cue.phase === 'cast') {
+    if ((cue.presentation ? cue.presentation.delivery === 'projectile' : cue.recipe === 'electric') && cue.phase === 'cast') {
       const intensity = clamp01(options.intensity)
       this.emitterActive[slot] = intensity > 0 ? 1 : 0
       this.emitterElapsed[slot] = 0
@@ -140,7 +146,9 @@ export class VfxRuntime {
       return
     }
 
-    const baseCount = particleCount(cue.recipe, cue.phase, options.tier)
+    const baseCount = cue.presentation
+      ? (cue.phase === 'impact' ? 12 : 8) * (options.tier === 'high' ? 2 : 1)
+      : particleCount(cue.recipe, cue.phase, options.tier)
     const count = Math.min(baseCount, Math.floor(baseCount * clamp01(options.intensity)))
     const cueSeed = hash(`${cue.cueId}:${cue.owner}:${cue.recipe}:${cue.phase}:${options.seed ?? 0}`)
     for (let index = 0; index < count; index += 1) {
@@ -219,6 +227,7 @@ export class VfxRuntime {
     this.cueIds[slot] = cue.cueId
     this.owners[slot] = cue.owner
     this.cueRecipe[slot] = RECIPE_CODE[cue.recipe]
+    this.cuePresentation[slot] = cue.presentation ? { ...cue.presentation } : undefined
     this.cueCaster[slot] = sideCode(cue.caster)
     this.cueTarget[slot] = sideCode(cue.target)
     this.cuePhaseMask[slot] = 0
@@ -247,6 +256,7 @@ export class VfxRuntime {
     this.radius[slot] = 0.25 + b * 0.75
     this.variance[slot] = c
     this.size[slot] = particleSize(cue.recipe, cue.phase, b)
+    this.applyPresentation(slot, cue.presentation)
     this.emitted += 1
     this.revision += 1
   }
@@ -274,9 +284,22 @@ export class VfxRuntime {
     this.radius[slot] = 0.25 + b * 0.75
     this.variance[slot] = Math.min(1, (emittedAt - this.emitterStartedAt[cueSlot]) / ELECTRIC_CAST_SECONDS)
     this.size[slot] = 18 + b * 11
+    this.applyPresentation(slot, this.cuePresentation[cueSlot])
     this.emitterOrdinal[cueSlot] = ordinal + 1
     this.emitted += 1
     this.revision += 1
+  }
+  private applyPresentation(slot: number, presentation: MoveRecipe | undefined): void {
+    const offset = slot * 4
+    this.presentation[offset] = presentation ? DELIVERY_CODE[presentation.delivery] : 0
+    this.presentation[offset + 1] = presentation?.motif ?? 0
+    this.presentation[offset + 2] = presentation ? EFFECT_CODE[presentation.effect] : 0
+    this.presentation[offset + 3] = presentation?.result === 'immune' ? 1 : presentation?.result === 'miss' ? 2 : 0
+    if (presentation) {
+      const strength = Math.max(0.65, clamp01(presentation.intensity))
+      this.size[slot] *= strength * 3
+      this.lifetime[slot] *= 0.8 + strength * 0.2
+    }
   }
 }
 

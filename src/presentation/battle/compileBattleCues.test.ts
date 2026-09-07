@@ -18,7 +18,7 @@ describe('compileBattleCues', () => {
   it.each([
     ['physical', 'electric', 'physical'],
     ['special', 'electric', 'electric'],
-    ['special', 'fire', null],
+    ['special', 'fire', 'electric'],
   ] as const)('selects tracer from resolved %s/%s move, not the default move', (category, type, tracerRecipe) => {
     const selected = { ...move(type), id: 7, category }
     const before = createBattleState([mon({ moves: [selected] })], [mon()])

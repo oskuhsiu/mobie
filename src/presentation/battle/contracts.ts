@@ -1,3 +1,4 @@
+import type { MoveRecipe } from './moveRecipe'
 import type { BattleEvent, BattleState, Side } from '@/game/battle/reducer'
 import type { ReplayInput } from '@/game/replay/types'
 import type { BattleMobie, Move, TerrainId } from '@/game/types'
@@ -197,6 +198,7 @@ export interface DamageCue {
   move: Move
   normalAttack: boolean
   tracerRecipe: 'physical' | 'electric' | null
+  presentation: MoveRecipe
   timing: DamageTiming
 }
 

@@ -8,6 +8,7 @@ import { forwardRef, useImperativeHandle, useRef } from 'react'
 // （回退既有 FloatDamage＝M22 基線、DOM 零新增）。
 
 export interface DamageSpawn {
+  /** Snapshot the world impact projection at spawn; float remains screen-fixed during camera recovery. */
   /** 正規化座標（0..1，相對戰鬥區）＝受擊方打點 */
   nx: number
   ny: number
@@ -28,10 +29,11 @@ const POOL = 6 // 同時最多 6 個飄字（本遊戲傷害逐一演出，6 足
 
 /** 依相剋/會心決定圖示與樣式 class（圖示優先）。 */
 function effIcon(eff: number, missed: boolean, amount: number): string {
-  if (missed || amount <= 0) return ''
+  if (missed) return '↗'
+  if (amount <= 0) return '⊘'
   if (eff >= 2) return '↑↑'
   if (eff > 0 && eff < 1) return '↓'
-  return ''
+  return '•'
 }
 
 export const DamageNumbers = forwardRef<DamageNumbersHandle>((_props, ref) => {
@@ -50,11 +52,11 @@ export const DamageNumbers = forwardRef<DamageNumbersHandle>((_props, ref) => {
       // 文案：MISS / 沒效果 / -傷害
       const text = missed ? 'MISS' : amount <= 0 ? '沒效果' : `-${amount}`
       if (valEl) valEl.textContent = text
-      if (effEl) effEl.textContent = effIcon(effectiveness, missed, amount)
+      if (effEl) effEl.textContent = `${crit && !missed && amount > 0 ? '！會心 ' : ''}${effIcon(effectiveness, missed, amount)}`
 
       // 樣式變體（圖示/顏色/放大）
       node.className = 'dmg-num'
-      if (crit) node.classList.add('dmg-num--crit')
+      if (crit && !missed && amount > 0) node.classList.add('dmg-num--crit')
       else if (!missed && amount > 0 && effectiveness >= 2) node.classList.add('dmg-num--super')
       else if (!missed && amount > 0 && effectiveness > 0 && effectiveness < 1) node.classList.add('dmg-num--weak')
       if (missed || amount <= 0) node.classList.add('dmg-num--null')
