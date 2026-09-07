@@ -1068,3 +1068,9 @@
 .battle-shell[data-reduced-motion='true'] .gesture-hint {
   animation: none;
 }
+
+/* Turn skip stays above the root cinematic layer, outside the isolated stage. */
+.battle-shell > .battle-presentation-skip {
+  z-index: 40;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+}

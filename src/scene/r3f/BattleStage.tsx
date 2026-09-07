@@ -419,22 +419,42 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       return true
     },
     normalAttack: runNormalAttack,
+    frameEntry: (side, cueId, owner) => {
+      queueRef.current = acquireCamera(queueRef.current, { cueId, owner, caster: side, target: side }, 'caster')
+      publish()
+    },
     lunge: (side) => { anim.current[side].lungeT = reducedMotion ? 0 : LUNGE_DUR },
     hitReact: (side, strength = 1) => {
       anim.current[side].shakeT = reducedMotion ? 0 : SHAKE_DUR
       anim.current[side].shakeMag = reducedMotion ? 0 : 0.16 * strength
     },
+    recall: (side) => {
+      const state = anim.current[side]
+      state.recalled = true
+      state.recallT = 0
+      state.lungeT = 0
+      state.shakeT = 0
+      state.attackPhase = 'idle'
+      state.attackT = 0
+      state.enterT = 0
+    },
     faint: (side) => { anim.current[side].fainted = true },
     enter: (side) => {
       const state = anim.current[side]
+      state.recalled = false
+      state.recallT = 0
       state.fainted = false
       state.faintT = 0
       state.enterT = ENTER_DUR
     },
     setTimeScale: (scale) => { timeScaleRef.current = scale },
-    resetPresentation: () => {
+    resetPresentation: (options) => {
       vfxRef.current?.reset()
-      for (const side of ['player', 'foe'] as const) Object.assign(anim.current[side], makeAnim())
+      for (const side of ['player', 'foe'] as const) {
+        const recalled = options?.keepRecall && anim.current[side].recalled
+        Object.assign(anim.current[side], makeAnim())
+        if (recalled) Object.assign(anim.current[side], { recalled: true, recallT: 1 })
+      }
       timeScaleRef.current = 1
       queueRef.current = resetCamera()
       impactHoldRef.current = 0

@@ -4,14 +4,14 @@ import type {
   DamageHapticPort,
   DamageHudPort,
   DamageScenePort,
-  LegacyEventPort,
-} from '../contracts'
+  EventScenePort,
+} from './contracts'
 
-export interface LegacyPresentationPorts {
+export interface BattleCuePorts {
   scene: DamageScenePort
   hud: DamageHudPort
   audio: DamageAudioPort
   haptic: DamageHapticPort
-  legacy: LegacyEventPort
+  event: EventScenePort
   action: BattleActionPort
 }

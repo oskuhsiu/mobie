@@ -1,4 +1,4 @@
-import { resolveMoveRecipe } from '@/presentation/battle/moveRecipe'
+import { createBattleEventPorts, SUPPORT_LABEL } from '@/ui/battle/battleEventPorts'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
@@ -12,14 +12,12 @@ import {
   type BattleEvent,
   type BattleState,
   type ChainHit,
-  type SupportOutcome,
 } from '@/game/battle/reducer'
 import { chargeTier, type QteQuality } from '@/game/battle/engine'
 import type { BattleMobie, Move, TypeName } from '@/game/types'
 import { initiativePresentation, moveDecisionPresentation } from '@/game/battle/decisionPresentation'
-import { getMove } from '@/game/data/moves'
 import { lookupRegion } from '@/game/data/regionLookup'
-import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS, lookupTerrain } from '@/game/data/terrains'
+import { resolveBattleTerrains, resolveTerrainMult, terrainDefsOf, TERRAINS } from '@/game/data/terrains'
 import { makeWildEvents } from '@/game/accidents'
 import { makeRng } from '@/game/rng'
 import type { ReplayInput, DisplayUnitSnapshot } from '@/game/replay/types'
@@ -32,7 +30,6 @@ import { HoldChargeRing, RhythmTap } from '@/ui/components/StarStrikeGestures'
 import { ShieldSwipe } from '@/ui/components/BattleGestures'
 import { interactModeOf, attackInputVariantOf, juiceLevelOf } from '@/game/settings'
 import { haptic, vibrate } from '@/input/haptics'
-import { createCinematicCoordinator, type CinematicCoordinator, type CutInSpec } from '@/ui/screens/battleCinematic'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { WeatherCanvas } from '@/scene/fx/WeatherCanvas'
@@ -43,7 +40,7 @@ import type {
   BattleSceneHandle,
   NormalAttackPhase,
 } from '@/scene/battle/contracts'
-import { resolveTerrainPalette, resolveTerrainWorld } from '@/scene/r3f/terrainVisual'
+import { resolveTerrainWorld } from '@/scene/r3f/terrainVisual'
 import type { VfxCue } from '@/scene/r3f/vfxRuntime'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { getItem } from '@/game/ext/items'
@@ -57,9 +54,9 @@ import { BattleIntentCoordinator } from '@/presentation/battle/BattleIntentCoord
 import { BattleIntentPresenter } from '@/presentation/battle/BattleIntentPresenter'
 import { BattleSessionLifecycle } from '@/presentation/battle/BattleSessionLifecycle'
 import { BattleTurnCoordinator } from '@/presentation/battle/BattleTurnCoordinator'
-import { LegacyBattleCueHandler, type BattleCuePorts } from '@/presentation/battle/cueHandlers'
+import { BattleEventCueHandler, type BattleCuePorts } from '@/presentation/battle/cueHandlers'
 import { battleActionFromReplayInput } from '@/presentation/battle/turnInput'
-import { sameBattleSession } from '@/presentation/battle/battleIdentity'
+import { sameBattleSession, samePresentationToken } from '@/presentation/battle/battleIdentity'
 import { registerBattleLifecycleEnd } from '@/presentation/battle/battleLifecycleBridge'
 import { normalizedBattleAnchor } from '@/presentation/battle/battleAnchors'
 import {
@@ -95,13 +92,14 @@ import { SwitchAction, SwitchSheet } from '@/ui/battle/SwitchSheet'
 import { mobCardDisabledReason, switchAvailability } from '@/ui/battle/BattleActionModel'
 import '@/ui/styles/battle.css'
 
-const monAt = (b: BattleState, side: Side, i: number) => b[side].members[i]
-const SUPPORT_LABEL: Record<SupportOutcome, string> = {
-  attackUp: '⚡ 攻擊力上升！',
-  crit: '🎯 必定會心！',
-  ally: '🤝 夥伴補刀！',
-  dud: '… 可惜，摃龜',
+interface CutInSpec {
+  artworkUrl: string
+  casterName: string
+  moveName: string
+  type: TypeName
+  side: Side
 }
+
 // 星擊能量：QTE 表現累積（不綁隨機）；約 3 個好回合集滿（參數待玩測）
 const QUALITY_ENERGY: Record<QteQuality, number> = { perfect: 46, good: 34, normal: 26, weak: 16 }
 const energyGain = (q: QteQuality, mashCount: number) => QUALITY_ENERGY[q] + Math.min(24, mashCount) * 0.5
@@ -159,10 +157,6 @@ const resultFeedInput = (cueId: string, text: string): BattleFeedInput => ({
   text,
   kind: 'result',
 })
-
-function playCurrentBattleSfx(callback: () => void): boolean {
-  return battleAudioSession.playCurrent(callback)
-}
 
 function inputKind(input: ReplayInput, before: BattleState): 'attack' | 'status' | 'switch' | 'chain' | 'star' {
   if (input.type === 'SWITCH') return 'switch'
@@ -689,34 +683,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   // EXT.2 星擊電影化 display state（低頻：每場星擊一次，走一般 state 不違反效能紅線）。
   const [cutIn, setCutIn] = useState<CutInSpec | null>(null)
   const [letterbox, setLetterbox] = useState(false)
-  // EXT.1 §6 / EXT.2 演出協調器（hit-stop + 星擊三拍 cut-in 共用）。hooks 全參照穩定身分（setState/ref/
-  // module 單例），建一次即可。慢鏡接到 R3F 舞台 timeScale；蓄力/衝擊的 FX 走 fxRef/audio/rootShake（real-time）。
-  const cinematicRef = useRef<CinematicCoordinator | null>(null)
-  if (!cinematicRef.current) {
-    cinematicRef.current = createCinematicCoordinator({
-      setCutIn,
-      setLetterbox,
-      setTimeScale: (scale) => stageRef.current?.setTimeScale(reducedMotionRef.current ? 1 : scale),
-      onCharge: (spec) => {
-        const pal = typePalette[spec.type]
-        fxRef.current?.converge({ nx: 0.5, ny: 0.5, color: pal.color, count: 40, shape: pal.shape })
-        playCurrentBattleSfx(() => audio.starChargeSweep())
-      },
-      onStamp: () => { playCurrentBattleSfx(() => audio.starStampTick()) },
-      onImpact: (spec) => {
-        const pal = typePalette[spec.type]
-        fxRef.current?.flash('#ffffff', 0.9)
-        fxRef.current?.shockwave({ nx: 0.5, ny: 0.5, color: pal.color }) // 外層大環
-        fxRef.current?.shockwave({ nx: 0.5, ny: 0.5, color: pal.accent, lw: 5 }) // 內層細環
-        fxRef.current?.burst({ nx: 0.5, ny: 0.5, color: pal.color, count: 44, power: 2.2, kind: 'spark', shape: pal.shape })
-        if (!reducedMotionRef.current) {
-          void rootShake.start({ x: [0, -24, 20, -16, 10, 0], scale: [1, 1.05, 1], transition: { duration: 0.55 } })
-        }
-        playCurrentBattleSfx(() => audio.starImpactBoom())
-        haptic('crit')
-      },
-    })
-  }
+  const [starPhase, setStarPhase] = useState<'charge' | 'stamp' | 'impact' | null>(null)
+  const [outcomeTitle, setOutcomeTitle] = useState<string | null>(null)
+  const [skipGate, setSkipGate] = useState<{ kind: 'star' | 'outcome'; ready: boolean } | null>(null)
+  const skipOwnerRef = useRef<{ context: CueContext; kind: 'star' | 'outcome'; ready: boolean } | null>(null)
+  const skipButtonRef = useRef<HTMLButtonElement>(null)
   const initedRef = useRef(false)
   const turnCoordinatorRef = useRef<BattleTurnCoordinator | null>(null)
   const intentCoordinatorRef = useRef<BattleIntentCoordinator | null>(null)
@@ -758,6 +729,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const cardInvokerRef = useRef<HTMLButtonElement | null>(null)
   // 換人面板選中的隊友索引（等防禦 QTE）
   const [pendingSwitch, setPendingSwitch] = useState<number | null>(null)
+  const preparedSwitchRef = useRef<number | null>(null)
   // timing QTE 命中品質暫存，待連打蓄力結束才解算回合
   const pendingQualityRef = useRef<QteQuality>('normal')
   // M19.c 選定的招式槽（選槽→qte→mash 相位間存活）；玩家明確選擇前不會進入 QTE。
@@ -853,6 +825,17 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
 
   const intentPresenter = useMemo(() => new BattleIntentPresenter({
     display: {
+      prepareSwitch: (ctx) => {
+        if (!sessionLifecycle.ownsPresentation(ctx.token)) return
+        stageRef.current?.recall?.('player')
+        useBattleStore.getState().intentSetBanner(ctx.token, '召回夥伴，準備防禦…')
+        tracePresentation(ctx.token, 'cue', { cueId: ctx.token.intentId, detail: 'switch:recall' })
+      },
+      frameSwitch: (ctx) => {
+        if (!sessionLifecycle.ownsPresentation(ctx.token)) return
+        stageRef.current?.frameEntry?.('player', ctx.token.intentId, `${ctx.token.battleSessionId}:${ctx.token.presentationId}`)
+        tracePresentation(ctx.token, 'cue', { cueId: ctx.token.intentId, detail: 'switch:entry-frame' })
+      },
       setBanner: (message, cueContext) => {
         useBattleStore.getState().intentSetBanner(cueContext.token, message)
       },
@@ -1214,200 +1197,49 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     return () => clearTimeout(t)
   }, [phase, juice])
 
-  const playLegacyEvent = useCallback(async (
-    b0: BattleState,
-    e: BattleEvent,
-    cueContext: CueContext,
-    cueId: string,
-  ) => {
-    if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-    const store = useBattleStore.getState
-    const delay = (ms: number) => cueContext.clock.wait(ms, cueContext.signal)
-    const playAudio = (callback: () => void) => battleAudioSession.play(cueContext.token, callback)
-    const setMemberHp = (side: Side, index: number, hp: number) =>
-      store().presentationSetMemberHp(cueContext.token, side, index, hp)
-    const setActiveIndex = (side: Side, index: number) =>
-      store().presentationSetActiveIndex(cueContext.token, side, index)
-    const setBanner = (value: string | null) => store().presentationSetBanner(cueContext.token, value)
-    const pushFeed = (message: string) => store().presentationPushFeed(
-      cueContext.token,
-      resultFeedInput(cueId, message),
-    )
-    const showHit = (fx: Omit<HitFx, 'id'>) => store().presentationShowHit(cueContext.token, fx)
-    const clearFx = () => store().presentationClearTransient(cueContext.token)
-    const setSupport = (value: SupportOutcome | null) => store().presentationSetSupport(cueContext.token, value)
-    const setCombo = (value: number | null) => store().presentationSetCombo(cueContext.token, value)
-
-    if (e.type === 'damageApplied') throw new Error('damageApplied must use the semantic attack cue handler')
-    if (e.type === 'memberFainted') {
-      const m = monAt(b0, e.side, e.index)
-      const prefix = e.side === 'foe' ? '對手的 ' : ''
-      stageRef.current?.faint(e.side)
-      fxRef.current?.burst({ ...FX_POS[e.side], color: '#8893a8', count: 18, kind: 'puff' })
-      playAudio(() => audio.play('faint'))
-      haptic('faint')
-      pushFeed(`${prefix}${m.nameZh} 倒下了！`)
-      await delay(620)
-    } else if (e.type === 'heal') {
-      const m = monAt(b0, e.side, e.index)
-      const src = getItem(e.source) ?? getAbility(e.source)
-      setMemberHp(e.side, e.index, e.hpAfter)
-      fxRef.current?.burst({ ...FX_POS[e.side], color: '#4ade80', count: 12, power: 1, kind: 'spark' })
-      playAudio(() => audio.play('select'))
-      const prefix = e.side === 'foe' ? '對手的 ' : ''
-      setBanner(`${src?.icon ?? '✨'} ${prefix}${m.nameZh} 回復了 ${e.amount} HP`)
-      pushFeed(`${prefix}${m.nameZh} 回復 ${e.amount} HP（${src?.name ?? e.source}）`)
-      await delay(720)
-      setBanner(null)
-      await delay(120)
-    } else if (e.type === 'statusApplied') {
-      const m = monAt(b0, e.side, e.index)
-      const mv = m.moves.find((move) => move.id === e.moveId)
-        ?? (m.move.id === e.moveId ? m.move : getMove(e.moveId))
-      const recipe = resolveFx(mv)
-      const prefix = e.side === 'foe' ? '對手的 ' : ''
-      const statusCue = (phase: VfxCue['phase']) => sessionLifecycle.ownsPresentation(cueContext.token) && (stageRef.current?.tracer?.({
-        cueId, owner: `${cueContext.token.battleSessionId}:${cueContext.token.presentationId}`,
-        caster: e.side, target: e.side, recipe: 'status', phase, didHit: true,
-        presentation: resolveMoveRecipe(mv),
-      }) ?? false)
-      const worldStatus = statusCue('anticipate')
-      if (!worldStatus) stageRef.current?.lunge(e.side)
-      setBanner(`${prefix}${m.nameZh} 使出 ${mv.nameZh}！`)
-      playAudio(() => audio.play('select'))
-      await delay(240)
-      if (worldStatus) statusCue('cast')
-      await delay(300)
-      if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-      if (!worldStatus || !statusCue('impact')) {
-        playMoveFx(fxRef.current, recipe, FX_POS[e.side], FX_POS[e.side])
-      }
-      playAudio(() => audio.playMoveSound(recipe.sound))
-      if (e.effectKind === 'heal' && e.hpAfter != null) {
-        setMemberHp(e.side, e.index, e.hpAfter)
-        playAudio(() => audio.play('super'))
-        setBanner(`＋ ${e.label}　+${e.healAmount} HP`)
-      } else if (e.effectKind === 'buff') {
-        playAudio(() => audio.play('super'))
-        setBanner(`${(mv.effect?.mult ?? 1) < 1 ? '▼' : '▲'} ${e.label}（${e.remaining} 回合）`)
-      } else {
-        playAudio(() => audio.play('super'))
-        setBanner(`◎ 場域：${e.label}`)
-      }
-      pushFeed(`${prefix}${m.nameZh}：${e.label}`)
-      await delay(820)
-      if (worldStatus) statusCue('recover')
-      setBanner(null)
-      await delay(140)
-    } else if (e.type === 'wildAccident') {
-      if (e.kind === 'terrainShift' && e.terrainId) {
-        const def = lookupTerrain(e.terrainId)
-        setBanner(`🌀 野外意外：地形突變 → ${def ? `${def.icon}${def.name}` : e.terrainId}！`)
-        pushFeed(`地形突變！場域變為 ${def?.name ?? e.terrainId}`)
-        const shiftColor = juiceRef.current === 'off' ? '#a07aff' : resolveTerrainPalette([e.terrainId]).particleColor
-        fxRef.current?.ring({ nx: 0.5, ny: 0.42, color: shiftColor })
-        playAudio(() => audio.play('super'))
-        await delay(950)
-        setBanner(null)
-        await delay(140)
-      } else if (e.kind === 'intrusion' && e.side != null && e.index != null && e.hpAfter != null) {
-        const m = monAt(b0, e.side, e.index)
-        const prefix = e.side === 'foe' ? '對手的 ' : ''
-        setMemberHp(e.side, e.index, e.hpAfter)
-        showHit({ target: e.side, amount: e.amount ?? 0, crit: false, effText: null, missed: false })
-        if (juiceRef.current !== 'off') {
-          damageRef.current?.spawn({ ...FX_POS[e.side], amount: e.amount ?? 0, crit: false, effectiveness: 1, missed: false })
-        }
-        fxRef.current?.burst({ ...FX_POS[e.side], color: '#ff9a3c', count: 14, kind: 'puff' })
-        if (!reducedMotionRef.current) {
-          void rootShake.start({ x: [0, -8, 6, 0], transition: { duration: 0.3 } })
-        }
-        playAudio(() => audio.play('hit'))
-        haptic('hit')
-        setBanner(`💥 野外意外：亂入野生襲擊 ${prefix}${m.nameZh}！`)
-        pushFeed(`亂入野生襲擊 ${prefix}${m.nameZh}（-${e.amount}）`)
-        await delay(820)
-        clearFx()
-        setBanner(null)
-        await delay(140)
-      }
-    } else if (e.type === 'activeChanged') {
-      setActiveIndex(e.side, e.toIndex)
-      stageRef.current?.enter(e.side)
-      const m = monAt(b0, e.side, e.toIndex)
-      const prefix = e.side === 'foe' ? '對手的 ' : ''
-      if (e.forced) {
-        store().presentationSetCommandNotice(cueContext.token, {
-          kind: 'forced-switch',
-          text: `${prefix}${m.nameZh} 因夥伴倒下自動上場`,
-        })
-      }
-      fxRef.current?.ring({ ...FX_POS[e.side], color: '#ffffff' })
-      if (e.side === 'player') fxRef.current?.flash('#ffffff', 0.3)
-      playAudio(() => audio.play('switch'))
-      setBanner(e.side === 'player' ? `上吧，${m.nameZh}！` : `對手派出了 ${m.nameZh}！`)
-      pushFeed(e.forced ? `${prefix}${m.nameZh} 因夥伴倒下自動上場` : `${prefix}${m.nameZh} 換上場`)
-      await delay(640)
-      setBanner(null)
-      await delay(120)
-    } else if (e.type === 'switchDefenseResolved') {
-      const pct = Math.round((1 - e.damageMult) * 100)
-      const label = e.defenseQuality === 'perfect' ? '完美防禦！'
-        : e.defenseQuality === 'good' ? '防禦成功！'
-          : e.defenseQuality === 'normal' ? '勉強防禦' : '防禦失敗…'
-      setBanner(pct > 0 ? `${label}　減傷 ${pct}%` : label)
-      pushFeed(`${label}（減傷 ${pct}%）`)
-      await delay(640)
-      setBanner(null)
-      await delay(110)
-    } else if (e.type === 'random' && e.event.type === 'supportRoulette') {
-      const outcome = e.event.outcome as SupportOutcome
-      setSupport(outcome)
-      playAudio(() => audio.play('select'))
-      await delay(950)
-      playAudio(() => audio.play(outcome === 'dud' ? 'select' : 'super'))
-      pushFeed(`支援輪盤：${SUPPORT_LABEL[outcome]}`)
-      await delay(800)
-      setSupport(null)
-      await delay(150)
-    } else if (e.type === 'battleEnded' && e.reason === 'timeout') {
-      setBanner('達回合上限！依剩餘血量判定勝負')
-      pushFeed('回合數達上限，依雙方剩餘血量判定勝負')
-      await delay(1150)
-      setBanner(null)
-      await delay(150)
-    } else if (e.type === 'chainOpportunity') {
-      setBanner('🔗 連鎖就緒！')
-      pushFeed('連鎖槽集滿！可發動連鎖攻擊')
-      playAudio(() => audio.play('super'))
-      fxRef.current?.flash('#7ae0ff', 0.3)
-      await delay(680)
-      setBanner(null)
-      await delay(120)
-    } else if (e.type === 'chainHit') {
-      setCombo(e.comboCount)
-      fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 12, power: 1.2, kind: 'spark' })
-      playAudio(() => audio.play('select'))
-      await delay(180)
-    } else if (e.type === 'comboCast') {
-      setBanner(`${e.icon} 合體技「${e.name}」！`)
-      const eff = e.castKind === 'infuseTerrain' ? '灌注場域' : e.castKind === 'teamBuff' ? '全隊增益' : '弱化敵方'
-      pushFeed(`${e.icon} 合體技「${e.name}」發動：${eff}（${e.remaining} 回合）`)
-      playAudio(() => audio.play('crit'))
-      fxRef.current?.flash('#ffe14a', 0.6)
-      fxRef.current?.ring({ ...FX_POS.player, color: '#ffe14a' })
-      fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 30, power: 1.8, kind: 'spark' })
-      if (!reducedMotionRef.current) {
-        void rootShake.start({ x: [0, -16, 14, -10, 0], transition: { duration: 0.42 } })
-      }
-      await delay(760)
-      setBanner(null)
-      await delay(140)
+  const closeTurnSkip = useCallback(() => {
+    skipOwnerRef.current = null
+    setSkipGate(null)
+  }, [])
+  const armTurnSkip = useCallback((context: CueContext, kind: 'star' | 'outcome') => {
+    if (context.skipping) return
+    const owner = { context, kind, ready: false }
+    skipOwnerRef.current = owner
+    setSkipGate({ kind, ready: false })
+    void context.clock.wait(600, context.signal).then(() => {
+      if (skipOwnerRef.current !== owner || !sessionLifecycle.ownsPresentation(context.token) || context.skipping) return
+      owner.ready = true
+      setSkipGate({ kind, ready: true })
+    }).catch(() => undefined)
+  }, [sessionLifecycle])
+  const requestTurnSkip = useCallback(() => {
+    const owner = skipOwnerRef.current
+    if (!owner?.ready || !sessionLifecycle.ownsPresentation(owner.context.token)) return
+    if (!presentationDirectorRef.current?.skip(owner.context.token)) return
+    tracePresentation(owner.context.token, 'skip', { detail: owner.kind })
+    resetPresentationRef.current(owner.context.token)
+    // Cut pending one-shots, retaining this token for its single outcome sound at commit.
+    battleAudioSession.cancel(owner.context.token)
+    battleAudioSession.begin(owner.context.token)
+    closeTurnSkip()
+  }, [closeTurnSkip, sessionLifecycle])
+  useEffect(() => {
+    if (!skipGate) return
+    if (skipGate.kind === 'outcome') skipButtonRef.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat || !['Enter', 'Escape'].includes(event.key)) return
+      event.preventDefault()
+      requestTurnSkip()
     }
-  }, [rootShake, sessionLifecycle])
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [skipGate?.kind, requestTurnSkip])
 
   const createCuePorts = useCallback((): BattleCuePorts => {
     let worldDamageCue: DamageCue | null = null
+    let starOwner: PresentationToken | null = null
+    let chainActiveIndex: number | null = null
+    let supportReturn: { side: Side; index: number } | null = null
     const tracer = (cue: DamageCue, context: CueContext, phase: VfxCue['phase']) => (
       cue.tracerRecipe !== null && (stageRef.current?.tracer?.({
         cueId: cue.id, owner: `${context.token.battleSessionId}:${context.token.presentationId}`,
@@ -1416,7 +1248,6 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       }) ?? false)
     )
     const normalAttack = (cue: DamageCue, phase: NormalAttackPhase) => {
-      if (!cue.normalAttack) return false
       stageRef.current?.normalAttack({
         cueId: cue.id,
         owner: 'normal-attack',
@@ -1432,17 +1263,30 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     return {
       scene: {
         begin: (cue, cueContext) => {
-          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
+          const current = useBattleStore.getState()
+          const target = current.presentation?.battle[cue.defenderSide]
+          if (target && target.activeIndex !== cue.event.targetIndex) {
+            current.presentationSetActiveIndex(cueContext.token, cue.defenderSide, cue.event.targetIndex)
+            stageRef.current?.enter(cue.defenderSide)
+          }
+          const side = current.presentation?.battle[cue.attackerSide]
+          supportReturn = side && side.activeIndex !== cue.event.attackerIndex
+            ? { side: cue.attackerSide, index: side.activeIndex } : null
+          if (supportReturn) {
+            current.presentationSetActiveIndex(cueContext.token, cue.attackerSide, cue.event.attackerIndex)
+            stageRef.current?.enter(cue.attackerSide)
+          }
           worldDamageCue = tracer(cue, cueContext, 'anticipate') ? cue : null
-          if (!normalAttack(cue, 'anticipate')) stageRef.current?.lunge(cue.attackerSide)
+          normalAttack(cue, 'anticipate')
         },
         impact: async (cue, cueContext) => {
-          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
           const e = cue.event
           if (tracer(cue, cueContext, 'cast')) {
             if (cue.presentation.delivery === 'contact') normalAttack(cue, 'travel')
             await cueContext.clock.wait(reducedMotionRef.current ? 120 : 280, cueContext.signal)
-            if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+            if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
             if (tracer(cue, cueContext, 'impact')) {
               normalAttack(cue, 'contact')
               baselineDriver()?.recordCastImpact(performance.now())
@@ -1467,11 +1311,12 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
             { reducedMotion: reducedMotionRef.current },
           )
           if (impactDelayMs > 0) await cueContext.clock.wait(impactDelayMs, cueContext.signal)
+          if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
           normalAttack(cue, 'contact')
           baselineDriver()?.recordCastImpact(performance.now())
         },
         reaction: (cue, cueContext) => {
-          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
           const e = cue.event
           if (e.missed || e.amount <= 0) return
           const pos = projectedSceneAnchor(e.targetSide, 'impact')
@@ -1489,16 +1334,29 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           }
           if (!tracedNormalAttack || strong) stageRef.current?.hitReact(e.targetSide, strong ? 1.6 : 1)
         },
-        hitStop: (cue, cueContext) => {
-          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+        hitStop: async (cue, cueContext) => {
+          if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
           const e = cue.event
           if (e.missed || e.amount <= 0 || juiceRef.current !== 'full' || reducedMotionRef.current) return
-          return cinematicRef.current!.pause(e.crit || e.effectiveness >= 2 ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS)
+          stageRef.current?.setTimeScale(0)
+          try {
+            await cueContext.clock.wait(e.crit || e.effectiveness >= 2 ? HITSTOP_STRONG_MS : HITSTOP_HIT_MS, cueContext.signal)
+          } finally {
+            if (sessionLifecycle.ownsPresentation(cueContext.token)) stageRef.current?.setTimeScale(1)
+          }
         },
         clear: (cue, cueContext) => {
-          if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+          if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
           normalAttack(cue, 'recover')
           tracer(cue, cueContext, 'recover')
+          if (supportReturn) {
+            useBattleStore.getState().presentationSetActiveIndex(cueContext.token, supportReturn.side, supportReturn.index)
+            stageRef.current?.enter(supportReturn.side)
+            supportReturn = null
+          }
+          if (samePresentationToken(starOwner, cueContext.token) && cue.attackerSide === 'player') {
+            starOwner = null; setCutIn(null); setLetterbox(false); setStarPhase(null); closeTurnSkip()
+          }
         },
       },
       hud: {
@@ -1514,6 +1372,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         const e = cue.event
         const store = useBattleStore.getState()
         store.presentationSetMemberHp(cueContext.token, e.targetSide, e.targetIndex, e.hpAfter)
+        if (cueContext.skipping) return
         store.presentationShowHit(cueContext.token, {
           target: e.targetSide, amount: e.amount, crit: e.crit,
           effText: e.effectivenessText, missed: e.missed,
@@ -1559,19 +1418,20 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     },
     audio: {
       playAttack: (cue, cueContext) => {
+        if (cueContext.skipping) return
         battleAudioSession.play(cueContext.token, () => audio.play('attack'))
         tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'attack' })
       },
       playImpact: (cue, cueContext) => {
+        if (cueContext.skipping) return
         const e = cue.event
         if (e.missed || e.amount <= 0) return
-        battleAudioSession.play(
-          cueContext.token,
-          () => audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit'),
-        )
-        tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'impact' })
+        battleAudioSession.play(cueContext.token, () => samePresentationToken(starOwner, cueContext.token) && e.attackerSide === 'player'
+          ? audio.starImpactBoom() : audio.play(e.crit ? 'crit' : e.effectiveness >= 2 ? 'super' : 'hit'))
+        tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: samePresentationToken(starOwner, cueContext.token) && e.attackerSide === 'player' ? 'star-impact' : 'impact' })
       },
       playMoveSound: (cue, cueContext) => {
+        if (cueContext.skipping) return
         const e = cue.event
         if (e.missed || e.amount <= 0) return
         const sound = resolveFx(cue.move).sound
@@ -1581,61 +1441,58 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     },
     haptic: {
       impact: (cue, cueContext) => {
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+        if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
         const e = cue.event
         if (e.missed || e.amount <= 0) return
         haptic(e.crit ? 'crit' : e.effectiveness >= 2 ? 'superEffective' : 'hit')
       },
     },
-    legacy: {
-      play: (cue, cueContext) => playLegacyEvent(cue.before, cue.event, cueContext, cue.id),
-    },
+    event: createBattleEventPorts({
+      owns: (ctx) => sessionLifecycle.ownsPresentation(ctx.token),
+      scene: () => stageRef.current, fx: () => fxRef.current, damage: () => damageRef.current,
+      position: projectedSceneAnchor, reducedMotion: () => reducedMotionRef.current,
+      enabled: () => juiceRef.current !== 'off',
+      switchPrepared: (index) => preparedSwitchRef.current === index,
+      trace: (cue, ctx, stage, detail) => tracePresentation(ctx.token, stage, { cueId: cue.id, detail }),
+    }),
     action: {
       starPrelude: async (_cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
         const store = useBattleStore.getState()
-        const projectedBattle = store.presentation?.battle
-        if (!projectedBattle) throw new Error('Star prelude requires a current presentation')
-        store.presentationPushFeed(cueContext.token, {
-          id: 'input:star-consumed',
-          text: '星擊能量已消耗，重新開始蓄力',
-          kind: 'system',
-        })
-        await cueContext.clock.race(
-          baselineDriver()?.checkpoint('action:star', 'star') ?? Promise.resolve(),
-          cueContext.signal,
-        )
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-        const caster = projectedBattle.player.members[projectedBattle.player.activeIndex]
+        const projected = store.presentation?.battle
+        if (!projected) throw new Error('Star requires a current presentation')
+        store.presentationPushFeed(cueContext.token, { id: 'input:star-consumed', text: '星擊能量已消耗，重新開始蓄力', kind: 'system' })
+        if (cueContext.skipping) return
+        await cueContext.clock.race(baselineDriver()?.checkpoint('action:star', 'star') ?? Promise.resolve(), cueContext.signal)
+        if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
+        const caster = projected.player.members[projected.player.activeIndex]
         const finisher = caster.moves[0] ?? caster.move
-        battleAudioSession.play(cueContext.token, () => audio.play('crit'))
-        tracePresentation(cueContext.token, 'audio', { cueId: 'input:star-prelude', detail: 'star' })
-        if (juiceRef.current !== 'off') {
-          await cinematicRef.current!.cutIn({
-            artworkUrl: caster.artworkUrl,
-            casterName: caster.nameZh,
-            moveName: finisher.nameZh,
-            type: finisher.type,
-            side: 'player',
-          }, {
-            wait: (ms) => cueContext.clock.wait(ms, cueContext.signal),
-          })
-          store.presentationSetBanner(cueContext.token, '★ 星擊發動！')
-          return
+        starOwner = cueContext.token
+        armTurnSkip(cueContext, 'star')
+        setStarPhase('charge')
+        setLetterbox(!reducedMotionRef.current)
+        setCutIn({ artworkUrl: caster.artworkUrl, casterName: caster.nameZh, moveName: finisher.nameZh, type: finisher.type, side: 'player' })
+        store.presentationSetBanner(cueContext.token, '★ 星擊蓄力')
+        if (juiceRef.current !== 'off' && !reducedMotionRef.current) {
+          fxRef.current?.converge({ ...projectedSceneAnchor('player', 'cast'), color: typePalette[finisher.type].color, count: 16 })
         }
+        battleAudioSession.play(cueContext.token, () => audio.starChargeSweep())
+        tracePresentation(cueContext.token, 'audio', { cueId: 'input:star-prelude', detail: 'charge' })
+        await cueContext.clock.wait(720, cueContext.signal)
+        if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
+        setStarPhase('stamp')
+        battleAudioSession.play(cueContext.token, () => audio.starStampTick())
+        tracePresentation(cueContext.token, 'audio', { cueId: 'input:star-prelude', detail: 'stamp' })
+        await cueContext.clock.wait(120, cueContext.signal)
+        if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
+        setStarPhase('impact')
+        setCutIn(null)
         store.presentationSetBanner(cueContext.token, '★ 星擊發動！')
-        haptic('crit')
-        fxRef.current?.flash('#ffffff', 0.7)
-        fxRef.current?.ring({ ...FX_POS.foe, color: '#ff7ae0' })
-        if (!reducedMotionRef.current) {
-          void rootShake.start({ x: [0, -20, 18, -14, 10, 0], transition: { duration: 0.5 } })
-        }
-        await cueContext.clock.wait(620, cueContext.signal)
-        fxRef.current?.burst({ ...FX_POS.foe, color: '#ff7ae0', count: 40, power: 2, kind: 'spark' })
       },
       chainPrelude: async (cue, cueContext) => {
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
+        if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
         const store = useBattleStore.getState()
+        chainActiveIndex = store.presentation?.battle.player.activeIndex ?? null
         store.presentationSetBanner(cueContext.token, '🔗 連鎖攻擊！')
         store.presentationPushFeed(cueContext.token, {
           id: 'input:chain-consumed',
@@ -1644,58 +1501,59 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         })
         battleAudioSession.play(cueContext.token, () => audio.play('crit'))
         tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'chain' })
-        fxRef.current?.flash('#7ae0ff', 0.4)
+        if (juiceRef.current !== 'off') fxRef.current?.ring({ ...projectedSceneAnchor('player', 'cast'), color: '#7ae0ff' })
         await cueContext.clock.wait(cue.timingMs, cueContext.signal)
       },
       chainCleanup: async (cue, cueContext) => {
         await cueContext.clock.wait(cue.timingMs, cueContext.signal)
-        if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
-        useBattleStore.getState().presentationSetCombo(cueContext.token, null)
+        if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
+        const current = useBattleStore.getState()
+        if (chainActiveIndex !== null && (current.presentation?.battle.player.members[chainActiveIndex]?.currentHp ?? 0) > 0) {
+          current.presentationSetActiveIndex(cueContext.token, 'player', chainActiveIndex)
+          stageRef.current?.enter('player')
+        }
+        current.presentationSetCombo(cueContext.token, null)
       },
       outcome: async (cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
         const store = useBattleStore.getState()
-        store.presentationSetCommandNotice(cueContext.token, {
-          kind: cue.event.reason === 'timeout' ? 'timeout' : 'outcome',
-          text: cue.event.reason === 'timeout'
-            ? '達回合上限，依剩餘 HP 判定勝負'
-            : cue.event.winner === 'player' ? '戰鬥勝利' : '戰鬥失利',
-        })
-        if (cue.event.reason === 'timeout') {
-          store.presentationSetBanner(cueContext.token, '達回合上限！依剩餘血量判定勝負')
-          store.presentationPushFeed(cueContext.token, {
-            id: `${cue.id}:timeout`,
-            text: '回合數達上限，依雙方剩餘血量判定勝負',
-            kind: 'result',
-          })
-          tracePresentation(cueContext.token, 'feed', { cueId: cue.id, detail: 'timeout' })
-          await cueContext.clock.wait(1150, cueContext.signal)
-          store.presentationSetBanner(cueContext.token, null)
-          await cueContext.clock.wait(150, cueContext.signal)
-        }
-        await cueContext.clock.wait(1100, cueContext.signal)
+        const title = cue.event.winner === 'player' ? '戰鬥勝利！' : '戰鬥失利'
+        const reason = cue.event.reason === 'timeout' ? '達回合上限，依剩餘 HP 判定勝負' : title
+        store.presentationSetCommandNotice(cueContext.token, { kind: cue.event.reason === 'timeout' ? 'timeout' : 'outcome', text: reason })
+        store.presentationPushFeed(cueContext.token, { id: `${cue.id}:outcome`, kind: 'result', text: reason })
+        tracePresentation(cueContext.token, 'feed', { cueId: cue.id, detail: cue.event.reason ?? 'outcome' })
+        if (cueContext.skipping) return
+        setOutcomeTitle(title)
+        store.presentationSetBanner(cueContext.token, reason)
+        armTurnSkip(cueContext, 'outcome')
+        await cueContext.clock.wait(1800, cueContext.signal)
       },
       },
     }
-  }, [playLegacyEvent, projectedSceneAnchor, rootShake, sessionLifecycle])
+  }, [armTurnSkip, closeTurnSkip, projectedSceneAnchor, rootShake, sessionLifecycle])
 
   const presentationCueHandler = useMemo(
-    () => new LegacyBattleCueHandler(createCuePorts()),
+    () => new BattleEventCueHandler(createCuePorts()),
     [createCuePorts],
   )
 
-  const resetPresentationVisuals = useCallback((token: PresentationToken) => {
+  const resetPresentationVisuals = useCallback((token: PresentationToken, keepRecall = false) => {
     if (!sessionLifecycle.ownsPresentation(token)) return
     if (token.purpose === 'turn') useBattleStore.getState().presentationClearTransient(token)
     else useBattleStore.getState().intentSetBanner(token, null)
-    cinematicRef.current?.resume()
-    stageRef.current?.resetPresentation()
+    setCutIn(null)
+    setLetterbox(false)
+    setStarPhase(null)
+    setOutcomeTitle(null)
+    closeTurnSkip()
+    stageRef.current?.resetPresentation({ keepRecall })
+    if (!keepRecall) preparedSwitchRef.current = null
     fxRef.current?.clear()
     damageRef.current?.clear()
     rootShake.stop()
     rootShake.set({ x: 0, scale: 1 })
     vibrate(0)
-  }, [rootShake, sessionLifecycle])
+  }, [closeTurnSkip, rootShake, sessionLifecycle])
   resetPresentationRef.current = resetPresentationVisuals
 
   const presentationDirector = useMemo(() => new BattleDirector({
@@ -1717,15 +1575,8 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       degraded: (_error, job) => {
         if (job.kind === 'turn') resetPresentationVisuals(job.token)
       },
-      reset: (job) => {
-        if (!sessionLifecycle.ownsPresentation(job.token)) return
-        if (job.kind === 'intent') {
-          useBattleStore.getState().intentSetBanner(job.token, null)
-        } else {
-          cinematicRef.current?.resume()
-          useBattleStore.getState().presentationClearTransient(job.token)
-        }
-      },
+      reset: (job, context) => resetPresentationVisuals(job.token,
+        job.kind === 'intent' && job.intent.kind === 'switch-prelude' && !context.signal.aborted),
     },
   }), [intentPresenter, presentationCueHandler, resetPresentationVisuals, sessionLifecycle])
   presentationDirectorRef.current = presentationDirector
@@ -1882,6 +1733,20 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
 
   const runStarStrike = useCallback(() => submitTurn({ type: 'ATTACK', starStrike: true }), [submitTurn])
 
+  const prepareVoluntarySwitch = useCallback(async (index: number) => {
+    const current = useBattleStore.getState()
+    if (current.phase !== 'switchSelect' || !current.battle || !current.session || current.session.retired) return
+    const session = current.session.token
+    switchInvokerRef.current = null
+    preparedSwitchRef.current = index
+    setPendingSwitch(index)
+    const result = await submitIntent({ kind: 'switch-prelude', id: `switch:${current.session.nextPresentationId}` },
+      battleDisplaySnapshot(current.battle), `${current.session.battleSeed}:switch:${index}`)
+    if (!useBattleStore.getState().isSessionCurrent(session)) return
+    if (result === 'completed' || result === 'degraded') useBattleStore.getState().setPhase('defenseQte')
+    else { preparedSwitchRef.current = null; setPendingSwitch(null) }
+  }, [submitIntent])
+
   const runSwitchTurn = useCallback((index: number, defenseQuality: QteQuality) => {
     setPendingSwitch(null)
     return submitTurn({ type: 'SWITCH', index, defenseQuality })
@@ -2020,16 +1885,25 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       ref={battleRootRef}
       className={`battle-shell${juice !== 'off' ? ' battle-enter' : ''}`}
       data-battle-shell
+      data-star-phase={starPhase ?? undefined}
+      data-outcome={outcomeTitle ?? undefined}
       data-window-class={windowClass}
       data-reduced-motion={reducedMotion ? 'true' : 'false'}
       animate={rootShake}
     >
+      {skipGate && (
+        <button ref={skipButtonRef} type="button" className="btn btn--ghost battle-intro-skip battle-presentation-skip"
+          data-presentation-skip={skipGate.kind} aria-disabled={!skipGate.ready} onClick={requestTurnSkip}>
+          {skipGate.kind === 'outcome' ? '繼續' : '跳過星擊'}
+        </button>
+      )}
       <section
         ref={battleStageElementRef}
         className="battle-stage"
         data-battle-stage
         aria-label="戰鬥場景"
       >
+
       {/* Three-free host owns lazy next boot and one-way compatibility fallback. */}
       <BattleSceneHost
         key={currentRendererAttemptId!}
@@ -2387,11 +2261,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           <SwitchSheet
             members={battle.player.members}
             legalIndices={switchProjection.legalIndices}
-            onPick={(index) => {
-              switchInvokerRef.current = null
-              setPendingSwitch(index)
-              useBattleStore.getState().setPhase('defenseQte')
-            }}
+            onPick={(index) => { void prepareVoluntarySwitch(index) }}
             onCancel={cancelSwitch}
           />
         )}
@@ -2399,7 +2269,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         {(phase === 'busy' || phase === 'intro' || phase === 'won' || phase === 'lost' || phase === 'error') && (
           <div className="battle-command-busy" role="status">
             <span aria-hidden="true">•••</span>
-            {commandNotice?.text
+            {intentPresentation?.intent.kind === 'switch-prelude' ? '準備換人防禦' : commandNotice?.text
               ?? (phase === 'intro' ? '準備戰鬥'
                 : phase === 'won' ? '戰鬥勝利'
                   : phase === 'lost' ? '戰鬥失利'
@@ -2424,7 +2294,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         </AnimatePresence>
       )}
 
-      {/* ===== EXT.2 星擊電影化：letterbox + 全螢幕 cut-in（純 display，由 cinematicCoordinator 驅動） ===== */}
+      {/* ===== EXT.2 星擊電影化：letterbox + 全螢幕 cut-in（純 display，由 Director 時鐘驅動） ===== */}
       <AnimatePresence>
         {letterbox && (
           <motion.div key="lb" className="cinematic-letterbox" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
@@ -2440,14 +2310,14 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
               key="cutin"
               className="cutin-card"
               style={{ ['--type' as string]: typePalette[cutIn.type].color }}
-              initial={{ opacity: 0, scale: 1.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.32, filter: 'brightness(4)' }}
+              initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: !reducedMotion && starPhase === 'stamp' ? 1.06 : 1 }}
+              exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 1.05 }}
               transition={{ duration: 0.13, ease: [0.2, 0.9, 0.3, 1] }}
             >
               <img className="cutin-card__art" src={cutIn.artworkUrl} alt="" draggable={false} />
               <div className="cutin-card__text">
-                <div className="cutin-card__eyebrow">★ 星擊 FINISHER</div>
+                <div className="cutin-card__eyebrow">{starPhase === 'charge' ? '★ 星擊蓄力' : '★ 星擊就緒'}</div>
                 <div className="cutin-card__move">{cutIn.moveName}</div>
                 <div className="cutin-card__caster">{cutIn.casterName}</div>
               </div>

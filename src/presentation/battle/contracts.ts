@@ -102,7 +102,12 @@ export interface PartnerSkillResultIntent {
   effects: readonly PartnerResultEffect[]
 }
 
-export type BattleIntent = IntroIntent | PartnerSkillResultIntent
+export interface SwitchPreludeIntent {
+  kind: 'switch-prelude'
+  id: `switch:${number}`
+}
+
+export type BattleIntent = IntroIntent | PartnerSkillResultIntent | SwitchPreludeIntent
 
 export interface BattleUnitView {
   instanceId: string
@@ -163,6 +168,7 @@ export interface PausablePresentationClock extends PresentationClock {
 }
 
 export interface CueContext {
+  readonly skipping?: boolean
   token: TurnPresentationToken
   signal: AbortSignal
   clock: PresentationClock
@@ -202,18 +208,18 @@ export interface DamageCue {
   timing: DamageTiming
 }
 
-type NarrowLegacyEvent =
+type PresentationEvent =
   | Exclude<BattleEvent, { type: 'damageApplied' | 'battleEnded' | 'random' }>
   | (Omit<Extract<BattleEvent, { type: 'random' }>, 'event'> & {
       event: Extract<BattleEvent, { type: 'random' }>['event'] & { type: 'supportRoulette' }
     })
 
-export interface LegacyBattleCue {
-  kind: 'legacy-event'
+export interface BattleEventCue {
+  kind: 'battle-event'
   id: string
   eventIndex: number
   before: BattleState
-  event: NarrowLegacyEvent
+  event: PresentationEvent
 }
 
 export interface IntentionalNoopCue {
@@ -249,7 +255,7 @@ export interface BattleOutcomeCue {
 
 export type BattleCue =
   | DamageCue
-  | LegacyBattleCue
+  | BattleEventCue
   | IntentionalNoopCue
   | StarPreludeCue
   | ChainPreludeCue
@@ -288,8 +294,11 @@ export interface DamageHapticPort {
   impact(cue: DamageCue, context: CueContext): Promise<void> | void
 }
 
-export interface LegacyEventPort {
-  play(cue: LegacyBattleCue, context: CueContext): Promise<void> | void
+export interface EventScenePort {
+  begin(cue: BattleEventCue, context: CueContext): void
+  cast(cue: BattleEventCue, context: CueContext): void
+  apply(cue: BattleEventCue, context: CueContext): void
+  clear(cue: BattleEventCue, context: CueContext): void
 }
 
 export interface BattleActionPort {

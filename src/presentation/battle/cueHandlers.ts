@@ -4,9 +4,10 @@ import type {
   CueContext,
   DamageCue,
 } from './contracts'
-import type { LegacyPresentationPorts } from './legacy/LegacyPresentationPorts'
+import type { BattleCuePorts } from './BattleCuePorts'
+import { playEventChoreography } from './eventChoreography'
 
-export type BattleCuePorts = LegacyPresentationPorts
+export type { BattleCuePorts } from './BattleCuePorts'
 
 async function invoke(work: Promise<void> | void, context: CueContext): Promise<void> {
   await context.clock.race(Promise.resolve(work), context.signal)
@@ -16,12 +17,12 @@ function assertNever(value: never): never {
   throw new Error(`Unhandled battle cue: ${JSON.stringify(value)}`)
 }
 
-export class LegacyBattleCueHandler implements BattleCueHandler {
+export class BattleEventCueHandler implements BattleCueHandler {
   constructor(private readonly ports: BattleCuePorts) {}
 
   async play(cue: BattleCue, context: CueContext): Promise<void> {
     switch (cue.kind) {
-      case 'legacy-event': await invoke(this.ports.legacy.play(cue, context), context); return
+      case 'battle-event': await playEventChoreography(cue, context, this.ports.event); return
       case 'intentional-noop': return
       case 'star-prelude': await invoke(this.ports.action.starPrelude(cue, context), context); return
       case 'chain-prelude': await invoke(this.ports.action.chainPrelude(cue, context), context); return

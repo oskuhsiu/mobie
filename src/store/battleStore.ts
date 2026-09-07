@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { projectEventField } from '@/presentation/battle/eventProjection'
 import type { BattleMobie, TerrainId } from '@/game/types'
 import { createBattleState, upsertStatus, type BattleEvent, type BattleState, type Side, type SupportOutcome, type StatusEffect } from '@/game/battle/reducer'
 import type { DisplayUnitSnapshot, ReplayInput, ReplayTurn } from '@/game/replay/types'
@@ -113,6 +114,7 @@ function safePointFeedOf(intent: BattleIntent): readonly IntentFeedEntry[] {
         ...(intent.synergy?.feed ?? []),
       ]
     case 'partner-result': return [intent.feed]
+    case 'switch-prelude': return []
   }
 }
 
@@ -325,6 +327,7 @@ interface BattleUiState {
   commitPartnerSkillOnce: (commit: PartnerSkillGameplayCommit) => PartnerSkillCommitReceipt | null
   setCaptured: (b: boolean) => void
   beginPresentation: (token: TurnPresentationToken, before: BattleState, input: TurnInput) => void
+  presentationApplyEvent: (token: TurnPresentationToken, event: BattleEvent) => void
   presentationSetMemberHp: (token: TurnPresentationToken, side: Side, index: number, hp: number) => void
   presentationSetActiveIndex: (token: TurnPresentationToken, side: Side, index: number) => void
   presentationSetBanner: (token: TurnPresentationToken, banner: string | null) => void
@@ -715,6 +718,15 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
       }
     }),
 
+  presentationApplyEvent: (token, event) =>
+    set((s) => {
+      const projection = s.presentation
+      if (!projection || !samePresentationToken(projection.token, token)) return {}
+      const field = projectEventField(projection.battle, event)
+      if (field === projection.battle.field) return {}
+      return { presentation: { ...projection, battle: { ...projection.battle, field } } }
+    }),
+
   presentationSetMemberHp: (token, side, index, hp) =>
     set((s) => {
       const projection = s.presentation
@@ -880,7 +892,9 @@ export const useBattleStore = create<BattleUiState>((set, get) => ({
         || s.presentation
         || s.intentPresentation
         || s.session.completedIntentIds.has(intent.id)
-        || (intent.kind === 'intro' ? s.phase !== 'intro' : s.phase !== 'playerChoice')
+        || (intent.kind === 'intro'
+          ? s.phase !== 'intro'
+          : intent.kind === 'switch-prelude' ? s.phase !== 'switchSelect' : s.phase !== 'playerChoice')
         || (intent.kind === 'partner-result' && (
           intent.id !== `partner:${intent.skillId}`
           || !s.session.partnerSkillIdsUsed.has(intent.skillId)

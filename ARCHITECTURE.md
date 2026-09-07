@@ -132,7 +132,12 @@ Two halves, deliberately separated:
    `store/battleStore.ts`.** `BattleTurnCoordinator` is the only turn transaction owner for every
    `ReplayInput`: allocate a fenced token → resolve once → record once → compile/present ordered cues →
    atomically commit once. `compileBattleCues` and the Director do not import React, scene, or UI;
-   BattleScreen only collects input and supplies legacy scene/HUD/audio/haptic ports. During playback,
+   BattleScreen collects input and supplies scene/HUD/audio/haptic ports. Non-damage events
+   use `eventChoreography` for prepare/cast/apply/clear timing, with synchronous UI adapters and
+   token-fenced field projection at the apply safe point. A display-only switch prelude recalls
+   and frames the entry before defense input. Star/outcome skip opens after 600ms and fast-forwards
+   the current turn clock through safe points; ordinary aborts still cancel without commit.
+   The Director finally releases camera, timing, transient FX and overlays. During playback,
    battleStore exposes a token-owned shadow for HP/active/feed while canonical `BattleState`, energy,
    lock, combo, phase, replay finish, and `END_BATTLE` remain unchanged until `commitTurn`. Its
    non-persisted runtime session owns the Web Crypto result identity pair, seeded RNG, replay recorder,

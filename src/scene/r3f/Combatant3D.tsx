@@ -17,6 +17,9 @@ export interface MonAnim {
   shakeMag: number
   /** 入場（換上）剩餘秒數 */
   enterT: number
+  /** 主動收回；完成後保持空場直到 enter。 */
+  recalled: boolean
+  recallT: number
   /** 是否倒下（觸發傾倒淡沉）+ 進度 0..1 */
   fainted: boolean
   faintT: number
@@ -30,6 +33,8 @@ export function makeAnim(): MonAnim {
     shakeT: 0,
     shakeMag: 0,
     enterT: 0,
+    recalled: false,
+    recallT: 0,
     fainted: false,
     faintT: 0,
     attackPhase: 'idle',
@@ -43,6 +48,7 @@ export const LUNGE_DUR = 0.42
 export const SHAKE_DUR = 0.34
 export const ENTER_DUR = 0.5
 const FAINT_DUR = 0.6
+const RECALL_DUR = 0.3
 
 const easeOutBack = (p: number) => {
   const c = 1.7
@@ -110,12 +116,23 @@ export const Combatant3D = forwardRef<CombatantRigHandle, Combatant3DProps>(func
     let rotX = 0
     let scale = 1
 
-    if (anim.fainted) {
-      anim.faintT = Math.min(1, anim.faintT + delta / FAINT_DUR)
+    g.visible = true
+    if (anim.recalled) {
+      anim.recallT = Math.min(1, anim.recallT + delta / (reducedMotion ? 0.12 : RECALL_DUR))
+      if (!reducedMotion) {
+        scale = 1 - anim.recallT
+        y -= anim.recallT * 0.2
+      }
+      g.visible = anim.recallT < 1
+    } else if (anim.fainted) {
+      anim.faintT = Math.min(1, anim.faintT + delta / (reducedMotion ? 0.12 : FAINT_DUR))
       const p = anim.faintT
-      rotX = (side === 'foe' ? -1 : 1) * p * 1.25 // 往後仰倒
-      y -= p * 0.55
-      scale = 1 - p * 0.5
+      if (!reducedMotion) {
+        rotX = (side === 'foe' ? -1 : 1) * p * 1.25 // 往後仰倒
+        y -= p * 0.55
+        scale = 1 - p * 0.5
+      }
+      g.visible = p < 1
     } else {
       anim.faintT = 0
       if (!reducedMotion) y += Math.sin(t * 1.6 + bobPhase) * 0.05
@@ -148,8 +165,8 @@ export const Combatant3D = forwardRef<CombatantRigHandle, Combatant3DProps>(func
       if (anim.enterT > 0) {
         anim.enterT = Math.max(0, anim.enterT - delta)
         const p = 1 - anim.enterT / ENTER_DUR // 0→1
-        scale = easeOutBack(Math.max(0, p))
-        y += (1 - p) * 0.9 // 從上方落下
+        scale = reducedMotion ? 1 : easeOutBack(Math.max(0, p))
+        y += reducedMotion ? 0 : (1 - p) * 0.9 // 從上方落下
       }
     }
 

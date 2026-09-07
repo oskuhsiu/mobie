@@ -154,10 +154,12 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       normalAttack: (cue) => active()?.normalAttack(cue),
       lunge: (side) => active()?.lunge(side),
       hitReact: (side, strength) => active()?.hitReact(side, strength),
+      recall: (side) => active()?.recall?.(side),
+      frameEntry: (side, cueId, owner) => active()?.frameEntry?.(side, cueId, owner),
       faint: (side) => active()?.faint(side),
       enter: (side) => active()?.enter(side),
       setTimeScale: (scale) => active()?.setTimeScale(scale),
-      resetPresentation: () => active()?.resetPresentation(),
+      resetPresentation: (options) => active()?.resetPresentation(options),
       projectAnchor: (side, anchor, viewport) => active()?.projectAnchor(side, anchor, viewport)
         ?? projectBattleAnchor(side, anchor, viewport),
     }

@@ -269,7 +269,7 @@ describe('BattleDirector', () => {
     kind: 'turn', token, before, input: { type: 'ATTACK' }, events: [], battleSeed: 'seed', turn: 1,
   }
   const cue = {
-    kind: 'legacy-event', id: 'event:0:memberFainted', eventIndex: 0, before,
+    kind: 'battle-event', id: 'event:0:memberFainted', eventIndex: 0, before,
     event: { type: 'memberFainted', side: 'foe', index: 0 },
   } as BattleCue
 

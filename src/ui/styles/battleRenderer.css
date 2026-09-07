@@ -93,8 +93,31 @@
 }
 
 .battle-renderer__combatant-motion--faint {
-  transform: translateY(10%) rotate(var(--battle-renderer-faint-rotation, 14deg)) scale(0.72);
-  opacity: 0.42;
+  animation: battle-renderer-faint calc(600ms * var(--battle-renderer-duration-scale, 1)) ease-in both;
+}
+
+.battle-renderer__combatant-motion--recall {
+  animation: battle-renderer-recall calc(300ms * var(--battle-renderer-duration-scale, 1)) ease-in both;
+}
+
+@keyframes battle-renderer-faint {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(10%) rotate(var(--battle-renderer-faint-rotation, 14deg)) scale(0.72); }
+}
+
+@keyframes battle-renderer-recall {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(10%) scale(0); }
+}
+
+.battle-renderer--compatibility[data-reduced-motion='true'] .battle-renderer__combatant-motion--faint,
+.battle-renderer--compatibility[data-reduced-motion='true'] .battle-renderer__combatant-motion--recall {
+  animation: battle-renderer-disappear 120ms linear both;
+}
+
+@keyframes battle-renderer-disappear {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .battle-renderer--compatibility[data-renderer-paused='true'] .battle-renderer__combatant-motion {

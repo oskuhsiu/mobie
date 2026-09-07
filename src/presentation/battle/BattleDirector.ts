@@ -1,6 +1,7 @@
 import { compileBattleCues } from './compileBattleCues'
 import { samePresentationToken } from './battleIdentity'
 import { isPresentationAbort, RealPresentationClock } from './PresentationClock'
+import { TurnSkipClock } from './TurnSkipClock'
 import type {
   BattleCue,
   BattleCueHandler,
@@ -39,6 +40,7 @@ export class BattleDirector {
   private activeToken: PresentationToken | null = null
   private pendingClockState: { token: PresentationToken; paused: boolean } | null = null
   private clockPaused = false
+  private activeTurnClock: TurnSkipClock | null = null
 
   constructor(private readonly options: BattleDirectorOptions) {
     this.clock = options.clock ?? new RealPresentationClock()
@@ -47,6 +49,8 @@ export class BattleDirector {
 
   async present(job: PresentationJob, signal: AbortSignal): Promise<PresentationResult> {
     this.activeToken = job.token
+    const turnClock = job.kind === 'turn' ? new TurnSkipClock(this.clock) : null
+    this.activeTurnClock = turnClock
     if (this.pendingClockState && samePresentationToken(this.pendingClockState.token, job.token)) {
       this.clockPaused = this.pendingClockState.paused
       this.pendingClockState = null
@@ -59,12 +63,15 @@ export class BattleDirector {
         if (!this.options.intentHandler) throw new Error('Battle Director has no intent handler')
         await this.options.intentHandler.play(job, { ...context, token: job.token })
       } else {
-        const cueContext: CueContext = { ...context, token: job.token }
+        const cueContext: CueContext = {
+          ...context, token: job.token, clock: turnClock!,
+          get skipping() { return turnClock!.skipping },
+        }
         const cues = this.compile(job)
         for (const cue of cues) {
           if (signal.aborted) return 'cancelled'
           if (this.options.lifecycle.beforeCue) {
-            await this.clock.race(Promise.resolve(this.options.lifecycle.beforeCue(cue, cueContext)), signal)
+            await cueContext.clock.race(Promise.resolve(this.options.lifecycle.beforeCue(cue, cueContext)), signal)
           }
           await this.options.handler.play(cue, cueContext)
         }
@@ -86,8 +93,17 @@ export class BattleDirector {
       } catch {
         // Reset is best-effort and must not change the transaction result.
       }
-      if (samePresentationToken(this.activeToken, job.token)) this.activeToken = null
+      if (samePresentationToken(this.activeToken, job.token)) {
+        this.activeToken = null
+        this.activeTurnClock = null
+      }
     }
+  }
+
+  skip(token: PresentationToken): boolean {
+    if (!samePresentationToken(this.activeToken, token) || !this.activeTurnClock) return false
+    this.activeTurnClock.skip()
+    return true
   }
 
   pause(token: PresentationToken): boolean {

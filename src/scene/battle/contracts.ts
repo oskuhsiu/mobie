@@ -57,10 +57,14 @@ export interface BattleSceneHandle {
   normalAttack(cue: NormalAttackCue): void
   lunge(side: Side): void
   hitReact(side: Side, strength?: number): void
+  /** Withdraw without a faint result or sound; remain absent until enter. */
+  recall?(side: Side): void
+  /** Camera-only framing of the empty entry anchor; compatibility keeps its static view. */
+  frameEntry?(side: Side, cueId: string, owner: string): void
   faint(side: Side): void
   enter(side: Side): void
   setTimeScale(scale: number): void
-  resetPresentation(): void
+  resetPresentation(options?: { keepRecall?: boolean }): void
   projectAnchor(side: Side, anchor: BattleAnchorKind, viewport: BattleViewport): BattleScreenPoint
 }
 

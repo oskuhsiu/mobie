@@ -5,7 +5,7 @@ import { projectBattleAnchor } from '@/presentation/battle/battleAnchors'
 import type { BattleSceneHandle, BattleSceneSnapshot } from '@/scene/battle/contracts'
 import '@/ui/styles/battleRenderer.css'
 
-type MotionState = 'idle' | 'lunge' | 'hit' | 'faint' | 'enter'
+type MotionState = 'idle' | 'lunge' | 'hit' | 'faint' | 'recall' | 'enter'
 type CombatantState = { mode: MotionState; version: number }
 
 const INITIAL_STATE: Record<Side, CombatantState> = {
@@ -101,17 +101,18 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
     },
     lunge: (side) => setMode(side, reducedMotion ? 'idle' : 'lunge'),
     hitReact: (side) => setMode(side, reducedMotion ? 'idle' : 'hit'),
+    recall: (side) => setMode(side, 'recall'),
     faint: (side) => setMode(side, 'faint'),
     enter: (side) => setMode(side, 'enter'),
     setTimeScale: (scale) => {
       const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1
       rootRef.current?.style.setProperty('--battle-renderer-duration-scale', String(1 / safeScale))
     },
-    resetPresentation: () => {
+    resetPresentation: (options) => {
       rootRef.current?.style.setProperty('--battle-renderer-duration-scale', '1')
       setStates((previous) => ({
-        player: { mode: 'idle', version: previous.player.version + 1 },
-        foe: { mode: 'idle', version: previous.foe.version + 1 },
+        player: options?.keepRecall && previous.player.mode === 'recall' ? previous.player : { mode: 'idle', version: previous.player.version + 1 },
+        foe: options?.keepRecall && previous.foe.mode === 'recall' ? previous.foe : { mode: 'idle', version: previous.foe.version + 1 },
       }))
     },
     projectAnchor: (side: Side, anchor: BattleAnchorKind, viewport: BattleViewport): BattleScreenPoint =>
@@ -135,7 +136,7 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
           artworkUrl={snapshot.foe.artworkUrl}
           shiny={snapshot.foe.shiny}
           state={states.foe}
-          onMotionEnd={() => states.foe.mode !== 'faint' && setMode('foe', 'idle')}
+          onMotionEnd={() => !['faint', 'recall'].includes(states.foe.mode) && setMode('foe', 'idle')}
         />
         <CompatibilityCombatant
           side="player"
@@ -143,7 +144,7 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
           artworkUrl={snapshot.player.artworkUrl}
           shiny={snapshot.player.shiny}
           state={states.player}
-          onMotionEnd={() => states.player.mode !== 'faint' && setMode('player', 'idle')}
+          onMotionEnd={() => !['faint', 'recall'].includes(states.player.mode) && setMode('player', 'idle')}
         />
       </div>
     </div>

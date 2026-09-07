@@ -9,6 +9,8 @@ import type {
 } from './contracts'
 
 export interface BattleIntentDisplayPort {
+  prepareSwitch?(context: IntentCueContext): void
+  frameSwitch?(context: IntentCueContext): void
   setBanner(message: string | null, context: IntentCueContext): Promise<void> | void
   appendFeed(entry: IntentFeedEntry, context: IntentCueContext): Promise<void> | void
   playPartnerEffect(effect: PartnerResultEffect, context: IntentCueContext): Promise<void> | void
@@ -31,6 +33,14 @@ export class BattleIntentPresenter implements BattleIntentHandler {
 
   async play(job: IntentPresentationJob, context: IntentCueContext): Promise<void> {
     switch (job.intent.kind) {
+      case 'switch-prelude':
+        context.signal.throwIfAborted()
+        this.display.prepareSwitch?.(context)
+        await context.clock.wait(300, context.signal)
+        context.signal.throwIfAborted()
+        this.display.frameSwitch?.(context)
+        await context.clock.wait(120, context.signal)
+        break
       case 'intro':
         await this.playIntro(job.intent, context)
         break

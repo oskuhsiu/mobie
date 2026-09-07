@@ -54,7 +54,7 @@ describe('compileBattleCues', () => {
     expect(cues.map((cue) => [cue.kind, cue.id])).toEqual([
       ['intentional-noop', 'event:0:random:accuracy'],
       ['damage', 'event:1:damageApplied'],
-      ['legacy-event', 'event:2:memberFainted'],
+      ['battle-event', 'event:2:memberFainted'],
     ])
     const damage = cues[1]
     if (damage?.kind !== 'damage') throw new Error('expected damage cue')
@@ -114,7 +114,7 @@ describe('compileBattleCues', () => {
     expect(compileBattleCues(job({ type: 'ATTACK' }, [event]))[0]?.kind).toBe('intentional-noop')
   })
 
-  it('routes support roulette and every nested gameplay variant to legacy cues', () => {
+  it('routes support roulette and nested gameplay variants to battle event cues', () => {
     const events: BattleEvent[] = [
       { type: 'random', event: { type: 'supportRoulette', actorId: 'p', roll: 0.2, outcome: 'ally', source: 'test' } },
       { type: 'wildAccident', kind: 'terrainShift', terrainId: 'volcanic' },
@@ -127,7 +127,7 @@ describe('compileBattleCues', () => {
       { type: 'comboCast', key: 'c', name: 'c', icon: 'c', castKind: 'enemyDebuff', label: 'c', remaining: 1 },
     ]
     expect(compileBattleCues(job({ type: 'SWITCH', index: 0 }, events)).map((cue) => cue.kind))
-      .toEqual(events.map(() => 'legacy-event'))
+      .toEqual(events.map(() => 'battle-event'))
   })
 
   it('emits one semantic outcome cue and rejects duplicates', () => {

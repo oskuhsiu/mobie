@@ -4,7 +4,7 @@ import type {
   BattleCue,
   DamageCue,
   IntentionalNoopCue,
-  LegacyBattleCue,
+  BattleEventCue,
   TurnPresentationJob,
 } from './contracts'
 
@@ -24,12 +24,12 @@ function assertNever(value: never): never {
   throw new Error(`Unhandled battle presentation variant: ${JSON.stringify(value)}`)
 }
 
-function legacyCue(
+function eventCue(
   before: TurnPresentationJob['before'],
-  event: LegacyBattleCue['event'],
+  event: BattleEventCue['event'],
   eventIndex: number,
-): LegacyBattleCue {
-  return { kind: 'legacy-event', id: `event:${eventIndex}:${event.type}`, eventIndex, before, event }
+): BattleEventCue {
+  return { kind: 'battle-event', id: `event:${eventIndex}:${event.type}`, eventIndex, before, event }
 }
 
 function noopCue(
@@ -46,7 +46,7 @@ function compileRandom(
 ): BattleCue {
   switch (event.event.type) {
     case 'supportRoulette':
-      return legacyCue(before, {
+      return eventCue(before, {
         ...event,
         event: { ...event.event, type: 'supportRoulette' },
       }, eventIndex)
@@ -61,10 +61,10 @@ function compileWild(
   before: TurnPresentationJob['before'],
   event: Extract<BattleEvent, { type: 'wildAccident' }>,
   eventIndex: number,
-): LegacyBattleCue {
+): BattleEventCue {
   switch (event.kind) {
-    case 'terrainShift': return legacyCue(before, event, eventIndex)
-    case 'intrusion': return legacyCue(before, event, eventIndex)
+    case 'terrainShift': return eventCue(before, event, eventIndex)
+    case 'intrusion': return eventCue(before, event, eventIndex)
     default: return assertNever(event.kind)
   }
 }
@@ -73,11 +73,11 @@ function compileStatus(
   before: TurnPresentationJob['before'],
   event: Extract<BattleEvent, { type: 'statusApplied' }>,
   eventIndex: number,
-): LegacyBattleCue {
+): BattleEventCue {
   switch (event.effectKind) {
-    case 'buff': return legacyCue(before, event, eventIndex)
-    case 'heal': return legacyCue(before, event, eventIndex)
-    case 'terrain': return legacyCue(before, event, eventIndex)
+    case 'buff': return eventCue(before, event, eventIndex)
+    case 'heal': return eventCue(before, event, eventIndex)
+    case 'terrain': return eventCue(before, event, eventIndex)
     default: return assertNever(event.effectKind)
   }
 }
@@ -86,11 +86,11 @@ function compileCombo(
   before: TurnPresentationJob['before'],
   event: Extract<BattleEvent, { type: 'comboCast' }>,
   eventIndex: number,
-): LegacyBattleCue {
+): BattleEventCue {
   switch (event.castKind) {
-    case 'infuseTerrain': return legacyCue(before, event, eventIndex)
-    case 'teamBuff': return legacyCue(before, event, eventIndex)
-    case 'enemyDebuff': return legacyCue(before, event, eventIndex)
+    case 'infuseTerrain': return eventCue(before, event, eventIndex)
+    case 'teamBuff': return eventCue(before, event, eventIndex)
+    case 'enemyDebuff': return eventCue(before, event, eventIndex)
     default: return assertNever(event.castKind)
   }
 }
@@ -123,16 +123,16 @@ function compileDamage(job: TurnPresentationJob, event: Extract<BattleEvent, { t
 function compileEvent(job: TurnPresentationJob, event: BattleEvent, eventIndex: number): BattleCue {
   switch (event.type) {
     case 'damageApplied': return compileDamage(job, event, eventIndex)
-    case 'memberFainted': return legacyCue(job.before, event, eventIndex)
-    case 'heal': return legacyCue(job.before, event, eventIndex)
-    case 'activeChanged': return legacyCue(job.before, event, eventIndex)
-    case 'switchDefenseResolved': return legacyCue(job.before, event, eventIndex)
+    case 'memberFainted': return eventCue(job.before, event, eventIndex)
+    case 'heal': return eventCue(job.before, event, eventIndex)
+    case 'activeChanged': return eventCue(job.before, event, eventIndex)
+    case 'switchDefenseResolved': return eventCue(job.before, event, eventIndex)
     case 'battleEnded': return {
       kind: 'battle-outcome', id: `event:${eventIndex}:battleEnded`, eventIndex, event,
     }
     case 'random': return compileRandom(job.before, event, eventIndex)
-    case 'chainOpportunity': return legacyCue(job.before, event, eventIndex)
-    case 'chainHit': return legacyCue(job.before, event, eventIndex)
+    case 'chainOpportunity': return eventCue(job.before, event, eventIndex)
+    case 'chainHit': return eventCue(job.before, event, eventIndex)
     case 'comboCast': return compileCombo(job.before, event, eventIndex)
     case 'wildAccident': return compileWild(job.before, event, eventIndex)
     case 'statusApplied': return compileStatus(job.before, event, eventIndex)

@@ -145,4 +145,29 @@ describe('battleStore intent presentation', () => {
     expect(useBattleStore.getState().log.map((entry) => entry.text)).toEqual([intent.feed.message])
     expect(useBattleStore.getState().session).toMatchObject({ rngCursor: 0, endSent: false })
   })
+
+  it('starts switch prelude only during selection and completes without a turn or gameplay change', () => {
+    reset('playerChoice')
+    const before = useBattleStore.getState()
+    const intent = { kind: 'switch-prelude' as const, id: `switch:${before.session!.nextPresentationId}` as const }
+    expect(before.beginIntentPresentation(intent)).toBeNull()
+    before.setPhase('switchSelect')
+    const token = before.beginIntentPresentation(intent)!
+    expect(token).not.toBeNull()
+    expect(useBattleStore.getState().phase).toBe('busy')
+    expect(useBattleStore.getState().intentPresentation!.safePointFeed).toEqual([])
+    expect(before.completeIntentOnce(token)).toBe(true)
+    const after = useBattleStore.getState()
+    expect(after.phase).toBe('playerChoice')
+    expect(after.battle).toBe(before.battle)
+    expect(after.energy).toBe(before.energy)
+    expect(after.log).toEqual(before.log)
+    expect(after.session!.rngCursor).toBe(before.session!.rngCursor)
+    expect(after.session!.pendingReplay).toBeNull()
+    expect(after.session!.recorder).toBe(before.session!.recorder)
+    after.setPhase('switchSelect')
+    expect(after.beginIntentPresentation(intent)).toBeNull()
+    expect(after.beginIntentPresentation({ kind: 'switch-prelude', id: `switch:${after.session!.nextPresentationId}` })).not.toBeNull()
+  })
+
 })
