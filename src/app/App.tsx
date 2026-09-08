@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
 import { GameProvider, useGame } from '@/app/GameProvider'
 import type { GameEvent } from '@/game/machine/gameMachine'
-import { useRoster } from '@/store/rosterStore'
-import { useMeta } from '@/store/metaStore'
-import { useIncubator } from '@/store/incubatorStore'
+import { createActor } from 'xstate'
 import { useSettings } from '@/store/settingsStore'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { TitleScreen } from '@/ui/screens/TitleScreen'
@@ -16,6 +14,17 @@ import { TowerSetupScreen } from '@/ui/screens/TowerSetupScreen'
 import { endRegisteredBattleLifecycle } from '@/presentation/battle/battleLifecycleBridge'
 import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'
 import { M24_BASELINE_SCENARIO_ID, M24_GAME_EVENT } from '@/dev/m24/contracts'
+import {
+  BootstrapProvider,
+  ensureBootstrap,
+  useBootstrapCoordinator,
+} from '@/app/bootstrapCoordinator'
+import { AppShell, ScreenViewport } from '@/ui/shell/AppShell'
+import { gameMachine } from '@/game/machine/gameMachine'
+
+// The browser app owns one route actor outside React component lifetime so a
+// root remount cannot send the player back to Title or create a second machine.
+const appGameActor = createActor(gameMachine).start()
 
 export function Stage() {
   const game = useGame()
@@ -64,9 +73,9 @@ export function Stage() {
     : 'radial-gradient(120% 100% at 50% 0%, #1a2150 0%, #0b1026 60%, #060a1c 100%)'
 
   return (
-    <div className="app" style={{ background: bg, transition: 'background 0.6s ease' }}>
+    <AppShell background={bg} route={value}>
       {/* Keep transitions local: scaling this full-screen layer forces gradients, blur and WebGL to re-rasterize together. */}
-      <div className="screen">
+      <ScreenViewport>
         {value === 'title' && <TitleScreen />}
         {value === 'regionSelect' && <RegionSelectScreen />}
         {value === 'towerSetup' && <TowerSetupScreen />}
@@ -74,20 +83,23 @@ export function Stage() {
         {value === 'cardSelect' && <CardSelectScreen />}
         {value === 'battle' && devBattleMounted && <BattleScreen graphicsPreference={graphicsPreference} />}
         {value === 'result' && <ResultScreen />}
-      </div>
-    </div>
+      </ScreenViewport>
+    </AppShell>
   )
 }
 
 export function App() {
-  // 開場載入持久化 roster（localStorage；空則 seed 預設並存檔），再用 roster 回填圖鑑 meta + 載入孵化所
+  const bootstrap = useBootstrapCoordinator()
+
   useEffect(() => {
-    void useRoster.getState().load().then(() => useMeta.getState().load(useRoster.getState().roster))
-    useIncubator.getState().load()
+    void ensureBootstrap()
   }, [])
+
   return (
-    <GameProvider>
-      <Stage />
-    </GameProvider>
+    <BootstrapProvider snapshot={bootstrap.snapshot}>
+      <GameProvider actor={appGameActor}>
+        <Stage />
+      </GameProvider>
+    </BootstrapProvider>
   )
 }

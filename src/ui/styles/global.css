@@ -42,6 +42,7 @@ body {
     'Noto Sans TC', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
@@ -54,23 +55,33 @@ body {
 .app {
   position: relative;
   flex: 1;
-  height: 100dvh;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
+.app-shell {
+  /* The shell owns the viewport and safe-area insets; routes only own content. */
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+}
 
 .screen {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  padding:
-    calc(var(--safe-t) + 20px)
-    calc(var(--safe-r) + 24px)
-    calc(var(--safe-b) + 20px)
-    calc(var(--safe-l) + 24px);
+  padding: 20px 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
+.screen-viewport { isolation: isolate; }
 
 /* ============ 共用元件 ============ */
 .btn {
@@ -114,10 +125,38 @@ body {
   font-size: 12px; font-weight: 800; color: var(--accent);
 }
 
+.task-header {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center;
+}
+.task-header__eyebrow {
+  display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 0;
+  padding: 5px 12px; border: 1px solid rgba(255, 210, 63, 0.3); border-radius: 999px;
+  background: rgba(8, 12, 32, 0.5); backdrop-filter: blur(8px);
+}
+.task-header__title { line-height: 1; }
+.task-header__tagline {
+  color: var(--text-dim); font-size: clamp(13px, 2.2vw, 19px); font-weight: 750;
+  letter-spacing: 0.06em;
+}
+.bootstrap-status {
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  width: min(92vw, 500px); padding: 12px 16px; border-radius: 14px;
+  color: var(--text); background: rgba(122, 224, 255, 0.1);
+  border: 1px solid rgba(122, 224, 255, 0.34); text-align: center;
+}
+.bootstrap-status--error {
+  background: rgba(255, 107, 107, 0.12); border-color: rgba(255, 107, 107, 0.52);
+}
+.bootstrap-status__title { font-weight: 900; }
+.bootstrap-status__copy { color: var(--text-dim); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.bootstrap-action-reason { color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+.utility-dock { width: 100%; display: flex; justify-content: center; }
+
 /* ============ Title / primary journey ============ */
 .title-screen {
   position: relative; isolation: isolate; gap: clamp(16px, 3.2vh, 28px);
-  padding: clamp(12px, 3vw, 28px); overflow: hidden;
+  width: 100%; min-height: 0; padding: clamp(12px, 3vw, 28px);
 }
 .title-screen::before {
   content: ''; position: absolute; z-index: -1;
@@ -128,17 +167,9 @@ body {
   filter: drop-shadow(0 0 70px rgba(122, 224, 255, 0.12));
 }
 .title-screen__hero { align-items: center; gap: 10px; }
-.title-screen__eyebrow {
-  padding: 5px 12px; border: 1px solid rgba(255, 210, 63, 0.3); border-radius: 999px;
-  background: rgba(8, 12, 32, 0.5); backdrop-filter: blur(8px);
-}
-.title-screen__logo {
+.title-screen .task-header__title {
   font-size: clamp(44px, 9vw, 88px); line-height: 1; text-align: center;
   text-shadow: 0 16px 46px rgba(0, 0, 0, 0.48);
-}
-.title-screen__loop {
-  margin-top: 10px; font-size: clamp(13px, 2.2vw, 19px); font-weight: 750;
-  color: var(--text-dim); letter-spacing: 0.06em;
 }
 .title-screen__adventure { min-width: min(76vw, 280px); font-size: 20px; padding: 18px 48px; }
 .tools-menu { position: relative; width: 100%; max-width: 760px; margin-inline: auto; }

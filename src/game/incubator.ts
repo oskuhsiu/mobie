@@ -127,6 +127,23 @@ export function loadIncubator(): IncubatorState {
   }
 }
 
+/** Bootstrap read: keep storage failures recoverable instead of replacing them with an empty incubator. */
+export function loadIncubatorStrict(): IncubatorState {
+  if (!hasLS()) return defaultIncubator()
+  const raw = localStorage.getItem(KEY)
+  if (raw === null) return defaultIncubator()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (cause) {
+    throw new Error(`讀取孵化所失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('讀取孵化所失敗：資料格式無效')
+  const record = parsed as Record<string, unknown>
+  if (!Array.isArray(record.eggs)) throw new Error('讀取孵化所失敗：資料格式無效')
+  return migrateIncubator(record)
+}
+
 export function saveIncubatorState(state: IncubatorState): void {
   if (!hasLS()) return
   try {

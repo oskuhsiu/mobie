@@ -7,6 +7,9 @@ export interface PersistenceAdapter {
   loadRoster(): Promise<OwnedUnit[]>
   saveRoster(units: OwnedUnit[]): Promise<void>
   saveUnit(unit: OwnedUnit): Promise<void>
+  /** Bootstrap-only strict reads/writes; unlike gameplay persistence, failures are recoverable UI errors. */
+  loadRosterStrict?: () => Promise<OwnedUnit[]>
+  saveRosterStrict?: (units: OwnedUnit[]) => Promise<void>
 }
 
 // v2：起始 roster 由 5 隻擴充為跨屬性 16 隻（dex 擴到 251、區域擴到 8）→ 換 key 讓既有存檔重新種子。
@@ -33,6 +36,28 @@ export class LocalStorageAdapter implements PersistenceAdapter {
     }
   }
 
+  async loadRosterStrict(): Promise<OwnedUnit[]> {
+    if (typeof localStorage === 'undefined') return []
+    try {
+      const raw = localStorage.getItem(KEY)
+      if (raw === null) return []
+      const data = JSON.parse(raw)
+      if (!Array.isArray(data)) throw new Error('roster payload is not an array')
+      return data as OwnedUnit[]
+    } catch (cause) {
+      throw new Error(`讀取 Mobie 資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveRosterStrict(units: OwnedUnit[]): Promise<void> {
+    if (typeof localStorage === 'undefined') return
+    try {
+      localStorage.setItem(KEY, JSON.stringify(units))
+    } catch (cause) {
+      throw new Error(`保存 Mobie 資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
   async saveUnit(unit: OwnedUnit): Promise<void> {
     const roster = await this.loadRoster()
     const i = roster.findIndex((u) => u.id === unit.id)
@@ -47,6 +72,8 @@ export class MemoryAdapter implements PersistenceAdapter {
   private roster: OwnedUnit[] = []
   async loadRoster() { return this.roster.map((u) => ({ ...u })) }
   async saveRoster(units: OwnedUnit[]) { this.roster = units.map((u) => ({ ...u })) }
+  async loadRosterStrict() { return this.loadRoster() }
+  async saveRosterStrict(units: OwnedUnit[]) { return this.saveRoster(units) }
   async saveUnit(unit: OwnedUnit) {
     const i = this.roster.findIndex((u) => u.id === unit.id)
     if (i >= 0) this.roster[i] = { ...unit }

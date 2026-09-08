@@ -124,11 +124,45 @@ export function loadMeta(): MetaState {
   }
 }
 
+/** Bootstrap read: preserve storage errors so the Title can offer Retry instead of seeding over them. */
+export function loadMetaStrict(): MetaState {
+  if (!hasLS()) return defaultMeta()
+  const raw = localStorage.getItem(KEY)
+  if (raw === null) return defaultMeta()
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (cause) {
+    throw new Error(`讀取圖鑑與成就失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('讀取圖鑑與成就失敗：資料格式無效')
+  }
+  const record = parsed as Record<string, unknown>
+  if (
+    !Array.isArray(record.registered)
+    || !Array.isArray(record.seen)
+    || !record.stats || typeof record.stats !== 'object' || Array.isArray(record.stats)
+    || !record.achievements || typeof record.achievements !== 'object' || Array.isArray(record.achievements)
+  ) throw new Error('讀取圖鑑與成就失敗：資料格式無效')
+  return migrateMeta(record)
+}
+
 export function saveMetaState(meta: MetaState): void {
   if (!hasLS()) return
   try {
     localStorage.setItem(KEY, JSON.stringify(meta))
   } catch {
     /* 配額/隱私模式：忽略 */
+  }
+}
+
+/** Bootstrap write: report a storage failure instead of presenting an unpersisted ready state. */
+export function saveMetaStateStrict(meta: MetaState): void {
+  if (!hasLS()) return
+  try {
+    localStorage.setItem(KEY, JSON.stringify(meta))
+  } catch (cause) {
+    throw new Error(`保存圖鑑與成就失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }

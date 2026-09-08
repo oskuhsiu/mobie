@@ -12,6 +12,8 @@ import {
   bumpStat,
   markClaimed,
   currentlyOwnedSpecies,
+  loadMetaStrict,
+  saveMetaStateStrict,
   type MetaState,
 } from '@/game/meta'
 import { computeAchievements, getAchievement, type AchievementReward } from '@/game/achievements'
@@ -21,6 +23,8 @@ interface MetaStore {
   loaded: boolean
   /** 載入 meta，並用當前 roster 回填 registered（起始隊伍/既有收藏計入「已捕」）。 */
   load: (roster: OwnedUnit[]) => void
+  /** Cold boot variant: storage errors propagate to the bootstrap coordinator for Retry. */
+  loadStrict: (roster: OwnedUnit[]) => void
   /** 遭遇/看到一批物種（未登錄者記為 seen）。 */
   recordSeen: (speciesIds: number[]) => void
   /** 收服一隻：registered + captures(+shiny)。 */
@@ -40,15 +44,23 @@ export const useMeta = create<MetaStore>((set, get) => {
     saveMetaState(meta)
     set({ meta })
   }
+  const hydrate = (
+    roster: OwnedUnit[],
+    read: () => MetaState,
+    write: (meta: MetaState) => void,
+  ): void => {
+    set({ loaded: false })
+    const meta = addRegistered(read(), [...currentlyOwnedSpecies(roster)])
+    write(meta)
+    set({ meta, loaded: true })
+  }
   return {
     meta: defaultMeta(),
     loaded: false,
 
-    load: (roster) => {
-      const meta = addRegistered(loadMeta(), [...currentlyOwnedSpecies(roster)])
-      saveMetaState(meta)
-      set({ meta, loaded: true })
-    },
+    load: (roster) => hydrate(roster, loadMeta, saveMetaState),
+
+    loadStrict: (roster) => hydrate(roster, loadMetaStrict, saveMetaStateStrict),
 
     recordSeen: (speciesIds) => commit(addSeen(get().meta, speciesIds)),
 

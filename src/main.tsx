@@ -6,11 +6,31 @@ import '@/ui/styles/global.css'
 import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'
 import { M24_BASELINE_SCENARIO_ID } from '@/dev/m24/contracts'
 
-createRoot(document.getElementById('root')!).render(
+declare global {
+  interface Window {
+    /** DEV-only root remount seam for cold-boot lifecycle evidence. */
+    __MOBIE_APP_TEST__?: { remount: () => void }
+  }
+}
+
+const rootNode = document.getElementById('root')!
+let root = createRoot(rootNode)
+const renderApp = () => root.render(
   <StrictMode>
     <App />
   </StrictMode>,
 )
+renderApp()
+
+if (import.meta.env.DEV) {
+  window.__MOBIE_APP_TEST__ = {
+    remount: () => {
+      root.unmount()
+      root = createRoot(rootNode)
+      renderApp()
+    },
+  }
+}
 
 if (
   import.meta.env.DEV

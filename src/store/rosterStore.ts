@@ -43,6 +43,7 @@ interface RosterState {
   /** 最近一場勝利新收服的Mobie（給結算畫面顯示），null=沒收服 */
   lastCaptured: OwnedUnit | null
   load: () => Promise<void>
+  loadStrict: () => Promise<void>
   /**
    * 戰鬥結算：給參戰的 unitIds 依被擊敗隊伍等級加經驗、升級、存檔。
    * ratio 用來區分勝（1.0 全額）與敗（部分，例如 0.15）。
@@ -64,27 +65,41 @@ interface RosterState {
   clearResults: () => void
 }
 
-export const useRoster = create<RosterState>((set, get) => ({
-  roster: defaultRoster(),
-  loaded: false,
-  lastResults: [],
-  lastEvolutions: [],
-  lastMoveLearns: [],
-  lastCaptured: null,
-
-  load: async () => {
-    const saved = await adapter.loadRoster()
+export const useRoster = create<RosterState>((set, get) => {
+  const hydrateRoster = async (
+    loadRoster: () => Promise<OwnedUnit[]>,
+    saveRoster: (units: OwnedUnit[]) => Promise<void>,
+    rejectCorruptPayload = false,
+  ): Promise<void> => {
+    set({ loaded: false })
+    const saved = await loadRoster()
     // 載入邊界防護：丟棄壞項 / 夾合法範圍，擋「壞檔讓遊戲開不起來」的死迴圈
     const clean = sanitizeRoster(saved)
     if (clean.length === 0) {
+      if (rejectCorruptPayload && saved.length > 0) throw new Error('讀取 Mobie 資料失敗：沒有可用的 canonical roster')
       const seeded = defaultRoster()
-      await adapter.saveRoster(seeded)
+      await saveRoster(seeded)
       set({ roster: seeded, loaded: true })
     } else {
-      if (clean.length !== saved.length) await adapter.saveRoster(clean) // 有丟棄壞項 → 修檔回寫
+      if (clean.length !== saved.length) await saveRoster(clean) // 有丟棄壞項 → 修檔回寫
       set({ roster: clean, loaded: true })
     }
-  },
+  }
+
+  return {
+    roster: defaultRoster(),
+    loaded: false,
+    lastResults: [],
+    lastEvolutions: [],
+    lastMoveLearns: [],
+    lastCaptured: null,
+
+    load: () => hydrateRoster(adapter.loadRoster.bind(adapter), adapter.saveRoster.bind(adapter)),
+    loadStrict: () => hydrateRoster(
+      adapter.loadRosterStrict?.bind(adapter) ?? adapter.loadRoster.bind(adapter),
+      adapter.saveRosterStrict?.bind(adapter) ?? adapter.saveRoster.bind(adapter),
+      true,
+    ),
 
   grantBattleExp: async (unitIds, foeLevels, ratio = 1) => {
     const base = foeLevels.reduce((s, l) => s + expYield(l), 0)
@@ -199,4 +214,5 @@ export const useRoster = create<RosterState>((set, get) => ({
   },
 
   clearResults: () => set({ lastResults: [], lastEvolutions: [], lastMoveLearns: [], lastCaptured: null }),
-}))
+  }
+})

@@ -29,7 +29,7 @@ gitignored; that workflow does not alter the authority of documents already trac
 ## 2. Layered structure (`src/`)
 
 ```
-app/        App shell + GameProvider (XState machine context via React context)
+app/        AppShell + cached bootstrap coordinator + GameProvider (XState context via React context)
 game/       Pure domain logic (no React). The testable core.
   data/     Seed/generated data + type chart + region lookup
   battle/   Pure battle engine + reducer + fixtures + tests
@@ -78,6 +78,16 @@ title → regionSelect → encounter → cardSelect → battle → result
   enabled (all utility entries are lazy-loaded). Every utility therefore
   remains reachable without flattening it into the primary hunt loop. `regionSelect` adds
   `BACK → title` (a 🏠 button); it is the in-game hub returned to after each result.
+- **App shell and cold boot (M24 Ticket 23):** `app/bootstrapCoordinator.tsx` owns one cached
+  bootstrap promise and snapshot outside React component lifetime. It starts roster and incubator
+  loading together, waits for the canonical roster, then hydrates meta from that roster. The UI only
+  exposes `loading`, `ready`, or `partial-error`; a failed attempt stays on the Title with an explicit
+  Retry and leaves safe Settings/More actions available. `ui/shell/AppShell.tsx` owns the full viewport,
+  safe-area padding, route background, `TaskHeader`, `ScreenViewport`, and `UtilityDock`. It does not
+  create a second screen machine: route changes remain XState events, while resize/orientation are CSS
+  layout concerns. The browser app keeps its one XState actor outside the React root, so a dev/test root
+  remount preserves the current route while the coordinator keeps its cached snapshot. Data-dependent
+  actions carry a readable disabled reason until bootstrap is ready.
 - `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. The arena (id `'practice'`) resolves
   through `data/regionLookup.lookupRegion` to the hand-authored `data/practiceRegion.ts` — so it reuses
   the entire normal flow with no special-casing.
@@ -362,6 +372,9 @@ scoped Three.js procedural-geometry ticket.
   always-terminates / determinism under the fixed product runtime), plus `jsdom` semantic journeys for the
   title/hub, owned-Mobie details, hunt target/advice/order, real battle decisions, and capture results.
 - `npm run typecheck` / `npm run build` must stay green.
+- `npm run baseline:m24-shell` runs the Ticket 23 Chrome CDP cold-boot journey, including delayed
+  loading, a controlled partial failure, Retry recovery, Title→region return, My Mobie/More handoffs,
+  route-event counts, and the zoom-capable viewport meta.
 - Responsive visual verification runs in a real local browser at iPad and narrow-phone viewports;
   semantic assertions stay in Vitest so navigation and decision regressions do not depend on pixels.
   Headless battle screens need software WebGL flags when the environment does not provide a GL context.

@@ -5,7 +5,7 @@
 import { create } from 'zustand'
 import type { OwnedUnit } from '@/game/types'
 import {
-  loadIncubator, saveIncubatorState, defaultIncubator,
+  loadIncubator, loadIncubatorStrict, saveIncubatorState, defaultIncubator,
   addEgg, advanceAll, hatchEgg, isHatchable,
   type IncubatorState, type Egg,
 } from '@/game/incubator'
@@ -17,6 +17,8 @@ interface IncubatorStore {
   state: IncubatorState
   loaded: boolean
   load: () => void
+  /** Cold boot variant: storage errors propagate to the bootstrap coordinator for Retry. */
+  loadStrict: () => void
   /** 成就獎勵 → 蛋（plan/10 §3.3 發獎 action 的副作用入口）。 */
   addRewardEgg: (reward: AchievementReward) => void
   /** 重複捕獲轉化（overflow policy）→ 同種蛋；絕不刪既有個體（plan/10 §5.3.1）。
@@ -30,11 +32,17 @@ interface IncubatorStore {
 
 export const useIncubator = create<IncubatorStore>((set, get) => {
   const persist = (state: IncubatorState) => { saveIncubatorState(state); set({ state }) }
+  const hydrate = (load: () => IncubatorState): void => {
+    set({ loaded: false })
+    set({ state: load(), loaded: true })
+  }
   return {
     state: defaultIncubator(),
     loaded: false,
 
-    load: () => set({ state: loadIncubator(), loaded: true }),
+    load: () => hydrate(loadIncubator),
+
+    loadStrict: () => hydrate(loadIncubatorStrict),
 
     addRewardEgg: (reward) => {
       if (reward.kind !== 'egg') return

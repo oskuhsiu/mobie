@@ -6,6 +6,7 @@ import { REGIONS } from '@/game/data/regions'
 import { PRACTICE_REGION } from '@/game/data/practiceRegion'
 import { terrainDefsOf } from '@/game/data/terrains'
 import { ToolsMenu } from '@/ui/components/ToolsMenu'
+import { UtilityDock } from '@/ui/shell/AppShell'
 
 /** 區域地形提示文案（M8）：隨機地形區標「隨機」，否則列出固定/混合地形 icon+名。 */
 function terrainHint(r: Region): string | null {
@@ -83,7 +84,9 @@ export function RegionSelectScreen() {
 
       {/* 遊戲中樞的共用工具列：開始遊戲後仍可開隊伍/招式/圖鑑/設定等（修「首頁功能開始後就找不到」） */}
       <div className="region-tools">
-        <ToolsMenu />
+        <UtilityDock>
+          <ToolsMenu />
+        </UtilityDock>
       </div>
     </div>
   )

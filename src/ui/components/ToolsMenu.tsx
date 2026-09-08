@@ -1,11 +1,13 @@
 import { lazy, Suspense, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useBootstrap } from '@/app/bootstrapCoordinator'
 import { audio } from '@/audio/audioEngine'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { useSettings } from '@/store/settingsStore'
 import { claimableCount } from '@/game/achievements'
 import { isHatchable } from '@/game/incubator'
+import { bootstrapActionReason } from '@/ui/shell/AppShell'
 
 // 工具 overlay 較重（qrcode/camera），lazy 載入避免拖慢開場/區域選擇
 const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
@@ -21,6 +23,7 @@ const ReplayListModal = lazy(() => import('@/ui/components/ReplayListModal').the
 const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
 
 type Overlay = 'none' | 'library' | 'scanner' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
+const DATA_OVERLAYS: Overlay[] = ['library', 'scanner', 'save', 'team', 'moves', 'partner', 'dex', 'achievements', 'incubator']
 
 /**
  * 共用工具列：卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 回放 / 掃卡（可選） /
@@ -30,10 +33,23 @@ type Overlay = 'none' | 'library' | 'scanner' | 'save' | 'settings' | 'team' | '
 export function ToolsMenu() {
   const [overlay, setOverlay] = useState<Overlay>('none')
   const [moreOpen, setMoreOpen] = useState(false)
-  const open = (o: Overlay) => { void audio.unlock(); setOverlay(o) }
-  const claimable = useMeta((s) => claimableCount(s.meta))
-  const hatchable = useIncubator((s) => s.state.eggs.some(isHatchable))
+  const { snapshot } = useBootstrap()
+  const dataReady = snapshot.status === 'ready'
+  const dataReason = bootstrapActionReason(snapshot.status)
+  const open = (o: Overlay) => {
+    if (!dataReady && DATA_OVERLAYS.includes(o)) return
+    void audio.unlock()
+    setOverlay(o)
+  }
+  const claimable = useMeta((s) => dataReady ? claimableCount(s.meta) : 0)
+  const hatchable = useIncubator((s) => dataReady && s.state.eggs.some(isHatchable))
   const scannerEnabled = useSettings((s) => s.settings.prefs.scannerEnabled)
+  const dataGate = (label: string) => ({
+    disabled: !dataReady,
+    'aria-describedby': dataReason ? 'bootstrap-action-reason' : undefined,
+    'data-bootstrap-gated': !dataReady ? 'true' : undefined,
+    title: dataReason ? `${label}：${dataReason}` : undefined,
+  })
 
   return (
     <>
@@ -41,7 +57,12 @@ export function ToolsMenu() {
         <div
           className="row tools-menu-primary" style={{ gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}
         >
-          <button aria-label="我的 Mobie" className="btn btn--ghost tools-menu-primary__mobies" onClick={() => open('team')}>✨ 我的 Mobie</button>
+          <button
+            {...dataGate('我的 Mobie')}
+            aria-label="我的 Mobie"
+            className="btn btn--ghost tools-menu-primary__mobies"
+            onClick={() => open('team')}
+          >✨ 我的 Mobie</button>
           <button
             aria-label="更多"
             aria-expanded={moreOpen}
@@ -63,19 +84,19 @@ export function ToolsMenu() {
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <button className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => open('partner')}>✨ 夥伴技能</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📚 圖鑑</button>
-              <button className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
+              <button {...dataGate('卡庫')} className="btn btn--ghost btn--sm" onClick={() => open('library')}>🗂 卡庫</button>
+              <button {...dataGate('招式訓練所')} className="btn btn--ghost btn--sm" onClick={() => open('moves')}>📖 招式</button>
+              <button {...dataGate('夥伴技能')} className="btn btn--ghost btn--sm" onClick={() => open('partner')}>✨ 夥伴技能</button>
+              <button {...dataGate('圖鑑')} className="btn btn--ghost btn--sm" onClick={() => open('dex')}>📚 圖鑑</button>
+              <button {...dataGate('成就')} className="btn btn--ghost btn--sm" onClick={() => open('achievements')}>
                 🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
               </button>
-              <button className="btn btn--ghost btn--sm" onClick={() => open('incubator')}>
+              <button {...dataGate('孵化所')} className="btn btn--ghost btn--sm" onClick={() => open('incubator')}>
                 🥚 孵化所{hatchable && <span className="title-dot">!</span>}
               </button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('replays')}>🎬 回放</button>
-              {scannerEnabled && <button className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner')}>📷 掃卡</button>}
-              <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
+              {scannerEnabled && <button {...dataGate('掃卡')} className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner')}>📷 掃卡</button>}
+              <button {...dataGate('存檔')} className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
             </motion.div>
           )}
