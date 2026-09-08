@@ -39,6 +39,12 @@ export interface M23MetricsEvidence {
   viewport: { width: number; height: number }
   seed: string
   graphics: string
+  rendererFailure?: string | null
+  artworkFixture?: string | null
+  artworkModes?: {
+    player: 'artwork' | 'silhouette' | null
+    foe: 'artwork' | 'silhouette' | null
+  }
   requestedRendererRoute?: string
   rendererRoute?: string
   motion: string
@@ -313,6 +319,27 @@ function parseOptionalRendererRoute(value: unknown, path: string): string | unde
   return route
 }
 
+function parseOptionalNullableString(value: unknown, path: string): string | null | undefined {
+  if (value === undefined || value === null) return value
+  return nonEmptyString(value, path)
+}
+
+function parseOptionalArtworkModes(value: unknown): M23MetricsEvidence['artworkModes'] {
+  if (value === undefined) return undefined
+  const raw = record(value, 'artworkModes')
+  const mode = (entry: unknown, path: string): 'artwork' | 'silhouette' | null => {
+    if (entry === null) return null
+    if (entry !== 'artwork' && entry !== 'silhouette') {
+      fail(path, 'expected artwork, silhouette, or null')
+    }
+    return entry
+  }
+  return {
+    player: mode(raw.player, 'artworkModes.player'),
+    foe: mode(raw.foe, 'artworkModes.foe'),
+  }
+}
+
 function parseSchemaVersion(value: unknown): typeof M23_EVIDENCE_SCHEMA_VERSION {
   if (value !== M23_EVIDENCE_SCHEMA_VERSION) {
     fail('schemaVersion', `expected ${M23_EVIDENCE_SCHEMA_VERSION}`)
@@ -356,6 +383,9 @@ export function parseM23MetricsEvidence(value: unknown): M23MetricsEvidence {
     },
     seed: nonEmptyString(raw.seed, 'seed'),
     graphics: nonEmptyString(raw.graphics, 'graphics'),
+    rendererFailure: parseOptionalNullableString(raw.rendererFailure, 'rendererFailure'),
+    artworkFixture: parseOptionalNullableString(raw.artworkFixture, 'artworkFixture'),
+    artworkModes: parseOptionalArtworkModes(raw.artworkModes),
     requestedRendererRoute: parseOptionalRendererRoute(raw.requestedRendererRoute, 'requestedRendererRoute'),
     rendererRoute: parseOptionalRendererRoute(raw.rendererRoute, 'rendererRoute'),
     motion: nonEmptyString(raw.motion, 'motion'),

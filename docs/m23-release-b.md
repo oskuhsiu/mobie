@@ -68,14 +68,18 @@ The current Chrome evidence includes the following completed runs:
 | Existing profile rollback | `legacy` / `legacy` | 9 checkpoints, digest `5621dba2`, 0 errors | `test-runs/m23/release-b-legacy-rollback/` |
 | Existing profile compatibility | `compatibility` / `compatibility` | 9 checkpoints, digest `5621dba2`, 0 errors | `test-runs/m23/release-b-compatibility/` |
 | Fresh profile default (absent route) | `next` / `next` | 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-no-route/` |
-| Fresh profile artwork success | `next` / `next` | `large-texture`, 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-artwork-success/` |
-| Fresh profile artwork failure | `next` / `next` | `artwork-404`, 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-artwork-404/` |
+| Fresh profile artwork success | `next` / `next` | `large-texture`, modes `artwork/artwork`, 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-artwork-success-cached/` |
+| Fresh profile artwork failure | `next` / `next` | `artwork-404`, modes `silhouette/artwork`, 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-artwork-404-cached/` |
 | Injected chunk rejection | `next` / `compatibility` | 9 checkpoints, digest `5621dba2`, 0 errors; reason `chunk-reject` | `test-runs/m23/release-b-next-chunk-reject/` |
+| Injected WebGL failure | `next` / `compatibility` | 9 checkpoints, digest `5621dba2`, 0 errors; reason `webgl-unsupported` | `test-runs/m23/release-b-webgl-unsupported/` |
 
 The observed automatic fallback rate is `0/4` for the healthy next runs in
-this table and `1/1` for the deliberately injected chunk-rejection run. The injected
-case is the expected failure-path rate; this app has no uploaded telemetry for
-a natural production denominator. The haptics wrapper also skips vibration
+this table and `1/1` for the deliberately injected chunk-rejection run. The
+injected WebGL failure is also `1/1` by design. The injected cases are expected
+failure-path rates; this app has no uploaded telemetry for a natural production
+denominator. The existing `graphicsGovernor.test.ts` covers the ordered DPR →
+post → particles/weather → compatibility downgrade policy; a hardware
+pressure-rate claim remains outside this short functional run. The haptics wrapper also skips vibration
 when Chromium reports no active user gesture, keeping these programmatic
 journeys free of browser warnings.
 

@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Billboard } from '@react-three/drei'
-import { CanvasTexture, DoubleSide, TextureLoader, type Texture } from 'three'
-import { releaseArtworkTexture, retainArtworkTexture } from './artworkResourceCache'
+import { CanvasTexture, DoubleSide, type Texture } from 'three'
+import {
+  getArtworkTexture,
+  loadArtworkTexture,
+  releaseArtworkTexture,
+  retainArtworkTexture,
+} from './artworkResourceCache'
 
 interface MobieVisualProps {
   artworkUrl: string
@@ -76,27 +81,18 @@ function BillboardSprite({ url, name, shiny, onVisible }: {
   })
   useEffect(() => {
     let disposed = false
-    let resolved: Texture | null = null
     setLoaded({ url, texture: null, failed: false })
-    const pending = new TextureLoader().load(
-      url,
-      (texture) => {
-        resolved = texture
-        if (disposed) {
-          texture.dispose()
-          return
-        }
-        setLoaded({ url, texture, failed: false })
-      },
-      undefined,
-      () => {
+    const cached = getArtworkTexture(url)
+    if (cached) {
+      setLoaded({ url, texture: cached, failed: false })
+    } else {
+      void loadArtworkTexture(url).then((texture) => {
+        if (!disposed) setLoaded({ url, texture, failed: false })
+      }).catch(() => {
         if (!disposed) setLoaded({ url, texture: null, failed: true })
-      },
-    )
-    return () => {
-      disposed = true
-      if (!resolved) pending.dispose()
+      })
     }
+    return () => { disposed = true }
   }, [url])
 
   const tex = loaded.url === url && !loaded.failed ? loaded.texture : null

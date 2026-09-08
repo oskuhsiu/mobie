@@ -156,7 +156,7 @@ abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / 
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
 M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–18 implementation checks are complete** for
-the current Chrome qualification pass — **683 Vitest tests**, typecheck, and build are green. Content:
+the current Chrome qualification pass — **684 Vitest tests**, typecheck, and build are green. Content:
 national dex 1–1025, 16 regions (+ arena),
 16 starters.
 

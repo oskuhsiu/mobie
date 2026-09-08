@@ -112,6 +112,21 @@ describe('M23 metrics evidence', () => {
     expect(evidence.artworkCache?.totalEntries).toBe(2)
   })
 
+  it('parses optional renderer failure and artwork mode evidence', () => {
+    const metrics = validMetrics()
+    metrics.rendererFailure = null
+    metrics.artworkFixture = 'artwork-404'
+    metrics.artworkModes = { player: 'silhouette', foe: 'artwork' }
+    expect(parseM23MetricsEvidence(metrics)).toMatchObject({
+      rendererFailure: null,
+      artworkFixture: 'artwork-404',
+      artworkModes: { player: 'silhouette', foe: 'artwork' },
+    })
+
+    metrics.artworkModes = { player: 'missing', foe: 'artwork' }
+    expect(() => parseM23MetricsEvidence(metrics)).toThrow(/artworkModes.player/)
+  })
+
   it('accepts a performance capture with partial checkpoint coverage', () => {
     const evidence = validMetrics()
     evidence.evidenceKind = 'performance'

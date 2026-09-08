@@ -466,6 +466,23 @@ async function run(cdp) {
   await waitFor('window.__MOBIE_M23_BASELINE__.diagnostics().checkpoints.includes("player-choice")', 15_000, 'player-choice cue')
   await evaluate('window.__MOBIE_M23_BASELINE__.step()')
   await waitFor('Boolean(document.querySelector(".move-slot"))', 5_000, 'player choice UI')
+  const expectedArtworkMode = config.artworkFixture === 'large-texture'
+    ? 'artwork'
+    : config.artworkFixture === null ? null : 'silhouette'
+  if (expectedArtworkMode !== null) {
+    await waitFor(
+      `document.querySelector('.battle-scene-host')?.dataset.battleArtworkPlayer === ${JSON.stringify(expectedArtworkMode)}`,
+      10_000,
+      `${config.artworkFixture} artwork mode`,
+    )
+  }
+  const artworkModes = await evaluate(`(() => {
+    const host = document.querySelector('.battle-scene-host')
+    return {
+      player: host?.dataset.battleArtworkPlayer ?? null,
+      foe: host?.dataset.battleArtworkFoe ?? null,
+    }
+  })()`)
   await screenshot('player-choice', 'live journey cue')
 
   const preparedCheckpoint = async (label) => {
@@ -581,6 +598,7 @@ async function run(cdp) {
     graphics: diagnostics.requestedGraphics,
     rendererFailure: config.rendererFailure,
     artworkFixture: config.artworkFixture,
+    artworkModes,
     requestedRendererRoute: diagnostics.requestedRendererRoute,
     rendererRoute: diagnostics.rendererRoute,
     motion: diagnostics.motion,
