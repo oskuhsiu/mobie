@@ -1,7 +1,7 @@
 {
   "name": "mobie",
   "private": true,
-  "version": "0.1.66",
+  "version": "0.1.67",
   "type": "module",
   "description": "Mobie — an iPad-first monster-battler (personal use)",
   "scripts": {
@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "perf:check": "node scripts/perf-check.mjs",
+    "baseline:m24": "node scripts/m24-baseline.mjs",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {

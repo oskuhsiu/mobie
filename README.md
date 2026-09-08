@@ -110,6 +110,7 @@ is enabled by `npm install` (the `prepare` script sets `core.hooksPath`) — so 
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run perf:check -- --port=9223` | CDP frame-pacing check against a running app + hardware Chrome target |
 | `node scripts/m23-baseline.mjs --renderer=<route>` | Seeded post-M23 Chrome evidence (`next` by default or `compatibility` explicitly) |
+| `npm run baseline:m24 -- --viewport=wide-landscape` | Re-runnable post-M23 non-battle Chrome baseline; use `--all` for the five viewport matrix |
 
 ## Project layout
 
@@ -168,7 +169,9 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-**Next:** M24 Ticket 20 establishes the post-M23 non-battle Chrome baseline. The current release
+M24 Ticket 20 provides the post-M23 non-battle Chrome baseline through
+`npm run baseline:m24`; its route/state catalog and evidence layout are tracked in
+**[docs/m24-post-m23-chrome-baseline.md](docs/m24-post-m23-chrome-baseline.md)**. The current release
 renderer policy and retirement history are tracked in **[docs/m23-release-b.md](docs/m23-release-b.md)**.
 Physical iPad Safari qualification remains an external device evidence step for Ticket 16; sparse initial
 loadouts and the M22 f–j interaction backlog remain later work. M4 (MediaPipe motion-control QTE) remains

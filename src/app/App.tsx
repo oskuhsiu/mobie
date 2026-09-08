@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { GameProvider, useGame } from '@/app/GameProvider'
+import type { GameEvent } from '@/game/machine/gameMachine'
 import { useRoster } from '@/store/rosterStore'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
@@ -13,11 +14,27 @@ import { ResultScreen } from '@/ui/screens/ResultScreen'
 import { TowerSetupScreen } from '@/ui/screens/TowerSetupScreen'
 import { endRegisteredBattleLifecycle } from '@/presentation/battle/battleLifecycleBridge'
 import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'
+import { M24_BASELINE_SCENARIO_ID, M24_GAME_EVENT } from '@/dev/m24/contracts'
 
 export function Stage() {
   const game = useGame()
-  const { value, context } = game
+  const { value, context, send } = game
   const [devBattleMounted, setDevBattleMounted] = useState(true)
+
+  useEffect(() => {
+    if (
+      !import.meta.env.DEV
+      || new URLSearchParams(window.location.search).get('m24Scenario') !== M24_BASELINE_SCENARIO_ID
+    ) return
+    const onGameEvent = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail
+      if (!detail || typeof detail !== 'object' || typeof (detail as { type?: unknown }).type !== 'string') return
+      if ((detail as { type: string }).type === 'END_BATTLE') endRegisteredBattleLifecycle('unmount')
+      send(detail as GameEvent)
+    }
+    window.addEventListener(M24_GAME_EVENT, onGameEvent)
+    return () => window.removeEventListener(M24_GAME_EVENT, onGameEvent)
+  }, [send])
 
   useEffect(() => {
     if (
