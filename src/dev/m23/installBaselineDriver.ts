@@ -27,6 +27,7 @@ import {
   M23_GRAPHICS_OPTIONS,
   M23_MOTION_OPTIONS,
   M23_RENDERER_FAILURES,
+  M23_RENDERER_ROUTES,
   M23_TURN_TRANSACTION_CASES,
   M23_FAILURE_STAGES,
   M23_HUD_CASES,
@@ -35,6 +36,7 @@ import {
   type M23HudCase,
   type M23MotionPreference,
   type M23RendererFailure,
+  type M23RendererRoute,
   type M23PoolCount,
   type M23PresentationTraceEvent,
   type M23GraphicsGovernor,
@@ -49,6 +51,7 @@ export interface M23BaselineDriverOptions {
   seed: string
   viewport: { width: number; height: number }
   graphics: M23RequestedGraphics
+  rendererRoute: M23RendererRoute
   rendererFailure: M23RendererFailure | null
   motion: M23MotionPreference
   cueStep: number | 'run'
@@ -110,6 +113,7 @@ export interface M23BaselineDriver {
 }
 
 const GRAPHICS = new Set<M23RequestedGraphics>(M23_GRAPHICS_OPTIONS)
+const RENDERER_ROUTES = new Set<M23RendererRoute>(M23_RENDERER_ROUTES)
 const MOTION = new Set<M23MotionPreference>(M23_MOTION_OPTIONS)
 const RENDERER_FAILURES = new Set<M23RendererFailure>(M23_RENDERER_FAILURES)
 
@@ -124,6 +128,7 @@ function queryOptions(): Partial<M23BaselineDriverOptions> {
   const width = Number(query.get('width'))
   const height = Number(query.get('height'))
   const graphics = query.get('graphics') as M23RequestedGraphics | null
+  const rendererRoute = (query.get('renderer') ?? query.get('rendererRoute')) as M23RendererRoute | null
   const rendererFailure = query.get('rendererFailure') as M23RendererFailure | null
   const motion = query.get('motion') as M23MotionPreference | null
   const cue = query.get('cueStep')
@@ -134,6 +139,7 @@ function queryOptions(): Partial<M23BaselineDriverOptions> {
       ? { viewport: { width, height } }
       : {}),
     ...(graphics && GRAPHICS.has(graphics) ? { graphics } : {}),
+    ...(rendererRoute && RENDERER_ROUTES.has(rendererRoute) ? { rendererRoute } : {}),
     ...(rendererFailure && RENDERER_FAILURES.has(rendererFailure) ? { rendererFailure } : {}),
     ...(motion && MOTION.has(motion) ? { motion } : {}),
     ...(cue === 'run' ? { cueStep: 'run' as const } : cue !== null && Number.isInteger(Number(cue)) && Number(cue) >= 0
@@ -164,12 +170,13 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     seed: M23_BASELINE_SEED,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     graphics: 'auto',
+    rendererRoute: 'legacy',
     rendererFailure: null,
     motion: 'full',
     cueStep: 'run',
     ...queryOptions(),
   }
-  const diagnostics = new M23BattleDiagnostics(options.graphics, options.motion)
+  const diagnostics = new M23BattleDiagnostics(options.graphics, options.motion, options.rendererRoute)
   let cueIndex = -1
   let stepPermits = 0
   let resumeWaiters: Array<() => void> = []
@@ -190,6 +197,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     positiveInteger(viewport.width, 'viewport.width')
     positiveInteger(viewport.height, 'viewport.height')
     if (patch.graphics !== undefined && !GRAPHICS.has(patch.graphics)) throw new Error(`Unknown graphics request: ${patch.graphics}`)
+    if (patch.rendererRoute !== undefined && !RENDERER_ROUTES.has(patch.rendererRoute)) throw new Error(`Unknown renderer route: ${patch.rendererRoute}`)
     if (patch.rendererFailure !== undefined && patch.rendererFailure !== null && !RENDERER_FAILURES.has(patch.rendererFailure)) {
       throw new Error(`Unknown renderer failure: ${patch.rendererFailure}`)
     }
@@ -199,9 +207,10 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     }
     options = { ...options, ...patch, viewport: { ...viewport } }
     driver.options = options
-    diagnostics.configure(options.graphics, options.motion)
+    diagnostics.configure(options.graphics, options.motion, options.rendererRoute)
     document.documentElement.dataset.m23Scenario = options.scenarioId
     document.documentElement.dataset.m23Graphics = options.graphics
+    document.documentElement.dataset.m23RendererRoute = options.rendererRoute
     document.documentElement.dataset.m23RendererFailure = options.rendererFailure ?? ''
     document.documentElement.dataset.m23Motion = options.motion
     installFixtureSettings()
@@ -519,6 +528,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       for (const resolve of waiters) resolve()
       delete document.documentElement.dataset.m23Scenario
       delete document.documentElement.dataset.m23Graphics
+      delete document.documentElement.dataset.m23RendererRoute
       delete document.documentElement.dataset.m23RendererFailure
       delete document.documentElement.dataset.m23Motion
       if (window.__MOBIE_M23_BASELINE__ === driver) delete window.__MOBIE_M23_BASELINE__

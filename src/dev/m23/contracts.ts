@@ -1,5 +1,7 @@
 import {
+  BATTLE_RENDERER_ROUTES,
   GRAPHICS_PREFERENCES,
+  type BattleRendererRoute,
   type GraphicsPreference,
   type RendererFailureInjection,
 } from '@/presentation/battle/rendering'
@@ -11,6 +13,9 @@ export const M23_BASELINE_SCENARIO_ID = 'm23-current-parity-v1'
 
 export const M23_GRAPHICS_OPTIONS = GRAPHICS_PREFERENCES
 export type M23RequestedGraphics = GraphicsPreference
+
+export const M23_RENDERER_ROUTES = BATTLE_RENDERER_ROUTES
+export type M23RendererRoute = BattleRendererRoute
 
 export const M23_RENDERER_FAILURES = [
   'chunk-reject',

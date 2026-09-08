@@ -13,9 +13,11 @@ import {
   classifyRendererError,
   createBattleRendererState,
   reduceBattleRendererState,
+  resolveBattleRendererRoute,
   rendererAttemptId,
   updateBattleRendererQuality,
   type BattleRendererEvent,
+  type BattleRendererRoute,
   type BattleRendererState,
   type GraphicsPreference,
   type GraphicsQualityProfile,
@@ -35,11 +37,13 @@ import { BattleSceneBoundary } from './BattleSceneBoundary'
 import { supportsWebGl } from './capabilityProbe'
 import { TERRAIN_WORLD_TRANSITION_MS } from '@/scene/r3f/terrainVisual'
 
-type NextSceneComponent = ForwardRefExoticComponent<NextBattleSceneProps & RefAttributes<BattleSceneHandle>>
+type BattleSceneComponent = ForwardRefExoticComponent<NextBattleSceneProps & RefAttributes<BattleSceneHandle>>
 
 export interface BattleSceneHostProps {
   snapshot: BattleSceneSnapshot
   sessionToken: BattleSessionToken
+  /** Release A route. `next` is accepted only in DEV/test; production resolves to legacy. */
+  rendererRoute?: BattleRendererRoute
   preference: GraphicsPreference
   quality: GraphicsQualityProfile
   active: boolean
@@ -59,10 +63,12 @@ export interface BattleSceneHostProps {
 }
 
 const loadNextScene = () => import('@/scene/battle/next/NextBattleScene')
+const loadLegacyScene = () => import('@/scene/battle/legacy/LegacyBattleScene')
 
 export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProps>(function BattleSceneHost({
   snapshot,
   sessionToken,
+  rendererRoute,
   preference,
   quality,
   active,
@@ -80,16 +86,19 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   timeoutMs = 8_000,
 }, ref) {
   const activeDevFailure = import.meta.env.DEV ? devFailure : null
+  const selectedRoute = resolveBattleRendererRoute(rendererRoute, import.meta.env.DEV)
   const attemptId = rendererAttemptId(sessionToken)
   const [state, setState] = useState(() => createBattleRendererState({
     attemptId,
     preference,
+    rendererRoute: selectedRoute,
     latchedFallback,
   }))
   const stateRef = useRef(state)
+  const legacyRef = useRef<BattleSceneHandle>(null)
   const nextRef = useRef<BattleSceneHandle>(null)
   const compatibilityRef = useRef<BattleSceneHandle>(null)
-  const [NextScene, setNextScene] = useState<NextSceneComponent | null>(null)
+  const [Scene, setScene] = useState<BattleSceneComponent | null>(null)
   const [sceneDiagnostics, setSceneDiagnostics] = useState<BattleSceneDiagnostics | null>(null)
   const initialStateReported = useRef(false)
   const bootTimeoutRef = useRef<number | null>(null)
@@ -152,15 +161,16 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
         send({ type: 'FALLBACK', attemptId, reason: 'chunk-timeout' })
       }
     }, timeoutMs)
+    const route = stateRef.current.route
     const loading = activeDevFailure === 'chunk-timeout'
       ? new Promise<never>(() => undefined)
       : activeDevFailure === 'chunk-reject'
-        ? Promise.reject(new Error('Injected next renderer chunk rejection'))
-        : loadNextScene()
+        ? Promise.reject(new Error(`Injected ${route} renderer chunk rejection`))
+        : route === 'next' ? loadNextScene() : loadLegacyScene()
 
     void loading.then((module) => {
       if (!disposed && stateRef.current.phase === 'renderer-booting') {
-        setNextScene(() => module.default as NextSceneComponent)
+        setScene(() => module.default as BattleSceneComponent)
       }
     }).catch(() => {
       if (!disposed) send({ type: 'FALLBACK', attemptId, reason: 'chunk-reject' })
@@ -172,9 +182,10 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   }, [activeDevFailure, attemptId, clearBootTimeout, send, timeoutMs])
 
   useImperativeHandle(ref, () => {
-    const active = () => stateRef.current.phase === 'compatibility-ready'
-      ? compatibilityRef.current
-      : nextRef.current
+    const active = () => {
+      if (stateRef.current.phase === 'compatibility-ready') return compatibilityRef.current
+      return stateRef.current.route === 'next' ? nextRef.current : legacyRef.current
+    }
     return {
       tracer: (cue) => active()?.tracer?.(cue) ?? false,
       normalAttack: (cue) => active()?.normalAttack(cue),
@@ -206,6 +217,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
     <div
       className="battle-scene-host"
       data-renderer-state={state.phase}
+      data-renderer-route={state.route}
       data-renderer-tier={state.tier}
       data-battle-quality-stage={state.quality.stage}
       data-battle-post={state.quality.postEnabled ? 'restrained' : 'off'}
@@ -237,17 +249,20 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       data-terrain-visual-intensity={snapshot.terrainVisualIntensity}
       data-terrain-transition-ms={TERRAIN_WORLD_TRANSITION_MS}
     >
-      {state.phase !== 'compatibility-ready' && NextScene && (
+      {state.phase !== 'compatibility-ready' && Scene && (
         <BattleSceneBoundary onFatal={(error) => fatal(classifyRendererError(error))}>
-          <NextScene
-            ref={nextRef}
+          <Scene
+            ref={state.route === 'next' ? nextRef : legacyRef}
             snapshot={snapshot}
             tier={state.tier === 'high' ? 'high' : 'balanced'}
             quality={state.quality}
             active={active}
             paused={paused}
             reducedMotion={reducedMotion}
-            onReady={() => send({ type: 'NEXT_READY', attemptId })}
+            onReady={() => send({
+              type: state.route === 'next' ? 'NEXT_READY' : 'LEGACY_READY',
+              attemptId,
+            })}
             onFatal={fatal}
             onRenderedFrame={onRenderedFrame}
             onRendererDiagnostics={onRendererDiagnostics}

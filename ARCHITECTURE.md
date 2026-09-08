@@ -42,7 +42,7 @@ store/      Zustand: battleStore (display), rosterStore (persistence), prefs-onl
 ui/         React screens + components + global.css + type metadata
 audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
-scene/battle/ Three-free renderer contracts + host, DOM compatibility adapter, provisional next entry
+scene/battle/ Three-free renderer contracts + host, lazy legacy/next entries, DOM compatibility adapter
 scene/r3f/  React-three-fiber 3D battle/capture stage (M3, lazy three)
 scene/models/  Legacy custom-model tooling; Battle/Capture never import or read it
 input/      QTE seam (qualityFromPointer / zones)
@@ -157,7 +157,7 @@ Two halves, deliberately separated:
    busy, and outcome states replace the same command body; the scene never owns focus. Pure
    `BattleActionModel` projections provide phase reasons and switch/resource legality, while semantic
    `ResourceAction`, `SwitchSheet`, `SideStatusRail`, and `FieldStatusBar` components keep actions and
-   side/field ownership identical across Next and Compatibility renderers.
+   side/field ownership identical across Legacy, Next, and Compatibility renderers.
 
 Battle lifecycle is split by authority. `battleStore` fences canonical session state with the full Web
 Crypto identity pair, owns recoverable resolver/init errors, retires a session before Retry/Leave, and
@@ -169,14 +169,19 @@ resume rather than auto-submit. `BattleAudioSession` is presentation-token-owned
 reuses the single battle initializer with `forceNew`, and Leave fences resources before `ABORT_BATTLE`.
 
 Renderer lifecycle is a separate display-only seam. `BattleSceneHost` receives a storage-independent
-`GraphicsPreference` (`auto`/missing → Balanced, explicit High capped at DPR 1.5, or Compatibility),
-loads `NextBattleScene` explicitly, and exposes one stable `BattleSceneHandle` while swapping child
-adapters. Data loading and renderer boot are observable DOM states; commands mount only after next or
-compatibility readiness. Chunk rejection, 8-second readiness timeout, WebGL unsupported, shader fatal,
-and context loss all latch compatibility in the non-persisted session. Late ready/restore events and
+`GraphicsPreference` (`auto`/missing → Balanced, explicit High capped at DPR 1.5, or Compatibility) and a
+Release A `BattleRendererRoute`. Production resolves an absent route to `legacy`; the DEV/test-only
+`next` route is selected through the deterministic scenario flag, while `compatibility` remains the
+recovery entry. `LegacyBattleScene` preserves the established BattleStage behind its own lazy entry and
+`NextBattleScene` remains an explicit lazy entry; both expose the same stable `BattleSceneHandle` and
+consume the same snapshot, input, session, and presentation coordinator. Data loading and renderer boot
+are observable DOM states; commands mount only after the selected entry or compatibility readiness.
+Chunk rejection, 8-second readiness timeout, WebGL unsupported, shader fatal, context loss, and sustained
+performance pressure all latch compatibility in the non-persisted session. Late ready/restore events and
 same-session remounts cannot upgrade it; Retry creates a fresh token and may probe again. The DOM
 compatibility adapter reuses the same HUD, FxCanvas, WeatherCanvas, store projection, and coordinator,
-so renderer changes never rerun resolver/input or duplicate canonical commit.
+so renderer changes never rerun resolver/input or duplicate canonical commit. Route and fallback reason
+are available through the DEV diagnostics port only; no telemetry or player data is uploaded.
 
 `GraphicsGovernor` is a separate, pure cost policy. It receives only rendered frames marked active by
 the battle presentation; the stage runs an idle demand loop at roughly 20fps and an active loop at up to
@@ -357,4 +362,6 @@ tooling remains isolated from those runtime chunks pending its separately owned 
   journeys, hidden/resume clock invariants, a 200%-zoom-equivalent layout run, and reduced-motion diagnostics.
   Ticket 16 adds pure governor hysteresis tests, active-versus-idle frame evidence, bounded VFX/weather/
   artwork diagnostics, and `npm run perf:check -- --evidence=true` release metrics output. Hardware
-  ANGLE is required for performance claims; SwiftShader runs are functional evidence only.
+  ANGLE is required for performance claims; SwiftShader runs are functional evidence only. Ticket 17
+  adds the DEV/test-only next route, production legacy default, effective/requested route diagnostics,
+  and the seeded Chrome rollback checklist in `docs/m23-release-a.md`.

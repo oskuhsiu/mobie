@@ -27,6 +27,8 @@ function validMetrics(): Record<string, unknown> {
     viewport: { width: 1180, height: 820 },
     seed: 'm23-baseline-1',
     graphics: 'auto',
+    requestedRendererRoute: 'legacy',
+    rendererRoute: 'legacy',
     motion: 'full',
     checkpoints: [...M23_REQUIRED_CHECKPOINTS],
     activeFrameGapsMs: [16.6, 17.1, 20.2],
@@ -89,6 +91,7 @@ describe('M23 metrics evidence', () => {
     expect(/const SCENARIO_ID = '([^']+)'/.exec(harness)?.[1]).toBe(M23_BASELINE_SCENARIO_ID)
     expect(strings(arrayBlock('REQUIRED_CHECKPOINTS'))).toEqual([...M23_REQUIRED_CHECKPOINTS])
     expect(strings(setBlock('GRAPHICS'))).toEqual([...M23_GRAPHICS_OPTIONS])
+    expect(strings(setBlock('RENDERER_ROUTES'))).toEqual(['legacy', 'next', 'compatibility'])
     expect(strings(setBlock('MOTION'))).toEqual([...M23_MOTION_OPTIONS])
     for (const entryPoint of [main, app]) {
       expect(entryPoint).toContain("import { M23_BASELINE_SCENARIO_ID } from '@/dev/m23/contracts'")
@@ -101,6 +104,7 @@ describe('M23 metrics evidence', () => {
     const evidence = parseM23MetricsEvidence(validMetrics())
     expect(evidence.scenarioId).toBe('baseline-win')
     expect(evidence.environment.browser.name).toBe('Chrome')
+    expect(evidence.rendererRoute).toBe('legacy')
     expect(evidence.activeFrameGapsMs).toEqual([16.6, 17.1, 20.2])
     expect(evidence.idleCadenceGapsMs).toEqual([50, 49.8])
     expect(evidence.pools.particles).toEqual({ live: 120, capacity: 250 })
@@ -125,6 +129,12 @@ describe('M23 metrics evidence', () => {
     const invalidPool = validMetrics()
     invalidPool.pools = { particles: { live: 251, capacity: 250 } }
     expect(() => parseM23MetricsEvidence(invalidPool)).toThrow(/live must not exceed capacity/)
+  })
+
+  it('rejects unknown renderer route metadata', () => {
+    const evidence = validMetrics()
+    evidence.rendererRoute = 'experimental'
+    expect(() => parseM23MetricsEvidence(evidence)).toThrow(/expected one of legacy, next, compatibility/)
   })
 
   it('accepts null capacity for an observed legacy list with no enforced cap', () => {

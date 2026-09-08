@@ -3,8 +3,28 @@ import type { BattleSessionToken } from './contracts'
 export const GRAPHICS_PREFERENCES = ['auto', 'high', 'balanced', 'compatibility'] as const
 export type GraphicsPreference = (typeof GRAPHICS_PREFERENCES)[number]
 
+/**
+ * Release A renderer entry points. The compatibility entry is a terminal
+ * fallback, while legacy and next are selected before a battle renderer boots.
+ */
+export const BATTLE_RENDERER_ROUTES = ['legacy', 'next', 'compatibility'] as const
+export type BattleRendererRoute = (typeof BATTLE_RENDERER_ROUTES)[number]
+
+/**
+ * Next is an opt-in development/test route for Release A. Compatibility stays
+ * available in production because it is the recovery path for failed WebGL.
+ */
+export function resolveBattleRendererRoute(
+  requested?: BattleRendererRoute,
+  allowNext = false,
+): BattleRendererRoute {
+  if (requested === 'compatibility') return 'compatibility'
+  if (requested === 'next' && allowNext) return 'next'
+  return 'legacy'
+}
+
 export type EffectiveGraphicsTier = 'high' | 'balanced' | 'compatibility'
-export type BattleRendererPhase = 'renderer-booting' | 'next-ready' | 'compatibility-ready'
+export type BattleRendererPhase = 'renderer-booting' | 'legacy-ready' | 'next-ready' | 'compatibility-ready'
 export type RendererFallbackReason =
   | 'preference'
   | 'performance'
@@ -23,6 +43,7 @@ export type RendererFailureInjection =
 
 export interface GraphicsResolution {
   requested: GraphicsPreference
+  /** Quality resolver route; the Release A entry route is BattleRendererRoute. */
   route: 'next' | 'compatibility'
   tier: EffectiveGraphicsTier
   dprCap: 1 | 1.5 | null
@@ -103,6 +124,7 @@ export function graphicsQualityProfileForStage(stage: GraphicsQualityStage): Gra
 export interface BattleRendererState {
   attemptId: string
   phase: BattleRendererPhase
+  route: BattleRendererRoute
   requested: GraphicsPreference
   tier: EffectiveGraphicsTier
   dprCap: 1 | 1.5 | null
@@ -112,6 +134,7 @@ export interface BattleRendererState {
 
 export type BattleRendererEvent =
   | { type: 'NEXT_READY'; attemptId: string }
+  | { type: 'LEGACY_READY'; attemptId: string }
   | { type: 'FALLBACK'; attemptId: string; reason: RendererFallbackReason }
 
 export function resolveGraphicsPreference(preference?: GraphicsPreference): GraphicsResolution {
@@ -132,16 +155,21 @@ export function resolveGraphicsPreference(preference?: GraphicsPreference): Grap
 export function createBattleRendererState(options: {
   attemptId: string
   preference?: GraphicsPreference
+  rendererRoute?: BattleRendererRoute
   latchedFallback?: RendererFallbackReason | null
 }): BattleRendererState {
   const graphics = resolveGraphicsPreference(options.preference)
+  const rendererRoute = graphics.route === 'compatibility'
+    ? 'compatibility'
+    : options.rendererRoute ?? 'legacy'
   const fallbackReason = options.latchedFallback
-    ?? (graphics.route === 'compatibility' ? 'preference' : null)
+    ?? (rendererRoute === 'compatibility' ? 'preference' : null)
   if (fallbackReason) {
     const quality = graphicsQualityProfileForStage('compatibility')
     return {
       attemptId: options.attemptId,
       phase: 'compatibility-ready',
+      route: 'compatibility',
       requested: graphics.requested,
       tier: quality.tier,
       dprCap: quality.dprCap,
@@ -153,6 +181,7 @@ export function createBattleRendererState(options: {
   return {
     attemptId: options.attemptId,
     phase: 'renderer-booting',
+    route: rendererRoute,
     requested: graphics.requested,
     tier: quality.tier,
     dprCap: quality.dprCap,
@@ -180,11 +209,21 @@ export function reduceBattleRendererState(
 ): BattleRendererState {
   if (event.attemptId !== state.attemptId || state.phase === 'compatibility-ready') return state
   if (event.type === 'NEXT_READY') {
-    return state.phase === 'next-ready' ? state : { ...state, phase: 'next-ready' }
+    if (state.route !== 'next') return state
+    return state.phase === 'next-ready'
+      ? state
+      : { ...state, phase: 'next-ready', route: 'next' }
+  }
+  if (event.type === 'LEGACY_READY') {
+    if (state.route !== 'legacy') return state
+    return state.phase === 'legacy-ready'
+      ? state
+      : { ...state, phase: 'legacy-ready', route: 'legacy' }
   }
   return {
     ...state,
     phase: 'compatibility-ready',
+    route: 'compatibility',
     tier: 'compatibility',
     dprCap: null,
     quality: graphicsQualityProfileForStage('compatibility'),
@@ -193,7 +232,9 @@ export function reduceBattleRendererState(
 }
 
 export function rendererIsReady(state: BattleRendererState | null): boolean {
-  return state?.phase === 'next-ready' || state?.phase === 'compatibility-ready'
+  return state?.phase === 'legacy-ready'
+    || state?.phase === 'next-ready'
+    || state?.phase === 'compatibility-ready'
 }
 
 export function rendererAttemptId(token: BattleSessionToken): string {

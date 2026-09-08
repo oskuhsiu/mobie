@@ -60,8 +60,10 @@ import { sameBattleSession, samePresentationToken } from '@/presentation/battle/
 import { registerBattleLifecycleEnd } from '@/presentation/battle/battleLifecycleBridge'
 import { normalizedBattleAnchor } from '@/presentation/battle/battleAnchors'
 import {
+  resolveBattleRendererRoute,
   rendererIsReady,
   rendererAttemptId,
+  type BattleRendererRoute,
   type BattleRendererState,
   type GraphicsPreference,
   type RendererFallbackReason,
@@ -596,9 +598,11 @@ export { SwitchAction } from '@/ui/battle/SwitchSheet'
 export interface BattleScreenProps {
   /** Storage-independent renderer input. Production omits it and receives Auto. */
   graphicsPreference?: GraphicsPreference
+  /** DEV/test-only renderer entry override. Production always resolves to legacy. */
+  rendererRoute?: BattleRendererRoute
 }
 
-export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps = {}) {
+export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: BattleScreenProps = {}) {
   const { context, send } = useGame()
   const battle = useBattleStore((s) => s.presentation?.battle ?? s.battle)
   const phase = useBattleStore((s) => s.phase)
@@ -623,6 +627,10 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const commandNotice = useBattleStore((s) => s.presentation?.commandNotice ?? null)
   const devRendererOptions = import.meta.env.DEV ? baselineDriver()?.options : undefined
   const requestedGraphics = devRendererOptions?.graphics ?? graphicsPreference
+  const requestedRendererRoute = resolveBattleRendererRoute(
+    devRendererOptions?.rendererRoute ?? rendererRoute,
+    import.meta.env.DEV,
+  )
   const rendererFailure = devRendererOptions?.rendererFailure ?? null
   const prefersReducedMotion = useReducedMotion()
   const reducedMotion = Boolean(
@@ -643,7 +651,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const [graphicsQualityVersion, refreshGraphicsQuality] = useState(0)
   const graphicsGovernorRef = useRef<GraphicsGovernor | null>(null)
   const graphicsGovernorKeyRef = useRef<string | null>(null)
-  const graphicsGovernorKey = `${runtimeSession?.token.battleSessionId ?? 'no-session'}:${runtimeSession?.token.resultFingerprint ?? 'no-fingerprint'}:${requestedGraphics}`
+  const graphicsGovernorKey = `${runtimeSession?.token.battleSessionId ?? 'no-session'}:${runtimeSession?.token.resultFingerprint ?? 'no-fingerprint'}:${requestedGraphics}:${requestedRendererRoute}`
   if (graphicsGovernorRef.current === null || graphicsGovernorKeyRef.current !== graphicsGovernorKey) {
     graphicsGovernorRef.current = new GraphicsGovernor({ preference: requestedGraphics })
     graphicsGovernorKeyRef.current = graphicsGovernorKey
@@ -1044,6 +1052,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     setRendererState((current) => (
       current?.attemptId === next.attemptId
       && current.phase === next.phase
+      && current.route === next.route
       && current.tier === next.tier
       && current.quality?.stage === next.quality?.stage
       && current.fallbackReason === next.fallbackReason
@@ -1945,9 +1954,9 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         aria-label="戰鬥場景"
       >
 
-      {/* Three-free host owns lazy next boot and one-way compatibility fallback. */}
+      {/* Three-free host owns the selected lazy Release A entry and one-way compatibility fallback. */}
       <BattleSceneHost
-        key={currentRendererAttemptId!}
+        key={`${currentRendererAttemptId!}:${requestedRendererRoute}`}
         ref={stageRef}
         snapshot={{
           player,
@@ -1958,6 +1967,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           outcome: battle.winner,
         }}
         sessionToken={runtimeSession.token}
+        rendererRoute={requestedRendererRoute}
         preference={requestedGraphics}
         quality={effectiveGraphicsQuality}
         active={activeRendered}

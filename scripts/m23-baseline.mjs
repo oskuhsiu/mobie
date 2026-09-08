@@ -23,6 +23,7 @@ const REQUIRED_CHECKPOINTS = [
   'outcome',
 ]
 const GRAPHICS = new Set(['auto', 'high', 'balanced', 'compatibility'])
+const RENDERER_ROUTES = new Set(['legacy', 'next', 'compatibility'])
 const MOTION = new Set(['full', 'reduced', 'off'])
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
 
@@ -69,7 +70,7 @@ async function collectBattleChunks() {
       name: entry.name,
       bytes: bytes.length,
       gzipBytes: gzipSync(bytes).length,
-      battleRelevant: /^(NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
+      battleRelevant: /^(LegacyBattleScene|NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
     })
   }
   if (!files.some((file) => file.battleRelevant)) throw new Error('No battle-relevant production chunk was found in dist/assets')
@@ -103,12 +104,13 @@ function assertNormalTransactionTrace(trace) {
       throw new Error(`${transactionId} repeated a feed/audio cue`)
     }
     const normalCues = events.filter((event) => event.stage === 'cue' && event.detail?.startsWith('damage:'))
+    const normalCueIds = new Set(normalCues.map((event) => event.cueId))
     const expectedAudioCount = normalCues.reduce(
       (count, event) => count + (event.detail === 'damage:impact' ? 3 : 1),
       0,
     )
-    const audioCount = events.filter((event) => event.stage === 'audio').length
-    const feedCount = events.filter((event) => event.stage === 'feed').length
+    const audioCount = events.filter((event) => event.stage === 'audio' && normalCueIds.has(event.cueId)).length
+    const feedCount = events.filter((event) => event.stage === 'feed' && normalCueIds.has(event.cueId)).length
     if (audioCount !== expectedAudioCount || feedCount !== normalCues.length) {
       throw new Error(`${transactionId} feed/audio counts do not match compiled normal-attack cues`)
     }
@@ -152,10 +154,12 @@ const config = {
   height: finitePositive(args.height ?? 1366, 'height', { integer: true }),
   dpr: finitePositive(args.dpr ?? 2, 'dpr'),
   graphics: args.graphics ?? 'auto',
+  rendererRoute: args.renderer ?? args.rendererRoute ?? 'legacy',
   motion: args.motion ?? 'full',
   seed: args.seed ?? `${SCENARIO_ID}-seed`,
 }
 if (!GRAPHICS.has(config.graphics)) throw new Error(`--graphics must be one of ${[...GRAPHICS].join(', ')}`)
+if (!RENDERER_ROUTES.has(config.rendererRoute)) throw new Error(`--renderer must be one of ${[...RENDERER_ROUTES].join(', ')}`)
 if (!MOTION.has(config.motion)) throw new Error(`--motion must be one of ${[...MOTION].join(', ')}`)
 if (!config.seed.trim()) throw new Error('--seed must not be empty')
 const appUrl = new URL(config.app)
@@ -164,6 +168,7 @@ appUrl.searchParams.set('m23Scenario', SCENARIO_ID)
 appUrl.searchParams.set('width', String(config.width))
 appUrl.searchParams.set('height', String(config.height))
 appUrl.searchParams.set('graphics', config.graphics)
+appUrl.searchParams.set('renderer', config.rendererRoute)
 appUrl.searchParams.set('motion', config.motion)
 appUrl.searchParams.set('seed', config.seed)
 appUrl.searchParams.set('cueStep', '0')
@@ -321,6 +326,7 @@ async function run(cdp) {
     seed: config.seed,
     viewport: { width: config.width, height: config.height },
     graphics: config.graphics,
+    rendererRoute: config.rendererRoute,
     motion: config.motion,
     cueStep: 0,
   })})`)
@@ -428,7 +434,7 @@ async function run(cdp) {
   })()`)
   await waitFor('[...document.querySelectorAll("button")].some((button) => !button.disabled && button.textContent?.includes("3/3"))', 5_000, 'enabled Team Select engage action')
   await evaluate(`[...document.querySelectorAll('button')].find((button) => !button.disabled && button.textContent?.includes('3/3')).click()`)
-  await waitFor('Boolean(document.querySelector(".battle-fg"))', 25_000, 'Battle')
+  await waitFor('Boolean(document.querySelector("[data-battle-stage]"))', 25_000, 'Battle')
 
   try {
     await call('Page.startScreencast', {
@@ -456,14 +462,14 @@ async function run(cdp) {
       return true
     })()`)
     const readyExpression = {
-      qte: 'Boolean(document.querySelector(".battle-action"))',
-      star: 'Boolean(document.querySelector(".star-orb"))',
-      terrain: 'Boolean(document.querySelector(".terrain-chip")?.textContent?.includes("熔岩"))',
-      'terrain-rain': 'Boolean(document.querySelector(".terrain-chip")?.textContent?.includes("雨天"))',
+      qte: 'Boolean(document.querySelector(".battle-input-surface .tap-field"))',
+      star: 'Boolean(document.querySelector(`[data-resource-kind="star"][data-resource-state="ready"]`))',
+      terrain: 'Boolean(document.querySelector("[data-field-status]")?.textContent?.includes("熔岩"))',
+      'terrain-rain': 'Boolean(document.querySelector("[data-field-status]")?.textContent?.includes("雨天"))',
       switch: 'Boolean(document.querySelector(".switch-panel"))',
     }[label]
     await waitFor(readyExpression, 5_000, `${label} prepared UI`)
-    await screenshot(label, 'DEV driver prepared legacy UI state')
+    await screenshot(label, `DEV driver prepared ${config.rendererRoute} UI state`)
     await evaluate('window.__MOBIE_M23_BASELINE__.step()')
   }
 
@@ -488,7 +494,7 @@ async function run(cdp) {
       result: Boolean(document.querySelector('.exp-summary')),
       choice: Boolean(document.querySelector('.move-slot')),
       switchChoice: Boolean(document.querySelector('.switch-card:not(:disabled)')),
-      action: Boolean(document.querySelector('.battle-action .tap-field')),
+      action: Boolean(document.querySelector('.battle-input-surface .tap-field')),
     }))()`)
     for (const label of ['normal-attack', 'faint']) {
       if (state.checkpoints.includes(label) && !checkpointRecords.has(label)) {
@@ -511,7 +517,7 @@ async function run(cdp) {
       await click('document.querySelector(".switch-card:not(:disabled)")')
     } else if (state.action) {
       await evaluate(`(() => {
-        const field = document.querySelector('.battle-action .tap-field')
+        const field = document.querySelector('.battle-input-surface .tap-field')
         if (!field) return false
         for (let index = 0; index < 8; index += 1) {
           field.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }))
@@ -534,7 +540,7 @@ async function run(cdp) {
   const heap = await call('Runtime.getHeapUsage')
   const userAgent = await evaluate('navigator.userAgent')
   const limitations = [...diagnostics.limitations]
-  limitations.push('QTE, star, volcanic/rain terrain, and switch visual checkpoints use the DEV driver\'s explicit legacy-state preparation and are not represented as naturally reached reducer events.')
+  limitations.push('QTE, star, volcanic/rain terrain, and switch visual checkpoints use the DEV driver\'s explicit state preparation and are not represented as naturally reached reducer events.')
   limitations.push('Performance and heap values are descriptive CDP snapshots only; this harness does not make a release performance claim.')
   limitations.push('Auto starts from the conservative Balanced assumption; High is recorded as requested only and is not release-ready.')
   if (softwareRenderer) limitations.push(`Software renderer detected (${renderer}); performance values are non-gating and must not be used as a hardware verdict.`)
@@ -552,12 +558,15 @@ async function run(cdp) {
     },
   }
   const metrics = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    evidenceKind: 'full',
     scenarioId: SCENARIO_ID,
     environment,
     viewport: { width: config.width, height: config.height },
     seed: config.seed,
     graphics: diagnostics.requestedGraphics,
+    requestedRendererRoute: diagnostics.requestedRendererRoute,
+    rendererRoute: diagnostics.rendererRoute,
     motion: diagnostics.motion,
     checkpoints: REQUIRED_CHECKPOINTS.filter((label) => checkpointRecords.has(label)),
     activeFrameGapsMs: diagnostics.activeFrameGapsMs,
@@ -567,6 +576,8 @@ async function run(cdp) {
     pools: diagnostics.pools,
     dpr: diagnostics.dpr,
     tier: diagnostics.effectiveTier,
+    governor: diagnostics.governor,
+    artworkCache: diagnostics.artworkCache,
     activeCue: diagnostics.activeCue,
     assetComplexity: diagnostics.assetComplexity,
     firstCastLatencyMs: diagnostics.firstCastLatencyMs,
@@ -599,13 +610,13 @@ async function run(cdp) {
     }])),
   }
   const accessibility = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scenarioId: SCENARIO_ID,
     checkpoints: REQUIRED_CHECKPOINTS
       .filter((label) => checkpointRecords.has(label))
       .map((label) => ({ label, nodes: checkpointRecords.get(label).nodes })),
     limitations: [
-      'AX snapshots contain the non-ignored, named nodes exposed by Chrome at each captured legacy UI checkpoint.',
+      `AX snapshots contain the non-ignored, named nodes exposed by Chrome at each captured ${config.rendererRoute} UI checkpoint.`,
       ...limitations,
     ],
   }

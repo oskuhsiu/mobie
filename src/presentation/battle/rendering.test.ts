@@ -5,6 +5,7 @@ import {
   reduceBattleRendererState,
   rendererAttemptId,
   rendererIsReady,
+  resolveBattleRendererRoute,
   resolveGraphicsPreference,
   graphicsQualityProfileOf,
   graphicsQualityProfileForStage,
@@ -13,6 +14,28 @@ import {
 } from './rendering'
 
 describe('battle renderer policy', () => {
+  it('keeps Release A next opt-in while allowing compatibility recovery', () => {
+    expect(resolveBattleRendererRoute()).toBe('legacy')
+    expect(resolveBattleRendererRoute('next')).toBe('legacy')
+    expect(resolveBattleRendererRoute('next', true)).toBe('next')
+    expect(resolveBattleRendererRoute('compatibility')).toBe('compatibility')
+
+    const legacy = createBattleRendererState({
+      attemptId: 'session-legacy:1', preference: 'auto', rendererRoute: 'legacy',
+    })
+    const ready = reduceBattleRendererState(legacy, {
+      type: 'LEGACY_READY', attemptId: 'session-legacy:1',
+    })
+    expect(ready).toMatchObject({ phase: 'legacy-ready', route: 'legacy' })
+    expect(rendererIsReady(ready)).toBe(true)
+    expect(reduceBattleRendererState(legacy, {
+      type: 'NEXT_READY', attemptId: 'session-legacy:1',
+    })).toBe(legacy)
+    expect(createBattleRendererState({
+      attemptId: 'session-compat:1', preference: 'compatibility', rendererRoute: 'next',
+    })).toMatchObject({ phase: 'compatibility-ready', route: 'compatibility' })
+  })
+
   it('derives one full-token renderer attempt identity', () => {
     expect(rendererAttemptId({ battleSessionId: 'battle-a', resultFingerprint: 'fingerprint-a' }))
       .toBe('battle-a:fingerprint-a:renderer')
@@ -63,7 +86,7 @@ describe('battle renderer policy', () => {
   })
 
   it('allows a ready next renderer to fall one way to compatibility', () => {
-    const booting = createBattleRendererState({ attemptId: 'session-a:1', preference: 'high' })
+    const booting = createBattleRendererState({ attemptId: 'session-a:1', preference: 'high', rendererRoute: 'next' })
     const ready = reduceBattleRendererState(booting, { type: 'NEXT_READY', attemptId: 'session-a:1' })
     expect(ready).toMatchObject({ phase: 'next-ready', tier: 'high' })
 
@@ -89,7 +112,7 @@ describe('battle renderer policy', () => {
   })
 
   it('updates a live next renderer profile without allowing a compatibility renderer to upgrade', () => {
-    const booting = createBattleRendererState({ attemptId: 'session-a:1', preference: 'high' })
+    const booting = createBattleRendererState({ attemptId: 'session-a:1', preference: 'high', rendererRoute: 'next' })
     const ready = reduceBattleRendererState(booting, { type: 'NEXT_READY', attemptId: 'session-a:1' })
     const reduced = updateBattleRendererQuality(ready, graphicsQualityProfileForStage('high-dpr-reduced'))
     expect(reduced).toMatchObject({ tier: 'high', dprCap: 1, quality: { stage: 'high-dpr-reduced' } })

@@ -1,5 +1,6 @@
 import {
   M23_REQUIRED_CHECKPOINTS,
+  M23_RENDERER_ROUTES,
   type M23ArtworkCache,
   type M23GraphicsGovernor,
   type M23Checkpoint,
@@ -38,6 +39,8 @@ export interface M23MetricsEvidence {
   viewport: { width: number; height: number }
   seed: string
   graphics: string
+  requestedRendererRoute?: string
+  rendererRoute?: string
   motion: string
   checkpoints: M23Checkpoint[]
   activeFrameGapsMs: number[]
@@ -301,6 +304,15 @@ function parseBattleChunks(value: unknown): M23MetricsEvidence['battleChunks'] {
   return { files }
 }
 
+function parseOptionalRendererRoute(value: unknown, path: string): string | undefined {
+  if (value === undefined) return undefined
+  const route = nonEmptyString(value, path)
+  if (!M23_RENDERER_ROUTES.includes(route as (typeof M23_RENDERER_ROUTES)[number])) {
+    fail(path, `expected one of ${M23_RENDERER_ROUTES.join(', ')}`)
+  }
+  return route
+}
+
 function parseSchemaVersion(value: unknown): typeof M23_EVIDENCE_SCHEMA_VERSION {
   if (value !== M23_EVIDENCE_SCHEMA_VERSION) {
     fail('schemaVersion', `expected ${M23_EVIDENCE_SCHEMA_VERSION}`)
@@ -344,6 +356,8 @@ export function parseM23MetricsEvidence(value: unknown): M23MetricsEvidence {
     },
     seed: nonEmptyString(raw.seed, 'seed'),
     graphics: nonEmptyString(raw.graphics, 'graphics'),
+    requestedRendererRoute: parseOptionalRendererRoute(raw.requestedRendererRoute, 'requestedRendererRoute'),
+    rendererRoute: parseOptionalRendererRoute(raw.rendererRoute, 'rendererRoute'),
     motion: nonEmptyString(raw.motion, 'motion'),
     checkpoints,
     activeFrameGapsMs: (() => {

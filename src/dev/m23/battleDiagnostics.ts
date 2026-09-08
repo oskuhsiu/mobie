@@ -7,6 +7,7 @@ import type {
   M23PresentationTraceEvent,
   M23RendererResources,
   M23RequestedGraphics,
+  M23RendererRoute,
 } from './contracts'
 import { GraphicsGovernor } from '@/scene/battle/host/graphicsGovernor'
 import {
@@ -25,11 +26,14 @@ export interface M23DiagnosticsSnapshot {
   pools: Record<string, M23PoolCount>
   dpr: number
   requestedGraphics: M23RequestedGraphics
+  requestedRendererRoute: M23RendererRoute
+  rendererRoute: M23RendererRoute
   effectiveTier: EffectiveGraphicsTier
   rendererState: BattleRendererPhase
   rendererFallbackReason: RendererFallbackReason | null
   rendererTransitions: Array<{
     phase: BattleRendererPhase
+    route: M23RendererRoute
     tier: EffectiveGraphicsTier
     reason: RendererFallbackReason | null
     qualityStage: M23GraphicsGovernor['profile']['stage']
@@ -56,6 +60,13 @@ function appendBounded(values: number[], value: number, limit: number): void {
   if (values.length > limit) values.splice(0, values.length - limit)
 }
 
+function effectiveRouteFor(
+  graphics: M23RequestedGraphics,
+  rendererRoute: M23RendererRoute,
+): M23RendererRoute {
+  return graphics === 'compatibility' ? 'compatibility' : rendererRoute
+}
+
 export class M23BattleDiagnostics {
   private active = false
   private activeCue: string | null = null
@@ -77,6 +88,7 @@ export class M23BattleDiagnostics {
   private firstCastLatencyMs: number | null = null
   private presentationTrace: M23PresentationTraceEvent[] = []
   private effectiveTier: EffectiveGraphicsTier
+  private rendererRoute: M23RendererRoute
   private rendererState: BattleRendererPhase = 'renderer-booting'
   private rendererFallbackReason: RendererFallbackReason | null = null
   private rendererTransitions: M23DiagnosticsSnapshot['rendererTransitions'] = []
@@ -108,7 +120,9 @@ export class M23BattleDiagnostics {
   constructor(
     private requestedGraphics: M23RequestedGraphics,
     private motion: M23MotionPreference,
+    private requestedRendererRoute: M23RendererRoute = 'legacy',
   ) {
+    this.rendererRoute = effectiveRouteFor(requestedGraphics, requestedRendererRoute)
     this.effectiveTier = resolveGraphicsPreference(requestedGraphics).tier
     this.governor = new GraphicsGovernor({ preference: requestedGraphics }).snapshot()
     if (typeof PerformanceObserver === 'undefined') return
@@ -127,8 +141,14 @@ export class M23BattleDiagnostics {
     }
   }
 
-  configure(graphics: M23RequestedGraphics, motion: M23MotionPreference): void {
+  configure(
+    graphics: M23RequestedGraphics,
+    motion: M23MotionPreference,
+    rendererRoute: M23RendererRoute = this.requestedRendererRoute,
+  ): void {
     this.requestedGraphics = graphics
+    this.requestedRendererRoute = rendererRoute
+    this.rendererRoute = effectiveRouteFor(graphics, rendererRoute)
     this.effectiveTier = resolveGraphicsPreference(graphics).tier
     this.motion = motion
     this.governor = new GraphicsGovernor({ preference: graphics }).snapshot()
@@ -200,6 +220,7 @@ export class M23BattleDiagnostics {
   recordRendererState(state: BattleRendererState): void {
     const next = {
       phase: state.phase,
+      route: state.route,
       tier: state.tier,
       reason: state.fallbackReason,
       qualityStage: state.quality?.stage ?? 'balanced',
@@ -209,6 +230,7 @@ export class M23BattleDiagnostics {
     const previous = this.rendererTransitions.at(-1)
     if (
       previous?.phase === next.phase
+      && previous.route === next.route
       && previous.tier === next.tier
       && previous.reason === next.reason
       && previous.qualityStage === next.qualityStage
@@ -216,6 +238,7 @@ export class M23BattleDiagnostics {
       && previous.postEnabled === next.postEnabled
     ) return
     this.effectiveTier = state.tier
+    this.rendererRoute = state.route
     this.rendererState = state.phase
     this.rendererFallbackReason = state.fallbackReason
     if (state.quality) {
@@ -279,6 +302,7 @@ export class M23BattleDiagnostics {
     this.firstCastLatencyMs = null
     this.presentationTrace = []
     this.effectiveTier = resolveGraphicsPreference(this.requestedGraphics).tier
+    this.rendererRoute = effectiveRouteFor(this.requestedGraphics, this.requestedRendererRoute)
     this.rendererState = 'renderer-booting'
     this.rendererFallbackReason = null
     this.rendererTransitions = []
@@ -354,6 +378,8 @@ export class M23BattleDiagnostics {
         ? 1
         : Math.min(window.devicePixelRatio || 1, this.governor.profile.dprCap),
       requestedGraphics: this.requestedGraphics,
+      requestedRendererRoute: this.requestedRendererRoute,
+      rendererRoute: this.rendererRoute,
       effectiveTier: this.effectiveTier,
       rendererState: this.rendererState,
       rendererFallbackReason: this.rendererFallbackReason,

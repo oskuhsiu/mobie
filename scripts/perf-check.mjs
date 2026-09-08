@@ -26,6 +26,7 @@ const scenarioId = args.scenario ?? 'm23-current-parity-v1'
 const driverScenarioId = 'm23-current-parity-v1'
 const seed = args.seed ?? `${scenarioId}-perf`
 const graphics = args.graphics ?? 'auto'
+const rendererRoute = args.renderer ?? args.rendererRoute ?? 'legacy'
 const motion = args.motion ?? 'full'
 const deviceName = args.device ?? 'chrome-local'
 const outputPath = args.output
@@ -38,6 +39,10 @@ function safeSegment(value, name) {
     throw new Error(`--${name} must be one safe path segment`)
   }
   return value
+}
+
+if (!['legacy', 'next', 'compatibility'].includes(rendererRoute)) {
+  throw new Error('--renderer must be one of legacy, next, compatibility')
 }
 
 safeSegment(deviceName, 'device')
@@ -77,7 +82,7 @@ async function collectBattleChunks() {
       name: entry.name,
       bytes: bytes.length,
       gzipBytes: gzipSync(bytes).length,
-      battleRelevant: /^(NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
+      battleRelevant: /^(LegacyBattleScene|NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
     })
   }
   return { files }
@@ -223,6 +228,7 @@ async function run(cdp) {
   targetUrl.searchParams.set('m23Scenario', driverScenarioId)
   targetUrl.searchParams.set('seed', seed)
   targetUrl.searchParams.set('graphics', graphics)
+  targetUrl.searchParams.set('renderer', rendererRoute)
   targetUrl.searchParams.set('motion', motion)
   await call('Page.navigate', { url: targetUrl.href })
   await waitFor('Boolean(document.querySelector(".title-screen__adventure"))')
@@ -344,6 +350,8 @@ async function run(cdp) {
       viewport: { width: viewport.width, height: viewport.height },
       seed,
       graphics,
+      requestedRendererRoute: diagnostics?.requestedRendererRoute ?? rendererRoute,
+      rendererRoute: diagnostics?.rendererRoute ?? rendererRoute,
       motion,
       checkpoints: diagnostics?.checkpoints ?? [],
       activeFrameGapsMs: diagnostics?.activeFrameGapsMs ?? [],
