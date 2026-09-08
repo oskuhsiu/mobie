@@ -4,23 +4,29 @@ export const GRAPHICS_PREFERENCES = ['auto', 'high', 'balanced', 'compatibility'
 export type GraphicsPreference = (typeof GRAPHICS_PREFERENCES)[number]
 
 /**
- * Release A renderer entry points. The compatibility entry is a terminal
- * fallback, while legacy and next are selected before a battle renderer boots.
+ * Release B renderer entry points. The compatibility entry is a terminal
+ * fallback, while next is the normal entry and legacy is kept for one
+ * controlled rollback release.
  */
 export const BATTLE_RENDERER_ROUTES = ['legacy', 'next', 'compatibility'] as const
 export type BattleRendererRoute = (typeof BATTLE_RENDERER_ROUTES)[number]
+export const DEFAULT_BATTLE_RENDERER_ROUTE: Exclude<BattleRendererRoute, 'compatibility'> = 'next'
 
 /**
- * Next is an opt-in development/test route for Release A. Compatibility stays
- * available in production because it is the recovery path for failed WebGL.
+ * The only player-independent rollback switch is an operator-provided route.
+ * A production URL may request legacy for the rollback release, but a random
+ * query value cannot expose another renderer route.
  */
-export function resolveBattleRendererRoute(
-  requested?: BattleRendererRoute,
-  allowNext = false,
-): BattleRendererRoute {
+export function rendererRollbackRouteFromSearch(search: string): 'legacy' | undefined {
+  const query = new URLSearchParams(search)
+  const requested = query.get('renderer') ?? query.get('rendererRoute')
+  return requested === 'legacy' ? 'legacy' : undefined
+}
+
+export function resolveBattleRendererRoute(requested?: BattleRendererRoute): BattleRendererRoute {
   if (requested === 'compatibility') return 'compatibility'
-  if (requested === 'next' && allowNext) return 'next'
-  return 'legacy'
+  if (requested === 'legacy') return 'legacy'
+  return DEFAULT_BATTLE_RENDERER_ROUTE
 }
 
 export type EffectiveGraphicsTier = 'high' | 'balanced' | 'compatibility'
@@ -43,7 +49,7 @@ export type RendererFailureInjection =
 
 export interface GraphicsResolution {
   requested: GraphicsPreference
-  /** Quality resolver route; the Release A entry route is BattleRendererRoute. */
+  /** Quality resolver route; the Release B entry route is BattleRendererRoute. */
   route: 'next' | 'compatibility'
   tier: EffectiveGraphicsTier
   dprCap: 1 | 1.5 | null
@@ -161,7 +167,7 @@ export function createBattleRendererState(options: {
   const graphics = resolveGraphicsPreference(options.preference)
   const rendererRoute = graphics.route === 'compatibility'
     ? 'compatibility'
-    : options.rendererRoute ?? 'legacy'
+    : options.rendererRoute ?? DEFAULT_BATTLE_RENDERER_ROUTE
   const fallbackReason = options.latchedFallback
     ?? (rendererRoute === 'compatibility' ? 'preference' : null)
   if (fallbackReason) {

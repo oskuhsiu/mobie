@@ -32,9 +32,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
   sustained pressure applies DPR, post-grade, particle/weather, then compatibility reductions only at
   cue boundaries. Idle rendering is demand-capped, transient pools are bounded, and release metrics can
   be written with `npm run perf:check -- --evidence=true`.
-- **Release A renderer rollout** (M23 Ticket 17): legacy remains the production default; the next
-  renderer is available only through the DEV/test `renderer=next` flag, with the same seeded battle
-  state and a compatibility rollback path that does not touch saves or replays.
+- **Release B renderer rollout** (M23 Ticket 18): next is the production default; legacy remains
+  available for one release through the operator-only `?renderer=legacy` rollback query, with the
+  same seeded battle state and a compatibility fallback that does not touch saves or replays.
 - **Semantic battle HUD** (M23 Ticket 08): Legacy, Next, and Compatibility share one head-safe stage/command
   shell with real 1–4 move data, semantic HP/team controls, normal QTE body swaps, focus restoration,
   and a stable-ID full-session battle feed.
@@ -109,7 +109,7 @@ is enabled by `npm install` (the `prepare` script sets `core.hooksPath`) — so 
 | `npm test` | Run the Vitest suite |
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run perf:check -- --port=9223` | CDP frame-pacing check against a running app + hardware Chrome target |
-| `node scripts/m23-baseline.mjs --renderer=<route>` | Seeded Release A Chrome evidence (`legacy`, `next`, or `compatibility`) |
+| `node scripts/m23-baseline.mjs --renderer=<route>` | Seeded Release B Chrome evidence (`next` by default; `legacy` rollback or `compatibility` explicitly) |
 
 ## Project layout
 
@@ -133,8 +133,9 @@ plan/                 Existing tracked design docs; local generated specs/ticket
 ```
 
 See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full system design, and **[handoff.md](handoff.md)**
-for the current working state. Release A route and rollback steps live in
-**[docs/m23-release-a.md](docs/m23-release-a.md)**.
+for the current working state. Release A history lives in
+**[docs/m23-release-a.md](docs/m23-release-a.md)**; current route and rollback steps live in
+**[docs/m23-release-b.md](docs/m23-release-b.md)**.
 
 ## Regenerating game data
 
@@ -154,7 +155,7 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–16 implementation checks are complete** for
+M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–18 implementation checks are complete** for
 the current Chrome qualification pass — **682 Vitest tests**, typecheck, and build are green. Content:
 national dex 1–1025, 16 regions (+ arena),
 16 starters.
@@ -166,9 +167,11 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-**Next:** M23 Ticket 18 requires one stable Release A release and owner sign-off before next can become
-the default. Physical iPad Safari qualification remains an external device evidence step for Ticket 16;
-sparse initial loadouts and the M22 f–j interaction backlog remain later work. M4 (MediaPipe motion-control
-QTE) remains skipped by the owner. **Owner-only leftover:** M18.e
+**Next:** M23 Ticket 19 requires one stable Release B release and owner sign-off before duplicate legacy
+choreography can be retired. Ticket 18's next-default implementation and controlled rollback are in
+place; the stability/evidence gate is tracked in **[docs/m23-release-b.md](docs/m23-release-b.md)**.
+Physical iPad Safari qualification remains an external device evidence step for Ticket 16; sparse initial
+loadouts and the M22 f–j interaction backlog remain later work. M4 (MediaPipe motion-control QTE) remains
+skipped by the owner. **Owner-only leftover:** M18.e
 renames the repo directory + git remote (`pokemon-mezastar` → `mobie`). See `plan/CHECKLIST.md` for the
 milestone breakdown and `handoff.md` for the live working state.

@@ -154,7 +154,7 @@ const config = {
   height: finitePositive(args.height ?? 1366, 'height', { integer: true }),
   dpr: finitePositive(args.dpr ?? 2, 'dpr'),
   graphics: args.graphics ?? 'auto',
-  rendererRoute: args.renderer ?? args.rendererRoute ?? 'legacy',
+  rendererRoute: args.renderer ?? args.rendererRoute ?? 'next',
   motion: args.motion ?? 'full',
   seed: args.seed ?? `${SCENARIO_ID}-seed`,
 }

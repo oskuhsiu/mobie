@@ -37,6 +37,14 @@ describe('EXT.1.a haptics', () => {
     expect(spy).toHaveBeenCalledWith(HAPTIC.hit)
   })
 
+  it('沒有 user activation 時靜默略過，避免 Chromium warning', () => {
+    const spy = vi.fn(() => true)
+    vi.stubGlobal('navigator', { vibrate: spy, userActivation: { isActive: false } })
+    expect(canVibrate()).toBe(false)
+    expect(vibrate(20)).toBe(false)
+    expect(spy).not.toHaveBeenCalled()
+  })
+
   it('總開關 off → 即使支援裝置也零呼叫', () => {
     const spy = vi.fn(() => true)
     vi.stubGlobal('navigator', { vibrate: spy })

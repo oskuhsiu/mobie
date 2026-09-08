@@ -27,7 +27,12 @@ export function setHapticsEnabled(on: boolean): void {
 
 /** 裝置是否支援 Vibration API（SSR/node/iOS Safari 多半 false）。 */
 export function canVibrate(): boolean {
-  return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return false
+  // Chromium reports a console warning (and returns false) when vibration is
+  // attempted after the user-activation window has closed. Delayed battle
+  // cues are presentation-only, so silently skip them rather than polluting
+  // the browser error channel.
+  return navigator.userActivation?.isActive ?? true
 }
 
 /** 低階：直接送出一段震動 pattern。回傳是否實際送出（關閉/不支援/丟例外＝false）。 */

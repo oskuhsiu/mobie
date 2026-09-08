@@ -61,6 +61,7 @@ import { registerBattleLifecycleEnd } from '@/presentation/battle/battleLifecycl
 import { normalizedBattleAnchor } from '@/presentation/battle/battleAnchors'
 import {
   resolveBattleRendererRoute,
+  rendererRollbackRouteFromSearch,
   rendererIsReady,
   rendererAttemptId,
   type BattleRendererRoute,
@@ -598,7 +599,7 @@ export { SwitchAction } from '@/ui/battle/SwitchSheet'
 export interface BattleScreenProps {
   /** Storage-independent renderer input. Production omits it and receives Auto. */
   graphicsPreference?: GraphicsPreference
-  /** DEV/test-only renderer entry override. Production always resolves to legacy. */
+  /** Controlled operator rollback or test renderer entry override. */
   rendererRoute?: BattleRendererRoute
 }
 
@@ -627,9 +628,11 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
   const commandNotice = useBattleStore((s) => s.presentation?.commandNotice ?? null)
   const devRendererOptions = import.meta.env.DEV ? baselineDriver()?.options : undefined
   const requestedGraphics = devRendererOptions?.graphics ?? graphicsPreference
+  const rollbackRoute = typeof window === 'undefined'
+    ? undefined
+    : rendererRollbackRouteFromSearch(window.location.search)
   const requestedRendererRoute = resolveBattleRendererRoute(
-    devRendererOptions?.rendererRoute ?? rendererRoute,
-    import.meta.env.DEV,
+    devRendererOptions?.rendererRoute ?? rendererRoute ?? rollbackRoute,
   )
   const rendererFailure = devRendererOptions?.rendererFailure ?? null
   const prefersReducedMotion = useReducedMotion()
@@ -1954,7 +1957,7 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         aria-label="戰鬥場景"
       >
 
-      {/* Three-free host owns the selected lazy Release A entry and one-way compatibility fallback. */}
+      {/* Three-free host owns the selected lazy Release B entry and one-way compatibility fallback. */}
       <BattleSceneHost
         key={`${currentRendererAttemptId!}:${requestedRendererRoute}`}
         ref={stageRef}

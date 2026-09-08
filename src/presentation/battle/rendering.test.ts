@@ -5,6 +5,7 @@ import {
   reduceBattleRendererState,
   rendererAttemptId,
   rendererIsReady,
+  rendererRollbackRouteFromSearch,
   resolveBattleRendererRoute,
   resolveGraphicsPreference,
   graphicsQualityProfileOf,
@@ -14,23 +15,29 @@ import {
 } from './rendering'
 
 describe('battle renderer policy', () => {
-  it('keeps Release A next opt-in while allowing compatibility recovery', () => {
-    expect(resolveBattleRendererRoute()).toBe('legacy')
-    expect(resolveBattleRendererRoute('next')).toBe('legacy')
-    expect(resolveBattleRendererRoute('next', true)).toBe('next')
+  it('makes next the Release B default and keeps legacy as a controlled rollback', () => {
+    expect(resolveBattleRendererRoute()).toBe('next')
+    expect(resolveBattleRendererRoute('next')).toBe('next')
+    expect(resolveBattleRendererRoute('legacy')).toBe('legacy')
     expect(resolveBattleRendererRoute('compatibility')).toBe('compatibility')
 
-    const legacy = createBattleRendererState({
-      attemptId: 'session-legacy:1', preference: 'auto', rendererRoute: 'legacy',
+    expect(rendererRollbackRouteFromSearch('?renderer=legacy')).toBe('legacy')
+    expect(rendererRollbackRouteFromSearch('?rendererRoute=legacy')).toBe('legacy')
+    expect(rendererRollbackRouteFromSearch('?renderer=next')).toBeUndefined()
+    expect(rendererRollbackRouteFromSearch('?renderer=compatibility')).toBeUndefined()
+
+    const next = createBattleRendererState({
+      attemptId: 'session-next:1', preference: 'auto',
     })
-    const ready = reduceBattleRendererState(legacy, {
-      type: 'LEGACY_READY', attemptId: 'session-legacy:1',
+    expect(next).toMatchObject({ phase: 'renderer-booting', route: 'next' })
+    const ready = reduceBattleRendererState(next, {
+      type: 'NEXT_READY', attemptId: 'session-next:1',
     })
-    expect(ready).toMatchObject({ phase: 'legacy-ready', route: 'legacy' })
+    expect(ready).toMatchObject({ phase: 'next-ready', route: 'next' })
     expect(rendererIsReady(ready)).toBe(true)
-    expect(reduceBattleRendererState(legacy, {
-      type: 'NEXT_READY', attemptId: 'session-legacy:1',
-    })).toBe(legacy)
+    expect(reduceBattleRendererState(next, {
+      type: 'LEGACY_READY', attemptId: 'session-next:1',
+    })).toBe(next)
     expect(createBattleRendererState({
       attemptId: 'session-compat:1', preference: 'compatibility', rendererRoute: 'next',
     })).toMatchObject({ phase: 'compatibility-ready', route: 'compatibility' })

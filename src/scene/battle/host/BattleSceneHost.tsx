@@ -42,7 +42,7 @@ type BattleSceneComponent = ForwardRefExoticComponent<NextBattleSceneProps & Ref
 export interface BattleSceneHostProps {
   snapshot: BattleSceneSnapshot
   sessionToken: BattleSessionToken
-  /** Release A route. `next` is accepted only in DEV/test; production resolves to legacy. */
+  /** Release B route. Absent uses next; legacy is the controlled rollback route. */
   rendererRoute?: BattleRendererRoute
   preference: GraphicsPreference
   quality: GraphicsQualityProfile
@@ -57,7 +57,7 @@ export interface BattleSceneHostProps {
   onVfxDiagnostics?: NextBattleSceneProps['onVfxDiagnostics']
   onArtworkCacheDiagnostics?: NextBattleSceneProps['onArtworkCacheDiagnostics']
   onSceneDiagnostics?: NextBattleSceneProps['onSceneDiagnostics']
-  /** DEV/test-only; production callers omit this and the default path is used. */
+  /** DEV/test failure injection; production callers omit this. */
   devFailure?: RendererFailureInjection | null
   timeoutMs?: number
 }
@@ -86,7 +86,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   timeoutMs = 8_000,
 }, ref) {
   const activeDevFailure = import.meta.env.DEV ? devFailure : null
-  const selectedRoute = resolveBattleRendererRoute(rendererRoute, import.meta.env.DEV)
+  const selectedRoute = resolveBattleRendererRoute(rendererRoute)
   const attemptId = rendererAttemptId(sessionToken)
   const [state, setState] = useState(() => createBattleRendererState({
     attemptId,

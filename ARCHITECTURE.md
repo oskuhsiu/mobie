@@ -170,10 +170,10 @@ reuses the single battle initializer with `forceNew`, and Leave fences resources
 
 Renderer lifecycle is a separate display-only seam. `BattleSceneHost` receives a storage-independent
 `GraphicsPreference` (`auto`/missing → Balanced, explicit High capped at DPR 1.5, or Compatibility) and a
-Release A `BattleRendererRoute`. Production resolves an absent route to `legacy`; the DEV/test-only
-`next` route is selected through the deterministic scenario flag, while `compatibility` remains the
+Release B `BattleRendererRoute`. Production and ordinary development resolve an absent route to `next`;
+the operator-only `renderer=legacy` query is a one-release rollback, while `compatibility` remains the
 recovery entry. `LegacyBattleScene` preserves the established BattleStage behind its own lazy entry and
-`NextBattleScene` remains an explicit lazy entry; both expose the same stable `BattleSceneHandle` and
+`NextBattleScene` is the normal lazy entry; both expose the same stable `BattleSceneHandle` and
 consume the same snapshot, input, session, and presentation coordinator. Data loading and renderer boot
 are observable DOM states; commands mount only after the selected entry or compatibility readiness.
 Chunk rejection, 8-second readiness timeout, WebGL unsupported, shader fatal, context loss, and sustained
@@ -362,6 +362,6 @@ tooling remains isolated from those runtime chunks pending its separately owned 
   journeys, hidden/resume clock invariants, a 200%-zoom-equivalent layout run, and reduced-motion diagnostics.
   Ticket 16 adds pure governor hysteresis tests, active-versus-idle frame evidence, bounded VFX/weather/
   artwork diagnostics, and `npm run perf:check -- --evidence=true` release metrics output. Hardware
-  ANGLE is required for performance claims; SwiftShader runs are functional evidence only. Ticket 17
-  adds the DEV/test-only next route, production legacy default, effective/requested route diagnostics,
-  and the seeded Chrome rollback checklist in `docs/m23-release-a.md`.
+  ANGLE is required for performance claims; SwiftShader runs are functional evidence only. Ticket 18
+  adds the next default, operator legacy rollback, effective/requested route diagnostics, and the seeded
+  Chrome rollback checklist in `docs/m23-release-b.md`.

@@ -14,7 +14,10 @@ import { lookupTerrain } from '@/game/data/terrains'
 import type { TerrainId } from '@/game/types'
 import type { BattleSessionToken } from '@/presentation/battle/contracts'
 import type { BattleFeedEntry } from '@/presentation/battle/contracts'
-import type { BattleRendererState } from '@/presentation/battle/rendering'
+import {
+  DEFAULT_BATTLE_RENDERER_ROUTE,
+  type BattleRendererState,
+} from '@/presentation/battle/rendering'
 import type { QteQuality } from '@/game/battle/engine'
 import { battleAudioSession } from '@/audio/battleAudioSession'
 import { battleBgmSession } from '@/audio/battleBgmSession'
@@ -170,7 +173,7 @@ export function installM23BaselineDriver(): M23BaselineDriver {
     seed: M23_BASELINE_SEED,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     graphics: 'auto',
-    rendererRoute: 'legacy',
+    rendererRoute: DEFAULT_BATTLE_RENDERER_ROUTE,
     rendererFailure: null,
     motion: 'full',
     cueStep: 'run',

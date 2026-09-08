@@ -11,6 +11,7 @@ import type {
 } from './contracts'
 import { GraphicsGovernor } from '@/scene/battle/host/graphicsGovernor'
 import {
+  DEFAULT_BATTLE_RENDERER_ROUTE,
   resolveGraphicsPreference,
   type BattleRendererPhase,
   type BattleRendererState,
@@ -120,7 +121,7 @@ export class M23BattleDiagnostics {
   constructor(
     private requestedGraphics: M23RequestedGraphics,
     private motion: M23MotionPreference,
-    private requestedRendererRoute: M23RendererRoute = 'legacy',
+    private requestedRendererRoute: M23RendererRoute = DEFAULT_BATTLE_RENDERER_ROUTE,
   ) {
     this.rendererRoute = effectiveRouteFor(requestedGraphics, requestedRendererRoute)
     this.effectiveTier = resolveGraphicsPreference(requestedGraphics).tier
