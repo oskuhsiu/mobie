@@ -37,6 +37,8 @@ import {
   type M23RendererFailure,
   type M23PoolCount,
   type M23PresentationTraceEvent,
+  type M23GraphicsGovernor,
+  type M23ArtworkCache,
   type M23RendererResources,
   type M23RequestedGraphics,
   type M23TurnTransactionCase,
@@ -93,10 +95,12 @@ export interface M23BaselineDriver {
   step: (count?: number) => void
   resume: () => void
   setActivity: (active: boolean) => void
-  recordRenderedFrame: (at: number) => void
+  recordRenderedFrame: (at: number, active?: boolean) => void
   recordRendererResources: (resources: M23RendererResources) => void
   recordRendererState: (state: BattleRendererState) => void
   recordPools: (pools: Record<string, M23PoolCount>) => void
+  recordGovernor: (governor: M23GraphicsGovernor) => void
+  recordArtworkCache: (cache: M23ArtworkCache) => void
   beginCast: (at: number) => void
   recordCastImpact: (at: number) => void
   recordPresentationEvent: (event: M23PresentationTraceEvent) => void
@@ -490,10 +494,12 @@ export function installM23BaselineDriver(): M23BaselineDriver {
       for (const resolve of waiters) resolve()
     },
     setActivity: (active) => diagnostics.setActivity(active),
-    recordRenderedFrame: (at) => diagnostics.recordRenderedFrame(at),
+    recordRenderedFrame: (at, active) => diagnostics.recordRenderedFrame(at, active),
     recordRendererResources: (resources) => diagnostics.recordRendererResources(resources),
     recordRendererState: (state) => diagnostics.recordRendererState(state),
     recordPools: (pools) => diagnostics.recordPools(pools),
+    recordGovernor: (governor) => diagnostics.recordGovernor(governor),
+    recordArtworkCache: (cache) => diagnostics.recordArtworkCache(cache),
     beginCast: (at) => diagnostics.beginCast(at),
     recordCastImpact: (at) => diagnostics.recordCastImpact(at),
     recordPresentationEvent: (event) => diagnostics.recordPresentationEvent(event),

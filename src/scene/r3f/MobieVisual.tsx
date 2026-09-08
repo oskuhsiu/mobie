@@ -2,6 +2,7 @@ import { Component, Suspense, useEffect, useMemo, type ReactNode } from 'react'
 import { useLoader } from '@react-three/fiber'
 import { Billboard } from '@react-three/drei'
 import { CanvasTexture, DoubleSide, TextureLoader } from 'three'
+import { releaseArtworkTexture, retainArtworkTexture } from './artworkResourceCache'
 
 interface MobieVisualProps {
   artworkUrl: string
@@ -80,7 +81,11 @@ function BillboardSprite({ url, shiny, onVisible }: {
   const aspect = img && img.height ? img.width / img.height : 1
   const h = 2.3
   const w = h * aspect
-  useEffect(() => onVisible?.('artwork'), [onVisible])
+  useEffect(() => {
+    retainArtworkTexture(url, tex)
+    onVisible?.('artwork')
+    return () => releaseArtworkTexture(url, tex)
+  }, [onVisible, tex, url])
   return (
     <Billboard lockX lockZ position={[0, h / 2, 0]}>
       <mesh>

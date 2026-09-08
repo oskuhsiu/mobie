@@ -28,6 +28,10 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
   never read custom GLB/GLTF or model storage.
 - **Safe renderer gate** (M23 Ticket 07): Auto starts Balanced, High caps DPR at 1.5, and chunk/WebGL/
   shader/context failures switch one-way to a playable DOM compatibility scene without rerunning turns.
+- **Release quality governor** (M23 Ticket 16): active rendered frames use a 120-gap hysteresis window;
+  sustained pressure applies DPR, post-grade, particle/weather, then compatibility reductions only at
+  cue boundaries. Idle rendering is demand-capped, transient pools are bounded, and release metrics can
+  be written with `npm run perf:check -- --evidence=true`.
 - **Semantic battle HUD** (M23 Ticket 08): Next and Compatibility share one head-safe stage/command
   shell with real 1–4 move data, semantic HP/team controls, normal QTE body swaps, focus restoration,
   and a stable-ID full-session battle feed.
@@ -140,13 +144,14 @@ is the only hand-authored data file.
 
 ## Status
 
-**M1 + M1.5 (a–h), M2 (QR scan + card library), M3 (R3F 3D stage + GLB drop-in), M5 (portable save
+**M1 + M1.5 (a–h), M2 (QR scan + card library), M3 (R3F 3D stage + artwork billboard), M5 (portable save
 files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 (synergy / held items /
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–12 are complete** and browser-verified —
-**655 Vitest tests**, typecheck, and build are green. Content: national dex 1–1025, 16 regions (+ arena),
+M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–16 implementation checks are complete** for
+the current Chrome qualification pass — **679 Vitest tests**, typecheck, and build are green. Content:
+national dex 1–1025, 16 regions (+ arena),
 16 starters.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
@@ -156,8 +161,8 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-**Next:** M23 Ticket 13 builds the first Three.js VFX runtime tracers behind the existing presentation
-and renderer contracts. Sparse initial loadouts and the M22 f–j interaction backlog remain later
-work. M4 (MediaPipe motion-control QTE) remains skipped by the owner. **Owner-only leftover:** M18.e
+**Next:** M23 Ticket 17 is the Release A opt-in/rollback gate. Physical iPad Safari qualification remains
+an external device evidence step for Ticket 16; sparse initial loadouts and the M22 f–j interaction
+backlog remain later work. M4 (MediaPipe motion-control QTE) remains skipped by the owner. **Owner-only leftover:** M18.e
 renames the repo directory + git remote (`pokemon-mezastar` → `mobie`). See `plan/CHECKLIST.md` for the
 milestone breakdown and `handoff.md` for the live working state.

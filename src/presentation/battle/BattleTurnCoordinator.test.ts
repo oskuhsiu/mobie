@@ -309,6 +309,21 @@ describe('BattleDirector', () => {
     ])
   })
 
+  it('runs the quality boundary before a presentation job', async () => {
+    const calls: string[] = []
+    const director = new BattleDirector({
+      compile: () => { calls.push('compile'); return [cue] },
+      handler: { play: async () => { calls.push('play') } },
+      lifecycle: {
+        safeCueBoundary: () => { calls.push('safe') },
+        beforeCue: () => { calls.push('before') },
+        reset: () => { calls.push('reset') },
+      },
+    })
+    await expect(director.present(job, new AbortController().signal)).resolves.toBe('completed')
+    expect(calls).toEqual(['safe', 'compile', 'before', 'play', 'reset'])
+  })
+
   it('degrades on cue failure and resets once', async () => {
     const calls: string[] = []
     const director = new BattleDirector({

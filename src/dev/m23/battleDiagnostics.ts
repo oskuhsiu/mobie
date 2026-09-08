@@ -1,11 +1,14 @@
 import type {
   M23Checkpoint,
+  M23ArtworkCache,
+  M23GraphicsGovernor,
   M23MotionPreference,
   M23PoolCount,
   M23PresentationTraceEvent,
   M23RendererResources,
   M23RequestedGraphics,
 } from './contracts'
+import { GraphicsGovernor } from '@/scene/battle/host/graphicsGovernor'
 import {
   resolveGraphicsPreference,
   type BattleRendererPhase,
@@ -29,7 +32,12 @@ export interface M23DiagnosticsSnapshot {
     phase: BattleRendererPhase
     tier: EffectiveGraphicsTier
     reason: RendererFallbackReason | null
+    qualityStage: M23GraphicsGovernor['profile']['stage']
+    dprCap: 1 | 1.5 | null
+    postEnabled: boolean
   }>
+  governor: M23GraphicsGovernor
+  artworkCache: M23ArtworkCache
   motion: M23MotionPreference
   activeCue: string | null
   checkpoints: M23Checkpoint[]
@@ -52,6 +60,7 @@ export class M23BattleDiagnostics {
   private active = false
   private activeCue: string | null = null
   private lastRenderedFrameAt: number | null = null
+  private lastRenderedFrameActive: boolean | null = null
   private activeFrameGapsMs: number[] = []
   private idleCadenceGapsMs: number[] = []
   private longTasks: Array<{ startTimeMs: number; durationMs: number }> = []
@@ -71,6 +80,14 @@ export class M23BattleDiagnostics {
   private rendererState: BattleRendererPhase = 'renderer-booting'
   private rendererFallbackReason: RendererFallbackReason | null = null
   private rendererTransitions: M23DiagnosticsSnapshot['rendererTransitions'] = []
+  private governor: M23GraphicsGovernor
+  private artworkCache: M23ArtworkCache = {
+    totalEntries: 0,
+    activeEntries: 0,
+    inactiveEntries: 0,
+    estimatedDecodedBytes: 0,
+    evictions: 0,
+  }
   private observer: PerformanceObserver | null = null
   private peakAssetComplexity: Record<string, number> = {
     peakImageElements: 0,
@@ -83,6 +100,9 @@ export class M23BattleDiagnostics {
     peakRenderedTriangles: 0,
     peakImageResourceCount: 0,
     peakImageResourceBytes: 0,
+    peakArtworkCacheEntries: 0,
+    peakArtworkCacheBytes: 0,
+    artworkEvictions: 0,
   }
 
   constructor(
@@ -90,6 +110,7 @@ export class M23BattleDiagnostics {
     private motion: M23MotionPreference,
   ) {
     this.effectiveTier = resolveGraphicsPreference(requestedGraphics).tier
+    this.governor = new GraphicsGovernor({ preference: requestedGraphics }).snapshot()
     if (typeof PerformanceObserver === 'undefined') return
     try {
       this.observer = new PerformanceObserver((list) => {
@@ -110,12 +131,14 @@ export class M23BattleDiagnostics {
     this.requestedGraphics = graphics
     this.effectiveTier = resolveGraphicsPreference(graphics).tier
     this.motion = motion
+    this.governor = new GraphicsGovernor({ preference: graphics }).snapshot()
   }
 
   setActivity(active: boolean): void {
     if (this.active === active) return
     this.active = active
     this.lastRenderedFrameAt = null
+    this.lastRenderedFrameActive = null
   }
 
   setCue(cue: string, checkpoint?: M23Checkpoint): void {
@@ -139,16 +162,23 @@ export class M23BattleDiagnostics {
     }
   }
 
-  recordRenderedFrame(at: number): void {
-    if (this.lastRenderedFrameAt !== null) {
+  recordRenderedFrame(at: number, active = this.active): void {
+    if (!Number.isFinite(at)) return
+    if (
+      this.lastRenderedFrameAt !== null
+      && this.lastRenderedFrameActive === active
+    ) {
       const gap = at - this.lastRenderedFrameAt
-      appendBounded(
-        this.active ? this.activeFrameGapsMs : this.idleCadenceGapsMs,
-        gap,
-        MAX_FRAME_SAMPLES,
-      )
+      if (gap >= 0) {
+        appendBounded(
+          active ? this.activeFrameGapsMs : this.idleCadenceGapsMs,
+          gap,
+          MAX_FRAME_SAMPLES,
+        )
+      }
     }
     this.lastRenderedFrameAt = at
+    this.lastRenderedFrameActive = active
   }
 
   recordRendererResources(resources: M23RendererResources): void {
@@ -172,16 +202,29 @@ export class M23BattleDiagnostics {
       phase: state.phase,
       tier: state.tier,
       reason: state.fallbackReason,
+      qualityStage: state.quality?.stage ?? 'balanced',
+      dprCap: state.quality?.dprCap ?? state.dprCap,
+      postEnabled: state.quality?.postEnabled ?? false,
     }
     const previous = this.rendererTransitions.at(-1)
     if (
       previous?.phase === next.phase
       && previous.tier === next.tier
       && previous.reason === next.reason
+      && previous.qualityStage === next.qualityStage
+      && previous.dprCap === next.dprCap
+      && previous.postEnabled === next.postEnabled
     ) return
     this.effectiveTier = state.tier
     this.rendererState = state.phase
     this.rendererFallbackReason = state.fallbackReason
+    if (state.quality) {
+      this.governor = {
+        ...this.governor,
+        profile: { ...state.quality },
+        pending: state.phase === 'compatibility-ready' ? null : this.governor.pending,
+      }
+    }
     this.rendererTransitions.push(next)
   }
 
@@ -189,10 +232,43 @@ export class M23BattleDiagnostics {
     this.pools = { ...this.pools, ...pools }
   }
 
+  recordGovernor(governor: M23GraphicsGovernor): void {
+    this.governor = {
+      ...governor,
+      profile: { ...governor.profile },
+      pending: governor.pending
+        ? { ...governor.pending, from: { ...governor.pending.from }, to: { ...governor.pending.to } }
+        : null,
+      lastWindow: governor.lastWindow ? { ...governor.lastWindow } : null,
+      transitions: governor.transitions.map((transition) => ({
+        ...transition,
+        from: { ...transition.from },
+        to: { ...transition.to },
+      })),
+    }
+  }
+
+  recordArtworkCache(cache: M23ArtworkCache): void {
+    this.artworkCache = { ...cache }
+    this.peakAssetComplexity.peakArtworkCacheEntries = Math.max(
+      this.peakAssetComplexity.peakArtworkCacheEntries ?? 0,
+      cache.totalEntries,
+    )
+    this.peakAssetComplexity.peakArtworkCacheBytes = Math.max(
+      this.peakAssetComplexity.peakArtworkCacheBytes ?? 0,
+      cache.estimatedDecodedBytes,
+    )
+    this.peakAssetComplexity.artworkEvictions = Math.max(
+      this.peakAssetComplexity.artworkEvictions ?? 0,
+      cache.evictions,
+    )
+  }
+
   reset(): void {
     this.active = false
     this.activeCue = null
     this.lastRenderedFrameAt = null
+    this.lastRenderedFrameActive = null
     this.activeFrameGapsMs = []
     this.idleCadenceGapsMs = []
     this.longTasks = []
@@ -206,6 +282,14 @@ export class M23BattleDiagnostics {
     this.rendererState = 'renderer-booting'
     this.rendererFallbackReason = null
     this.rendererTransitions = []
+    this.governor = new GraphicsGovernor({ preference: this.requestedGraphics }).snapshot()
+    this.artworkCache = {
+      totalEntries: 0,
+      activeEntries: 0,
+      inactiveEntries: 0,
+      estimatedDecodedBytes: 0,
+      evictions: 0,
+    }
     this.peakAssetComplexity = {
       peakImageElements: 0,
       peakDecodedPixels: 0,
@@ -217,6 +301,9 @@ export class M23BattleDiagnostics {
       peakRenderedTriangles: 0,
       peakImageResourceCount: 0,
       peakImageResourceBytes: 0,
+      peakArtworkCacheEntries: 0,
+      peakArtworkCacheBytes: 0,
+      artworkEvictions: 0,
     }
   }
 
@@ -248,7 +335,6 @@ export class M23BattleDiagnostics {
     }
     const limitations = [
       'Minimum supported device is not selected; Auto is conservatively treated as Balanced and High is not release-ready.',
-      'Adaptive rolling-frame governor calibration remains release-qualification work.',
     ]
     if (this.observer === null) limitations.push('Long Task API is unavailable in this browser.')
     if (
@@ -264,14 +350,28 @@ export class M23BattleDiagnostics {
       longTasks: this.longTasks.map((task) => ({ ...task })),
       rendererResources: { ...this.rendererResources },
       pools: Object.fromEntries(Object.entries(this.pools).map(([name, pool]) => [name, { ...pool }])),
-      dpr: this.effectiveTier === 'high'
-        ? Math.min(window.devicePixelRatio || 1, 1.5)
-        : 1,
+      dpr: this.governor.profile.dprCap === null
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, this.governor.profile.dprCap),
       requestedGraphics: this.requestedGraphics,
       effectiveTier: this.effectiveTier,
       rendererState: this.rendererState,
       rendererFallbackReason: this.rendererFallbackReason,
       rendererTransitions: this.rendererTransitions.map((transition) => ({ ...transition })),
+      governor: {
+        ...this.governor,
+        profile: { ...this.governor.profile },
+        pending: this.governor.pending
+          ? { ...this.governor.pending, from: { ...this.governor.pending.from }, to: { ...this.governor.pending.to } }
+          : null,
+        lastWindow: this.governor.lastWindow ? { ...this.governor.lastWindow } : null,
+        transitions: this.governor.transitions.map((transition) => ({
+          ...transition,
+          from: { ...transition.from },
+          to: { ...transition.to },
+        })),
+      },
+      artworkCache: { ...this.artworkCache },
       motion: this.motion,
       activeCue: this.activeCue,
       checkpoints: [...this.checkpoints],

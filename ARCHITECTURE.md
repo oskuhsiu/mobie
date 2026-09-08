@@ -178,6 +178,14 @@ same-session remounts cannot upgrade it; Retry creates a fresh token and may pro
 compatibility adapter reuses the same HUD, FxCanvas, WeatherCanvas, store projection, and coordinator,
 so renderer changes never rerun resolver/input or duplicate canonical commit.
 
+`GraphicsGovernor` is a separate, pure cost policy. It receives only rendered frames marked active by
+the battle presentation; the stage runs an idle demand loop at roughly 20fps and an active loop at up to
+60fps. A rolling 120-gap window is evaluated every 60 active gaps, and two failing windows are required
+before a downgrade is queued. The queue applies only at a Director cue boundary and follows
+`DPR → post grade → particles/weather → compatibility`; it has no in-battle upgrade path. The active
+quality profile carries DPR, compositor-grade, VFX/weather scale, and bounded DOM-particle capacity,
+while reduced motion and juice remain independent axes.
+
 `BattleStage` owns the neutral world, lights, camera, and both combatant rigs in one R3F Canvas. Each rig
 publishes root/center/head/ground/cast/impact world anchors; the stage projects them through the live camera,
 with `presentation/battle/battleAnchors.ts` retained only as a pre-first-frame/compatibility fallback. Normal
@@ -185,6 +193,8 @@ damage cues drive anticipate/contact/hit-react/recover through the scene handle.
 hands off caster and impact shots and automatically returns to wide; cancellation resets the queue. Reduced
 motion keeps the same cue/anchor semantics while forcing a fixed wide camera and suppressing bob/shake/dolly.
 Artwork billboards and named procedural silhouettes remain storage-independent and share the same rig.
+`artworkResourceCache.ts` owns a 24-entry inactive LRU, retains active textures, disposes evicted
+textures, and exposes current entries, estimated decoded bytes, and evictions to the DEV diagnostics port.
 
 `vite build` emits a manifest plus explicit `NextBattleScene`, `CaptureStage`, Three-vendor, and
 compatibility categories. Rollup's explicit-only manual chunks keep Three out of the main and
@@ -345,3 +355,6 @@ tooling remains isolated from those runtime chunks pending its separately owned 
   gating, forced switch, and win/lose/timeout command semantics.
   Ticket 10 adds exact five-viewport classification, minimum-target and head-safe metrics, keyboard/focus
   journeys, hidden/resume clock invariants, a 200%-zoom-equivalent layout run, and reduced-motion diagnostics.
+  Ticket 16 adds pure governor hysteresis tests, active-versus-idle frame evidence, bounded VFX/weather/
+  artwork diagnostics, and `npm run perf:check -- --evidence=true` release metrics output. Hardware
+  ANGLE is required for performance claims; SwiftShader runs are functional evidence only.

@@ -1,6 +1,7 @@
 import type { Side } from '@/game/battle/reducer'
 import type { BattleMobie } from '@/game/types'
 import type { ResolvedTerrainWorld } from '@/scene/r3f/terrainVisual'
+import type { ArtworkCacheDiagnostics } from '@/scene/r3f/artworkResourceCache'
 import type { VfxCue } from '@/scene/r3f/vfxRuntime'
 import type {
   BattleAnchorKind,
@@ -9,6 +10,7 @@ import type {
 } from '@/presentation/battle/battleAnchors'
 import type {
   EffectiveGraphicsTier,
+  GraphicsQualityProfile,
   RendererFallbackReason,
 } from '@/presentation/battle/rendering'
 
@@ -19,6 +21,16 @@ export interface RendererDiagnostics {
   programs: number
   triangles: number
   drawCalls: number
+}
+
+export interface BattleVfxDiagnostics {
+  activeParticles: number
+  capacity: number
+  emitted: number
+  overwritten: number
+  resets: number
+  disposals: number
+  shaderMode: 'procedural' | 'fallback'
 }
 
 export type NormalAttackPhase = 'anticipate' | 'travel' | 'contact' | 'hit-react' | 'recover'
@@ -71,12 +83,17 @@ export interface BattleSceneHandle {
 export interface NextBattleSceneProps {
   snapshot: BattleSceneSnapshot
   tier: NextGraphicsTier
+  quality: GraphicsQualityProfile
+  /** True only for rendered frames that belong to an active presentation/QTE. */
+  active: boolean
   paused: boolean
   reducedMotion: boolean
   onReady(): void
   onFatal(reason: RendererFallbackReason): void
-  onRenderedFrame?: (at: number) => void
+  onRenderedFrame?: (at: number, active: boolean) => void
   onRendererDiagnostics?: (diagnostics: RendererDiagnostics) => void
+  onVfxDiagnostics?: (diagnostics: BattleVfxDiagnostics) => void
+  onArtworkCacheDiagnostics?: (diagnostics: ArtworkCacheDiagnostics) => void
   onSceneDiagnostics?: (diagnostics: BattleSceneDiagnostics) => void
   /** DEV/test-only typed renderer failure. Production callers omit it. */
   devShaderFailure?: boolean

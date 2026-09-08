@@ -66,6 +66,7 @@ import {
   type GraphicsPreference,
   type RendererFallbackReason,
 } from '@/presentation/battle/rendering'
+import { GraphicsGovernor } from '@/scene/battle/host/graphicsGovernor'
 import type {
   BattleDisplaySnapshot,
   DamageCue,
@@ -129,6 +130,10 @@ const WILD_SHIFT_POOL = TERRAINS.filter((t) => t.id !== 'neutral').map((t) => t.
 const pendingSessionCleanup = new Map<string, ReturnType<typeof setTimeout>>()
 const sessionCleanupKey = (token: BattleSessionToken) =>
   `${token.battleSessionId}:${token.resultFingerprint}`
+
+const ACTIVE_RENDER_PHASES = new Set([
+  'qte', 'mash', 'statusQte', 'defenseQte', 'chainQte', 'starQte', 'busy',
+])
 
 function baselineDriver() {
   return import.meta.env.DEV ? window.__MOBIE_M23_BASELINE__ : undefined
@@ -635,6 +640,19 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     ? rendererAttemptId(runtimeSession.token)
     : null
   const rendererReady = rendererState?.attemptId === currentRendererAttemptId && rendererIsReady(rendererState)
+  const [graphicsQualityVersion, refreshGraphicsQuality] = useState(0)
+  const graphicsGovernorRef = useRef<GraphicsGovernor | null>(null)
+  const graphicsGovernorKeyRef = useRef<string | null>(null)
+  const graphicsGovernorKey = `${runtimeSession?.token.battleSessionId ?? 'no-session'}:${runtimeSession?.token.resultFingerprint ?? 'no-fingerprint'}:${requestedGraphics}`
+  if (graphicsGovernorRef.current === null || graphicsGovernorKeyRef.current !== graphicsGovernorKey) {
+    graphicsGovernorRef.current = new GraphicsGovernor({ preference: requestedGraphics })
+    graphicsGovernorKeyRef.current = graphicsGovernorKey
+  }
+  const graphicsQuality = useMemo(
+    () => graphicsGovernorRef.current!.profile,
+    [graphicsGovernorKey, graphicsQualityVersion],
+  )
+  const activeRendered = ACTIVE_RENDER_PHASES.has(phase)
   // M16：戰鬥中點 HpPlate/TeamTray 開資訊卡（自己全顯、對手深度遮罩待 M17 看穿）
   const [cardView, setCardView] = useState<{ side: Side; index: number } | null>(null)
   // M22 星擊增強互動 mode（off＝原本單擊即放）。selector 內回純字串＝只在 mode 變動時才 re-render。
@@ -657,6 +675,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   const wildEventsRef = useRef(wildEvents)
   wildEventsRef.current = wildEvents
 
+  const effectiveGraphicsQuality = rendererState?.attemptId === currentRendererAttemptId
+    && rendererState.phase === 'compatibility-ready'
+      ? rendererState.quality ?? graphicsQuality
+      : graphicsQuality
+
   // Ticket 12：當前地形 → 一個主程序世界＋最多一個次地形 accent。純 display。
   const terrainWorld = useMemo(
     () => resolveTerrainWorld(battle?.field.terrainEffects.current ?? []),
@@ -664,9 +687,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   )
   const terrainPalette = terrainWorld.primary
   // Graphics controls cost; juice remains an independent presentation-intensity ceiling.
-  const graphicsWeatherDensity = !rendererReady
-    ? 0
-    : rendererState?.tier === 'high' ? 1 : rendererState?.tier === 'balanced' ? 0.3 : 0.2
+  const graphicsWeatherDensity = !rendererReady ? 0 : effectiveGraphicsQuality.weatherScale
   const juiceWeatherDensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.3 : 0
   const weatherDensity = graphicsWeatherDensity * juiceWeatherDensity * (reducedMotion ? 0.1 : 1)
   const terrainVisualIntensity = juice === 'full' ? 1 : juice === 'reduced' ? 0.5 : 0.2
@@ -1024,6 +1045,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       current?.attemptId === next.attemptId
       && current.phase === next.phase
       && current.tier === next.tier
+      && current.quality?.stage === next.quality?.stage
       && current.fallbackReason === next.fallbackReason
         ? current
         : next
@@ -1037,6 +1059,29 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   ) => {
     useBattleStore.getState().latchRendererCompatibility(token, reason)
   }, [])
+
+  const applyGraphicsQualityAtSafeCue = useCallback((token: BattleSessionToken) => {
+    const governor = graphicsGovernorRef.current
+    if (!governor) return
+    const transition = governor.applyAtSafeCueBoundary()
+    if (!transition) return
+    refreshGraphicsQuality((version) => version + 1)
+    baselineDriver()?.recordGovernor(governor.snapshot())
+    if (transition.to.tier === 'compatibility') handleRendererFallback(token, 'performance')
+  }, [handleRendererFallback])
+
+  const handleRenderedFrame = useCallback((at: number, active: boolean) => {
+    const driver = baselineDriver()
+    driver?.recordRenderedFrame(at, active)
+    const governor = graphicsGovernorRef.current
+    if (!governor) return
+    const evaluation = governor.recordRenderedFrame(at, active)
+    if (evaluation) driver?.recordGovernor(governor.snapshot())
+  }, [])
+
+  useEffect(() => {
+    baselineDriver()?.recordGovernor(graphicsGovernorRef.current!.snapshot())
+  }, [graphicsGovernorKey])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1169,16 +1214,8 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
   }, [context.foeTeam.length, context.playerTeam.length, initializeBattle])
 
   useEffect(() => {
-    baselineDriver()?.setActivity(
-      phase === 'qte'
-      || phase === 'mash'
-      || phase === 'statusQte'
-      || phase === 'defenseQte'
-      || phase === 'chainQte'
-      || phase === 'starQte'
-      || phase === 'busy',
-    )
-  }, [phase])
+    baselineDriver()?.setActivity(activeRendered)
+  }, [activeRendered])
 
   // 低血量緊張度 → BGM 濾波/警報（依我方在場 HP）
   useEffect(() => {
@@ -1560,7 +1597,11 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
     handler: presentationCueHandler,
     intentHandler: intentPresenter,
     lifecycle: {
+      safeCueBoundary: (_job, context) => {
+        applyGraphicsQualityAtSafeCue(context.token)
+      },
       beforeCue: (cue, cueContext) => {
+        applyGraphicsQualityAtSafeCue(cueContext.token)
         const cueEvent = 'event' in cue ? cue.event : undefined
         tracePresentation(cueContext.token, 'cue', {
           cueId: cue.id,
@@ -1578,7 +1619,7 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
       reset: (job, context) => resetPresentationVisuals(job.token,
         job.kind === 'intent' && job.intent.kind === 'switch-prelude' && !context.signal.aborted),
     },
-  }), [intentPresenter, presentationCueHandler, resetPresentationVisuals, sessionLifecycle])
+  }), [applyGraphicsQualityAtSafeCue, intentPresenter, presentationCueHandler, resetPresentationVisuals, sessionLifecycle])
   presentationDirectorRef.current = presentationDirector
 
   const submitTurn = useCallback(async (input: ReplayInput) => {
@@ -1918,19 +1959,25 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
         }}
         sessionToken={runtimeSession.token}
         preference={requestedGraphics}
+        quality={effectiveGraphicsQuality}
+        active={activeRendered}
         paused={documentHidden}
         reducedMotion={reducedMotion}
         latchedFallback={runtimeSession.rendererFallbackReason}
         onStateChange={handleRendererStateChange}
         onFallback={handleRendererFallback}
         devFailure={import.meta.env.DEV ? rendererFailure : null}
-        onRenderedFrame={import.meta.env.DEV ? (at) => baselineDriver()?.recordRenderedFrame(at) : undefined}
+        onRenderedFrame={handleRenderedFrame}
         onRendererDiagnostics={import.meta.env.DEV ? (resources) => {
           const driver = baselineDriver()
           driver?.recordRendererResources(resources)
           const pools = fxRef.current?.diagnostics?.()
           if (pools) driver?.recordPools(pools)
         } : undefined}
+        onVfxDiagnostics={import.meta.env.DEV ? (vfx) => baselineDriver()?.recordPools({
+          vfx: { live: vfx.activeParticles, capacity: vfx.capacity },
+        }) : undefined}
+        onArtworkCacheDiagnostics={import.meta.env.DEV ? (cache) => baselineDriver()?.recordArtworkCache(cache) : undefined}
         onSceneDiagnostics={syncHeadSafeRects}
       />
       {/* EXT.3 天氣持續層（z2，介於 R3F 與 FxCanvas）：off 不掛＝零 rAF、嚴格回 M22 基線。 */}
@@ -1941,11 +1988,19 @@ export function BattleScreen({ graphicsPreference = 'auto' }: BattleScreenProps 
           sparkAccent={terrainPalette.sparkAccent}
           overlay={terrainPalette.overlay}
           density={weatherDensity}
+          dprCap={effectiveGraphicsQuality.dprCap}
           paused={documentHidden}
           onPoolDiagnostics={import.meta.env.DEV ? (pool) => baselineDriver()?.recordPools({ weather: pool }) : undefined}
         />
       )}
-      <FxCanvas ref={fxRef} reducedMotion={reducedMotion} paused={documentHidden} />
+      <FxCanvas
+        ref={fxRef}
+        reducedMotion={reducedMotion}
+        paused={documentHidden}
+        intensity={effectiveGraphicsQuality.particleScale}
+        maxParticles={effectiveGraphicsQuality.transientParticleCap}
+        dprCap={effectiveGraphicsQuality.dprCap}
+      />
       {/* EXT.1.b：juice≠off 用富表現飄字層（圖示優先）；off 回退既有 FloatDamage＝M22 基線、DOM 零新增 wrapper。 */}
       {juice === 'off' ? <FloatDamage hitFx={hitFx} /> : <DamageNumbers ref={damageRef} />}
 

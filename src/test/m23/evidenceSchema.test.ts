@@ -17,6 +17,7 @@ import {
 function validMetrics(): Record<string, unknown> {
   return {
     schemaVersion: M23_EVIDENCE_SCHEMA_VERSION,
+    evidenceKind: 'full',
     scenarioId: 'baseline-win',
     environment: {
       device: 'desktop-chrome',
@@ -35,6 +36,25 @@ function validMetrics(): Record<string, unknown> {
     pools: { particles: { live: 120, capacity: 250 } },
     dpr: 1,
     tier: 'balanced',
+    governor: {
+      profile: {
+        stage: 'balanced', tier: 'balanced', dprCap: 1, postEnabled: false,
+        particleScale: 1, weatherScale: 0.3, transientParticleCap: 160,
+      },
+      activeFrameCount: 180,
+      activeGapCount: 120,
+      consecutiveFailingWindows: 0,
+      pending: null,
+      lastWindow: {
+        sampleCount: 120, p50Ms: 16.6, p95Ms: 20.2, maxMs: 24,
+        overBudgetCount: 0, overBudgetRate: 0, failing: false,
+      },
+      transitions: [],
+    },
+    artworkCache: {
+      totalEntries: 2, activeEntries: 2, inactiveEntries: 0,
+      estimatedDecodedBytes: 8_388_608, evictions: 0,
+    },
     activeCue: 'normal-attack:impact',
     assetComplexity: { artworkEntries: 2, estimatedBytes: 8_388_608, liveParticles: 120 },
     firstCastLatencyMs: 442.5,
@@ -84,6 +104,17 @@ describe('M23 metrics evidence', () => {
     expect(evidence.activeFrameGapsMs).toEqual([16.6, 17.1, 20.2])
     expect(evidence.idleCadenceGapsMs).toEqual([50, 49.8])
     expect(evidence.pools.particles).toEqual({ live: 120, capacity: 250 })
+    expect(evidence.governor?.profile.stage).toBe('balanced')
+    expect(evidence.artworkCache?.totalEntries).toBe(2)
+  })
+
+  it('accepts a performance capture with partial checkpoint coverage', () => {
+    const evidence = validMetrics()
+    evidence.evidenceKind = 'performance'
+    evidence.checkpoints = ['player-choice']
+    expect(parseM23MetricsEvidence(evidence)).toMatchObject({
+      evidenceKind: 'performance', checkpoints: ['player-choice'],
+    })
   })
 
   it('rejects missing checkpoint coverage and invalid pool counts', () => {

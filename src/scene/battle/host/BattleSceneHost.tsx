@@ -14,9 +14,11 @@ import {
   createBattleRendererState,
   reduceBattleRendererState,
   rendererAttemptId,
+  updateBattleRendererQuality,
   type BattleRendererEvent,
   type BattleRendererState,
   type GraphicsPreference,
+  type GraphicsQualityProfile,
   type RendererFailureInjection,
   type RendererFallbackReason,
 } from '@/presentation/battle/rendering'
@@ -39,6 +41,8 @@ export interface BattleSceneHostProps {
   snapshot: BattleSceneSnapshot
   sessionToken: BattleSessionToken
   preference: GraphicsPreference
+  quality: GraphicsQualityProfile
+  active: boolean
   paused: boolean
   reducedMotion: boolean
   latchedFallback: RendererFallbackReason | null
@@ -46,6 +50,8 @@ export interface BattleSceneHostProps {
   onFallback: (token: BattleSessionToken, reason: RendererFallbackReason) => void
   onRenderedFrame?: NextBattleSceneProps['onRenderedFrame']
   onRendererDiagnostics?: NextBattleSceneProps['onRendererDiagnostics']
+  onVfxDiagnostics?: NextBattleSceneProps['onVfxDiagnostics']
+  onArtworkCacheDiagnostics?: NextBattleSceneProps['onArtworkCacheDiagnostics']
   onSceneDiagnostics?: NextBattleSceneProps['onSceneDiagnostics']
   /** DEV/test-only; production callers omit this and the default path is used. */
   devFailure?: RendererFailureInjection | null
@@ -58,6 +64,8 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   snapshot,
   sessionToken,
   preference,
+  quality,
+  active,
   paused,
   reducedMotion,
   latchedFallback,
@@ -65,6 +73,8 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   onFallback,
   onRenderedFrame,
   onRendererDiagnostics,
+  onVfxDiagnostics,
+  onArtworkCacheDiagnostics,
   onSceneDiagnostics,
   devFailure = null,
   timeoutMs = 8_000,
@@ -112,6 +122,22 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       onFallback(sessionToken, state.fallbackReason!)
     }
   }, [latchedFallback, onFallback, onStateChange, sessionToken, state])
+
+  useEffect(() => {
+    const current = stateRef.current
+    if (quality.tier === 'compatibility') {
+      if (current.phase !== 'compatibility-ready') {
+        send({ type: 'FALLBACK', attemptId, reason: 'performance' })
+      }
+      return
+    }
+    if (current.phase === 'compatibility-ready') return
+    const next = updateBattleRendererQuality(current, quality)
+    if (next === current) return
+    stateRef.current = next
+    setState(next)
+    onStateChange(sessionToken, next)
+  }, [attemptId, onStateChange, quality, send, sessionToken])
 
   useEffect(() => {
     if (stateRef.current.phase !== 'renderer-booting') return
@@ -181,6 +207,9 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       className="battle-scene-host"
       data-renderer-state={state.phase}
       data-renderer-tier={state.tier}
+      data-battle-quality-stage={state.quality.stage}
+      data-battle-post={state.quality.postEnabled ? 'restrained' : 'off'}
+      data-battle-quality-dpr={state.quality.dprCap === null ? 'css' : String(state.quality.dprCap)}
       data-renderer-fallback={state.fallbackReason ?? undefined}
       data-battle-camera-shot={nextDiagnostics?.cameraShot ?? 'wide'}
       data-battle-camera-owner={nextDiagnostics?.cameraOwner ?? undefined}
@@ -214,12 +243,16 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
             ref={nextRef}
             snapshot={snapshot}
             tier={state.tier === 'high' ? 'high' : 'balanced'}
+            quality={state.quality}
+            active={active}
             paused={paused}
             reducedMotion={reducedMotion}
             onReady={() => send({ type: 'NEXT_READY', attemptId })}
             onFatal={fatal}
             onRenderedFrame={onRenderedFrame}
             onRendererDiagnostics={onRendererDiagnostics}
+            onVfxDiagnostics={onVfxDiagnostics}
+            onArtworkCacheDiagnostics={onArtworkCacheDiagnostics}
             onSceneDiagnostics={handleSceneDiagnostics}
             devShaderFailure={activeDevFailure === 'shader-error'}
           />

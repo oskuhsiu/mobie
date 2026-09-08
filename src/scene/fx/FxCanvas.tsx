@@ -41,13 +41,19 @@ export interface FxHandle {
   shockwave: (o: FxShockwaveOpts) => void
   /** 取消 presentation 時立即清除所有一次性 FX。 */
   clear: () => void
-  /** Ticket 01 diagnostics: current live arrays are unbounded legacy lists, hence capacity=null. */
+  /** Ticket 16 diagnostics: live arrays are bounded by the active quality profile. */
   diagnostics?: () => Record<string, M23PoolCount>
 }
 
 export interface FxCanvasProps {
   reducedMotion?: boolean
   paused?: boolean
+  /** Graphics governor multiplier for new transient effects. */
+  intensity?: number
+  /** Maximum live particle count for the current graphics quality profile. */
+  maxParticles?: number
+  /** DPR cap shared with the WebGL scene; compatibility uses CSS-sized pixels. */
+  dprCap?: 1 | 1.5 | null
 }
 
 interface P { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; g: number; shape: FxShape; rot: number }
@@ -59,12 +65,17 @@ interface Travel {
   onArrive: 'none' | 'burst' | 'burst-ring'
 }
 
-export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = false, paused = false }, ref) => {
+export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = false, paused = false, intensity = 1, maxParticles = 320, dprCap }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const reducedMotionRef = useRef(reducedMotion)
   const pausedRef = useRef(paused)
+  const intensityRef = useRef(intensity)
+  const dprCapRef = useRef(dprCap)
+  const resizeRef = useRef<(() => void) | null>(null)
   reducedMotionRef.current = reducedMotion
   pausedRef.current = paused
+  intensityRef.current = clamp01(intensity)
+  dprCapRef.current = dprCap
   const stateRef = useRef({
     ctx: null as CanvasRenderingContext2D | null,
     w: 0, h: 0,
@@ -75,6 +86,9 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     flashTimes: [] as number[],
     peakFlashAlpha: 0,
     maxFlashesPerSecond: 0,
+    maxParticles: Math.max(0, Math.floor(Number.isFinite(maxParticles) ? maxParticles : 320)),
+    maxRings: 32,
+    maxTravels: 8,
     raf: 0,
     running: false,
   })
@@ -87,16 +101,19 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     s.ctx = ctx
     const resize = () => {
       const rect = canvas.getBoundingClientRect()
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const dpr = dprCapRef.current === null
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, dprCapRef.current ?? 2)
       s.w = rect.width; s.h = rect.height
       canvas.width = Math.round(rect.width * dpr)
       canvas.height = Math.round(rect.height * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
     resize()
+    resizeRef.current = resize
     const ro = new ResizeObserver(resize)
     ro.observe(canvas)
-    return () => { ro.disconnect(); cancelAnimationFrame(s.raf) }
+    return () => { ro.disconnect(); resizeRef.current = null; cancelAnimationFrame(s.raf) }
   }, [])
 
   const tick = () => {
@@ -166,7 +183,7 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
 
       if (done) {
         if (tr.onArrive !== 'none') addBurst(s, tr.x1, tr.y1, tr.color, tr.count, tr.power, 'hit', tr.shape)
-        if (tr.onArrive === 'burst-ring') s.rings.push({ x: tr.x1, y: tr.y1, r: 6, max: Math.min(s.w, s.h) * 0.16, color: tr.accent, life: 1, lw: 3, glow: false, decay: 0.045, grow: 0.18 })
+        if (tr.onArrive === 'burst-ring') pushRing(s, { x: tr.x1, y: tr.y1, r: 6, max: Math.min(s.w, s.h) * 0.16, color: tr.accent, life: 1, lw: 3, glow: false, decay: 0.045, grow: 0.18 })
       } else {
         s.travels[tj++] = tr
       }
@@ -215,16 +232,26 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     if (s.particles.length || s.rings.length || s.travels.length || s.flash.a > 0) ensureRunning()
   }, [paused])
 
+  useEffect(() => {
+    const s = stateRef.current
+    s.maxParticles = Math.max(0, Math.floor(Number.isFinite(maxParticles) ? maxParticles : 320))
+    if (s.particles.length > s.maxParticles) s.particles.splice(0, s.particles.length - s.maxParticles)
+    if (s.particles.length || s.rings.length || s.travels.length || s.flash.a > 0) ensureRunning()
+  }, [intensity, maxParticles])
+
+  useEffect(() => { resizeRef.current?.() }, [dprCap])
+
   useImperativeHandle(ref, () => ({
     burst: ({ nx, ny, color, count = 16, power = 1, kind = 'hit', shape = 'dot' }) => {
       const s = stateRef.current
       const x = nx * s.w, y = ny * s.h
-      addBurst(s, x, y, color, count, power, kind, shape)
+      addBurst(s, x, y, color, scaledCount(count, intensityRef.current), power, kind, shape)
       ensureRunning()
     },
     ring: ({ nx, ny, color }) => {
       const s = stateRef.current
-      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 6, max: Math.min(s.w, s.h) * 0.2, color, life: 1, lw: 3, glow: false, decay: 0.045, grow: 0.18 })
+      if (intensityRef.current <= 0) return
+      pushRing(s, { x: nx * s.w, y: ny * s.h, r: 6, max: Math.min(s.w, s.h) * 0.2, color, life: 1, lw: 3, glow: false, decay: 0.045, grow: 0.18 })
       ensureRunning()
     },
     flash: (color, alpha = 0.5) => {
@@ -246,10 +273,12 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     },
     travel: ({ from, to, color, accent = color, shape = 'dot', count = 18, power = 1, onArrive = 'burst' }) => {
       const s = stateRef.current
-      s.travels.push({
+      if (intensityRef.current <= 0) return
+      pushTravel(s, {
         x0: from.nx * s.w, y0: from.ny * s.h,
         x1: to.nx * s.w, y1: to.ny * s.h,
-        color, accent, shape, count, power, onArrive,
+        color, accent, shape, count: scaledCount(count, intensityRef.current),
+        power: power * (0.7 + intensityRef.current * 0.3), onArrive,
         t: 0,
         speed: FX_TRAVEL_SPEED,
       })
@@ -258,7 +287,7 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     converge: ({ nx, ny, color, count = 30, shape = 'dot' }) => {
       const s = stateRef.current
       const cx = nx * s.w, cy = ny * s.h
-      for (let i = 0; i < count; i++) {
+      for (let i = 0; i < scaledCount(count, intensityRef.current); i++) {
         // 從四邊隨機點出發，朝中心飛（g=0；friction 會讓它在近中心處自然減速消散）
         const edge = i & 3
         let x: number, y: number
@@ -270,7 +299,7 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
         const d = Math.hypot(dx, dy) || 1
         const life = 40
         const sp = (d / life) * 1.7 // 補償 0.98 摩擦，讓粒子能逼近中心
-        s.particles.push({
+        pushParticle(s, {
           x, y, vx: (dx / d) * sp, vy: (dy / d) * sp,
           life, max: life, size: 3.2, color, g: 0, shape, rot: Math.atan2(dy, dx),
         })
@@ -280,7 +309,8 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     shockwave: ({ nx, ny, color, lw = 12 }) => {
       const s = stateRef.current
       // 大 max（畫面對角線）+ glow(lighter) + 慢 grow/decay → 一圈巨型擴散波掃滿全螢幕。
-      s.rings.push({ x: nx * s.w, y: ny * s.h, r: 12, max: Math.hypot(s.w, s.h) * 1.05, color, life: 1, lw, glow: true, decay: 0.03, grow: 0.1 })
+      if (intensityRef.current <= 0) return
+      pushRing(s, { x: nx * s.w, y: ny * s.h, r: 12, max: Math.hypot(s.w, s.h) * 1.05, color, life: 1, lw, glow: true, decay: 0.03, grow: 0.1 })
       ensureRunning()
     },
     clear: () => {
@@ -298,9 +328,9 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
     diagnostics: () => {
       const s = stateRef.current
       return {
-        'fx-particles': { live: s.particles.length, capacity: null },
-        'fx-rings': { live: s.rings.length, capacity: null },
-        'fx-travels': { live: s.travels.length, capacity: null },
+        'fx-particles': { live: s.particles.length, capacity: s.maxParticles },
+        'fx-rings': { live: s.rings.length, capacity: s.maxRings },
+        'fx-travels': { live: s.travels.length, capacity: s.maxTravels },
       }
     },
   }), [])
@@ -319,7 +349,7 @@ export const FxCanvas = forwardRef<FxHandle, FxCanvasProps>(({ reducedMotion = f
 FxCanvas.displayName = 'FxCanvas'
 
 function addBurst(
-  s: { particles: P[] },
+  s: { particles: P[]; maxParticles: number },
   x: number,
   y: number,
   color: string,
@@ -329,7 +359,11 @@ function addBurst(
   shape: FxShape,
 ) {
   const n = kind === 'puff' ? Math.round(count * 0.8) : count
-  for (let i = 0; i < n; i++) {
+  const amount = Math.min(n, s.maxParticles)
+  if (amount <= 0) return
+  const excess = Math.max(0, s.particles.length + amount - s.maxParticles)
+  if (excess > 0) s.particles.splice(0, excess)
+  for (let i = 0; i < amount; i++) {
     const ang = (Math.PI * 2 * i) / n + Math.random() * 0.5
     const sp = (kind === 'puff' ? 0.6 : 2.2) * power * (0.5 + Math.random())
     s.particles.push({
@@ -345,6 +379,32 @@ function addBurst(
       rot: Math.random() * Math.PI * 2,
     })
   }
+}
+
+function pushParticle(s: { particles: P[]; maxParticles: number }, particle: P): void {
+  if (s.maxParticles <= 0) return
+  if (s.particles.length >= s.maxParticles) s.particles.shift()
+  s.particles.push(particle)
+}
+
+function pushRing(s: { rings: Ring[]; maxRings: number }, ring: Ring): void {
+  if (s.maxRings <= 0) return
+  if (s.rings.length >= s.maxRings) s.rings.shift()
+  s.rings.push(ring)
+}
+
+function pushTravel(s: { travels: Travel[]; maxTravels: number }, travel: Travel): void {
+  if (s.maxTravels <= 0) return
+  if (s.travels.length >= s.maxTravels) s.travels.shift()
+  s.travels.push(travel)
+}
+
+function scaledCount(value: number, intensity: number): number {
+  return Math.max(0, Math.floor(Math.max(0, value) * clamp01(intensity)))
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0))
 }
 
 function drawShape(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string, shape: FxShape, rot: number) {

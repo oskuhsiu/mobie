@@ -1,5 +1,7 @@
 import {
   M23_REQUIRED_CHECKPOINTS,
+  type M23ArtworkCache,
+  type M23GraphicsGovernor,
   type M23Checkpoint,
   type M23PoolCount,
   type M23RendererResources,
@@ -8,7 +10,7 @@ import {
 export { M23_REQUIRED_CHECKPOINTS }
 export type { M23Checkpoint }
 
-export const M23_EVIDENCE_SCHEMA_VERSION = 1 as const
+export const M23_EVIDENCE_SCHEMA_VERSION = 2 as const
 export type M23EvidenceFileName = 'screenshot.png' | 'metrics.json' | 'accessibility.json'
 
 export interface M23EvidencePath {
@@ -30,6 +32,7 @@ export interface M23LongTask {
 
 export interface M23MetricsEvidence {
   schemaVersion: typeof M23_EVIDENCE_SCHEMA_VERSION
+  evidenceKind: 'full' | 'performance'
   scenarioId: string
   environment: M23Environment
   viewport: { width: number; height: number }
@@ -44,6 +47,8 @@ export interface M23MetricsEvidence {
   pools: Record<string, M23PoolCount>
   dpr: number
   tier: string
+  governor: M23GraphicsGovernor | null
+  artworkCache: M23ArtworkCache | null
   activeCue: string | null
   assetComplexity: Record<string, number>
   firstCastLatencyMs: number
@@ -183,6 +188,89 @@ function parsePools(value: unknown): Record<string, M23PoolCount> {
   return pools
 }
 
+function parseGraphicsProfile(value: unknown, path: string): M23GraphicsGovernor['profile'] {
+  const profile = record(value, path)
+  const stage = nonEmptyString(profile.stage, `${path}.stage`)
+  const tier = nonEmptyString(profile.tier, `${path}.tier`)
+  if (!['high', 'balanced', 'compatibility'].includes(tier)) {
+    fail(`${path}.tier`, 'expected high, balanced, or compatibility')
+  }
+  const dprCap = profile.dprCap === null
+    ? null
+    : finiteNumber(profile.dprCap, `${path}.dprCap`)
+  if (dprCap !== null && dprCap !== 1 && dprCap !== 1.5) {
+    fail(`${path}.dprCap`, 'expected null, 1, or 1.5')
+  }
+  if (typeof profile.postEnabled !== 'boolean') fail(`${path}.postEnabled`, 'expected a boolean')
+  return {
+    stage: stage as M23GraphicsGovernor['profile']['stage'],
+    tier: tier as M23GraphicsGovernor['profile']['tier'],
+    dprCap: dprCap as M23GraphicsGovernor['profile']['dprCap'],
+    postEnabled: profile.postEnabled,
+    particleScale: finiteNumber(profile.particleScale, `${path}.particleScale`),
+    weatherScale: finiteNumber(profile.weatherScale, `${path}.weatherScale`),
+    transientParticleCap: nonNegativeInteger(profile.transientParticleCap, `${path}.transientParticleCap`),
+  }
+}
+
+function parseArtworkCache(value: unknown): M23ArtworkCache {
+  const cache = record(value, 'artworkCache')
+  return {
+    totalEntries: nonNegativeInteger(cache.totalEntries, 'artworkCache.totalEntries'),
+    activeEntries: nonNegativeInteger(cache.activeEntries, 'artworkCache.activeEntries'),
+    inactiveEntries: nonNegativeInteger(cache.inactiveEntries, 'artworkCache.inactiveEntries'),
+    estimatedDecodedBytes: nonNegativeInteger(cache.estimatedDecodedBytes, 'artworkCache.estimatedDecodedBytes'),
+    evictions: nonNegativeInteger(cache.evictions, 'artworkCache.evictions'),
+  }
+}
+
+function parseGovernorWindow(value: unknown, path: string): M23GraphicsGovernor['lastWindow'] {
+  if (value === null) return null
+  const window = record(value, path)
+  if (typeof window.failing !== 'boolean') fail(`${path}.failing`, 'expected a boolean')
+  const overBudgetRate = finiteNumber(window.overBudgetRate, `${path}.overBudgetRate`)
+  if (overBudgetRate > 1) fail(`${path}.overBudgetRate`, 'expected a value <= 1')
+  return {
+    sampleCount: nonNegativeInteger(window.sampleCount, `${path}.sampleCount`),
+    p50Ms: finiteNumber(window.p50Ms, `${path}.p50Ms`),
+    p95Ms: finiteNumber(window.p95Ms, `${path}.p95Ms`),
+    maxMs: finiteNumber(window.maxMs, `${path}.maxMs`),
+    overBudgetCount: nonNegativeInteger(window.overBudgetCount, `${path}.overBudgetCount`),
+    overBudgetRate,
+    failing: window.failing,
+  }
+}
+
+function parseGovernorTransition(value: unknown, path: string): NonNullable<M23GraphicsGovernor['pending']> {
+  const transition = record(value, path)
+  return {
+    action: nonEmptyString(transition.action, `${path}.action`) as NonNullable<M23GraphicsGovernor['pending']>['action'],
+    from: parseGraphicsProfile(transition.from, `${path}.from`),
+    to: parseGraphicsProfile(transition.to, `${path}.to`),
+    reason: 'active-frame-window',
+  }
+}
+
+function parseGovernor(value: unknown): M23GraphicsGovernor {
+  const governor = record(value, 'governor')
+  return {
+    profile: parseGraphicsProfile(governor.profile, 'governor.profile'),
+    activeFrameCount: nonNegativeInteger(governor.activeFrameCount, 'governor.activeFrameCount'),
+    activeGapCount: nonNegativeInteger(governor.activeGapCount, 'governor.activeGapCount'),
+    consecutiveFailingWindows: nonNegativeInteger(
+      governor.consecutiveFailingWindows,
+      'governor.consecutiveFailingWindows',
+    ),
+    pending: governor.pending === null
+      ? null
+      : parseGovernorTransition(governor.pending, 'governor.pending'),
+    lastWindow: parseGovernorWindow(governor.lastWindow, 'governor.lastWindow'),
+    transitions: array(governor.transitions, 'governor.transitions').map((entry, index) =>
+      parseGovernorTransition(entry, `governor.transitions[${index}]`),
+    ),
+  }
+}
+
 function parseAssetComplexity(value: unknown): Record<string, number> {
   const rawComplexity = record(value, 'assetComplexity')
   if (Object.keys(rawComplexity).length === 0) fail('assetComplexity', 'expected at least one metric')
@@ -222,11 +310,15 @@ function parseSchemaVersion(value: unknown): typeof M23_EVIDENCE_SCHEMA_VERSION 
 
 export function parseM23MetricsEvidence(value: unknown): M23MetricsEvidence {
   const raw = record(value, 'metrics')
+  const evidenceKind = raw.evidenceKind === undefined ? 'full' : raw.evidenceKind
+  if (evidenceKind !== 'full' && evidenceKind !== 'performance') {
+    fail('evidenceKind', 'expected full or performance')
+  }
   const viewport = record(raw.viewport, 'viewport')
   const checkpoints = array(raw.checkpoints, 'checkpoints').map((entry, index) =>
     checkpoint(entry, `checkpoints[${index}]`),
   )
-  assertCheckpointCoverage(checkpoints, 'checkpoints')
+  if (evidenceKind === 'full') assertCheckpointCoverage(checkpoints, 'checkpoints')
 
   const longTasks = array(raw.longTasks, 'longTasks').map((entry, index) => {
     const task = record(entry, `longTasks[${index}]`)
@@ -243,6 +335,7 @@ export function parseM23MetricsEvidence(value: unknown): M23MetricsEvidence {
 
   return {
     schemaVersion: parseSchemaVersion(raw.schemaVersion),
+    evidenceKind,
     scenarioId: nonEmptyString(raw.scenarioId, 'scenarioId'),
     environment: parseEnvironment(raw.environment),
     viewport: {
@@ -255,12 +348,16 @@ export function parseM23MetricsEvidence(value: unknown): M23MetricsEvidence {
     checkpoints,
     activeFrameGapsMs: (() => {
       const gaps = array(raw.activeFrameGapsMs, 'activeFrameGapsMs')
-      if (gaps.length === 0) fail('activeFrameGapsMs', 'expected at least one active rendered frame gap')
+      if (gaps.length === 0 && evidenceKind === 'full') {
+        fail('activeFrameGapsMs', 'expected at least one active rendered frame gap')
+      }
       return gaps.map((gap, index) => finiteNumber(gap, `activeFrameGapsMs[${index}]`))
     })(),
     idleCadenceGapsMs: (() => {
       const gaps = array(raw.idleCadenceGapsMs, 'idleCadenceGapsMs')
-      if (gaps.length === 0) fail('idleCadenceGapsMs', 'expected at least one idle cadence gap')
+      if (gaps.length === 0 && evidenceKind === 'full') {
+        fail('idleCadenceGapsMs', 'expected at least one idle cadence gap')
+      }
       return gaps.map((gap, index) => finiteNumber(gap, `idleCadenceGapsMs[${index}]`))
     })(),
     longTasks,
@@ -268,6 +365,12 @@ export function parseM23MetricsEvidence(value: unknown): M23MetricsEvidence {
     pools: parsePools(raw.pools),
     dpr: finiteNumber(raw.dpr, 'dpr', Number.MIN_VALUE),
     tier: nonEmptyString(raw.tier, 'tier'),
+    governor: raw.governor === null && evidenceKind === 'performance'
+      ? null
+      : parseGovernor(raw.governor),
+    artworkCache: raw.artworkCache === null && evidenceKind === 'performance'
+      ? null
+      : parseArtworkCache(raw.artworkCache),
     activeCue,
     assetComplexity: parseAssetComplexity(raw.assetComplexity),
     firstCastLatencyMs: finiteNumber(raw.firstCastLatencyMs, 'firstCastLatencyMs'),

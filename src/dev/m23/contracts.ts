@@ -4,6 +4,8 @@ import {
   type RendererFailureInjection,
 } from '@/presentation/battle/rendering'
 import type { RendererDiagnostics } from '@/scene/battle/contracts'
+import type { GraphicsGovernorSnapshot } from '@/scene/battle/host/graphicsGovernor'
+import type { ArtworkCacheDiagnostics } from '@/scene/r3f/artworkResourceCache'
 
 export const M23_BASELINE_SCENARIO_ID = 'm23-current-parity-v1'
 
@@ -63,6 +65,8 @@ export const M23_FAILURE_STAGES = ['battle-data', 'resolve', 'recorder', 'retry-
 export type M23FailureStage = (typeof M23_FAILURE_STAGES)[number]
 
 export type M23RendererResources = RendererDiagnostics
+export type M23GraphicsGovernor = GraphicsGovernorSnapshot
+export type M23ArtworkCache = ArtworkCacheDiagnostics
 
 export interface M23PoolCount {
   live: number

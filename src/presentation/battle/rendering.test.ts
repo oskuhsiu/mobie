@@ -6,6 +6,9 @@ import {
   rendererAttemptId,
   rendererIsReady,
   resolveGraphicsPreference,
+  graphicsQualityProfileOf,
+  graphicsQualityProfileForStage,
+  updateBattleRendererQuality,
   type GraphicsPreference,
 } from './rendering'
 
@@ -71,5 +74,28 @@ describe('battle renderer policy', () => {
     expect(reduceBattleRendererState(fallback, {
       type: 'NEXT_READY', attemptId: 'session-a:1',
     })).toBe(fallback)
+  })
+
+  it('keeps graphics cost separate from motion and exposes the ordered quality stages', () => {
+    expect(graphicsQualityProfileOf('auto')).toMatchObject({
+      stage: 'balanced', tier: 'balanced', dprCap: 1, postEnabled: false, weatherScale: 0.3,
+    })
+    expect(graphicsQualityProfileOf('high')).toMatchObject({
+      stage: 'high', tier: 'high', dprCap: 1.5, postEnabled: true,
+    })
+    expect(graphicsQualityProfileForStage('balanced-effects-reduced')).toMatchObject({
+      tier: 'balanced', dprCap: 1, particleScale: 0.5, transientParticleCap: 80,
+    })
+  })
+
+  it('updates a live next renderer profile without allowing a compatibility renderer to upgrade', () => {
+    const booting = createBattleRendererState({ attemptId: 'session-a:1', preference: 'high' })
+    const ready = reduceBattleRendererState(booting, { type: 'NEXT_READY', attemptId: 'session-a:1' })
+    const reduced = updateBattleRendererQuality(ready, graphicsQualityProfileForStage('high-dpr-reduced'))
+    expect(reduced).toMatchObject({ tier: 'high', dprCap: 1, quality: { stage: 'high-dpr-reduced' } })
+    const compatibility = reduceBattleRendererState(reduced, {
+      type: 'FALLBACK', attemptId: 'session-a:1', reason: 'performance',
+    })
+    expect(updateBattleRendererQuality(compatibility, graphicsQualityProfileOf('high'))).toBe(compatibility)
   })
 })

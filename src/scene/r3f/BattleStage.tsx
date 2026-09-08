@@ -18,6 +18,7 @@ import { StageLights, Pedestal, ArenaFloor, BlobShadow } from './sceneParts'
 import { TerrainWorld } from './TerrainWorld'
 import { BattleVfx, type BattleVfxHandle } from './BattleVfx'
 import type { VfxLabControls } from './vfxRuntime'
+import { artworkCacheDiagnostics } from './artworkResourceCache'
 import type { TerrainPalette } from './terrainVisual'
 import { useTerrainTransition } from './terrainTransition'
 import {
@@ -213,20 +214,45 @@ function SceneBridgeProbe({
 function DiagnosticsProbe({
   onRenderedFrame,
   onRendererDiagnostics,
-}: Pick<NextBattleSceneProps, 'onRenderedFrame' | 'onRendererDiagnostics'>) {
+  onArtworkCacheDiagnostics,
+  active,
+}: Pick<NextBattleSceneProps, 'onRenderedFrame' | 'onRendererDiagnostics' | 'onArtworkCacheDiagnostics' | 'active'>) {
   const frame = useRef(0)
   useFrame(({ gl }) => {
-    onRenderedFrame?.(performance.now())
+    onRenderedFrame?.(performance.now(), active)
     frame.current += 1
-    if (!onRendererDiagnostics || frame.current % 60 !== 0) return
-    onRendererDiagnostics({
+    if (frame.current % 60 !== 0) return
+    onRendererDiagnostics?.({
       geometries: gl.info.memory.geometries,
       textures: gl.info.memory.textures,
       programs: gl.info.programs?.length ?? 0,
       triangles: gl.info.render.triangles,
       drawCalls: gl.info.render.calls,
     })
+    onArtworkCacheDiagnostics?.(artworkCacheDiagnostics())
   })
+  return null
+}
+
+function RenderCadence({ active, paused }: { active: boolean; paused: boolean }) {
+  const { invalidate } = useThree()
+  useEffect(() => {
+    let disposed = false
+    let animationFrame = 0
+    let idleTimer: number | null = null
+    const schedule = () => {
+      if (disposed || paused) return
+      invalidate()
+      if (active) animationFrame = window.requestAnimationFrame(schedule)
+      else idleTimer = window.setTimeout(schedule, 50)
+    }
+    schedule()
+    return () => {
+      disposed = true
+      window.cancelAnimationFrame(animationFrame)
+      if (idleTimer !== null) window.clearTimeout(idleTimer)
+    }
+  }, [active, invalidate, paused])
   return null
 }
 
@@ -323,13 +349,16 @@ function RendererLifecycle({
 
 const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function BattleStage({
   snapshot,
-  tier,
   onReady,
   onFatal,
   onRenderedFrame,
   onRendererDiagnostics,
+  onVfxDiagnostics,
+  onArtworkCacheDiagnostics,
   onSceneDiagnostics,
   devShaderFailure,
+  quality,
+  active,
   paused,
   reducedMotion,
 }, ref) {
@@ -470,30 +499,39 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   return (
     <Canvas
       className="battle-next-canvas"
-      dpr={[1, tier === 'high' ? 1.5 : 1]}
-      frameloop={paused ? 'never' : 'always'}
+      dpr={[1, quality.dprCap === 1.5 ? 1.5 : 1]}
+      frameloop={paused ? 'never' : 'demand'}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       camera={{ position: [0, 2.95, 6.4], fov: 40 }}
-      style={{ position: 'absolute', inset: 0, zIndex: 0 }}
+      // A restrained compositor grade is the only post effect in this scene;
+      // the governor can remove it without changing cue geometry or timing.
+      style={{
+        position: 'absolute', inset: 0, zIndex: 0,
+        filter: quality.postEnabled ? 'saturate(1.06) contrast(1.02)' : 'none',
+      }}
     >
+      <RenderCadence active={active} paused={paused} />
       <RendererLifecycle onReady={onReady} onFatal={onFatal} devShaderFailure={devShaderFailure} />
       <TerrainFog palette={palette} intensity={terrainVisualIntensity} />
       <BattleVfx
         ref={vfxRef}
         rigs={rigs}
-        tier={tier}
+        tier={quality.tier === 'high' ? 'high' : 'balanced'}
         reducedMotion={reducedMotion}
-        intensity={snapshot.vfxIntensity ?? 1}
+        intensity={(snapshot.vfxIntensity ?? 1) * quality.particleScale}
         timeScaleRef={timeScaleRef}
         controlsRef={labEnabled ? labControls : undefined}
+        onDiagnostics={onVfxDiagnostics}
       />
       {labEnabled && VfxLab && (
         <Suspense fallback={null}><VfxLab vfxRef={vfxRef} controlsRef={labControls} /></Suspense>
       )}
-      {(onRenderedFrame || onRendererDiagnostics) && (
+      {(onRenderedFrame || onRendererDiagnostics || onArtworkCacheDiagnostics) && (
         <DiagnosticsProbe
           onRenderedFrame={onRenderedFrame}
           onRendererDiagnostics={onRendererDiagnostics}
+          onArtworkCacheDiagnostics={onArtworkCacheDiagnostics}
+          active={active}
         />
       )}
       <SceneBridgeProbe
@@ -517,13 +555,13 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       />
       <StageLights
         palette={palette}
-        highDetail={tier === 'high'}
+        highDetail={quality.tier === 'high'}
         intensity={terrainVisualIntensity}
       />
       <ArenaFloor tint={palette.groundTint} featureTint={palette.featureTint} />
       <TerrainWorld
         world={terrainWorld}
-        highDetail={tier === 'high'}
+        highDetail={quality.tier === 'high'}
         intensity={terrainVisualIntensity}
       />
       <Pedestal position={FOE_BASE} color="#ff7a9c" />

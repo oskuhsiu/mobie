@@ -17,6 +17,8 @@ import type {
 } from './contracts'
 
 export interface BattleDirectorLifecycle {
+  /** Apply queued display-cost changes only between presentation cues/jobs. */
+  safeCueBoundary?(job: PresentationJob, context: PresentationContext): Promise<void> | void
   beforeCue?(cue: BattleCue, context: CueContext): Promise<void> | void
   degraded?(error: unknown, job: PresentationJob, context: PresentationContext): Promise<void> | void
   reset(job: PresentationJob, context: PresentationContext): Promise<void> | void
@@ -59,6 +61,12 @@ export class BattleDirector {
     else this.clock.resume()
     const context: PresentationContext = { token: job.token, signal, clock: this.clock }
     try {
+      if (this.options.lifecycle.safeCueBoundary) {
+        await this.clock.race(
+          Promise.resolve(this.options.lifecycle.safeCueBoundary(job, context)),
+          signal,
+        )
+      }
       if (job.kind === 'intent') {
         if (!this.options.intentHandler) throw new Error('Battle Director has no intent handler')
         await this.options.intentHandler.play(job, { ...context, token: job.token })

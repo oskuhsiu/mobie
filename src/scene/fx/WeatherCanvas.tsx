@@ -29,6 +29,8 @@ export interface WeatherCanvasProps {
   zIndex?: number
   /** Ticket 01 DEV instrumentation. The pool is bounded by BASE_COUNT for its emitter. */
   onPoolDiagnostics?: (pool: M23PoolCount) => void
+  /** DPR cap shared with the WebGL scene; compatibility uses CSS-sized pixels. */
+  dprCap?: 1 | 1.5 | null
 }
 
 interface WP {
@@ -46,10 +48,13 @@ const TWO_PI = Math.PI * 2
 const rand = (a: number, b: number) => a + Math.random() * (b - a)
 const WEATHER_FADE_HALF_MS = TERRAIN_WORLD_TRANSITION_MS / 2
 
-export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, paused = false, zIndex = 2, onPoolDiagnostics }: WeatherCanvasProps) {
+export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, paused = false, zIndex = 2, onPoolDiagnostics, dprCap }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [visual, setVisual] = useState({ emitter, color, sparkAccent, overlay })
   const [layerOpacity, setLayerOpacity] = useState(1)
+  const dprCapRef = useRef(dprCap)
+  const resizeRef = useRef<(() => void) | null>(null)
+  dprCapRef.current = dprCap
   const cfg = useRef({ ...visual, density, paused })
   cfg.current = { ...visual, density, paused }
 
@@ -87,13 +92,16 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, p
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect()
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
+      const dpr = dprCapRef.current === null
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, dprCapRef.current ?? 2)
       w = rect.width; h = rect.height
       canvas.width = Math.round(w * dpr)
       canvas.height = Math.round(h * dpr)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
     resize()
+    resizeRef.current = resize
 
     // 在 p（重複利用、不配置新物件）上以目前 emitter 重新撒一顆（出界回收用：永遠從「上游邊緣」進場）。
     const respawn = (p: WP, em: WeatherEmitter) => {
@@ -290,11 +298,12 @@ export function WeatherCanvas({ emitter, color, sparkAccent, overlay, density, p
     kickRef.current = kick
     kick()
 
-    return () => { ro.disconnect(); cancelAnimationFrame(raf); running = false; kickRef.current = null }
+    return () => { ro.disconnect(); resizeRef.current = null; cancelAnimationFrame(raf); running = false; kickRef.current = null }
   }, [])
 
   // props 變更（terrain 切換、juice 調整）→ 重新喚醒可能已 idle-stop 的迴圈。
   useEffect(() => { kickRef.current?.() }, [visual, density, paused])
+  useEffect(() => { resizeRef.current?.() }, [dprCap])
 
   return (
     <canvas

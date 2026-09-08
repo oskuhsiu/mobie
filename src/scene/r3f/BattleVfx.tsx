@@ -14,13 +14,13 @@ import {
   WebGLRenderTarget,
 } from 'three'
 import type { Side } from '@/game/battle/reducer'
+import type { BattleVfxDiagnostics as BattleVfxDiagnosticsContract } from '@/scene/battle/contracts'
 import type { CombatantRigHandle } from './Combatant3D'
 import {
   VFX_PARTICLE_CAPACITY,
   VfxRuntime,
   type VfxCue,
   type VfxLabControls,
-  type VfxRuntimeDiagnostics,
 } from './vfxRuntime'
 
 export type { VfxCue } from './vfxRuntime'
@@ -31,9 +31,7 @@ export interface BattleVfxHandle {
   diagnostics(): BattleVfxDiagnostics
 }
 
-export interface BattleVfxDiagnostics extends VfxRuntimeDiagnostics {
-  shaderMode: 'procedural' | 'fallback'
-}
+export type BattleVfxDiagnostics = BattleVfxDiagnosticsContract
 
 export interface BattleVfxProps {
   rigs: { current: Record<Side, CombatantRigHandle | null> }
@@ -253,6 +251,7 @@ export const BattleVfx = forwardRef<BattleVfxHandle, BattleVfxProps>(function Ba
   const shaderFailed = useRef(false)
   const prewarmReady = useRef(false)
   const uploadedRevision = useRef(-1)
+  const diagnosticFrame = useRef(0)
   const effectiveOptions = () => {
     const controls = controlsRef?.current
     return {
@@ -456,6 +455,7 @@ export const BattleVfx = forwardRef<BattleVfxHandle, BattleVfxProps>(function Ba
   }, [resources, runtime])
 
   useFrame((_state, rawDelta) => {
+    diagnosticFrame.current += 1
     const controls = controlsRef?.current
     const wantsFallback = forceFallback
       || controls?.forceFallback === true
@@ -486,7 +486,10 @@ export const BattleVfx = forwardRef<BattleVfxHandle, BattleVfxProps>(function Ba
     updateAnchor(rigs, 'foe', 'ground', resources.uniforms.uFoeGround.value)
     updateAnchor(rigs, 'foe', 'impact', resources.uniforms.uFoeImpact.value)
 
-    if (shaderMode.current !== 'fallback') return
+    if (shaderMode.current !== 'fallback') {
+      if (diagnosticFrame.current % 60 === 0) publishDiagnostics()
+      return
+    }
     resources.fallback.opacity = 0.82 * visualIntensity
 
     for (let index = 0; index < VFX_PARTICLE_CAPACITY; index += 1) {
@@ -503,6 +506,7 @@ export const BattleVfx = forwardRef<BattleVfxHandle, BattleVfxProps>(function Ba
       resources.positions[offset + 2] = scratch.point.z
     }
     resources.geometry.attributes.position.needsUpdate = true
+    if (diagnosticFrame.current % 60 === 0) publishDiagnostics()
   })
 
   return <points ref={pointsRef} geometry={resources.geometry} material={resources.fallback} frustumCulled={false} />

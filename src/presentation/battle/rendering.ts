@@ -7,6 +7,7 @@ export type EffectiveGraphicsTier = 'high' | 'balanced' | 'compatibility'
 export type BattleRendererPhase = 'renderer-booting' | 'next-ready' | 'compatibility-ready'
 export type RendererFallbackReason =
   | 'preference'
+  | 'performance'
   | 'webgl-unsupported'
   | 'chunk-reject'
   | 'chunk-timeout'
@@ -27,12 +28,85 @@ export interface GraphicsResolution {
   dprCap: 1 | 1.5 | null
 }
 
+/**
+ * Renderer cost controls are separate from motion and juice. A governor may
+ * move through these profiles during one battle, but it can only move in the
+ * cheaper direction until the next battle session is created.
+ */
+export type GraphicsQualityStage =
+  | 'high'
+  | 'high-dpr-reduced'
+  | 'high-post-reduced'
+  | 'balanced'
+  | 'balanced-effects-reduced'
+  | 'compatibility'
+
+export interface GraphicsQualityProfile {
+  stage: GraphicsQualityStage
+  tier: EffectiveGraphicsTier
+  dprCap: 1 | 1.5 | null
+  /** A restrained compositor grade; disabled before particle/weather reduction. */
+  postEnabled: boolean
+  /** Multiplier for transient VFX emission, independent of the graphics tier. */
+  particleScale: number
+  /** Multiplier for continuous weather emission. */
+  weatherScale: number
+  /** Upper bound for the DOM canvas transient particle pool. */
+  transientParticleCap: number
+}
+
+const QUALITY_PROFILES: Record<GraphicsQualityStage, GraphicsQualityProfile> = {
+  high: {
+    stage: 'high', tier: 'high', dprCap: 1.5, postEnabled: true,
+    particleScale: 1, weatherScale: 1, transientParticleCap: 320,
+  },
+  'high-dpr-reduced': {
+    stage: 'high-dpr-reduced', tier: 'high', dprCap: 1, postEnabled: true,
+    particleScale: 1, weatherScale: 1, transientParticleCap: 320,
+  },
+  'high-post-reduced': {
+    stage: 'high-post-reduced', tier: 'high', dprCap: 1, postEnabled: false,
+    particleScale: 1, weatherScale: 1, transientParticleCap: 320,
+  },
+  balanced: {
+    stage: 'balanced', tier: 'balanced', dprCap: 1, postEnabled: false,
+    particleScale: 1, weatherScale: 0.3, transientParticleCap: 160,
+  },
+  'balanced-effects-reduced': {
+    stage: 'balanced-effects-reduced', tier: 'balanced', dprCap: 1, postEnabled: false,
+    particleScale: 0.5, weatherScale: 0.1, transientParticleCap: 80,
+  },
+  compatibility: {
+    stage: 'compatibility', tier: 'compatibility', dprCap: null, postEnabled: false,
+    particleScale: 0.5, weatherScale: 0, transientParticleCap: 80,
+  },
+}
+
+function copyQualityProfile(profile: GraphicsQualityProfile): GraphicsQualityProfile {
+  return { ...profile }
+}
+
+export function graphicsQualityProfileOf(preference?: GraphicsPreference): GraphicsQualityProfile {
+  switch (preference ?? 'auto') {
+    case 'high': return copyQualityProfile(QUALITY_PROFILES.high)
+    case 'compatibility': return copyQualityProfile(QUALITY_PROFILES.compatibility)
+    case 'auto':
+    case 'balanced':
+      return copyQualityProfile(QUALITY_PROFILES.balanced)
+  }
+}
+
+export function graphicsQualityProfileForStage(stage: GraphicsQualityStage): GraphicsQualityProfile {
+  return copyQualityProfile(QUALITY_PROFILES[stage])
+}
+
 export interface BattleRendererState {
   attemptId: string
   phase: BattleRendererPhase
   requested: GraphicsPreference
   tier: EffectiveGraphicsTier
   dprCap: 1 | 1.5 | null
+  quality: GraphicsQualityProfile
   fallbackReason: RendererFallbackReason | null
 }
 
@@ -64,23 +138,40 @@ export function createBattleRendererState(options: {
   const fallbackReason = options.latchedFallback
     ?? (graphics.route === 'compatibility' ? 'preference' : null)
   if (fallbackReason) {
+    const quality = graphicsQualityProfileForStage('compatibility')
     return {
       attemptId: options.attemptId,
       phase: 'compatibility-ready',
       requested: graphics.requested,
-      tier: 'compatibility',
-      dprCap: null,
+      tier: quality.tier,
+      dprCap: quality.dprCap,
+      quality,
       fallbackReason,
     }
   }
+  const quality = graphicsQualityProfileOf(graphics.requested)
   return {
     attemptId: options.attemptId,
     phase: 'renderer-booting',
     requested: graphics.requested,
-    tier: graphics.tier,
-    dprCap: graphics.dprCap,
+    tier: quality.tier,
+    dprCap: quality.dprCap,
+    quality,
     fallbackReason: null,
   }
+}
+
+export function updateBattleRendererQuality(
+  state: BattleRendererState,
+  quality: GraphicsQualityProfile,
+): BattleRendererState {
+  if (state.phase === 'compatibility-ready' || quality.tier === 'compatibility') return state
+  if (
+    state.quality.stage === quality.stage
+    && state.dprCap === quality.dprCap
+    && state.tier === quality.tier
+  ) return state
+  return { ...state, tier: quality.tier, dprCap: quality.dprCap, quality }
 }
 
 export function reduceBattleRendererState(
@@ -96,6 +187,7 @@ export function reduceBattleRendererState(
     phase: 'compatibility-ready',
     tier: 'compatibility',
     dprCap: null,
+    quality: graphicsQualityProfileForStage('compatibility'),
     fallbackReason: event.reason,
   }
 }
