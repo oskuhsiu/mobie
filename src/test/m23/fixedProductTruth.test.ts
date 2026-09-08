@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8')
 
-describe('Ticket 06 production truth edges', () => {
-  it('keeps module toggles, encounter styles, Scanner, and custom models out of reachable owners', () => {
+describe('production truth edges', () => {
+  it('keeps fixed module toggles and encounter styles out while gating Scanner behind Settings v2', () => {
     const settings = source('../../store/settingsStore.ts') + source('../../ui/components/SettingsModal.tsx')
     const encounter = source('../../ui/screens/EncounterScreen.tsx')
       + source('../../ui/screens/BattleScreen.tsx')
@@ -14,7 +14,9 @@ describe('Ticket 06 production truth edges', () => {
 
     expect(settings).not.toMatch(/settings\.modules|setModuleEnabled|MODULE_IDS/)
     expect(encounter).not.toMatch(/encounterProfile|encounterTags|encounterSkills/)
-    expect(tools).not.toMatch(/CardScannerModal|open\('scan'\)|掃卡/)
+    expect(tools).toContain("import('@/ui/components/CardScannerModal')")
+    expect(tools).toContain('scannerEnabled')
+    expect(tools).toContain("overlay === 'scanner'")
     expect(combatant).not.toMatch(/GLTFLoader|useModelUrl|modelStore|\.glb|\.gltf/)
   })
 

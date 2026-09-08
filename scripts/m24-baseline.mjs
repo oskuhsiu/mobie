@@ -29,11 +29,19 @@ const VIEWPORTS = [
 const CHECKPOINT_CATALOG = {
   title: {
     route: 'title', event: 'boot', next: ['START', 'open ToolsMenu'],
-    storage: ['mobie.roster.v2', 'mobie.settings.v1'], lazy: [], capability: 'normal app shell',
+    storage: ['mobie.roster.v2', 'mobie.settings.v2'], lazy: [], capability: 'normal app shell',
+  },
+  'settings-v1-migrated': {
+    route: 'title', event: 'boot→loadSettings(v1→v2)', next: ['open ToolsMenu', 'reload'],
+    storage: ['mobie.settings.v1', 'mobie.settings.v2'], lazy: [], capability: 'valid v1 projected to exact v2; modules ignored',
   },
   'tools-more': {
     route: 'title', event: 'ToolsMenu.moreOpen', next: ['open one utility modal'],
     storage: ['mobie.meta.v1', 'mobie.incubator.v1'], lazy: ['utility modal entries'], capability: 'utility hub',
+  },
+  'scanner-off': {
+    route: 'title', event: 'scannerEnabled=false', next: ['設定→顯示掃卡工具'],
+    storage: ['mobie.settings.v2'], lazy: [], capability: 'no scanner UI/chunk/camera request',
   },
   'replay-load-start': {
     route: 'title/modal:replays', event: 'ToolsMenu.open(replays)', next: ['wait for list', '關閉'],
@@ -141,7 +149,19 @@ const CHECKPOINT_CATALOG = {
   },
   settings: {
     route: 'title/modal:settings', event: 'ToolsMenu.open(settings)', next: ['修改偏好', '關閉'],
-    storage: ['mobie.settings.v1'], lazy: ['SettingsModal'], capability: 'UX-only preferences',
+    storage: ['mobie.settings.v1', 'mobie.settings.v2'], lazy: ['SettingsModal'], capability: 'Settings v2 migration/preferences',
+  },
+  'settings-reloaded': {
+    route: 'title/modal:settings', event: 'Page.reload→loadSettings(v2)', next: ['確認偏好仍在', '關閉'],
+    storage: ['mobie.settings.v2'], lazy: ['SettingsModal'], capability: 'reload persistence',
+  },
+  'settings-malformed-recovery': {
+    route: 'title/modal:settings', event: 'Page.reload→malformed settings recovery', next: ['修改偏好', '關閉'],
+    storage: ['mobie.settings.v1', 'mobie.settings.v2'], lazy: ['SettingsModal'], capability: 'malformed v1/v2 safely falls back to defaults',
+  },
+  'scanner-on-fallback': {
+    route: 'title/modal:scanner', event: 'ToolsMenu.open(scanner)', next: ['手動輸入卡碼', '關閉'],
+    storage: ['mobie.settings.v2', 'mz-cards'], lazy: ['CardScannerModal', 'jsqr'], capability: 'explicit capability on; unsupported/denied fallback',
   },
   'region-select': {
     route: 'regionSelect', event: 'START', next: ['SELECT_REGION', 'OPEN_TOWER', 'BACK'],
@@ -169,7 +189,7 @@ const CHECKPOINT_CATALOG = {
   },
   'battle-handoff': {
     route: 'battle', event: 'SELECT_TEAM', next: ['ATTACK', 'SWITCH', 'END_BATTLE', 'ABORT_BATTLE'],
-    storage: ['mobie.settings.v1', 'mz-replays'], lazy: ['NextBattleScene'], capability: 'M23 renderer handoff',
+    storage: ['mobie.settings.v2', 'mz-replays'], lazy: ['NextBattleScene'], capability: 'M23 renderer handoff',
   },
   'battle-artwork-fallback': {
     route: 'battle', event: 'artwork load failure', next: ['continue battle', 'ABORT_BATTLE'],
@@ -222,13 +242,13 @@ const CHECKPOINT_CATALOG = {
 }
 
 const JOURNEY = [
-  'title', 'tools-more', 'replay-load-start', 'replay-empty', 'incubator-empty',
+  'title', 'settings-v1-migrated', 'tools-more', 'scanner-off', 'replay-load-start', 'replay-empty', 'incubator-empty',
   'my-mobies', 'my-mobies-detail', 'card-library', 'card-library-add',
   'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open',
   'partner-skills', 'dex', 'dex-registered', 'achievements', 'achievements-claimed',
   'incubator-ready', 'incubator-hatch-reveal', 'model-manager', 'save', 'save-busy',
   'save-result', 'save-import-error', 'save-compare-older', 'save-backup-ready',
-  'save-restore-result', 'settings', 'region-select', 'encounter', 'team-select',
+  'save-restore-result', 'settings-malformed-recovery', 'settings', 'settings-reloaded', 'scanner-on-fallback', 'region-select', 'encounter', 'team-select',
   'team-select-advice', 'battle-handoff', 'battle-artwork-fallback', 'battle-error', 'wild-win-result',
   'practice-result', 'practice-play-again-encounter', 'tower-setup', 'tower-win-result',
   'tower-continue-battle', 'tower-lose-result', 'lose-result',
@@ -435,6 +455,7 @@ const DOM_DIAGNOSTICS = String.raw`(async () => {
   const actionRects = [...document.querySelectorAll('button, [role="button"]')].filter((el) => visible(el) && ['fixed', 'sticky'].includes(getComputedStyle(el).position)).map((el) => { const r = el.getBoundingClientRect(); return { label: el.getAttribute('aria-label') || (el.textContent || '').trim().slice(0, 80), top: r.top, bottom: r.bottom, left: r.left, right: r.right } })
   const occluded = actionRects.filter((action) => contentRects.some((content) => action.bottom > content.top && action.top < content.bottom && action.right > content.left && action.left < content.right))
   const databases = typeof indexedDB.databases === 'function' ? await indexedDB.databases().then((dbs) => dbs.map((db) => db.name).filter(Boolean).sort()).catch(() => []) : []
+  const resources = [...new Set(performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /(?:\.js(?:\?|$)|@vite|src\/)/.test(name)))].slice(-250)
   return {
     viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
     routeHint: document.querySelector('.replay-player') ? 'modal' : document.querySelector('.modal-card') ? 'modal' : document.querySelector('.title-screen') ? 'title' : document.querySelector('.region-grid') ? 'regionSelect' : document.querySelector('.hunt-target') ? 'encounter' : document.querySelector('.asc-chip') ? 'towerSetup' : document.querySelector('.foe-strip') ? 'cardSelect' : document.querySelector('[data-battle-stage], .battle-scene-host') ? 'battle' : document.querySelector('.exp-summary') ? 'result' : 'unknown',
@@ -446,9 +467,9 @@ const DOM_DIAGNOSTICS = String.raw`(async () => {
     focus: { tag: active?.tagName?.toLowerCase() ?? null, id: active?.id || null, className: typeof active?.className === 'string' ? active.className : null, ariaLabel: active?.getAttribute?.('aria-label') ?? null, text: (active?.textContent || '').trim().slice(0, 100), withinModal: Boolean(active && modal?.contains(active)) },
     domCounts: { buttons: document.querySelectorAll('button').length, links: document.querySelectorAll('a').length, images: images.length, failedImages: failedImages.length, canvases: document.querySelectorAll('canvas').length, dialogs: document.querySelectorAll('[role="dialog"]').length, modals: document.querySelectorAll('.modal-card').length, regions: document.querySelectorAll('.region-card').length, cards: document.querySelectorAll('.poke-card').length, teamRows: document.querySelectorAll('.team-row').length, scrollContainers: scrollOwners.length },
     artwork: { images, failedImages: failedImages.slice(0, 20), loaded: images.filter((img) => img.complete && img.naturalWidth > 0).length, pending: images.filter((img) => !img.complete).length, fallbackNodes: document.querySelectorAll('.battle-renderer__silhouette, .sprite__skeleton').length, rendererArtwork: document.querySelector('.battle-scene-host') ? { player: document.querySelector('.battle-scene-host')?.dataset.battleArtworkPlayer || null, foe: document.querySelector('.battle-scene-host')?.dataset.battleArtworkFoe || null } : null },
-    capabilities: { scannerVisible: [...document.querySelectorAll('button, a, [role="button"]')].some((el) => (el.textContent || '').includes('掃卡')), mediaDevices: Boolean(navigator.mediaDevices?.getUserMedia), webgl: (() => { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')) })(), customModelInputVisible: Boolean(document.querySelector('input[type="file"][accept*="glb"]')) },
+    capabilities: { scannerVisible: [...document.querySelectorAll('button, a, [role="button"]')].some((el) => (el.textContent || '').includes('掃卡')), scannerChunkLoaded: resources.some((name) => /CardScanner|jsqr/i.test(name)), cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0), mediaDevices: Boolean(navigator.mediaDevices?.getUserMedia), webgl: (() => { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')) })(), customModelInputVisible: Boolean(document.querySelector('input[type="file"][accept*="glb"]')) },
     storage: { localStorageKeys: Object.keys(localStorage).sort(), indexedDbNames: databases },
-    resources: [...new Set(performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /(?:\.js(?:\?|$)|@vite|src\/)/.test(name)))].slice(-250),
+    resources,
     text: text.slice(0, 12_000),
   }
 })()`
@@ -593,6 +614,16 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await clickText(label)
     await waitFor(`Boolean([...document.querySelectorAll('.modal-card .h-title')].some((element) => (element.textContent || '').includes(${JSON.stringify(title)})))`, 8_000, `${label} modal`)
   }
+  const forceUnsupportedCamera = async () => evaluate(`(() => {
+    const devices = navigator.mediaDevices
+    if (!devices) return true
+    try {
+      Object.defineProperty(devices, 'getUserMedia', { configurable: true, value: undefined })
+      return true
+    } catch {
+      return false
+    }
+  })()`)
   const driver = async (expression) => evaluate(expression)
   const waitForStores = () => waitFor('Boolean(window.__MOBIE_M24_BASELINE__?.ready())', 20_000, 'M24 stores')
   const waitForBattle = async () => {
@@ -657,6 +688,14 @@ async function runViewport(cdp, config, viewport, browserInfo) {
   }
 
   const origin = new URL(config.app).origin
+  let scannerOffEvidence = null
+  let scannerOnEvidence = null
+  let startupScriptIdentifier = null
+  const clearStartupScript = async () => {
+    if (!startupScriptIdentifier) return
+    await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: startupScriptIdentifier }).catch(() => undefined)
+    startupScriptIdentifier = null
+  }
   try {
     await call('Page.bringToFront')
     await call('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined)
@@ -669,6 +708,33 @@ async function runViewport(cdp, config, viewport, browserInfo) {
       width: viewport.width, height: viewport.height, deviceScaleFactor: viewport.dpr, mobile: true,
       screenWidth: viewport.width, screenHeight: viewport.height,
     })
+    const startupScript = `(() => {
+      try {
+        if (localStorage.getItem('mobie.settings.v1') === null) {
+          localStorage.setItem('mobie.settings.v1', ${JSON.stringify(JSON.stringify({
+            schemaVersion: 1,
+            modules: { synergy: true, heldItems: true, encounterSkills: true },
+            prefs: { recordReplays: false },
+          }))})
+        }
+      } catch {}
+      window.__M24_CAMERA_REQUESTS__ = 0
+      const devices = navigator.mediaDevices
+      const original = devices?.getUserMedia
+      window.__M24_CAMERA_PROBE_INSTALLED__ = !devices || typeof original !== 'function'
+      if (!devices || typeof original !== 'function') return
+      try {
+        Object.defineProperty(window, '__M24_ORIGINAL_GET_USER_MEDIA__', { configurable: true, value: original })
+        Object.defineProperty(devices, 'getUserMedia', { configurable: true, value: function (...args) {
+          window.__M24_CAMERA_REQUESTS__ += 1
+          return window.__M24_ORIGINAL_GET_USER_MEDIA__.apply(this, args)
+        } })
+        window.__M24_CAMERA_PROBE_INSTALLED__ = true
+      } catch {
+        window.__M24_CAMERA_PROBE_INSTALLED__ = false
+      }
+    })()`
+    startupScriptIdentifier = (await call('Page.addScriptToEvaluateOnNewDocument', { source: startupScript })).identifier
     const url = new URL(config.app)
     url.searchParams.set('m24Scenario', SCENARIO_ID)
     url.searchParams.set('width', String(viewport.width))
@@ -681,9 +747,37 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await waitForStores()
     await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title')
     checkpoints.push(await capture('title', 'real app boot'))
+    const migration = await evaluate(`(() => {
+      const read = (key) => {
+        try { return JSON.parse(localStorage.getItem(key) ?? 'null') } catch { return null }
+      }
+      const legacy = read('mobie.settings.v1')
+      const current = read('mobie.settings.v2')
+      return {
+        legacyModules: legacy?.modules ?? null,
+        schemaVersion: current?.schemaVersion ?? null,
+        hasModules: Boolean(current?.modules),
+        scannerEnabled: current?.prefs?.scannerEnabled ?? null,
+        graphicsPreference: current?.prefs?.graphicsPreference ?? null,
+        cameraProbeInstalled: Boolean(window.__M24_CAMERA_PROBE_INSTALLED__),
+      }
+    })()`)
+    if (migration.legacyModules?.synergy !== true || migration.schemaVersion !== 2 || migration.hasModules || migration.scannerEnabled !== false || migration.graphicsPreference !== 'auto' || !migration.cameraProbeInstalled) {
+      throw new Error(`Settings v1 migration/probe failed: ${JSON.stringify(migration)}`)
+    }
+    checkpoints.push(await capture('settings-v1-migrated', 'real v1→v2 migration and fixed-module omission', { observation: migration }))
     await clickText('更多')
     await waitFor('Boolean(document.querySelector("#tools-menu-more"))', 5_000, 'More menu')
     checkpoints.push(await capture('tools-more', 'real ToolsMenu expansion'))
+    scannerOffEvidence = await evaluate(`(() => ({
+      scannerVisible: Boolean(document.querySelector('[data-tool="scanner"]')),
+      scannerChunkLoaded: [...performance.getEntriesByType('resource')].some((entry) => /CardScanner|jsqr/i.test(entry.name)),
+      cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0),
+    }))()`)
+    if (scannerOffEvidence.scannerVisible || scannerOffEvidence.scannerChunkLoaded || scannerOffEvidence.cameraRequests !== 0) {
+      throw new Error(`Scanner off boundary failed: ${JSON.stringify(scannerOffEvidence)}`)
+    }
+    checkpoints.push(await capture('scanner-off', 'default-off scanner capability boundary', { observation: scannerOffEvidence }))
 
     await clickText('回放')
     checkpoints.push(await capture('replay-load-start', 'immediate lazy modal load observation', {
@@ -804,9 +898,54 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     checkpoints.push(await capture('save-restore-result', 'real backup restore result'))
     await closeTopModal()
 
-    await openTool('設定', '設定')
+    await evaluate(`(() => {
+      localStorage.setItem('mobie.settings.v2', '{malformed-v2')
+      localStorage.setItem('mobie.settings.v1', '{malformed-v1')
+      return true
+    })()`)
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'malformed settings recovery reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after malformed settings reload')
+    await clickText('更多')
+    await waitFor('Boolean(document.querySelector("#tools-menu-more"))', 5_000, 'More after malformed settings reload')
+    await clickText('設定')
+    await waitFor('Boolean(document.querySelector("[data-settings-preference=\\"scannerEnabled\\"]"))', 8_000, 'malformed settings defaults')
+    const malformedRecovery = await evaluate(`(() => ({
+      scannerEnabled: document.querySelector('[data-settings-preference="scannerEnabled"]')?.getAttribute('aria-pressed') === 'true',
+      graphicsPreference: document.querySelector('[data-settings-preference="graphicsPreference"][data-settings-value="auto"]')?.classList.contains('interact-seg__btn--on') ?? false,
+    }))()`)
+    if (malformedRecovery.scannerEnabled || !malformedRecovery.graphicsPreference) throw new Error(`Malformed settings did not recover to defaults: ${JSON.stringify(malformedRecovery)}`)
+    checkpoints.push(await capture('settings-malformed-recovery', 'real malformed v1/v2 recovery to defaults', { observation: malformedRecovery }))
     await clickText('錄製戰鬥回放', '[role="button"]')
+    await clickSelector('[data-settings-preference="graphicsPreference"][data-settings-value="high"]')
+    await clickSelector('[data-settings-preference="scannerEnabled"]')
     checkpoints.push(await capture('settings', 'real persisted UX preferences with replay recording enabled'))
+    await closeTopModal()
+
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'settings persistence reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after settings reload')
+    await clickText('更多')
+    await waitFor('Boolean(document.querySelector("#tools-menu-more"))', 5_000, 'More after settings reload')
+    await clickText('設定')
+    await waitFor('Boolean(document.querySelector("[data-settings-preference=\\"scannerEnabled\\"]"))', 8_000, 'reloaded settings')
+    if (!(await evaluate('Boolean(document.querySelector("[data-settings-preference=\\"scannerEnabled\\"]")?.getAttribute("aria-pressed") === "true")'))) throw new Error('scannerEnabled did not persist after reload')
+    if (!(await exists('[data-settings-preference="graphicsPreference"][data-settings-value="high"].interact-seg__btn--on'))) throw new Error('graphicsPreference did not persist after reload')
+    checkpoints.push(await capture('settings-reloaded', 'real v2 settings after page reload'))
+    await closeTopModal()
+    await forceUnsupportedCamera()
+    await clickText('掃卡')
+    await waitFor('Boolean(document.querySelector(".scan-nocam"))', 8_000, 'scanner unsupported fallback')
+    scannerOnEvidence = await evaluate(`(() => ({
+      scannerVisible: Boolean(document.querySelector('[data-tool="scanner"]')),
+      scannerChunkLoaded: [...performance.getEntriesByType('resource')].some((entry) => /CardScanner|jsqr/i.test(entry.name)),
+      cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0),
+      fallbackVisible: Boolean(document.querySelector('.scan-nocam')),
+    }))()`)
+    if (!scannerOnEvidence.scannerVisible || !scannerOnEvidence.scannerChunkLoaded || !scannerOnEvidence.fallbackVisible) {
+      throw new Error(`Scanner on fallback boundary failed: ${JSON.stringify(scannerOnEvidence)}`)
+    }
+    checkpoints.push(await capture('scanner-on-fallback', 'explicit scanner capability fallback', { observation: scannerOnEvidence }))
     await closeTopModal()
 
     await clickSelector('.title-screen__adventure')
@@ -903,7 +1042,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
       seed: config.seed, device: config.device, viewport, browser: browserInfo,
       startedAt: checkpoints[0]?.capturedAt ?? new Date().toISOString(), finishedAt: new Date().toISOString(),
       seededContent: seeded, journey: JOURNEY, optionalCheckpoints: OPTIONAL_CHECKPOINTS, checkpoints,
-      coverage: { scanner: { reachable: false, observed: false, reason: 'M23 product truth keeps CardScannerModal dormant and removes the entry from ToolsMenu.' },
+      coverage: { scanner: { reachable: Boolean(scannerOnEvidence), observed: Boolean(scannerOffEvidence && scannerOnEvidence), defaultOff: Boolean(scannerOffEvidence), offHasZeroUiChunkPermission: Boolean(scannerOffEvidence && !scannerOffEvidence.scannerVisible && !scannerOffEvidence.scannerChunkLoaded && scannerOffEvidence.cameraRequests === 0), onFallback: scannerOnEvidence ? 'unsupported' : null, reason: 'Settings v2 keeps the entry absent until explicit enable; the journey then opens the existing lazy scanner and observes its unsupported fallback.' },
         xstateEvents: ['START', 'SELECT_REGION', 'ENGAGE', 'SELECT_TEAM', 'END_BATTLE', 'ABORT_BATTLE', 'SET_CAPTURED', 'PLAY_AGAIN', 'TO_REGIONS', 'BACK', 'OPEN_TOWER', 'START_TOWER', 'TOWER_CONTINUE', 'TOWER_QUIT'],
         storage: [...new Set(checkpoints.flatMap((checkpoint) => checkpoint.storage ?? []))].sort(),
         lazyBoundaries: [...new Set(checkpoints.flatMap((checkpoint) => CHECKPOINT_CATALOG[checkpoint.checkpoint]?.lazy ?? []))].sort(),
@@ -918,8 +1057,10 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     }
     validateViewportIndex(index)
     await writeFile(resolve(outputRoot, 'index.json'), `${JSON.stringify(index, null, 2)}\n`)
+    await clearStartupScript()
     return index
   } catch (error) {
+    await clearStartupScript()
     const failure = { schemaVersion: 1, scenarioId: SCENARIO_ID, baselineCommit: BASELINE_COMMIT, seed: config.seed, device: config.device, viewport, browser: browserInfo, error: error instanceof Error ? error.message : String(error), errors: cdp.observation(), capturedAt: new Date().toISOString() }
     await writeFile(resolve(outputRoot, 'failure.json'), `${JSON.stringify(failure, null, 2)}\n`)
     throw error

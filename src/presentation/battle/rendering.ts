@@ -1,7 +1,12 @@
 import type { BattleSessionToken } from './contracts'
 
-export const GRAPHICS_PREFERENCES = ['auto', 'high', 'balanced', 'compatibility'] as const
-export type GraphicsPreference = (typeof GRAPHICS_PREFERENCES)[number]
+import {
+  GRAPHICS_PREFERENCES,
+  type GraphicsPreference,
+} from '@/game/settings'
+
+export { GRAPHICS_PREFERENCES }
+export type { GraphicsPreference }
 
 /**
  * Post-M23 renderer entry points. The compatibility entry is a terminal

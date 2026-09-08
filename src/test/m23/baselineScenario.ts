@@ -15,7 +15,7 @@ import { createOwnedUnit } from '@/game/growth'
 import { encodeReplay } from '@/game/replay/codec'
 import type { DisplayUnitSnapshot, ReplayInput } from '@/game/replay/types'
 import { makeRng } from '@/game/rng'
-import { defaultPrefs, type GameSettings } from '@/game/settings'
+import { defaultSettings, type GameSettings } from '@/game/settings'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import type { BattleMobie, Move, MoveEffect, TypeName } from '@/game/types'
 import { ReplayRecorder } from '@/store/replayRecorder'
@@ -34,7 +34,8 @@ export const M23_ARTWORK_FIXTURES = {
 export type M23ArtworkFixture = keyof typeof M23_ARTWORK_FIXTURES
 
 export const M23_BASELINE_SETTINGS: GameSettings = {
-  prefs: { ...defaultPrefs(), recordReplays: true },
+  ...defaultSettings(),
+  prefs: { ...defaultSettings().prefs, recordReplays: true },
 }
 
 export const M23_FIXED_PRODUCT_MODULES = {

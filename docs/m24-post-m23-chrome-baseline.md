@@ -69,7 +69,9 @@ of allowing stale data to masquerade as an empty baseline.
 
 The journey index covers:
 
-- Title and More menu; empty Replay and Incubator states;
+- Title and More menu; v1→v2 settings migration, malformed-settings recovery,
+  reload persistence, and default-off/explicit-on scanner capability states;
+  empty Replay and Incubator states;
 - My Mobies, owner MobCard, growth progress, Card Library add/QR/invalid
   import error, Move Trainer, Partner Skills, Dex and registered filter,
   Achievements and claim, ready egg and hatch reveal, legacy model archive,
@@ -97,10 +99,12 @@ The Save busy checkpoint briefly holds the real Web Share boundary in the
 browser so the UI's `處理中…` disabled state is observable; it then releases
 that same boundary and records the normal download/share result.
 
-The baseline also records a capability boundary for the dormant scanner. The
-current product intentionally has no visible scanner entry, so permission
-handling is recorded as `reachable: false`; the baseline does not request a
-camera permission that the product cannot reach.
+The baseline records the scanner capability boundary from the default-off
+state. Settings v2 keeps `scannerEnabled` false until the player explicitly
+turns it on; the default Tools menu therefore has no scanner entry and does
+not load the scanner chunk or request camera permission. The scanner modal is
+an explicit lazy action after enabling the preference, and its existing
+unsupported/denied/manual-code fallback remains the camera boundary.
 
 ## State and authority inventory
 
@@ -118,19 +122,20 @@ camera permission that the product cannot reach.
 | Incubator | empty, ready, hatch reveal | obtain egg, hatch when ready, or close |
 | Card Library | populated, add panel, QR, invalid import | add/import/print or close |
 | Save | idle, export busy, export result | wait for export, inspect download, import, restore, or close |
-| Scanner | permission/stream state unreachable | capability boundary only; no camera request |
+| Scanner | default-off entry absent; explicit on state can open lazy modal | `scannerEnabled` controls entry/chunk; camera request only after selecting it |
 
 The script catalog is the executable form of the route/event/storage/lazy
 boundary index. Relevant persisted namespaces are intentionally visible by
 name in evidence while their values remain application-owned:
 
 - localStorage: `mobie.roster.v2`, `mobie.meta.v1`, `mobie.incubator.v1`,
-  `mobie.settings.v1`, `mobie.skillpoints.v1`, `mobie.playerskills.v1`,
+  `mobie.settings.v1` (read-only migration source), `mobie.settings.v2`,
+  `mobie.skillpoints.v1`, `mobie.playerskills.v1`,
   `mobie.itembag.v1`, `mobie.run.v1`, and `mobie.savemeta.v1`;
 - IndexedDB: `mz-cards`, `mz-replays`, `mz-models`, and save backup storage;
-- lazy boundaries: utility modals, `qrcode`, `fflate`, `CaptureStage`, and the
-  M23 `NextBattleScene` entry; `ReplayPlayerModal` is a nested child of its
-  already lazy `ReplayListModal` entry.
+- lazy boundaries: utility modals, `qrcode`, `fflate`, capability-gated
+  `CardScannerModal`/`jsqr`, `CaptureStage`, and the M23 `NextBattleScene` entry;
+  `ReplayPlayerModal` is a nested child of its already lazy `ReplayListModal` entry.
 
 The baseline is diagnostic evidence. It does not claim iPad Safari support,
 hardware performance, long-duration heap stability, or thermal qualification;

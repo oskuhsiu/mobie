@@ -4,6 +4,7 @@ import type { GameEvent } from '@/game/machine/gameMachine'
 import { useRoster } from '@/store/rosterStore'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
+import { useSettings } from '@/store/settingsStore'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { TitleScreen } from '@/ui/screens/TitleScreen'
 import { RegionSelectScreen } from '@/ui/screens/RegionSelectScreen'
@@ -19,6 +20,7 @@ import { M24_BASELINE_SCENARIO_ID, M24_GAME_EVENT } from '@/dev/m24/contracts'
 export function Stage() {
   const game = useGame()
   const { value, context, send } = game
+  const graphicsPreference = useSettings((s) => s.settings.prefs.graphicsPreference)
   const [devBattleMounted, setDevBattleMounted] = useState(true)
 
   useEffect(() => {
@@ -70,7 +72,7 @@ export function Stage() {
         {value === 'towerSetup' && <TowerSetupScreen />}
         {value === 'encounter' && <EncounterScreen />}
         {value === 'cardSelect' && <CardSelectScreen />}
-        {value === 'battle' && devBattleMounted && <BattleScreen />}
+        {value === 'battle' && devBattleMounted && <BattleScreen graphicsPreference={graphicsPreference} />}
         {value === 'result' && <ResultScreen />}
       </div>
     </div>

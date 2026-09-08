@@ -1,37 +1,83 @@
 // Runtime preferences plus the read-only legacy v1 module-data boundary.
 import { describe, it, expect } from 'vitest'
 import {
-  defaultSettings, runtimeSettingsFromV1, mergeRuntimeSettingsIntoLegacyV1,
+  defaultSettings, runtimeSettingsFromV1, loadSettingsFrom, parseSettingsV2, saveSettingsTo,
   defaultPrefs, migratePrefs, setInteractModeIn, isEnhancedSurfaceEnabled, interactModeOf,
   setAttackInputVariantIn, attackInputVariantOf,
   setJuiceIn, setHapticsIn, juiceLevelOf, hapticsEnabledOf,
-  INTERACT_SURFACES, INTENSITY_BY_MODE,
+  setGraphicsPreferenceIn, setScannerEnabledIn,
+  GRAPHICS_PREFERENCES, INTERACT_SURFACES, INTENSITY_BY_MODE,
+  SETTINGS_SCHEMA_VERSION, SETTINGS_V1_KEY, SETTINGS_V2_KEY,
+  type SettingsStorage,
 } from '@/game/settings'
 
-describe('Ticket 06 runtime settings boundary', () => {
-  it('projects preferences without exposing legacy module booleans', () => {
+function fakeStore(initial: Record<string, string> = {}): SettingsStorage & { values: () => Record<string, string> } {
+  const values = new Map(Object.entries(initial))
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => void values.set(key, value),
+    values: () => Object.fromEntries(values),
+  }
+}
+
+describe('Ticket 21 Settings v2 migration and validation', () => {
+  it('projects legacy module data into exact v2 without exposing or enabling it', () => {
     const runtime = runtimeSettingsFromV1({
       schemaVersion: 1,
       modules: { synergy: false, heldItems: false, encounterSkills: true },
       prefs: { recordReplays: true },
     })
 
+    expect(runtime.schemaVersion).toBe(SETTINGS_SCHEMA_VERSION)
     expect(runtime.prefs.recordReplays).toBe(true)
     expect(runtime).not.toHaveProperty('modules')
+    expect(runtime.prefs.scannerEnabled).toBe(false)
+    expect(runtime.prefs.graphicsPreference).toBe('auto')
   })
 
-  it('updates prefs while preserving the legacy modules subtree and unknown rollback data', () => {
-    const modules = { synergy: false, heldItems: 'legacy-value', encounterSkills: true }
-    const unknown = { nested: ['keep', 7] }
-    const legacy = { schemaVersion: 1, modules, unknown, prefs: { recordReplays: false } }
-    const settings = { ...defaultSettings(), prefs: { ...defaultPrefs(), recordReplays: true } }
+  it('has the exact v2 defaults and only the declared graphics choices', () => {
+    const settings = defaultSettings()
+    expect(settings).toEqual({ schemaVersion: 2, prefs: {
+      enhancedInteractivity: { mode: 'off', surfaces: Object.fromEntries(INTERACT_SURFACES.map((id) => [id, true])) },
+      recordReplays: false,
+      attackInputVariant: 'mash',
+      juice: 'full',
+      haptics: true,
+      graphicsPreference: 'auto',
+      scannerEnabled: false,
+    } })
+    expect(GRAPHICS_PREFERENCES).toEqual(['auto', 'high', 'balanced', 'compatibility'])
+    expect(parseSettingsV2(settings)).toEqual(settings)
+  })
 
-    const merged = mergeRuntimeSettingsIntoLegacyV1(legacy, settings)
+  it('prefers valid v2, otherwise migrates valid v1 once and writes only v2', () => {
+    const v2 = { ...defaultSettings(), prefs: { ...defaultPrefs(), scannerEnabled: true, graphicsPreference: 'high' as const } }
+    const store = fakeStore({
+      [SETTINGS_V2_KEY]: JSON.stringify(v2),
+      [SETTINGS_V1_KEY]: JSON.stringify({ schemaVersion: 1, prefs: { recordReplays: true } }),
+    })
+    expect(loadSettingsFrom(store)).toEqual(v2)
+    expect(store.values()[SETTINGS_V1_KEY]).toContain('recordReplays')
 
-    expect(merged.modules).toBe(modules)
-    expect(merged.unknown).toBe(unknown)
-    expect(merged.prefs).toEqual(settings.prefs)
-    expect(legacy).toEqual({ schemaVersion: 1, modules, unknown, prefs: { recordReplays: false } })
+    const legacyStore = fakeStore({ [SETTINGS_V1_KEY]: JSON.stringify({ schemaVersion: 1, modules: { synergy: true }, prefs: { recordReplays: true } }) })
+    const migrated = loadSettingsFrom(legacyStore)
+    expect(migrated.prefs.recordReplays).toBe(true)
+    expect(migrated.prefs.scannerEnabled).toBe(false)
+    expect(JSON.parse(legacyStore.values()[SETTINGS_V2_KEY])).toEqual(migrated)
+    expect(legacyStore.values()[SETTINGS_V1_KEY]).toContain('synergy')
+  })
+
+  it('recovers from malformed v2/v1 without throwing and writes canonical v2 on save', () => {
+    const store = fakeStore({ [SETTINGS_V2_KEY]: '{broken', [SETTINGS_V1_KEY]: '{also broken' })
+    expect(() => loadSettingsFrom(store)).not.toThrow()
+    expect(loadSettingsFrom(store)).toEqual(defaultSettings())
+
+    const settings = setScannerEnabledIn(setGraphicsPreferenceIn(defaultSettings(), 'compatibility'), true)
+    saveSettingsTo(store, settings)
+    const saved = JSON.parse(store.values()[SETTINGS_V2_KEY])
+    expect(saved).toEqual(settings)
+    expect(saved).not.toHaveProperty('modules')
+    expect(store.values()[SETTINGS_V1_KEY]).toBe('{also broken')
   })
 })
 

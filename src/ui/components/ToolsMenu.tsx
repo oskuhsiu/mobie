@@ -3,10 +3,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { audio } from '@/audio/audioEngine'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
+import { useSettings } from '@/store/settingsStore'
 import { claimableCount } from '@/game/achievements'
 import { isHatchable } from '@/game/incubator'
 
-// 工具 overlay 較重（qrcode/three），lazy 載入避免拖慢開場/區域選擇
+// 工具 overlay 較重（qrcode/three/camera），lazy 載入避免拖慢開場/區域選擇
 const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
 const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
 const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
@@ -18,11 +19,13 @@ const DexModal = lazy(() => import('@/ui/components/DexModal').then((m) => ({ de
 const AchievementsModal = lazy(() => import('@/ui/components/AchievementsModal').then((m) => ({ default: m.AchievementsModal })))
 const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then((m) => ({ default: m.IncubatorModal })))
 const ReplayListModal = lazy(() => import('@/ui/components/ReplayListModal').then((m) => ({ default: m.ReplayListModal })))
+const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
 
-type Overlay = 'none' | 'models' | 'library' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
+type Overlay = 'none' | 'models' | 'library' | 'scanner' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
 
 /**
- * 共用工具列：卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 3D 模型 / 存檔 / 設定。
+ * 共用工具列：卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 回放 / 掃卡（可選） /
+ * 3D 模型 / 存檔 / 設定。
  * Title 與 RegionSelect（遊戲中樞）共用——避免「開始遊戲後這些功能就找不到」。
  */
 export function ToolsMenu() {
@@ -31,6 +34,7 @@ export function ToolsMenu() {
   const open = (o: Overlay) => { void audio.unlock(); setOverlay(o) }
   const claimable = useMeta((s) => claimableCount(s.meta))
   const hatchable = useIncubator((s) => s.state.eggs.some(isHatchable))
+  const scannerEnabled = useSettings((s) => s.settings.prefs.scannerEnabled)
 
   return (
     <>
@@ -71,6 +75,7 @@ export function ToolsMenu() {
                 🥚 孵化所{hatchable && <span className="title-dot">!</span>}
               </button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('replays')}>🎬 回放</button>
+              {scannerEnabled && <button className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner')}>📷 掃卡</button>}
               <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
@@ -92,6 +97,7 @@ export function ToolsMenu() {
           {overlay === 'achievements' && <AchievementsModal onClose={() => setOverlay('none')} />}
           {overlay === 'incubator' && <IncubatorModal onClose={() => setOverlay('none')} />}
           {overlay === 'replays' && <ReplayListModal onClose={() => setOverlay('none')} />}
+          {overlay === 'scanner' && scannerEnabled && <CardScannerModal onClose={() => setOverlay('none')} />}
         </AnimatePresence>
       </Suspense>
     </>

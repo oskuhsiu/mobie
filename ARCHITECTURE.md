@@ -22,8 +22,9 @@ gitignored; that workflow does not alter the authority of documents already trac
   manager: **npm** (not pnpm).
 - Path alias `@/* → src/*` (configured in both `vite.config.ts` and `tsconfig.json`).
 - **Lazy-loaded heavies** (dynamic-imported so they stay out of the main bundle): `three` /
-  `@react-three/fiber` / `@react-three/drei`, `qrcode`, `tone`, and `fflate`. The dormant M23 Scanner
-  source still references `jsqr`, but no reachable import edge or production Scanner chunk exists.
+  `@react-three/fiber` / `@react-three/drei`, `qrcode`, `tone`, `fflate`, and the capability-gated
+  Scanner entry (which owns `jsqr`). Scanner is absent from the default Tools menu and its chunk is
+  requested only after `scannerEnabled` is turned on and the player selects 掃卡.
 
 ## 2. Layered structure (`src/`)
 
@@ -35,7 +36,7 @@ game/       Pure domain logic (no React). The testable core.
   ext/      Extension seams + fixed productRuntime: synergy/items/abilities/chain/combo/evolution
   machine/  XState gameMachine (screen flow)
   save/     Portable save file (M5): envelope meta, zip pack/unpack, export/import I/O, backup slot
-  settings.ts  Runtime UX preferences + read-only legacy v1 module-data preservation
+  settings.ts  Exact Settings v2 + read-only v1 migration and capability preferences
   cardCode/cardsImport/cardLibrary   QR card-code parse + import + IndexedDB card store (M2)
 store/      Zustand: battleStore (display), rosterStore (persistence), prefs-only settingsStore,
             bagStore (item bag mz.itembag.v1, M7)
@@ -74,7 +75,8 @@ title → regionSelect → encounter → cardSelect → battle → result
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
   `ui/components/ToolsMenu`. Its first level is deliberately limited to **我的 Mobie** and **更多**;
   the latter opens a scrollable secondary menu for library / moves / partner skills / dex /
-  achievements / incubator / 3D models / save / settings (all lazy-loaded). Every utility therefore
+  achievements / incubator / 3D models / save / settings, plus Scanner only when its capability is
+  enabled (all utility entries are lazy-loaded). Every utility therefore
   remains reachable without flattening it into the primary hunt loop. `regionSelect` adds
   `BACK → title` (a 🏠 button); it is the in-game hub returned to after each result.
 - `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. The arena (id `'practice'`) resolves
@@ -246,11 +248,13 @@ snapshots and events therefore derive from the same prepared canonical battle ra
 - `statPatch.ts` — shared `scale`/`applyStatMod`/`createLookup` used by the three modules.
 
 The reducer/engine remain pure; direct compatibility tests omit `ext`, while production always passes
-the fixed product runtime. Runtime
-`GameSettings` contains UX preferences only. Existing `mobie.settings.v1.modules` data is ignored by
-runtime and preserved unchanged when prefs are written, so it remains rollback input without becoming
-an interim schema or writable toggle. `SettingsModal` contains only real interaction, feedback, and
-replay preferences; Team/Partner surfaces contain no module-off warnings.
+the fixed product runtime. Runtime `GameSettingsV2` is the exact `{ schemaVersion: 2, prefs }` envelope
+written to `mobie.settings.v2`. Loading tries valid v2 first, then projects valid `mobie.settings.v1`
+into v2 and writes the migration, then falls back to defaults. The v1 `modules` subtree is never
+projected; it remains untouched rollback input. The v2 prefs contain enhanced interaction, replay
+recording, attack input, juice, haptics, graphics preference, and the default-off `scannerEnabled`
+capability. Settings never assemble battle features; Team/Partner surfaces contain no module-off
+warnings.
 
 ## 7. Persistence & progression
 
@@ -267,8 +271,8 @@ replay preferences; Team/Partner surfaces contain no module-off warnings.
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
 `heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models`
 (IndexedDB GLB blobs, M3) · `mz.savemeta.v1` (localStorage save envelope meta, M5) · `mz-save-backup`
-(IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v1` (runtime prefs plus untouched legacy
-`modules` rollback data) ·
+(IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
+`mobie.settings.v1` (read-only migration/rollback source) ·
 `mz.itembag.v1` (localStorage item bag, M7) · `mz-replays` (IndexedDB, M14 battle replays — canonical
 `encodeReplay` JSON only, `battleId`-deduped, FIFO-capped 50). The portable save bundles the roster (so
 `heldItemId` travels with it); the item-bag slice is not yet included in the `.save` (a known follow-up).

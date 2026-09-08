@@ -22,8 +22,9 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Team-select advice**: reveal a recommended trio with offense/risk reasons, then let the player
   choose and order the three Mobie instead of silently filling the team.
 - **Turn cap** to prevent unwinnable stalemates.
-- **QR card library** (M2): browse, import (JSON/CSV), make custom cards, and print QR codes. Scanner
-  source is dormant and has no M23 UI/import/camera path.
+- **QR card library** (M2): browse, import (JSON/CSV), make custom cards, and print QR codes. The
+  scanner is capability-gated, default-off, and only loads its camera path after the player enables
+  it in Settings and selects 掃卡.
 - **3D battle stage** (M3): React-three-fiber arena with PokéAPI artwork billboards; Battle/Capture
   never read custom GLB/GLTF or model storage.
 - **Safe renderer gate** (M23 Ticket 07): Auto starts Balanced, High caps DPR at 1.5, and chunk/WebGL/
@@ -78,6 +79,8 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Focused hub navigation**: title and region-select keep **我的 Mobie** and **更多** at the first
   level. Library / moves / partner skills / dex / achievements / incubator / models / save /
   settings remain available in the scrollable secondary menu without competing with the hunt loop.
+  Settings v2 persists real UX preferences, graphics choice, and the scanner capability choice;
+  fixed battle features have no module switches.
 - Content: national dex 1–1025 (G1–G9), 16 themed regions (+ arena), 16 cross-type starter cards.
 
 ## Getting started
@@ -121,7 +124,7 @@ src/
     ext/      Extension seams + fixed productRuntime: synergy / items / abilities / chain / combo /
               evolution; partner skills use learned-state authority
     save/     Portable save file: envelope meta, zip pack/unpack, export/import I/O, backup (M5)
-    settings.ts   Runtime UX preferences + read-only legacy module-data preservation
+    settings.ts   Exact Settings v2 + read-only v1 migration and capability preferences
   store/      Zustand: battle display, persistent roster, prefs-only settings, item bag, skill
               points, player skills, tower run, metadata, incubator
   ui/         Screens + components; semantic battle HUD/feed/actions/status, shared ToolsMenu
@@ -156,8 +159,9 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), and M23 Tickets 01–19 implementation checks are complete** for
-the current Chrome qualification pass — **684 Vitest tests**, typecheck, and build are green. Content:
+M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–21 implementation checks
+are complete** for the current Chrome qualification pass — **687 Vitest tests**, typecheck, and build are
+green. Content:
 national dex 1–1025, 16 regions (+ arena),
 16 starters. Current Chrome evidence covers the next renderer and its compatibility fallback. Physical
 iPad Safari qualification remains an external release gate.
@@ -169,7 +173,8 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-M24 Ticket 20 provides the post-M23 non-battle Chrome baseline through
+M24 Tickets 20–21 provide the post-M23 non-battle Chrome baseline and Settings v2 capability
+boundary through
 `npm run baseline:m24`; its route/state catalog and evidence layout are tracked in
 **[docs/m24-post-m23-chrome-baseline.md](docs/m24-post-m23-chrome-baseline.md)**. The current release
 renderer policy and retirement history are tracked in **[docs/m23-release-b.md](docs/m23-release-b.md)**.
