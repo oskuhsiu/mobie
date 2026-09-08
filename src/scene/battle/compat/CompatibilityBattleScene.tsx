@@ -105,11 +105,15 @@ export const CompatibilityBattleScene = forwardRef<BattleSceneHandle, Compatibil
     faint: (side) => setMode(side, 'faint'),
     enter: (side) => setMode(side, 'enter'),
     setTimeScale: (scale) => {
-      const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1
-      rootRef.current?.style.setProperty('--battle-renderer-duration-scale', String(1 / safeScale))
+      const root = rootRef.current
+      if (!root) return
+      const paused = !Number.isFinite(scale) || scale <= 0
+      root.dataset.rendererTimeScale = paused ? '0' : '1'
+      root.style.setProperty('--battle-renderer-duration-scale', paused ? '1' : String(1 / scale))
     },
     resetPresentation: (options) => {
       rootRef.current?.style.setProperty('--battle-renderer-duration-scale', '1')
+      if (rootRef.current) rootRef.current.dataset.rendererTimeScale = '1'
       setStates((previous) => ({
         player: options?.keepRecall && previous.player.mode === 'recall' ? previous.player : { mode: 'idle', version: previous.player.version + 1 },
         foe: options?.keepRecall && previous.foe.mode === 'recall' ? previous.foe : { mode: 'idle', version: previous.foe.version + 1 },

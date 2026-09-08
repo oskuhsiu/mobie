@@ -303,6 +303,8 @@ export interface EventScenePort {
 
 export interface BattleActionPort {
   starPrelude(cue: StarPreludeCue, context: CueContext): Promise<void> | void
+  starStamp(cue: StarPreludeCue, context: CueContext): Promise<void> | void
+  starImpact(cue: StarPreludeCue, context: CueContext): Promise<void> | void
   chainPrelude(cue: ChainPreludeCue, context: CueContext): Promise<void> | void
   chainCleanup(cue: ChainCleanupCue, context: CueContext): Promise<void> | void
   outcome(cue: BattleOutcomeCue, context: CueContext): Promise<void> | void

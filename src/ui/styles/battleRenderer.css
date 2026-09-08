@@ -124,6 +124,10 @@
   animation-play-state: paused;
 }
 
+.battle-renderer--compatibility[data-renderer-time-scale='0'] .battle-renderer__combatant-motion {
+  animation-play-state: paused;
+}
+
 .battle-renderer__combatant--foe .battle-renderer__combatant-motion--faint {
   --battle-renderer-faint-rotation: -14deg;
 }

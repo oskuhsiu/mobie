@@ -42,7 +42,7 @@ store/      Zustand: battleStore (display), rosterStore (persistence), prefs-onl
 ui/         React screens + components + global.css + type metadata
 audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
-scene/battle/ Three-free renderer contracts + host, lazy legacy/next entries, DOM compatibility adapter
+scene/battle/ Three-free renderer contracts + host, one lazy next entry, DOM compatibility adapter
 scene/r3f/  React-three-fiber 3D battle/capture stage (M3, lazy three)
 scene/models/  Legacy custom-model tooling; Battle/Capture never import or read it
 input/      QTE seam (qualityFromPointer / zones)
@@ -157,7 +157,7 @@ Two halves, deliberately separated:
    busy, and outcome states replace the same command body; the scene never owns focus. Pure
    `BattleActionModel` projections provide phase reasons and switch/resource legality, while semantic
    `ResourceAction`, `SwitchSheet`, `SideStatusRail`, and `FieldStatusBar` components keep actions and
-   side/field ownership identical across Legacy, Next, and Compatibility renderers.
+   side/field ownership identical across Next and Compatibility renderers.
 
 Battle lifecycle is split by authority. `battleStore` fences canonical session state with the full Web
 Crypto identity pair, owns recoverable resolver/init errors, retires a session before Retry/Leave, and
@@ -170,12 +170,12 @@ reuses the single battle initializer with `forceNew`, and Leave fences resources
 
 Renderer lifecycle is a separate display-only seam. `BattleSceneHost` receives a storage-independent
 `GraphicsPreference` (`auto`/missing → Balanced, explicit High capped at DPR 1.5, or Compatibility) and a
-Release B `BattleRendererRoute`. Production and ordinary development resolve an absent route to `next`;
-the operator-only `renderer=legacy` query is a one-release rollback, while `compatibility` remains the
-recovery entry. `LegacyBattleScene` preserves the established BattleStage behind its own lazy entry and
-`NextBattleScene` is the normal lazy entry; both expose the same stable `BattleSceneHandle` and
-consume the same snapshot, input, session, and presentation coordinator. Data loading and renderer boot
-are observable DOM states; commands mount only after the selected entry or compatibility readiness.
+post-M23 `BattleRendererRoute`. Production and ordinary development resolve an absent route to `next`;
+`compatibility` remains the recovery entry. `NextBattleScene` is the only full-scene lazy entry and
+exposes the stable `BattleSceneHandle`; the compatibility adapter consumes the same snapshot, input,
+session, and presentation coordinator. Data loading and renderer boot are observable DOM states;
+commands mount only after the selected entry or compatibility readiness. The Release A/B legacy route is
+retained in the release history only; stale `renderer=legacy` links resolve to the current next default.
 Chunk rejection, 8-second readiness timeout, WebGL unsupported, shader fatal, context loss, and sustained
 performance pressure all latch compatibility in the non-persisted session. Late ready/restore events and
 same-session remounts cannot upgrade it; Retry creates a fresh token and may probe again. The DOM
@@ -362,6 +362,6 @@ tooling remains isolated from those runtime chunks pending its separately owned 
   journeys, hidden/resume clock invariants, a 200%-zoom-equivalent layout run, and reduced-motion diagnostics.
   Ticket 16 adds pure governor hysteresis tests, active-versus-idle frame evidence, bounded VFX/weather/
   artwork diagnostics, and `npm run perf:check -- --evidence=true` release metrics output. Hardware
-  ANGLE is required for performance claims; SwiftShader runs are functional evidence only. Ticket 18
-  adds the next default, operator legacy rollback, effective/requested route diagnostics, and the seeded
-  Chrome rollback checklist in `docs/m23-release-b.md`.
+  ANGLE is required for performance claims; SwiftShader runs are functional evidence only. Tickets 18–19
+  promote next, retire the temporary legacy route, preserve the release history, and keep the seeded
+  Chrome compatibility/failure checklist in `docs/m23-release-b.md`.

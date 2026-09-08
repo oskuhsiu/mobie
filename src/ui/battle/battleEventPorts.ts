@@ -11,7 +11,7 @@ import { getAbility } from '@/game/ext/abilities'
 import { haptic } from '@/input/haptics'
 import type { BattleSceneHandle } from '@/scene/battle/contracts'
 import type { FxHandle } from '@/scene/fx/FxCanvas'
-import { playMoveFx, resolveFx } from '@/scene/fx/fxCatalog'
+import { playMoveFx, resolveFx, type FxPoint } from '@/scene/fx/fxCatalog'
 import type { VfxCue } from '@/scene/r3f/vfxRuntime'
 import { useBattleStore } from '@/store/battleStore'
 import type { DamageNumbersHandle } from '@/ui/components/DamageNumbers'
@@ -21,7 +21,7 @@ interface EventVisuals {
   scene(): BattleSceneHandle | null
   fx(): FxHandle | null
   damage(): DamageNumbersHandle | null
-  position(side: Side, anchor: 'cast' | 'impact'): { nx: number; ny: number }
+  position(side: Side, anchor: 'cast' | 'impact'): FxPoint | null
   reducedMotion(): boolean
   enabled(): boolean
   switchPrepared(index: number): boolean
@@ -80,7 +80,8 @@ export function createBattleEventPorts(v: EventVisuals): EventScenePort {
         banner(ctx, `🔗 第 ${e.comboCount} 段：${member(cue, 'player', e.attackerIndex).nameZh}`)
       } else if (e.type === 'comboCast') {
         banner(ctx, `${e.icon} 合體技「${e.name}」！`)
-        if (v.enabled()) v.fx()?.converge({ ...v.position('player', 'cast'), color: '#ffe14a', count: 16 })
+        const point = v.position('player', 'cast')
+        if (v.enabled() && point) v.fx()?.converge({ ...point, color: '#ffe14a', count: 16 })
         sound(cue, ctx, 'select')
       } else if (e.type === 'statusApplied') {
         banner(ctx, `${name(cue, e.side, e.index)} 使出 ${statusMove(cue)!.nameZh}！`)
@@ -90,7 +91,8 @@ export function createBattleEventPorts(v: EventVisuals): EventScenePort {
         banner(ctx, `＋ ${name(cue, e.side, e.index)} 回復體力`)
       } else if (e.type === 'wildAccident') {
         banner(ctx, e.kind === 'terrainShift' ? '◎ 場域正在改變…' : '💥 野生夥伴亂入！')
-        if (v.enabled()) v.fx()?.ring({ nx: 0.5, ny: 0.5, color: '#aab9d9' })
+        const point = v.position('player', 'cast')
+        if (v.enabled() && point) v.fx()?.ring({ ...point, color: '#aab9d9' })
       } else if (e.type === 'random') {
         banner(ctx, '支援輪盤…')
         sound(cue, ctx, 'select')
@@ -109,7 +111,11 @@ export function createBattleEventPorts(v: EventVisuals): EventScenePort {
       if (move && visual && !aura(cue, ctx, 'impact') && v.enabled()) {
         const side = 'side' in e && e.side ? e.side : 'player'
         const target = e.type === 'comboCast' && e.castKind === 'enemyDebuff' ? 'foe' : side
-        playMoveFx(v.fx(), resolveFx(move), v.position(side, 'cast'), v.position(target, 'impact'), { reducedMotion: v.reducedMotion() })
+        const from = v.position(side, 'cast')
+        const to = v.position(target, 'impact')
+        if (from && to) {
+          playMoveFx(v.fx(), resolveFx(move), from, to, { reducedMotion: v.reducedMotion() })
+        }
       }
       switch (e.type) {
         case 'memberFainted': {
@@ -152,7 +158,7 @@ export function createBattleEventPorts(v: EventVisuals): EventScenePort {
             const amount = e.amount ?? 0
             const pos = v.position(e.side, 'impact')
             store().presentationSetMemberHp(ctx.token, e.side, e.index, e.hpAfter)
-            if (visual && amount > 0) {
+            if (visual && amount > 0 && pos) {
               store().presentationShowHit(ctx.token, { target: e.side, amount, crit: false, effText: null, missed: false })
               if (v.enabled()) {
                 v.damage()?.spawn({ ...pos, amount, crit: false, effectiveness: 1, missed: false })

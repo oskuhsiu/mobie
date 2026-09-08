@@ -22,6 +22,7 @@ export const M23_RENDERER_FAILURES = [
   'chunk-timeout',
   'webgl-unsupported',
   'shader-error',
+  'context-lost',
 ] as const satisfies readonly RendererFailureInjection[]
 export type M23RendererFailure = (typeof M23_RENDERER_FAILURES)[number]
 

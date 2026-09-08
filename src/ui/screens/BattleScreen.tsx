@@ -33,7 +33,7 @@ import { haptic, vibrate } from '@/input/haptics'
 import { rhythmToMashCount } from '@/input/gestures'
 import { FxCanvas, type FxHandle } from '@/scene/fx/FxCanvas'
 import { WeatherCanvas } from '@/scene/fx/WeatherCanvas'
-import { playMoveFx, resolveFx, typePalette } from '@/scene/fx/fxCatalog'
+import { playMoveFx, resolveFx, typePalette, type FxPoint } from '@/scene/fx/fxCatalog'
 import { BattleSceneHost } from '@/scene/battle/host/BattleSceneHost'
 import type {
   BattleSceneDiagnostics,
@@ -58,10 +58,8 @@ import { BattleEventCueHandler, type BattleCuePorts } from '@/presentation/battl
 import { battleActionFromReplayInput } from '@/presentation/battle/turnInput'
 import { sameBattleSession, samePresentationToken } from '@/presentation/battle/battleIdentity'
 import { registerBattleLifecycleEnd } from '@/presentation/battle/battleLifecycleBridge'
-import { normalizedBattleAnchor } from '@/presentation/battle/battleAnchors'
 import {
   resolveBattleRendererRoute,
-  rendererRollbackRouteFromSearch,
   rendererIsReady,
   rendererAttemptId,
   type BattleRendererRoute,
@@ -110,11 +108,6 @@ const energyGain = (q: QteQuality, mashCount: number) => QUALITY_ENERGY[q] + Mat
 // HP 比例 → 色階 class（>50% 健康無 class / >20% mid / 其餘 low）
 const hpToneClass = (frac: number, prefix: string) =>
   frac > 0.5 ? '' : frac > 0.2 ? `${prefix}--mid` : `${prefix}--low`
-// FxCanvas 上的概略打點位置（對齊版面：敵方上、我方下）
-const FX_POS: Record<Side, { nx: number; ny: number }> = {
-  foe: normalizedBattleAnchor('foe', 'impact'),
-  player: normalizedBattleAnchor('player', 'impact'),
-}
 const ATTACK_QTE_TIMEOUT_MS = 10000
 // 連打蓄力視窗：原本 950ms 太短（玩測回饋「給的時間超級少」），放寬到 2.8s 讓連點真的衝得起來。
 const MASH_DURATION_MS = 2800
@@ -279,19 +272,26 @@ function battleDisplaySnapshot(battle: BattleState): BattleDisplaySnapshot {
   }
 }
 
-/** 浮傷數字：3D 場景之上的 DOM 疊層，依 FX_POS 對齊在受擊方上方。 */
-function FloatDamage({ hitFx }: { hitFx: HitFx | null }) {
+/** 浮傷數字：3D 場景之上的 DOM 疊層，位置由目前 renderer 的 world anchor 投影提供。 */
+function FloatDamage({
+  hitFx,
+  position,
+}: {
+  hitFx: HitFx | null
+  position: (side: Side, anchor: 'impact') => FxPoint | null
+}) {
   const show = hitFx && !hitFx.missed && hitFx.amount > 0
+  const point = show ? position(hitFx!.target, 'impact') : null
   return (
     <AnimatePresence>
-      {show && (
+      {show && point && (
         <motion.div
           key={hitFx!.id}
           className={`float-dmg ${hitFx!.crit ? 'float-dmg--crit' : ''}`}
           style={{
             position: 'absolute',
-            left: `${FX_POS[hitFx!.target].nx * 100}%`,
-            top: `${FX_POS[hitFx!.target].ny * 100}%`,
+            left: `${point.nx * 100}%`,
+            top: `${point.ny * 100}%`,
             zIndex: 8,
           }}
           initial={{ y: 10, opacity: 0, scale: 0.6, x: '-50%' }}
@@ -599,7 +599,7 @@ export { SwitchAction } from '@/ui/battle/SwitchSheet'
 export interface BattleScreenProps {
   /** Storage-independent renderer input. Production omits it and receives Auto. */
   graphicsPreference?: GraphicsPreference
-  /** Controlled operator rollback or test renderer entry override. */
+  /** Compatibility is a test entry; production next is the only full scene route. */
   rendererRoute?: BattleRendererRoute
 }
 
@@ -628,11 +628,8 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
   const commandNotice = useBattleStore((s) => s.presentation?.commandNotice ?? null)
   const devRendererOptions = import.meta.env.DEV ? baselineDriver()?.options : undefined
   const requestedGraphics = devRendererOptions?.graphics ?? graphicsPreference
-  const rollbackRoute = typeof window === 'undefined'
-    ? undefined
-    : rendererRollbackRouteFromSearch(window.location.search)
   const requestedRendererRoute = resolveBattleRendererRoute(
-    devRendererOptions?.rendererRoute ?? rendererRoute ?? rollbackRoute,
+    devRendererOptions?.rendererRoute ?? rendererRoute,
   )
   const rendererFailure = devRendererOptions?.rendererFailure ?? null
   const prefersReducedMotion = useReducedMotion()
@@ -739,13 +736,11 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
 
   const projectedSceneAnchor = useCallback((side: Side, anchor: 'cast' | 'impact') => {
     const stage = battleStageElementRef.current
-    if (!stage) return FX_POS[side]
+    if (!stage) return null
     const { width, height } = stage.getBoundingClientRect()
-    if (width <= 0 || height <= 0) return FX_POS[side]
+    if (width <= 0 || height <= 0) return null
     const point = stageRef.current?.projectAnchor(side, anchor, { width, height })
-    return point
-      ? { nx: point.x / width, ny: point.y / height }
-      : FX_POS[side]
+    return point ? { nx: point.x / width, ny: point.y / height } : null
   }, [])
   const syncHeadSafeRects = useCallback((diagnostics: BattleSceneDiagnostics) => {
     const stage = battleStageElementRef.current
@@ -879,16 +874,22 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         if (!useBattleStore.getState().isIntentPresentationCurrent(cueContext.token)) return
         if (effect === 'reveal-foe') {
           fxRef.current?.flash('#7ae0ff', 0.3)
-          fxRef.current?.ring({ ...FX_POS.foe, color: '#7ae0ff' })
-          fxRef.current?.burst({ ...FX_POS.foe, color: '#7ae0ff', count: 14, kind: 'spark' })
+          const point = projectedSceneAnchor('foe', 'impact')
+          if (point) {
+            fxRef.current?.ring({ ...point, color: '#7ae0ff' })
+            fxRef.current?.burst({ ...point, color: '#7ae0ff', count: 14, kind: 'spark' })
+          }
         } else {
           fxRef.current?.flash('#ffd23f', 0.3)
-          fxRef.current?.ring({ ...FX_POS.player, color: '#ffd23f' })
-          fxRef.current?.burst({ ...FX_POS.player, color: '#ffd23f', count: 16, kind: 'spark' })
+          const point = projectedSceneAnchor('player', 'impact')
+          if (point) {
+            fxRef.current?.ring({ ...point, color: '#ffd23f' })
+            fxRef.current?.burst({ ...point, color: '#ffd23f', count: 16, kind: 'spark' })
+          }
         }
       },
     },
-  }), [])
+  }), [projectedSceneAnchor])
 
   const intentCoordinator = useMemo(() => new BattleIntentCoordinator({
     presenter: {
@@ -1345,20 +1346,25 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
           worldDamageCue = null
           if (e.missed || e.amount <= 0) {
             if (!e.missed && e.effectiveness === 0) {
-              fxRef.current?.ring({ ...projectedSceneAnchor(e.targetSide, 'impact'), color: '#d1d5db' })
+              const point = projectedSceneAnchor(e.targetSide, 'impact')
+              if (point) fxRef.current?.ring({ ...point, color: '#d1d5db' })
             }
             normalAttack(cue, 'contact')
             return
           }
           const recipe = resolveFx(cue.move)
           const strong = e.crit || e.effectiveness >= 2
-          const impactDelayMs = playMoveFx(
-            fxRef.current,
-            strong ? { ...recipe, power: recipe.power * 1.15 } : recipe,
-            projectedSceneAnchor(e.attackerSide, 'cast'),
-            projectedSceneAnchor(e.targetSide, 'impact'),
-            { reducedMotion: reducedMotionRef.current },
-          )
+          const from = projectedSceneAnchor(e.attackerSide, 'cast')
+          const to = projectedSceneAnchor(e.targetSide, 'impact')
+          const impactDelayMs = from && to
+            ? playMoveFx(
+                fxRef.current,
+                strong ? { ...recipe, power: recipe.power * 1.15 } : recipe,
+                from,
+                to,
+                { reducedMotion: reducedMotionRef.current },
+              )
+            : 0
           if (impactDelayMs > 0) await cueContext.clock.wait(impactDelayMs, cueContext.signal)
           if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
           normalAttack(cue, 'contact')
@@ -1372,9 +1378,9 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
           const recipe = resolveFx(cue.move)
           const strong = e.crit || e.effectiveness >= 2
           const tracedNormalAttack = normalAttack(cue, 'hit-react')
-          if (e.crit && worldDamageCue !== cue) {
+          if (pos && e.crit && worldDamageCue !== cue) {
             fxRef.current?.ring({ ...pos, color: '#ffd23f' })
-          } else if (e.effectiveness >= 2 && worldDamageCue !== cue) {
+          } else if (pos && e.effectiveness >= 2 && worldDamageCue !== cue) {
             fxRef.current?.ring({ ...pos, color: recipe.accent })
           }
           const mag = e.crit ? 16 : e.effectiveness >= 2 ? 11 : 6
@@ -1428,10 +1434,12 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         })
         if (juiceRef.current !== 'off') {
           const impact = projectedSceneAnchor(e.targetSide, 'impact')
-          damageRef.current?.spawn({
-            ...impact, amount: e.amount, crit: e.crit,
-            effectiveness: e.effectiveness, missed: e.missed,
-          })
+          if (impact) {
+            damageRef.current?.spawn({
+              ...impact, amount: e.amount, crit: e.crit,
+              effectiveness: e.effectiveness, missed: e.missed,
+            })
+          }
         }
       },
       showResult: (cue, cueContext) => {
@@ -1523,17 +1531,21 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         setCutIn({ artworkUrl: caster.artworkUrl, casterName: caster.nameZh, moveName: finisher.nameZh, type: finisher.type, side: 'player' })
         store.presentationSetBanner(cueContext.token, '★ 星擊蓄力')
         if (juiceRef.current !== 'off' && !reducedMotionRef.current) {
-          fxRef.current?.converge({ ...projectedSceneAnchor('player', 'cast'), color: typePalette[finisher.type].color, count: 16 })
+          const point = projectedSceneAnchor('player', 'cast')
+          if (point) fxRef.current?.converge({ ...point, color: typePalette[finisher.type].color, count: 16 })
         }
         battleAudioSession.play(cueContext.token, () => audio.starChargeSweep())
         tracePresentation(cueContext.token, 'audio', { cueId: 'input:star-prelude', detail: 'charge' })
-        await cueContext.clock.wait(720, cueContext.signal)
+      },
+      starStamp: (_cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
         setStarPhase('stamp')
         battleAudioSession.play(cueContext.token, () => audio.starStampTick())
         tracePresentation(cueContext.token, 'audio', { cueId: 'input:star-prelude', detail: 'stamp' })
-        await cueContext.clock.wait(120, cueContext.signal)
+      },
+      starImpact: (_cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
+        const store = useBattleStore.getState()
         setStarPhase('impact')
         setCutIn(null)
         store.presentationSetBanner(cueContext.token, '★ 星擊發動！')
@@ -1550,11 +1562,12 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         })
         battleAudioSession.play(cueContext.token, () => audio.play('crit'))
         tracePresentation(cueContext.token, 'audio', { cueId: cue.id, detail: 'chain' })
-        if (juiceRef.current !== 'off') fxRef.current?.ring({ ...projectedSceneAnchor('player', 'cast'), color: '#7ae0ff' })
-        await cueContext.clock.wait(cue.timingMs, cueContext.signal)
+        if (juiceRef.current !== 'off') {
+          const point = projectedSceneAnchor('player', 'cast')
+          if (point) fxRef.current?.ring({ ...point, color: '#7ae0ff' })
+        }
       },
-      chainCleanup: async (cue, cueContext) => {
-        await cueContext.clock.wait(cue.timingMs, cueContext.signal)
+      chainCleanup: (_cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token) || cueContext.skipping) return
         const current = useBattleStore.getState()
         if (chainActiveIndex !== null && (current.presentation?.battle.player.members[chainActiveIndex]?.currentHp ?? 0) > 0) {
@@ -1563,7 +1576,7 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         }
         current.presentationSetCombo(cueContext.token, null)
       },
-      outcome: async (cue, cueContext) => {
+      outcome: (cue, cueContext) => {
         if (!sessionLifecycle.ownsPresentation(cueContext.token)) return
         const store = useBattleStore.getState()
         const title = cue.event.winner === 'player' ? '戰鬥勝利！' : '戰鬥失利'
@@ -1575,7 +1588,6 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         setOutcomeTitle(title)
         store.presentationSetBanner(cueContext.token, reason)
         armTurnSkip(cueContext, 'outcome')
-        await cueContext.clock.wait(1800, cueContext.signal)
       },
       },
     }
@@ -2015,7 +2027,9 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
         dprCap={effectiveGraphicsQuality.dprCap}
       />
       {/* EXT.1.b：juice≠off 用富表現飄字層（圖示優先）；off 回退既有 FloatDamage＝M22 基線、DOM 零新增 wrapper。 */}
-      {juice === 'off' ? <FloatDamage hitFx={hitFx} /> : <DamageNumbers ref={damageRef} />}
+      {juice === 'off'
+        ? <FloatDamage hitFx={hitFx} position={projectedSceneAnchor} />
+        : <DamageNumbers ref={damageRef} />}
 
       {/* 前景 HUD（疊在 3D 之上） */}
       <div className="battle-stage__hud">

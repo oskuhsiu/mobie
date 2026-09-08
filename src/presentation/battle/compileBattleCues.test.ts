@@ -32,7 +32,7 @@ describe('compileBattleCues', () => {
       .toMatchObject({ kind: 'damage', tracerRecipe })
   })
 
-  it('preserves event order and legacy damage timing/move identity', () => {
+  it('preserves event order and default damage timing/move identity', () => {
     const fallback = { ...move('normal'), id: 1, nameZh: '基礎招' }
     const selected = { ...move('fire'), id: 7, nameZh: '火招' }
     const before = createBattleState(

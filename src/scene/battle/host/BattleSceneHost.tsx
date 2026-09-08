@@ -42,7 +42,7 @@ type BattleSceneComponent = ForwardRefExoticComponent<NextBattleSceneProps & Ref
 export interface BattleSceneHostProps {
   snapshot: BattleSceneSnapshot
   sessionToken: BattleSessionToken
-  /** Release B route. Absent uses next; legacy is the controlled rollback route. */
+  /** Post-M23 route. Absent uses the sole full scene entry, next. */
   rendererRoute?: BattleRendererRoute
   preference: GraphicsPreference
   quality: GraphicsQualityProfile
@@ -63,7 +63,6 @@ export interface BattleSceneHostProps {
 }
 
 const loadNextScene = () => import('@/scene/battle/next/NextBattleScene')
-const loadLegacyScene = () => import('@/scene/battle/legacy/LegacyBattleScene')
 
 export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProps>(function BattleSceneHost({
   snapshot,
@@ -95,7 +94,6 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
     latchedFallback,
   }))
   const stateRef = useRef(state)
-  const legacyRef = useRef<BattleSceneHandle>(null)
   const nextRef = useRef<BattleSceneHandle>(null)
   const compatibilityRef = useRef<BattleSceneHandle>(null)
   const [Scene, setScene] = useState<BattleSceneComponent | null>(null)
@@ -150,6 +148,14 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
 
   useEffect(() => {
     if (stateRef.current.phase !== 'renderer-booting') return
+    if (activeDevFailure === 'shader-error') {
+      send({ type: 'FALLBACK', attemptId, reason: 'shader-error' })
+      return
+    }
+    if (activeDevFailure === 'context-lost') {
+      send({ type: 'FALLBACK', attemptId, reason: 'context-lost' })
+      return
+    }
     if (activeDevFailure === 'webgl-unsupported' || !supportsWebGl()) {
       send({ type: 'FALLBACK', attemptId, reason: 'webgl-unsupported' })
       return
@@ -166,7 +172,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       ? new Promise<never>(() => undefined)
       : activeDevFailure === 'chunk-reject'
         ? Promise.reject(new Error(`Injected ${route} renderer chunk rejection`))
-        : route === 'next' ? loadNextScene() : loadLegacyScene()
+        : loadNextScene()
 
     void loading.then((module) => {
       if (!disposed && stateRef.current.phase === 'renderer-booting') {
@@ -184,7 +190,7 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
   useImperativeHandle(ref, () => {
     const active = () => {
       if (stateRef.current.phase === 'compatibility-ready') return compatibilityRef.current
-      return stateRef.current.route === 'next' ? nextRef.current : legacyRef.current
+      return nextRef.current
     }
     return {
       tracer: (cue) => active()?.tracer?.(cue) ?? false,
@@ -252,24 +258,20 @@ export const BattleSceneHost = forwardRef<BattleSceneHandle, BattleSceneHostProp
       {state.phase !== 'compatibility-ready' && Scene && (
         <BattleSceneBoundary onFatal={(error) => fatal(classifyRendererError(error))}>
           <Scene
-            ref={state.route === 'next' ? nextRef : legacyRef}
+            ref={nextRef}
             snapshot={snapshot}
             tier={state.tier === 'high' ? 'high' : 'balanced'}
             quality={state.quality}
             active={active}
             paused={paused}
             reducedMotion={reducedMotion}
-            onReady={() => send({
-              type: state.route === 'next' ? 'NEXT_READY' : 'LEGACY_READY',
-              attemptId,
-            })}
+            onReady={() => send({ type: 'NEXT_READY', attemptId })}
             onFatal={fatal}
             onRenderedFrame={onRenderedFrame}
             onRendererDiagnostics={onRendererDiagnostics}
             onVfxDiagnostics={onVfxDiagnostics}
             onArtworkCacheDiagnostics={onArtworkCacheDiagnostics}
             onSceneDiagnostics={handleSceneDiagnostics}
-            devShaderFailure={activeDevFailure === 'shader-error'}
           />
         </BattleSceneBoundary>
       )}

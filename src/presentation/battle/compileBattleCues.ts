@@ -14,7 +14,7 @@ const NORMAL_ATTACK_TIMING = {
   clearMs: 140,
 } as const
 
-const LEGACY_DAMAGE_TIMING = {
+const DEFAULT_DAMAGE_TIMING = {
   windupMs: 440,
   resultMs: 820,
   clearMs: 140,
@@ -116,7 +116,7 @@ function compileDamage(job: TurnPresentationJob, event: Extract<BattleEvent, { t
     presentation: resolveMoveRecipe(move, { ...event,
       star: job.input.type === 'ATTACK' && job.input.starStrike === true && event.attackerSide === 'player',
     }),
-    timing: normalAttack ? NORMAL_ATTACK_TIMING : LEGACY_DAMAGE_TIMING,
+    timing: normalAttack ? NORMAL_ATTACK_TIMING : DEFAULT_DAMAGE_TIMING,
   }
 }
 

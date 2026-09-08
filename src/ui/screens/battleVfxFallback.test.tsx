@@ -112,6 +112,10 @@ describe('battle world VFX fallback', () => {
         ],
       },
     })
+    vi.spyOn(screen.getByLabelText('戰鬥場景'), 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, width: 800, height: 600, top: 0, right: 800, bottom: 600, left: 0,
+      toJSON: () => ({}),
+    } as DOMRect)
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)

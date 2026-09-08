@@ -46,8 +46,12 @@ function ports(call: (name: string, context: CueContext) => Promise<void> | void
       clear: (_cue, ctx) => { void call('event.clear', ctx) },
     },
     action: {
-      starPrelude: (_cue, ctx) => call('star', ctx), chainPrelude: (_cue, ctx) => call('chain.prelude', ctx),
-      chainCleanup: (_cue, ctx) => call('chain.cleanup', ctx), outcome: (_cue, ctx) => call('outcome', ctx),
+      starPrelude: (_cue, ctx) => call('star', ctx),
+      starStamp: (_cue, ctx) => call('star.stamp', ctx),
+      starImpact: (_cue, ctx) => call('star.impact', ctx),
+      chainPrelude: (_cue, ctx) => call('chain.prelude', ctx),
+      chainCleanup: (_cue, ctx) => call('chain.cleanup', ctx),
+      outcome: (_cue, ctx) => call('outcome', ctx),
     },
   }
 }
@@ -114,7 +118,12 @@ describe('BattleEventCueHandler', () => {
       { kind: 'battle-outcome', id: 'event:2:battleEnded', eventIndex: 2, event: { type: 'battleEnded', winner: 'player' } },
     ]
     for (const cue of cues) await handler.play(cue, context)
-    expect(log).toEqual(['star', 'chain.prelude', 'event.begin', 'wait:180', 'event.cast', 'wait:0', 'event.apply', 'wait:620', 'event.clear', 'chain.cleanup', 'outcome'])
+    expect(log).toEqual([
+      'star', 'wait:720', 'star.stamp', 'wait:120', 'star.impact',
+      'chain.prelude', 'wait:420', 'event.begin', 'wait:180', 'event.cast',
+      'wait:0', 'event.apply', 'wait:620', 'event.clear', 'wait:180',
+      'chain.cleanup', 'outcome', 'wait:1800',
+    ])
     expect(signals.every((signal) => signal === controller.signal)).toBe(true)
   })
 

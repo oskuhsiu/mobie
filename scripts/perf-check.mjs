@@ -42,8 +42,8 @@ function safeSegment(value, name) {
   return value
 }
 
-if (!['legacy', 'next', 'compatibility'].includes(rendererRoute)) {
-  throw new Error('--renderer must be one of legacy, next, compatibility')
+if (!['next', 'compatibility'].includes(rendererRoute)) {
+  throw new Error('--renderer must be one of next, compatibility')
 }
 
 safeSegment(deviceName, 'device')
@@ -83,7 +83,7 @@ async function collectBattleChunks() {
       name: entry.name,
       bytes: bytes.length,
       gzipBytes: gzipSync(bytes).length,
-      battleRelevant: /^(LegacyBattleScene|NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
+      battleRelevant: /^(NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
     })
   }
   return { files }

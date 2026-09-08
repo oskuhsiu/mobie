@@ -465,10 +465,10 @@ export default function VfxLab({ vfxRef, controlsRef }: VfxLabProps) {
     setFixtureStatus(`${kind} fixture ready`)
   }, [])
 
-  const openLegacyComparison = useCallback(() => {
+  const openCompatibilityComparison = useCallback(() => {
     const url = new URL(window.location.href)
     url.searchParams.set('graphics', 'compatibility')
-    window.open(url, 'mobie-vfx-legacy', 'noopener')
+    window.open(url, 'mobie-vfx-compatibility', 'noopener')
   }, [])
 
   if (!import.meta.env.DEV) return null
@@ -592,11 +592,11 @@ export default function VfxLab({ vfxRef, controlsRef }: VfxLabProps) {
         <div role="status" data-vfx-fixture-status style={{ minHeight: 16, marginTop: 5 }}>{fixtureStatus}</div>
         <button
           type="button"
-          data-vfx-action="open-legacy"
+          data-vfx-action="open-compatibility"
           style={{ width: '100%', marginTop: 5 }}
-          onClick={openLegacyComparison}
+          onClick={openCompatibilityComparison}
         >
-          Open legacy comparison
+          Open compatibility comparison
         </button>
 
         <pre id="vfx-lab-output" style={{ margin: '10px 0 0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>

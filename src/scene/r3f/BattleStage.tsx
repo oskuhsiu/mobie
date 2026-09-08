@@ -308,8 +308,7 @@ function TerrainFog({ palette, intensity }: { palette: TerrainPalette; intensity
 function RendererLifecycle({
   onReady,
   onFatal,
-  devShaderFailure,
-}: Pick<NextBattleSceneProps, 'onReady' | 'onFatal' | 'devShaderFailure'>) {
+}: Pick<NextBattleSceneProps, 'onReady' | 'onFatal'>) {
   const { gl } = useThree()
   const ready = useRef(false)
   const failed = useRef(false)
@@ -334,8 +333,7 @@ function RendererLifecycle({
     canvas.addEventListener('webglcontextlost', loseContext)
     gl.debug.checkShaderErrors = true
     gl.debug.onShaderError = fail
-    if (devShaderFailure) fail()
-    else if (!ready.current) {
+    if (!ready.current) {
       ready.current = true
       onReadyRef.current()
     }
@@ -343,7 +341,7 @@ function RendererLifecycle({
       canvas.removeEventListener('webglcontextlost', loseContext)
       if (gl.debug.onShaderError === fail) gl.debug.onShaderError = previousShaderError
     }
-  }, [devShaderFailure, gl])
+  }, [gl])
   return null
 }
 
@@ -356,7 +354,6 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
   onVfxDiagnostics,
   onArtworkCacheDiagnostics,
   onSceneDiagnostics,
-  devShaderFailure,
   quality,
   active,
   paused,
@@ -511,7 +508,7 @@ const BattleStage = forwardRef<BattleSceneHandle, NextBattleSceneProps>(function
       }}
     >
       <RenderCadence active={active} paused={paused} />
-      <RendererLifecycle onReady={onReady} onFatal={onFatal} devShaderFailure={devShaderFailure} />
+      <RendererLifecycle onReady={onReady} onFatal={onFatal} />
       <TerrainFog palette={palette} intensity={terrainVisualIntensity} />
       <BattleVfx
         ref={vfxRef}

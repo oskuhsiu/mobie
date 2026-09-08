@@ -4,33 +4,25 @@ export const GRAPHICS_PREFERENCES = ['auto', 'high', 'balanced', 'compatibility'
 export type GraphicsPreference = (typeof GRAPHICS_PREFERENCES)[number]
 
 /**
- * Release B renderer entry points. The compatibility entry is a terminal
- * fallback, while next is the normal entry and legacy is kept for one
- * controlled rollback release.
+ * Post-M23 renderer entry points. The compatibility entry is a terminal
+ * fallback, while next is the only full scene entry.
  */
-export const BATTLE_RENDERER_ROUTES = ['legacy', 'next', 'compatibility'] as const
+export const BATTLE_RENDERER_ROUTES = ['next', 'compatibility'] as const
 export type BattleRendererRoute = (typeof BATTLE_RENDERER_ROUTES)[number]
 export const DEFAULT_BATTLE_RENDERER_ROUTE: Exclude<BattleRendererRoute, 'compatibility'> = 'next'
 
 /**
- * The only player-independent rollback switch is an operator-provided route.
- * A production URL may request legacy for the rollback release, but a random
- * query value cannot expose another renderer route.
+ * Resolve a display route without allowing arbitrary query values to expose a
+ * second full scene. Obsolete full-scene query values naturally fall back to
+ * next because the current product exposes only one full scene.
  */
-export function rendererRollbackRouteFromSearch(search: string): 'legacy' | undefined {
-  const query = new URLSearchParams(search)
-  const requested = query.get('renderer') ?? query.get('rendererRoute')
-  return requested === 'legacy' ? 'legacy' : undefined
-}
-
 export function resolveBattleRendererRoute(requested?: BattleRendererRoute): BattleRendererRoute {
   if (requested === 'compatibility') return 'compatibility'
-  if (requested === 'legacy') return 'legacy'
   return DEFAULT_BATTLE_RENDERER_ROUTE
 }
 
 export type EffectiveGraphicsTier = 'high' | 'balanced' | 'compatibility'
-export type BattleRendererPhase = 'renderer-booting' | 'legacy-ready' | 'next-ready' | 'compatibility-ready'
+export type BattleRendererPhase = 'renderer-booting' | 'next-ready' | 'compatibility-ready'
 export type RendererFallbackReason =
   | 'preference'
   | 'performance'
@@ -46,6 +38,7 @@ export type RendererFailureInjection =
   | 'chunk-timeout'
   | 'webgl-unsupported'
   | 'shader-error'
+  | 'context-lost'
 
 export interface GraphicsResolution {
   requested: GraphicsPreference
@@ -140,7 +133,6 @@ export interface BattleRendererState {
 
 export type BattleRendererEvent =
   | { type: 'NEXT_READY'; attemptId: string }
-  | { type: 'LEGACY_READY'; attemptId: string }
   | { type: 'FALLBACK'; attemptId: string; reason: RendererFallbackReason }
 
 export function resolveGraphicsPreference(preference?: GraphicsPreference): GraphicsResolution {
@@ -220,12 +212,6 @@ export function reduceBattleRendererState(
       ? state
       : { ...state, phase: 'next-ready', route: 'next' }
   }
-  if (event.type === 'LEGACY_READY') {
-    if (state.route !== 'legacy') return state
-    return state.phase === 'legacy-ready'
-      ? state
-      : { ...state, phase: 'legacy-ready', route: 'legacy' }
-  }
   return {
     ...state,
     phase: 'compatibility-ready',
@@ -238,9 +224,7 @@ export function reduceBattleRendererState(
 }
 
 export function rendererIsReady(state: BattleRendererState | null): boolean {
-  return state?.phase === 'legacy-ready'
-    || state?.phase === 'next-ready'
-    || state?.phase === 'compatibility-ready'
+  return state?.phase === 'next-ready' || state?.phase === 'compatibility-ready'
 }
 
 export function rendererAttemptId(token: BattleSessionToken): string {

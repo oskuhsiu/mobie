@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { normalizedBattleAnchor, projectBattleAnchor } from './battleAnchors'
 
 describe('battle anchor projection', () => {
-  it('preserves the legacy normalized impact points across resize', () => {
+  it('preserves the fallback normalized impact points across resize', () => {
     expect(normalizedBattleAnchor('player', 'impact')).toEqual({ nx: 0.3, ny: 0.62 })
     expect(normalizedBattleAnchor('foe', 'impact')).toEqual({ nx: 0.72, ny: 0.22 })
     expect(projectBattleAnchor('player', 'impact', { width: 1_000, height: 500 })).toEqual({ x: 300, y: 310 })

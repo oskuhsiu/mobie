@@ -5,7 +5,6 @@ import {
   reduceBattleRendererState,
   rendererAttemptId,
   rendererIsReady,
-  rendererRollbackRouteFromSearch,
   resolveBattleRendererRoute,
   resolveGraphicsPreference,
   graphicsQualityProfileOf,
@@ -15,16 +14,10 @@ import {
 } from './rendering'
 
 describe('battle renderer policy', () => {
-  it('makes next the Release B default and keeps legacy as a controlled rollback', () => {
+  it('keeps next as the only full scene and compatibility as the fallback entry', () => {
     expect(resolveBattleRendererRoute()).toBe('next')
     expect(resolveBattleRendererRoute('next')).toBe('next')
-    expect(resolveBattleRendererRoute('legacy')).toBe('legacy')
     expect(resolveBattleRendererRoute('compatibility')).toBe('compatibility')
-
-    expect(rendererRollbackRouteFromSearch('?renderer=legacy')).toBe('legacy')
-    expect(rendererRollbackRouteFromSearch('?rendererRoute=legacy')).toBe('legacy')
-    expect(rendererRollbackRouteFromSearch('?renderer=next')).toBeUndefined()
-    expect(rendererRollbackRouteFromSearch('?renderer=compatibility')).toBeUndefined()
 
     const next = createBattleRendererState({
       attemptId: 'session-next:1', preference: 'auto',
@@ -35,9 +28,6 @@ describe('battle renderer policy', () => {
     })
     expect(ready).toMatchObject({ phase: 'next-ready', route: 'next' })
     expect(rendererIsReady(ready)).toBe(true)
-    expect(reduceBattleRendererState(next, {
-      type: 'LEGACY_READY', attemptId: 'session-next:1',
-    })).toBe(next)
     expect(createBattleRendererState({
       attemptId: 'session-compat:1', preference: 'compatibility', rendererRoute: 'next',
     })).toMatchObject({ phase: 'compatibility-ready', route: 'compatibility' })

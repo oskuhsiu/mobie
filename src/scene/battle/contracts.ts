@@ -95,6 +95,4 @@ export interface NextBattleSceneProps {
   onVfxDiagnostics?: (diagnostics: BattleVfxDiagnostics) => void
   onArtworkCacheDiagnostics?: (diagnostics: ArtworkCacheDiagnostics) => void
   onSceneDiagnostics?: (diagnostics: BattleSceneDiagnostics) => void
-  /** DEV/test-only typed renderer failure. Production callers omit it. */
-  devShaderFailure?: boolean
 }

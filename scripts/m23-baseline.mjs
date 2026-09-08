@@ -23,7 +23,7 @@ const REQUIRED_CHECKPOINTS = [
   'outcome',
 ]
 const GRAPHICS = new Set(['auto', 'high', 'balanced', 'compatibility'])
-const RENDERER_ROUTES = new Set(['legacy', 'next', 'compatibility'])
+const RENDERER_ROUTES = new Set(['next', 'compatibility'])
 const MOTION = new Set(['full', 'reduced', 'off'])
 const ARTWORK_FIXTURES = new Set(['artwork-404', 'decode-failure', 'large-texture'])
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
@@ -71,7 +71,7 @@ async function collectBattleChunks() {
       name: entry.name,
       bytes: bytes.length,
       gzipBytes: gzipSync(bytes).length,
-      battleRelevant: /^(LegacyBattleScene|NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
+      battleRelevant: /^(NextBattleScene|CaptureStage|MobieVisual|three-vendor|battle-compatibility|battleRenderer|index)-/.test(entry.name),
     })
   }
   if (!files.some((file) => file.battleRelevant)) throw new Error('No battle-relevant production chunk was found in dist/assets')
@@ -164,8 +164,8 @@ const config = {
 }
 if (!GRAPHICS.has(config.graphics)) throw new Error(`--graphics must be one of ${[...GRAPHICS].join(', ')}`)
 if (!RENDERER_ROUTES.has(config.rendererRoute)) throw new Error(`--renderer must be one of ${[...RENDERER_ROUTES].join(', ')}`)
-if (config.rendererFailure !== null && !['chunk-reject', 'chunk-timeout', 'webgl-unsupported', 'shader-error'].includes(config.rendererFailure)) {
-  throw new Error('--rendererFailure must be one of chunk-reject, chunk-timeout, webgl-unsupported, shader-error')
+if (config.rendererFailure !== null && !['chunk-reject', 'chunk-timeout', 'webgl-unsupported', 'shader-error', 'context-lost'].includes(config.rendererFailure)) {
+  throw new Error('--rendererFailure must be one of chunk-reject, chunk-timeout, webgl-unsupported, shader-error, context-lost')
 }
 if (config.artworkFixture !== null && !ARTWORK_FIXTURES.has(config.artworkFixture)) {
   throw new Error(`--artwork must be one of ${[...ARTWORK_FIXTURES].join(', ')}`)

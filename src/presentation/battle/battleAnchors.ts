@@ -5,7 +5,9 @@ export interface NormalizedBattlePoint { nx: number; ny: number }
 export interface BattleViewport { width: number; height: number }
 export interface BattleScreenPoint { x: number; y: number }
 
-const LEGACY_ANCHORS: Record<Side, Record<BattleAnchorKind, NormalizedBattlePoint>> = {
+// A deterministic projection fallback for compatibility and before the first
+// scene frame. Normal battle effects use the live world-anchor projection.
+const FALLBACK_ANCHORS: Record<Side, Record<BattleAnchorKind, NormalizedBattlePoint>> = {
   player: {
     root: { nx: 0.3, ny: 0.74 },
     center: { nx: 0.3, ny: 0.62 },
@@ -25,7 +27,7 @@ const LEGACY_ANCHORS: Record<Side, Record<BattleAnchorKind, NormalizedBattlePoin
 }
 
 export function normalizedBattleAnchor(side: Side, anchor: BattleAnchorKind): NormalizedBattlePoint {
-  return { ...LEGACY_ANCHORS[side][anchor] }
+  return { ...FALLBACK_ANCHORS[side][anchor] }
 }
 
 export function projectBattleAnchor(
@@ -33,7 +35,7 @@ export function projectBattleAnchor(
   anchor: BattleAnchorKind,
   viewport: BattleViewport,
 ): BattleScreenPoint {
-  const point = LEGACY_ANCHORS[side][anchor]
+  const point = FALLBACK_ANCHORS[side][anchor]
   return {
     x: point.nx * Math.max(0, viewport.width),
     y: point.ny * Math.max(0, viewport.height),
