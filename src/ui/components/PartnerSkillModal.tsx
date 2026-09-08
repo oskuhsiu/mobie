@@ -72,7 +72,7 @@ export function PartnerSkillModal({ onClose }: { onClose: () => void }) {
           })}
         </div>
 
-        <div className="model-foot">
+        <div className="utility-foot">
           SP 與「📖 招式訓練所」共用同一池，但分池顯示（玩家技能 vs 怪物招式）。玩家技能存於 <b>mobie.playerskills.v1</b>，不掛任何 Mobie。
         </div>
       </motion.div>

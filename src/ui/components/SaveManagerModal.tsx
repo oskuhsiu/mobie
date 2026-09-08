@@ -12,7 +12,6 @@ import {
 } from '@/game/save/saveIO'
 import { getBackupInfo, type BackupInfo } from '@/game/save/backupStore'
 import { listCards } from '@/game/cardLibrary'
-import { listModelIds } from '@/scene/models/modelStore'
 import type { UnpackOk } from '@/game/save/bundle'
 import { audio } from '@/audio/audioEngine'
 
@@ -44,8 +43,6 @@ const DIR_COLOR: Record<SaveComparison, string> = {
 export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   const roster = useRoster((s) => s.roster)
   const [name, setName] = useState('')
-  const [includeModels, setIncludeModels] = useState(false)
-  const [modelCount, setModelCount] = useState(0)
   const [cardsCount, setCardsCount] = useState(0)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -67,7 +64,6 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
 
   const refreshLocal = () => {
     setMeta(loadMeta())
-    listModelIds().then((ids) => setModelCount(ids.length)).catch(() => {})
     listCards().then((c) => setCardsCount(c.length)).catch(() => {})
     getBackupInfo().then(setBackup).catch(() => {})
   }
@@ -90,11 +86,10 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
     setMsg(null)
     commitName()
     try {
-      const built = await buildSaveFile(roster, includeModels)
+      const built = await buildSaveFile(roster)
       const how = await deliverSaveFile(built)
       audio.play('select')
-      const extra = built.modelCount ? `、含 ${built.modelCount} 個模型` : ''
-      setMsg(`已${how === 'shared' ? '開啟分享面板送出' : '下載'} ${built.filename}（${fmtBytes(built.size)}${extra}）`)
+      setMsg(`已${how === 'shared' ? '開啟分享面板送出' : '下載'} ${built.filename}（${fmtBytes(built.size)}）`)
       setMeta(loadMeta())
     } catch (e) {
       setMsg((e as Error)?.name === 'AbortError' ? '已取消分享' : `匯出失敗：${(e as Error)?.message ?? String(e)}`)
@@ -123,7 +118,10 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
       await backupCurrentSave(Date.now()) // 安全紅線：覆蓋前一定先備份
       await applyImportedSave(pending)
       audio.play('victory')
-      setMsg(`已匯入存檔（${pending.roster.length} 隻、${pending.cards.length} 張卡${pending.includesModels ? `、${pending.models.length} 個模型` : ''}）。`)
+      const legacyNotice = pending.legacyModelCount > 0
+        ? `；舊版模型資料 ${pending.legacyModelCount} 個已完成完整性驗證並忽略`
+        : ''
+      setMsg(`已匯入存檔（${pending.roster.length} 隻、${pending.cards.length} 張卡${legacyNotice}）。`)
       setPending(null)
       refreshLocal()
     } catch (e) {
@@ -172,7 +170,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
             <div className="col" style={{ gap: 4 }}>
               <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>存檔名稱</span>
               <input
-                className="model-search"
+                className="utility-search"
                 value={name}
                 maxLength={24}
                 placeholder="trainer"
@@ -181,12 +179,9 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
               />
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>檔名：<b>{filename}</b></span>
             </div>
-
-            <label className="lib-shiny" style={{ marginTop: 4 }}>
-              <input type="checkbox" checked={includeModels} onChange={(e) => setIncludeModels(e.target.checked)} />
-              包含 3D 模型（完整備份{modelCount ? `，${modelCount} 個` : '；目前無'}）
-            </label>
-            {includeModels && modelCount > 0 && <div className="lib-hint">含模型的檔案可能較大（每隻 GLB 數 MB）。</div>}
+            <div className="lib-hint" style={{ marginLeft: 0 }}>
+              新存檔固定只含 Mobie 與卡片進度；custom GLB/GLTF 已停用，既有本機資料不會被讀取或刪除。
+            </div>
 
             <button className="btn" style={{ marginTop: 8 }} onClick={() => void doExport()} disabled={busy}>
               {busy ? '處理中…' : '⬆ 匯出存檔'}
@@ -232,9 +227,14 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
                       <tr><td>版本</td><td>v{meta.revision}</td><td>v{pending.meta.revision}</td></tr>
                       <tr><td>Mobie</td><td>{roster.length}</td><td>{pending.roster.length}</td></tr>
                       <tr><td>卡片</td><td>{cardsCount}</td><td>{pending.cards.length}</td></tr>
-                      <tr><td>模型</td><td>{modelCount || '—'}</td><td>{pending.includesModels ? pending.models.length : '不含'}</td></tr>
                     </tbody>
                   </table>
+
+                  {pending.legacyModelCount > 0 && (
+                    <div className="lib-hint" style={{ marginLeft: 0 }}>
+                      這份舊版存檔含 {pending.legacyModelCount} 個停用的 custom model entry；只驗證檔案完整性，匯入時會忽略，且不會碰本機舊資料。
+                    </div>
+                  )}
 
                   {direction === 'older' && (
                     <div className="save-compare__warn">
@@ -272,7 +272,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="model-foot">
+        <div className="utility-foot">
           目前進度：{roster.length} 隻Mobie。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。
         </div>
         {msg && <div className="lib-msg" style={{ marginTop: 8 }}>{msg}</div>}

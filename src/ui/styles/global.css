@@ -957,7 +957,7 @@ body {
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
 
-/* ============ Model manager modal ============ */
+/* ============ Shared modal surfaces ============ */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 100;
   display: grid; place-items: center; padding: 20px;
@@ -970,32 +970,24 @@ body {
   background: var(--bg-soft); border: 1px solid var(--stroke); box-shadow: var(--shadow);
 }
 .modal-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.model-search {
+.utility-search {
   width: 100%; padding: 11px 14px; border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.3); border: 1px solid var(--stroke); color: var(--text); font-size: 15px;
 }
-.model-search:focus { outline: none; border-color: var(--accent); }
-.model-error {
-  font-size: 13px; font-weight: 700; color: var(--bad);
-  background: rgba(255, 107, 107, 0.12); border: 1px solid rgba(255, 107, 107, 0.4);
-  padding: 8px 12px; border-radius: var(--radius-sm);
-}
-.model-list { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
-.model-row {
+.utility-search:focus { outline: none; border-color: var(--accent); }
+.utility-list { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.utility-row {
   display: flex; align-items: center; gap: 12px; text-align: left;
   padding: 8px 10px; border-radius: var(--radius-sm);
   background: var(--panel); border: 1px solid transparent;
 }
-.model-row--has { border-color: rgba(74, 222, 128, 0.45); background: rgba(74, 222, 128, 0.08); }
-.model-row__art { width: 46px; height: 46px; object-fit: contain; flex: 0 0 auto; }
-.model-row__meta { flex: 1; min-width: 0; }
-.model-row__name { font-weight: 800; font-size: 15px; }
-.model-row__id { color: var(--text-dim); font-size: 12px; font-weight: 700; }
-.model-row__status { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-.model-row__status.is-custom { color: var(--good); font-weight: 700; }
-.model-row__import { flex: 0 0 auto; cursor: pointer; }
-.model-empty { text-align: center; color: var(--text-dim); padding: 24px; }
-.model-foot { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.utility-row__art { width: 46px; height: 46px; object-fit: contain; flex: 0 0 auto; }
+.utility-row__meta { flex: 1; min-width: 0; }
+.utility-row__name { font-weight: 800; font-size: 15px; }
+.utility-row__id { color: var(--text-dim); font-size: 12px; font-weight: 700; }
+.utility-row__status { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.utility-empty { text-align: center; color: var(--text-dim); padding: 24px; }
+.utility-foot { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 
 /* ============ Card library extras ============ */
 .lib-panel { overflow: hidden; display: flex; flex-direction: column; gap: 10px; }

@@ -45,7 +45,6 @@ audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
 scene/battle/ Three-free renderer contracts + host, one lazy next entry, DOM compatibility adapter
 scene/r3f/  React-three-fiber 3D battle/capture stage (M3, lazy three)
-scene/models/  Legacy custom-model tooling; Battle/Capture never import or read it
 input/      QTE seam (qualityFromPointer / zones)
 ```
 
@@ -75,7 +74,7 @@ title → regionSelect → encounter → cardSelect → battle → result
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
   `ui/components/ToolsMenu`. Its first level is deliberately limited to **我的 Mobie** and **更多**;
   the latter opens a scrollable secondary menu for library / moves / partner skills / dex /
-  achievements / incubator / 3D models / save / settings, plus Scanner only when its capability is
+  achievements / incubator / save / settings, plus Scanner only when its capability is
   enabled (all utility entries are lazy-loaded). Every utility therefore
   remains reachable without flattening it into the primary hunt loop. `regionSelect` adds
   `BACK → title` (a 🏠 button); it is the in-game hub returned to after each result.
@@ -205,8 +204,7 @@ textures, and exposes current entries, estimated decoded bytes, and evictions to
 
 `vite build` emits a manifest plus explicit `NextBattleScene`, `CaptureStage`, Three-vendor, and
 compatibility categories. Rollup's explicit-only manual chunks keep Three out of the main and
-compatibility static graphs. Legacy ModelManager/Save model chunks remain isolated Ticket 22 work and
-are not dependencies of the battle/capture graphs.
+compatibility static graphs. Custom GLB/GLTF tooling is retired and has no runtime or lazy chunk.
 
 **Performance red-line:** high-frequency values (QTE pointer position, future MediaPipe coords) go
 through refs/rAF/DOM or Zustand — **never** React top-level state. See `TimingBar`, `MashMeter`, `FxCanvas`.
@@ -269,13 +267,17 @@ warnings.
   recommended trio. Advice never mutates selection: the player still chooses and orders the team.
 
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
-`heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-models`
-(IndexedDB GLB blobs, M3) · `mz.savemeta.v1` (localStorage save envelope meta, M5) · `mz-save-backup`
+`heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
+(localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
 `mobie.settings.v1` (read-only migration/rollback source) ·
 `mz.itembag.v1` (localStorage item bag, M7) · `mz-replays` (IndexedDB, M14 battle replays — canonical
 `encodeReplay` JSON only, `battleId`-deduped, FIFO-capped 50). The portable save bundles the roster (so
 `heldItemId` travels with it); the item-bag slice is not yet included in the `.save` (a known follow-up).
+
+The retired `mz-models` IndexedDB may still exist on a user's device. It is deliberately absent from
+the migration list and every product store path: the app does not open, read, write, or delete it, and
+does not perform a cleanup migration.
 
 ### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
 
@@ -302,21 +304,24 @@ deliberately dropped: zero backend, zero secret, zero vendor.
 - **`saveMeta.ts`** — envelope meta (`schemaVersion`/`profileName`/`updatedAt`/`revision`) in
   `mz.savemeta.v1`; bumped on every progress write. Pure `compareSaves` (newer/older/same) drives
   import old/new detection. `adoptMeta` locks lineage after an import.
-- **`bundle.ts`** — pure `packSave`/`unpackSave`. A `.save` is a **zip**: `manifest.json` +
-  `roster.json` + `cards.json` + optional `models/<speciesId>.glb`, with a **crc32 payload checksum**
-  and classified unpack errors (`not-zip`/`no-manifest`/`bad-manifest`/`schema-too-new`/`bad-payload`/
-  `checksum-mismatch`, mirroring `cardCode.ts`).
+- **`bundle.ts`** — pure `packSave`/`unpackSave`. New `.save` files are a **zip** containing only
+  `manifest.json`, `roster.json`, and `cards.json`, with a **crc32 payload checksum** and classified
+  unpack errors (`not-zip`/`no-manifest`/`bad-manifest`/`schema-too-new`/`bad-payload`/
+  `checksum-mismatch`, mirroring `cardCode.ts`). For old files, `models/<speciesId>.glb/.gltf` bytes are
+  treated as opaque checksum input and discarded immediately after verification; no model bytes are
+  returned by the codec.
 - **`saveIO.ts`** — wires the pure codec to store I/O + browser delivery. Export prefers
   `navigator.share` (iPad share sheet → Drive/Files), falling back to `<a download>`. Import does a
-  **whole-save replace** (roster → cards → optional models → `adoptMeta`) after auto-backing-up.
+  **whole-save replace** (roster → cards → `adoptMeta`) after auto-backing-up. It never touches the
+  retired `mz-models` store.
 - **`backupStore.ts`** — IndexedDB single-slot backup written *before* any overwrite; restorable
-  one-tap. Backs up roster+cards (not models — those are re-importable drop-ins).
+  one-tap. Backs up roster+cards only.
 
 UI: `SaveManagerModal` (Title "☁️ 存檔" entry, lazy so `fflate` stays out of the main bundle). New/old
 judgement is **semi-automatic** — a comparison table is always shown and an older-save overwrite
-requires explicit consent; no field-level merge (whole-save replace + backup). Correctness was
-cross-validated by an independent **5-agent blind interop test** (both pack and unpack directions,
-byte-level fidelity incl. binary models) — see the M5 commits.
+requires explicit consent; no field-level merge (whole-save replace + backup). A legacy save with
+model entries shows that the entries were checksum-verified and ignored; it never offers model
+restore or cleanup.
 
 ## 8. Content generation (do not hand-edit generated files)
 
@@ -329,8 +334,9 @@ to rebuild. **These four files are generated — change the generator, not the o
 
 The repo **does not bundle, fetch, or distribute infringing assets**. Artwork uses official PokéAPI
 raw URLs loaded at runtime (with skeleton fallback). Audio is fully procedural (Tone.js). Battle and
-Capture combatants are artwork billboards and never read GLB/GLTF or custom model storage. Legacy model
-tooling remains isolated from those runtime chunks pending its separately owned retirement ticket.
+Capture combatants are artwork billboards and never read GLB/GLTF or custom model storage. Custom
+model import, storage access, and playback are retired; future 3D Mobie work must use a separately
+scoped Three.js procedural-geometry ticket.
 
 ## 10. Known gotchas
 

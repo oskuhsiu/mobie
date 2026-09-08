@@ -1,24 +1,14 @@
 // M5：把純粹的 packSave/unpackSave（bundle.ts）接到真實的 store I/O 與瀏覽器的
 // 分享 / 下載。本檔有副作用（讀 IndexedDB、碰 navigator / DOM），故不在 vitest 覆蓋；
-// 純邏輯都在 bundle.ts / saveMeta.ts。匯入套用（apply）在 M5-4 補上。
+// 純邏輯都在 bundle.ts / saveMeta.ts。custom GLB 已停用，舊存檔模型只在 bundle codec
+// 驗證 checksum，永不進入這層。
 
 import type { OwnedUnit } from '@/game/types'
-import { packSave, unpackSave, type SaveModel, type UnpackResult, type UnpackOk } from './bundle'
+import { packSave, unpackSave, type UnpackResult, type UnpackOk } from './bundle'
 import { loadMeta, adoptMeta, type SaveMeta } from './saveMeta'
 import { listCards, replaceAllCards } from '@/game/cardLibrary'
-import { listModelIds, getModelBlob, clearAllModels, putModel } from '@/scene/models/modelStore'
 import { saveBackup, loadBackupBytes } from './backupStore'
 import { useRoster } from '@/store/rosterStore'
-
-async function gatherModels(): Promise<SaveModel[]> {
-  const ids = await listModelIds()
-  const out: SaveModel[] = []
-  for (const id of ids) {
-    const blob = await getModelBlob(id)
-    if (blob) out.push({ speciesId: id, bytes: new Uint8Array(await blob.arrayBuffer()) })
-  }
-  return out
-}
 
 export interface BuiltSave {
   bytes: Uint8Array
@@ -26,20 +16,18 @@ export interface BuiltSave {
   meta: SaveMeta
   /** 打包後的位元組大小（給 UI 顯示 / 判斷分享可行性） */
   size: number
-  modelCount: number
 }
 
 /**
  * 打包目前存檔成 `<profileName>.save`。roster 由呼叫端（讀 useRoster 的 live 狀態）傳入，
- * cards / models 從各自的 IndexedDB 取。includeModels=false 時不含 GLB（小而快）。
+ * cards 從 IndexedDB 取。新格式固定只含 canonical roster / cards。
  */
-export async function buildSaveFile(roster: OwnedUnit[], includeModels: boolean): Promise<BuiltSave> {
+export async function buildSaveFile(roster: OwnedUnit[]): Promise<BuiltSave> {
   const meta = loadMeta()
   const cards = await listCards()
-  const models = includeModels ? await gatherModels() : undefined
-  const bytes = packSave({ meta, roster, cards, models })
+  const bytes = packSave({ meta, roster, cards })
   const filename = `${meta.profileName || 'trainer'}.save`
-  return { bytes, filename, meta, size: bytes.byteLength, modelCount: models?.length ?? 0 }
+  return { bytes, filename, meta, size: bytes.byteLength }
 }
 
 export type DeliverResult = 'shared' | 'downloaded'
@@ -97,19 +85,13 @@ export async function backupCurrentSave(now: number): Promise<void> {
 }
 
 /**
- * 套用一份已解析的存檔（整包取代）：
- *  roster → cards 整批取代 → （若含模型）清空模型再套用 → 最後 adoptMeta 鎖定新舊血統。
- * adoptMeta 必須最後呼叫，蓋掉過程中 putCards/putModel 的 bump。
+ * 套用一份已解析的存檔（整包取代）：roster → cards 整批取代 → 最後 adoptMeta 鎖定
+ * 新舊血統。舊版模型已在 unpackSave 完成 opaque checksum 驗證並丟棄，因此這裡不碰
+ * `mz-models`。
  */
 export async function applyImportedSave(parsed: UnpackOk): Promise<void> {
   await useRoster.getState().replaceAll(parsed.roster)
   await replaceAllCards(parsed.cards)
-  if (parsed.includesModels) {
-    await clearAllModels()
-    for (const m of parsed.models) {
-      await putModel(m.speciesId, new Blob([m.bytes as BlobPart], { type: 'model/gltf-binary' }))
-    }
-  }
   adoptMeta(parsed.meta)
 }
 

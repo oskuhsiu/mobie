@@ -7,8 +7,7 @@ import { useSettings } from '@/store/settingsStore'
 import { claimableCount } from '@/game/achievements'
 import { isHatchable } from '@/game/incubator'
 
-// 工具 overlay 較重（qrcode/three/camera），lazy 載入避免拖慢開場/區域選擇
-const ModelManagerModal = lazy(() => import('@/ui/components/ModelManagerModal').then((m) => ({ default: m.ModelManagerModal })))
+// 工具 overlay 較重（qrcode/camera），lazy 載入避免拖慢開場/區域選擇
 const CardLibraryModal = lazy(() => import('@/ui/components/CardLibraryModal').then((m) => ({ default: m.CardLibraryModal })))
 const SaveManagerModal = lazy(() => import('@/ui/components/SaveManagerModal').then((m) => ({ default: m.SaveManagerModal })))
 const SettingsModal = lazy(() => import('@/ui/components/SettingsModal').then((m) => ({ default: m.SettingsModal })))
@@ -21,11 +20,11 @@ const IncubatorModal = lazy(() => import('@/ui/components/IncubatorModal').then(
 const ReplayListModal = lazy(() => import('@/ui/components/ReplayListModal').then((m) => ({ default: m.ReplayListModal })))
 const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
 
-type Overlay = 'none' | 'models' | 'library' | 'scanner' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
+type Overlay = 'none' | 'library' | 'scanner' | 'save' | 'settings' | 'team' | 'moves' | 'partner' | 'dex' | 'achievements' | 'incubator' | 'replays'
 
 /**
  * 共用工具列：卡庫 / 隊伍 / 招式 / 夥伴技能 / 圖鑑 / 成就 / 孵化所 / 回放 / 掃卡（可選） /
- * 3D 模型 / 存檔 / 設定。
+ * 存檔 / 設定。
  * Title 與 RegionSelect（遊戲中樞）共用——避免「開始遊戲後這些功能就找不到」。
  */
 export function ToolsMenu() {
@@ -76,7 +75,6 @@ export function ToolsMenu() {
               </button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('replays')}>🎬 回放</button>
               {scannerEnabled && <button className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner')}>📷 掃卡</button>}
-              <button className="btn btn--ghost btn--sm" onClick={() => open('models')}>🧩 3D 模型</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('save')}>☁️ 存檔</button>
               <button className="btn btn--ghost btn--sm" onClick={() => open('settings')}>⚙️ 設定</button>
             </motion.div>
@@ -86,7 +84,6 @@ export function ToolsMenu() {
 
       <Suspense fallback={null}>
         <AnimatePresence>
-          {overlay === 'models' && <ModelManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'library' && <CardLibraryModal onClose={() => setOverlay('none')} />}
           {overlay === 'save' && <SaveManagerModal onClose={() => setOverlay('none')} />}
           {overlay === 'settings' && <SettingsModal onClose={() => setOverlay('none')} />}

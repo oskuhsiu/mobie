@@ -1,6 +1,7 @@
+import { zipSync, strToU8 } from 'fflate'
 import { putCards, listCards } from '@/game/cardLibrary'
-import { packSave } from '@/game/save/bundle'
 import { loadMeta } from '@/game/save/saveMeta'
+import { crc32Bytes } from '@/game/crc32'
 import { useIncubator } from '@/store/incubatorStore'
 import { useMeta } from '@/store/metaStore'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
@@ -47,6 +48,7 @@ export interface M24BaselineDriver {
   prepareBattleError: () => void
   prepareRecordedWin: () => void
   makeOlderSave: () => Promise<number[]>
+  makeMalformedLegacySave: () => Promise<number[]>
   endBattle: (outcome: Outcome) => void
   sendGameEvent: (event: GameEvent) => void
   snapshot: () => M24SeedSnapshot & { battle: boolean }
@@ -206,11 +208,32 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     useBattleStore.setState({ battle, phase: 'playerChoice', intentPresentation: null, battleError: null })
   }
 
-  const makeOlderSave = async (): Promise<number[]> => {
+  const buildLegacySave = async (modelBytes: Uint8Array, checksumModelBytes = modelBytes): Promise<number[]> => {
     const cards = await listCards()
     const meta = { ...loadMeta(), updatedAt: 0, revision: 0 }
-    const bytes = packSave({ meta, roster: useRoster.getState().roster, cards })
+    const rosterBytes = strToU8(JSON.stringify(useRoster.getState().roster))
+    const cardsBytes = strToU8(JSON.stringify(cards))
+    const manifest = {
+      schemaVersion: meta.schemaVersion,
+      profileName: meta.profileName,
+      updatedAt: meta.updatedAt,
+      revision: meta.revision,
+      includesModels: true,
+      counts: { roster: useRoster.getState().roster.length, cards: cards.length, models: 1 },
+      checksum: crc32Bytes([rosterBytes, cardsBytes, checksumModelBytes]),
+    }
+    const bytes = zipSync({
+      'manifest.json': strToU8(JSON.stringify(manifest)),
+      'roster.json': rosterBytes,
+      'cards.json': cardsBytes,
+      'models/25.gltf': modelBytes,
+    })
     return Array.from(bytes)
+  }
+  const makeOlderSave = () => buildLegacySave(new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x22]))
+  const makeMalformedLegacySave = () => {
+    const validBytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x22])
+    return buildLegacySave(new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x23]), validBytes)
   }
 
   const endBattle = (outcome: Outcome): void => {
@@ -234,6 +257,7 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     prepareBattleError,
     prepareRecordedWin,
     makeOlderSave,
+    makeMalformedLegacySave,
     endBattle,
     sendGameEvent: dispatchGameEvent,
     snapshot,

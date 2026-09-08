@@ -7,8 +7,9 @@ truth and reference them instead of re-deriving.
 ## Hard constraints (do not violate)
 
 - **Platform is Web/PWA** (iPad-first), not native iOS. Native is only a future performance escape hatch.
-- **No infringing assets** in the repo. Artwork = PokéAPI runtime URLs; audio = procedural; 3D models =
-  user drop-in only (`public/models/` is gitignored).
+- **No infringing assets** in the repo. Artwork = PokéAPI runtime URLs; audio = procedural. Custom
+  GLB/GLTF import, playback, and model-store I/O are retired; existing `mz-models` data stays untouched
+  on the user's device, and future 3D work must use procedural geometry under a separate ticket.
 - **Generated data files are off-limits to hand edits:** `src/game/data/{species,moves,regions,playerCards}.ts`
   come from `scripts/gen_dex.mjs`. Change the generator and re-run `node scripts/gen_dex.mjs`.
   `src/game/data/practiceRegion.ts` is the one hand-authored data file.

@@ -159,7 +159,7 @@ export function MoveTrainerModal({ onClose }: { onClose: () => void }) {
           })}
         </div>
 
-        <div className="model-foot">
+        <div className="utility-foot">
           升級會自動領悟新招；訓練所可學 teachable 招、調整出戰 4 招。SP 與夥伴技能（M17）共用、分池顯示。
         </div>
       </motion.div>

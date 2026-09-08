@@ -5,9 +5,9 @@
 // 必須在任何 store 模組載入「之前」執行（store 於 import 時即 `loadSettings()`/`loadRoster()` 讀 key）。
 // 故由 `src/bootstrap.ts` 以「最前 side-effect import」呼叫（見 main.tsx）。
 //
-// 注意：IndexedDB DB 名（`mz-cards`/`mz-models`/`mz-save-backup`）**刻意保留舊名**，不在此遷移——
-// 純內部、不面向品牌、不進 .save，且跨 DB 搬遷 blob 成本高、`indexedDB.databases()` 在 iPad Safari
-// 支援不穩易孤立模型/卡庫（plan/20「二選一明文記錄」採此案）。`.save` 格式不含 key 名故完全不受影響。
+// 注意：IndexedDB DB 名（`mz-cards`/`mz-save-backup`）**刻意保留舊名**，不在此遷移——
+// 純內部、不面向品牌、不進 .save。已停用的 `mz-models` 也不在遷移清單中，保留使用者既有
+// bytes，絕不由 app 開啟、清理或搬移。
 
 /** 舊→新 localStorage key 對照（6 個 slice）。 */
 export const KEY_MIGRATIONS: ReadonlyArray<readonly [oldKey: string, newKey: string]> = [

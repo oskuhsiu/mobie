@@ -1,4 +1,4 @@
-// M14.c — 戰鬥回放持久化（IndexedDB `mz-replays`）。比照 modelStore.ts 的薄 I/O glue。
+// M14.c — 戰鬥回放持久化（IndexedDB `mz-replays`）的薄 I/O glue。
 // 只存 canonical encodeReplay 的 .json 字串（不存 derived .txt 戰報，plan/15 §7）。
 // key = battleId（FNV-1a(seed+snapshot)）去重；超過 FIFO 上限丟最舊。node 測試無 indexedDB → 安全退回。
 

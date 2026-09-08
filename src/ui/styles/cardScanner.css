@@ -31,5 +31,5 @@
 .scan-nocam__msg { color: var(--text-dim); text-align: center; font-size: 14px; line-height: 1.5; }
 .scan-result--inline { position: static; inset: auto; background: transparent; backdrop-filter: none; padding: 6px 0 0; }
 .scan-manual { display: flex; gap: 8px; align-items: center; }
-.scan-manual .model-search { flex: 1; }
-.scan-manual--primary .model-search { border-color: var(--accent); }
+.scan-manual .utility-search { flex: 1; }
+.scan-manual--primary .utility-search { border-color: var(--accent); }

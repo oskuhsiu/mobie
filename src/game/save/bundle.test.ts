@@ -3,6 +3,7 @@ import { zipSync, unzipSync, strToU8 } from 'fflate'
 import { packSave, unpackSave, type SaveSlices } from './bundle'
 import { SAVE_SCHEMA_VERSION } from './saveMeta'
 import type { OwnedUnit } from '@/game/types'
+import { crc32Bytes } from '@/game/crc32'
 
 // SPECIES 含 1（妙蛙種子）/ 4（小火龍）等；sanitizeRoster 會丟棄不在圖鑑的 speciesId。
 const unit = (id: string, speciesId: number): OwnedUnit => ({
@@ -39,21 +40,48 @@ describe('bundle：packSave / unpackSave round-trip', () => {
     expect(r.meta).toMatchObject({ profileName: 'Red', updatedAt: 1000, revision: 4 })
   })
 
-  it('省略 models → includesModels=false、models 空', () => {
-    const r = unpackSave(packSave(slices()))
-    expect(r.ok && r.includesModels).toBe(false)
-    expect(r.ok && r.models).toHaveLength(0)
-  })
-
-  it('含 models → 二進位完整往返、includesModels=true', () => {
-    const glb = new Uint8Array([0x67, 0x6c, 0x54, 0x46, 1, 2, 3, 250])
-    const r = unpackSave(packSave(slices({ models: [{ speciesId: 4, bytes: glb }] })))
+  it('新格式固定 no-model，manifest 與 zip 都沒有模型', () => {
+    const packed = packSave(slices())
+    const entries = unzipSync(packed)
+    const r = unpackSave(packed)
+    expect(JSON.parse(new TextDecoder().decode(entries['manifest.json']))).toMatchObject({
+      includesModels: false,
+      counts: { models: 0 },
+    })
+    expect(Object.keys(entries).some((path) => path.startsWith('models/'))).toBe(false)
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.includesModels).toBe(true)
-    expect(r.models).toHaveLength(1)
-    expect(r.models[0].speciesId).toBe(4)
-    expect(Array.from(r.models[0].bytes)).toEqual(Array.from(glb))
+    expect(r.legacyModelCount).toBe(0)
+    expect(r).not.toHaveProperty('models')
+  })
+
+  it('舊版模型 bytes 只參與 checksum，驗證後立即丟棄', () => {
+    const rosterBytes = strToU8(JSON.stringify(slices().roster))
+    const cardsBytes = strToU8(JSON.stringify(slices().cards))
+    // 刻意不是有效 GLB；legacy codec 只應把它視為 opaque bytes。
+    const opaqueBytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x00])
+    const manifest = {
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      profileName: 'Red',
+      updatedAt: 1000,
+      revision: 4,
+      includesModels: true,
+      counts: { roster: 2, cards: 2, models: 1 },
+      checksum: crc32Bytes([rosterBytes, cardsBytes, opaqueBytes]),
+    }
+    const packed = zipSync({
+      'manifest.json': strToU8(JSON.stringify(manifest)),
+      'roster.json': rosterBytes,
+      'cards.json': cardsBytes,
+      'models/4.gltf': opaqueBytes,
+    })
+
+    const r = unpackSave(packed)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.legacyModelCount).toBe(1)
+    expect(r.manifest.includesModels).toBe(true)
+    expect(r).not.toHaveProperty('models')
   })
 
   it('manifest.counts 反映實際數量', () => {

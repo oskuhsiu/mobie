@@ -1,10 +1,12 @@
 # M24 post-M23 Chrome baseline
 
-This is the repeatable non-battle baseline for the application at the end of
-M23 Ticket 19 (`d6514e8`). It exercises the real Vite app in Chrome through
+This is the repeatable non-battle baseline for the application after
+M24 Ticket 22, starting from the Ticket 21 frontier (`2121098`). It exercises the real Vite app in Chrome through
 CDP, records screenshots and the Chrome accessibility tree, and writes an
 index containing the route, event, storage, lazy-loading, capability, focus,
 scroll, artwork, and browser-error observations for every checkpoint.
+The Ticket 22 run is complete only when this command produces the evidence
+index; no captured run is checked into the repository.
 
 The baseline does not use generated mockups. The journey clicks the real
 screens and modals, reads the real generated species data, and seeds the
@@ -74,8 +76,9 @@ The journey index covers:
   empty Replay and Incubator states;
 - My Mobies, owner MobCard, growth progress, Card Library add/QR/invalid
   import error, Move Trainer, Partner Skills, Dex and registered filter,
-  Achievements and claim, ready egg and hatch reveal, legacy model archive,
-  Save idle/busy/result/import-error/older-compare/backup-restore, and
+  Achievements and claim, ready egg and hatch reveal,
+  Save idle/busy/result/malformed-legacy-error/older-compare/backup-restore
+  with a legacy model entry checksum-only fixture, and
   Settings;
 - Region Select, wild Encounter and target card, Team Select and matchup
   advice, battle handoff, artwork failure fallback, recoverable error, and
@@ -93,6 +96,8 @@ metrics add point-in-time observations for:
 - active focus, modal containment, and Escape behavior where exercised;
 - key DOM counts, artwork load/failure/fallback indicators, localStorage keys,
   IndexedDB names, and loaded JS resource URLs;
+- no-model UI controls, exported zip entry names, and the retired `mz-models`
+  sentinel's keys, bytes, timestamp, count, and operation counters;
 - console/log errors, unhandled exceptions, and network load failures.
 
 The Save busy checkpoint briefly holds the real Web Share boundary in the
@@ -121,7 +126,7 @@ unsupported/denied/manual-code fallback remains the camera boundary.
 | Replay | lazy load, empty, populated, player | wait, open event stream, export/report, delete, or close |
 | Incubator | empty, ready, hatch reveal | obtain egg, hatch when ready, or close |
 | Card Library | populated, add panel, QR, invalid import | add/import/print or close |
-| Save | idle, export busy, export result | wait for export, inspect download, import, restore, or close |
+| Save | idle, export busy, export result | wait for export, inspect no-model download, import, restore, or close |
 | Scanner | default-off entry absent; explicit on state can open lazy modal | `scannerEnabled` controls entry/chunk; camera request only after selecting it |
 
 The script catalog is the executable form of the route/event/storage/lazy
@@ -132,10 +137,16 @@ name in evidence while their values remain application-owned:
   `mobie.settings.v1` (read-only migration source), `mobie.settings.v2`,
   `mobie.skillpoints.v1`, `mobie.playerskills.v1`,
   `mobie.itembag.v1`, `mobie.run.v1`, and `mobie.savemeta.v1`;
-- IndexedDB: `mz-cards`, `mz-replays`, `mz-models`, and save backup storage;
+- IndexedDB: `mz-cards`, `mz-replays`, retired `mz-models` sentinel storage, and save backup storage;
 - lazy boundaries: utility modals, `qrcode`, `fflate`, capability-gated
   `CardScannerModal`/`jsqr`, `CaptureStage`, and the M23 `NextBattleScene` entry;
   `ReplayPlayerModal` is a nested child of its already lazy `ReplayListModal` entry.
+
+The retired `mz-models` store is seeded only by the baseline harness with a
+sentinel record. The app journey must leave its keys, bytes, timestamp, and
+count unchanged, with zero observed open, transaction, read, write, or delete
+operations. Legacy save model bytes are a checksum-only fixture and are never
+returned to runtime storage.
 
 The baseline is diagnostic evidence. It does not claim iPad Safari support,
 hardware performance, long-duration heap stability, or thermal qualification;

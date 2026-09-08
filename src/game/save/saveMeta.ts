@@ -93,7 +93,7 @@ function writeMeta(meta: SaveMeta): void {
 }
 
 /**
- * 任一存檔資料（roster / cards / models）寫入後呼叫：revision++、updatedAt = now。
+ * 任一 canonical 存檔資料（roster / cards）寫入後呼叫：revision++、updatedAt = now。
  * now 由呼叫端傳入（`Date.now()`），保持本模組可測、不直接相依時鐘。
  */
 export function bumpSaveMeta(now: number): SaveMeta {
@@ -112,7 +112,7 @@ export function setProfileName(name: string): SaveMeta {
 
 /**
  * 匯入套用「之後」呼叫：採用匯入存檔的 updatedAt/revision 血統（讓後續本機比對一致），
- * 但 schemaVersion 鎖回本機當前版本。必須在所有資料寫入（含會 bump 的 putCards/putModel）之後呼叫，
+ * 但 schemaVersion 鎖回本機當前版本。必須在所有資料寫入（含會 bump 的 putCards）之後呼叫，
  * 才不會被那些 bump 蓋掉。
  */
 export function adoptMeta(incoming: SaveMeta): SaveMeta {

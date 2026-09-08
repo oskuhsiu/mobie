@@ -1,6 +1,6 @@
 // M5-4：匯入覆蓋「之前」的自動備份槽（IndexedDB，單一 'last' 槽）。
 // 安全紅線：絕不在沒有可救回備份的情況下覆蓋既有存檔。備份內容＝當前 roster+cards 的
-// .save 位元組（不含 GLB 模型——模型是可重新 drop-in 的，進度才是不可逆的）。
+// .save 位元組；custom GLB 已停用，備份流程不碰舊模型資料。
 
 import type { SaveMeta } from './saveMeta'
 

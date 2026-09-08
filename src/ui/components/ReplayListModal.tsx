@@ -110,7 +110,7 @@ export function ReplayListModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <div className="model-foot">回放存於瀏覽器 <b>mz-replays</b>，最多保留最近 50 場（超過自動清最舊）。文字戰報為即時產生、不另存。</div>
+        <div className="utility-foot">回放存於瀏覽器 <b>mz-replays</b>，最多保留最近 50 場（超過自動清最舊）。文字戰報為即時產生、不另存。</div>
       </motion.div>
 
       {playing && <ReplayPlayerModal log={playing} onClose={() => setPlaying(null)} />}

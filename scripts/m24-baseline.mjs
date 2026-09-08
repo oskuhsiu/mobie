@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 
 const SCENARIO_ID = 'm24-post-m23-chrome-v1'
-const BASELINE_COMMIT = 'd6514e8'
+const BASELINE_COMMIT = '2121098'
 const BASELINE_SEED = 'm24-post-m23-chrome-seed'
 const OUTPUT_ROOT = resolve('test-runs', 'm24', 'post-m23-chrome')
 
@@ -37,7 +37,7 @@ const CHECKPOINT_CATALOG = {
   },
   'tools-more': {
     route: 'title', event: 'ToolsMenu.moreOpen', next: ['open one utility modal'],
-    storage: ['mobie.meta.v1', 'mobie.incubator.v1'], lazy: ['utility modal entries'], capability: 'utility hub',
+    storage: ['mobie.meta.v1', 'mobie.incubator.v1', 'mz-models'], lazy: ['utility modal entries'], capability: 'utility hub; custom GLB entry removed; sentinel archive untouched',
   },
   'scanner-off': {
     route: 'title', event: 'scannerEnabled=false', next: ['設定→顯示掃卡工具'],
@@ -115,37 +115,33 @@ const CHECKPOINT_CATALOG = {
     route: 'title/modal:incubator/reveal', event: 'Incubator.hatch', next: ['點擊關閉'],
     storage: ['mobie.incubator.v1', 'mobie.roster.v2', 'mobie.meta.v1'], lazy: ['IncubatorModal'], capability: 'deterministic hatch reveal',
   },
-  'model-manager': {
-    route: 'title/modal:models', event: 'ToolsMenu.open(models)', next: ['匯入 GLB', '關閉'],
-    storage: ['mz-models'], lazy: ['ModelManagerModal'], capability: 'legacy model archive isolated from battle',
-  },
   save: {
     route: 'title/modal:save', event: 'ToolsMenu.open(save)', next: ['匯出存檔', '選擇 .save 檔', '關閉'],
-    storage: ['mobie.savemeta.v1', 'mobie.roster.v2', 'mz-cards', 'mz-models', 'mz-save-backup'], lazy: ['SaveManagerModal', 'fflate'], capability: 'local portable save I/O',
+    storage: ['mobie.savemeta.v1', 'mobie.roster.v2', 'mz-cards', 'mz-save-backup', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'local portable save I/O; fixed no-model export; sentinel archive untouched',
   },
   'save-busy': {
     route: 'title/modal:save/busy', event: 'buildSaveFile', next: ['wait for export', '取消分享/下載'],
-    storage: ['mobie.savemeta.v1', 'mobie.roster.v2', 'mz-cards'], lazy: ['SaveManagerModal', 'fflate'], capability: 'busy guard',
+    storage: ['mobie.savemeta.v1', 'mobie.roster.v2', 'mz-cards', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'busy guard; no model read',
   },
   'save-result': {
     route: 'title/modal:save/result', event: 'deliverSaveFile', next: ['檢查下載檔', '關閉'],
-    storage: ['mobie.savemeta.v1', 'mz-cards'], lazy: ['SaveManagerModal', 'fflate'], capability: 'download/share fallback',
+    storage: ['mobie.savemeta.v1', 'mz-cards', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'download/share fallback; no-model archive',
   },
   'save-import-error': {
-    route: 'title/modal:save/import-error', event: 'readSaveFile(invalid)', next: ['選擇有效 .save 檔', '關閉'],
-    storage: ['mobie.savemeta.v1'], lazy: ['SaveManagerModal', 'fflate'], capability: 'invalid save validation',
+    route: 'title/modal:save/import-error', event: 'readSaveFile(malformed legacy model)', next: ['選擇有效 .save 檔', '關閉'],
+    storage: ['mobie.savemeta.v1', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'malformed legacy checksum error; archive untouched',
   },
   'save-compare-older': {
     route: 'title/modal:save/compare', event: 'compareSaves', next: ['勾選確認', '取消', '覆蓋並匯入'],
-    storage: ['mobie.savemeta.v1', 'mobie.roster.v2', 'mz-cards'], lazy: ['SaveManagerModal', 'fflate'], capability: 'older-save warning',
+    storage: ['mobie.savemeta.v1', 'mobie.roster.v2', 'mz-cards', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'older-save warning; legacy model entries are ignored',
   },
   'save-backup-ready': {
     route: 'title/modal:save/backup', event: 'backupCurrentSave', next: ['還原', '關閉'],
-    storage: ['mz-save-backup'], lazy: ['SaveManagerModal', 'fflate'], capability: 'pre-import backup',
+    storage: ['mz-save-backup', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'pre-import backup; archive untouched',
   },
   'save-restore-result': {
     route: 'title/modal:save/restore', event: 'restoreBackup', next: ['關閉'],
-    storage: ['mz-save-backup', 'mz-cards', 'mobie.savemeta.v1', 'mobie.roster.v2'], lazy: ['SaveManagerModal', 'fflate'], capability: 'backup restore result',
+    storage: ['mz-save-backup', 'mz-cards', 'mobie.savemeta.v1', 'mobie.roster.v2', 'mz-models'], lazy: ['SaveManagerModal', 'fflate'], capability: 'backup restore result; archive untouched',
   },
   settings: {
     route: 'title/modal:settings', event: 'ToolsMenu.open(settings)', next: ['修改偏好', '關閉'],
@@ -246,7 +242,7 @@ const JOURNEY = [
   'my-mobies', 'my-mobies-detail', 'card-library', 'card-library-add',
   'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open',
   'partner-skills', 'dex', 'dex-registered', 'achievements', 'achievements-claimed',
-  'incubator-ready', 'incubator-hatch-reveal', 'model-manager', 'save', 'save-busy',
+  'incubator-ready', 'incubator-hatch-reveal', 'save', 'save-busy',
   'save-result', 'save-import-error', 'save-compare-older', 'save-backup-ready',
   'save-restore-result', 'settings-malformed-recovery', 'settings', 'settings-reloaded', 'scanner-on-fallback', 'region-select', 'encounter', 'team-select',
   'team-select-advice', 'battle-handoff', 'battle-artwork-fallback', 'battle-error', 'wild-win-result',
@@ -273,7 +269,7 @@ function validateCheckpointEvidence(record) {
   if (record.schemaVersion !== 1 || !record.scenarioId || !record.checkpoint || !record.baselineCommit) throw new Error('M24 checkpoint evidence has an invalid identity')
   if (!record.viewport?.id || !Number.isInteger(record.viewport.width) || !Number.isInteger(record.viewport.height)) throw new Error(`M24 checkpoint ${record.checkpoint} has an invalid viewport`)
   if (!record.route || !record.event || !Array.isArray(record.legalNext) || !Array.isArray(record.storageBoundary) || !Array.isArray(record.lazyBoundary) || !record.capabilityBoundary) throw new Error(`M24 checkpoint ${record.checkpoint} has incomplete route metadata`)
-  if (!record.dom?.viewport || !record.dom.domCounts || !record.dom.horizontalOverflow || !record.dom.focus || !record.dom.storage || !Array.isArray(record.dom.resources)) throw new Error(`M24 checkpoint ${record.checkpoint} has incomplete DOM diagnostics`)
+  if (!record.dom?.viewport || !record.dom.domCounts || !record.dom.horizontalOverflow || !record.dom.focus || !record.dom.storage || !record.dom.modelStorage?.available || !Array.isArray(record.dom.resources)) throw new Error(`M24 checkpoint ${record.checkpoint} has incomplete DOM diagnostics`)
   if (!Array.isArray(record.errors?.console) || !Array.isArray(record.errors?.unhandled) || !Array.isArray(record.errors?.networkFailed)) throw new Error(`M24 checkpoint ${record.checkpoint} has incomplete browser error diagnostics`)
 }
 
@@ -448,6 +444,12 @@ const DOM_DIAGNOSTICS = String.raw`(async () => {
   const failedImages = images.filter((img) => img.complete && img.naturalWidth === 0)
   const active = document.activeElement
   const text = (document.body.innerText || '').replace(/\s+/g, ' ').trim()
+  const modelUi = typeof window.__M24_MODEL_UI_STATUS__ === 'function'
+    ? window.__M24_MODEL_UI_STATUS__()
+    : { customModelInputVisible: false, customModelControlsVisible: false }
+  const modelStorage = typeof window.__M24_MODEL_DB_SNAPSHOT__ === 'function'
+    ? await window.__M24_MODEL_DB_SNAPSHOT__()
+    : null
   const html = document.documentElement
   const body = document.body
   const modal = document.querySelector('.modal-card')
@@ -467,8 +469,9 @@ const DOM_DIAGNOSTICS = String.raw`(async () => {
     focus: { tag: active?.tagName?.toLowerCase() ?? null, id: active?.id || null, className: typeof active?.className === 'string' ? active.className : null, ariaLabel: active?.getAttribute?.('aria-label') ?? null, text: (active?.textContent || '').trim().slice(0, 100), withinModal: Boolean(active && modal?.contains(active)) },
     domCounts: { buttons: document.querySelectorAll('button').length, links: document.querySelectorAll('a').length, images: images.length, failedImages: failedImages.length, canvases: document.querySelectorAll('canvas').length, dialogs: document.querySelectorAll('[role="dialog"]').length, modals: document.querySelectorAll('.modal-card').length, regions: document.querySelectorAll('.region-card').length, cards: document.querySelectorAll('.poke-card').length, teamRows: document.querySelectorAll('.team-row').length, scrollContainers: scrollOwners.length },
     artwork: { images, failedImages: failedImages.slice(0, 20), loaded: images.filter((img) => img.complete && img.naturalWidth > 0).length, pending: images.filter((img) => !img.complete).length, fallbackNodes: document.querySelectorAll('.battle-renderer__silhouette, .sprite__skeleton').length, rendererArtwork: document.querySelector('.battle-scene-host') ? { player: document.querySelector('.battle-scene-host')?.dataset.battleArtworkPlayer || null, foe: document.querySelector('.battle-scene-host')?.dataset.battleArtworkFoe || null } : null },
-    capabilities: { scannerVisible: [...document.querySelectorAll('button, a, [role="button"]')].some((el) => (el.textContent || '').includes('掃卡')), scannerChunkLoaded: resources.some((name) => /CardScanner|jsqr/i.test(name)), cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0), mediaDevices: Boolean(navigator.mediaDevices?.getUserMedia), webgl: (() => { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')) })(), customModelInputVisible: Boolean(document.querySelector('input[type="file"][accept*="glb"]')) },
+    capabilities: { scannerVisible: [...document.querySelectorAll('button, a, [role="button"]')].some((el) => (el.textContent || '').includes('掃卡')), scannerChunkLoaded: resources.some((name) => /CardScanner|jsqr/i.test(name)), cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0), mediaDevices: Boolean(navigator.mediaDevices?.getUserMedia), webgl: (() => { const c = document.createElement('canvas'); return Boolean(c.getContext('webgl2') || c.getContext('webgl')) })(), customModelInputVisible: modelUi.customModelInputVisible, customModelControlsVisible: modelUi.customModelControlsVisible },
     storage: { localStorageKeys: Object.keys(localStorage).sort(), indexedDbNames: databases },
+    modelStorage,
     resources,
     text: text.slice(0, 12_000),
   }
@@ -480,6 +483,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
   cdp.resetObservation()
   const checkpoints = []
   const call = cdp.call
+  let modelDbSignature = null
   const evaluate = async (expression) => {
     const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true })
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text ?? 'Page evaluation failed')
@@ -497,6 +501,20 @@ async function runViewport(cdp, config, viewport, browserInfo) {
       await sleep(75)
     }
     throw new Error(`Timed out waiting for ${description}${lastError ? ` (${lastError.message})` : ''}`)
+  }
+  const verifyModelDb = (status, label) => {
+    if (!status?.available) throw new Error(`Sentinel mz-models archive is unavailable at ${label}: ${status?.error ?? 'unknown error'}`)
+    const io = Object.entries(status.io ?? {}).filter(([, value]) => Number(value) > 0)
+    if (io.length > 0) throw new Error(`App touched retired mz-models at ${label}: ${JSON.stringify(io)}`)
+    const record = status.records?.find(({ key }) => key === 777)
+    const expectedBytes = [77, 79, 66, 73, 69, 45, 83, 69, 78, 84, 73, 78, 69, 76]
+    if (JSON.stringify(status.keys) !== JSON.stringify(['777']) || !record || record.name !== 'sentinel.glb' || record.type !== 'model/gltf-binary' || record.lastModified !== 1700000000000 || JSON.stringify(record.bytes) !== JSON.stringify(expectedBytes)) {
+      throw new Error(`Sentinel mz-models archive has an unexpected shape at ${label}`)
+    }
+    const signature = JSON.stringify({ keys: status.keys, records: status.records })
+    if (modelDbSignature === null) modelDbSignature = signature
+    else if (signature !== modelDbSignature) throw new Error(`Sentinel mz-models archive changed at ${label}`)
+    return status
   }
   const exists = (selector) => evaluate(`Boolean(document.querySelector(${JSON.stringify(selector)}))`)
   const clickVisible = async (elementExpression, description) => {
@@ -530,8 +548,15 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     window.__M24_ORIGINAL_SHARE__ = nav.share
     window.__M24_ORIGINAL_CAN_SHARE__ = nav.canShare
     window.__M24_RELEASE_SHARE__ = null
+    window.__M24_SHARED_SAVE_FILE__ = null
+    window.__M24_SHARED_SAVE_BYTES__ = null
     Object.defineProperty(nav, 'canShare', { configurable: true, value: () => true })
-    Object.defineProperty(nav, 'share', { configurable: true, value: () => new Promise((resolve) => { window.__M24_RELEASE_SHARE__ = resolve }) })
+    Object.defineProperty(nav, 'share', { configurable: true, value: (data) => {
+      const file = data?.files?.[0]
+      window.__M24_SHARED_SAVE_FILE__ = file ? { name: file.name, size: file.size, type: file.type } : null
+      if (file) file.arrayBuffer().then((buffer) => { window.__M24_SHARED_SAVE_BYTES__ = Array.from(new Uint8Array(buffer)) })
+      return new Promise((resolve) => { window.__M24_RELEASE_SHARE__ = resolve })
+    } })
     return true
   })()`)
   const releaseShareBoundary = async () => evaluate(`(() => {
@@ -550,6 +575,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await sleep(details.settleMs ?? 260)
     const screenshot = await call('Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false })
     const dom = await evaluate(DOM_DIAGNOSTICS)
+    verifyModelDb(dom.modelStorage, label)
     const nodes = await axSnapshot()
     if (nodes.length === 0) throw new Error(`Accessibility tree was empty at ${label}`)
     const catalog = CHECKPOINT_CATALOG[label]
@@ -575,7 +601,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
       writeFile(resolve(checkpointRoot, 'metrics.json'), `${JSON.stringify({ ...record, scenarioId: `${SCENARIO_ID}--${label}` }, null, 2)}\n`),
     ])
     console.log(`Captured ${viewport.id}/${label}`)
-    return { checkpoint: label, source, route: catalog.route, event: catalog.event, legalNext: catalog.next, artifact: `${label}/`, contentDigest, screenshotDigest, behavior: details.behavior ?? null, routeHint: dom.routeHint, domCounts: dom.domCounts, horizontalOverflow: dom.horizontalOverflow, primaryScrollOwner: dom.primaryScrollOwner, artwork: { loaded: dom.artwork.loaded, failed: dom.artwork.failedImages.length, fallbackNodes: dom.artwork.fallbackNodes }, storage: dom.storage, resources: dom.resources.slice(-30) }
+    return { checkpoint: label, source, route: catalog.route, event: catalog.event, legalNext: catalog.next, artifact: `${label}/`, contentDigest, screenshotDigest, behavior: details.behavior ?? null, routeHint: dom.routeHint, domCounts: dom.domCounts, horizontalOverflow: dom.horizontalOverflow, primaryScrollOwner: dom.primaryScrollOwner, artwork: { loaded: dom.artwork.loaded, failed: dom.artwork.failedImages.length, fallbackNodes: dom.artwork.fallbackNodes }, modelStorage: dom.modelStorage, storage: dom.storage, resources: dom.resources.slice(-30) }
   }
   const probeEscape = async () => {
     const before = await evaluate('document.querySelectorAll(".modal-card").length')
@@ -718,6 +744,133 @@ async function runViewport(cdp, config, viewport, browserInfo) {
           }))})
         }
       } catch {}
+      // Create one sentinel legacy model record before the app boots. The
+      // observer uses the original IndexedDB methods, while the wrapped
+      // methods count only app attempts to touch this retired store.
+      window.__M24_MODEL_DB_READY__ = false
+      window.__M24_MODEL_DB_IO__ = { opens: 0, transactions: 0, readonly: 0, readwrite: 0, puts: 0, gets: 0, deletes: 0, clears: 0, getAllKeys: 0 }
+      window.__M24_MODEL_DB_OBSERVING__ = false
+      const modelDbName = 'mz-models'
+      const modelStoreName = 'glb'
+      const modelSentinelKey = 777
+      const factoryPrototype = typeof IDBFactory !== 'undefined' ? IDBFactory.prototype : null
+      const databasePrototype = typeof IDBDatabase !== 'undefined' ? IDBDatabase.prototype : null
+      const objectStorePrototype = typeof IDBObjectStore !== 'undefined' ? IDBObjectStore.prototype : null
+      const originalOpen = factoryPrototype?.open
+      const originalTransaction = databasePrototype?.transaction
+      const originalMethods = {
+        get: objectStorePrototype?.get,
+        put: objectStorePrototype?.put,
+        delete: objectStorePrototype?.delete,
+        clear: objectStorePrototype?.clear,
+        getAllKeys: objectStorePrototype?.getAllKeys,
+      }
+      const openModelDb = () => new Promise((resolve, reject) => {
+        if (!originalOpen) { reject(new Error('IndexedDB open is unavailable')); return }
+        const request = originalOpen.call(indexedDB, modelDbName, 1)
+        request.onupgradeneeded = () => {
+          const db = request.result
+          if (!db.objectStoreNames.contains(modelStoreName)) db.createObjectStore(modelStoreName)
+        }
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error || new Error('Could not open sentinel model DB'))
+      })
+      const copyIo = () => ({ ...window.__M24_MODEL_DB_IO__ })
+      const installModelDbSpies = () => {
+        if (!factoryPrototype || !originalOpen || !databasePrototype || !originalTransaction || !objectStorePrototype || Object.values(originalMethods).some((method) => typeof method !== 'function')) {
+          throw new Error('IndexedDB model I/O instrumentation is incomplete')
+        }
+        Object.defineProperty(factoryPrototype, 'open', { configurable: true, value: function (...args) {
+          if (!window.__M24_MODEL_DB_OBSERVING__ && args[0] === modelDbName) window.__M24_MODEL_DB_IO__.opens += 1
+          return originalOpen.apply(this, args)
+        } })
+        Object.defineProperty(databasePrototype, 'transaction', { configurable: true, value: function (...args) {
+          if (!window.__M24_MODEL_DB_OBSERVING__ && this.name === modelDbName) {
+            window.__M24_MODEL_DB_IO__.transactions += 1
+            const mode = args[1] || 'readonly'
+            if (mode === 'readwrite') window.__M24_MODEL_DB_IO__.readwrite += 1
+            else if (mode === 'readonly') window.__M24_MODEL_DB_IO__.readonly += 1
+          }
+          return originalTransaction.apply(this, args)
+        } })
+        for (const [method, field] of [['get', 'gets'], ['put', 'puts'], ['delete', 'deletes'], ['clear', 'clears'], ['getAllKeys', 'getAllKeys']]) {
+          const original = originalMethods[method]
+          Object.defineProperty(objectStorePrototype, method, { configurable: true, value: function (...args) {
+            if (!window.__M24_MODEL_DB_OBSERVING__ && this.transaction?.db?.name === modelDbName) window.__M24_MODEL_DB_IO__[field] += 1
+            return original.apply(this, args)
+          } })
+        }
+      }
+      window.__M24_MODEL_DB_SNAPSHOT__ = async () => {
+        if (!originalOpen || !originalTransaction || !originalMethods.get || !originalMethods.getAllKeys) return { available: false, io: copyIo() }
+        window.__M24_MODEL_DB_OBSERVING__ = true
+        try {
+          const db = await openModelDb()
+          const result = await new Promise((resolve, reject) => {
+            const transaction = originalTransaction.call(db, modelStoreName, 'readonly')
+            const store = transaction.objectStore(modelStoreName)
+            let keys = []
+            let value
+            let failed = false
+            const fail = (error) => { if (!failed) { failed = true; reject(error) } }
+            const keysRequest = originalMethods.getAllKeys.call(store)
+            const valueRequest = originalMethods.get.call(store, modelSentinelKey)
+            keysRequest.onsuccess = () => { keys = keysRequest.result || [] }
+            keysRequest.onerror = () => fail(keysRequest.error || new Error('Could not read sentinel keys'))
+            valueRequest.onsuccess = () => { value = valueRequest.result }
+            valueRequest.onerror = () => fail(valueRequest.error || new Error('Could not read sentinel value'))
+            transaction.onerror = () => fail(transaction.error || new Error('Could not observe sentinel model DB'))
+            transaction.onabort = () => fail(new Error('Sentinel model DB read aborted'))
+            transaction.oncomplete = async () => {
+              if (failed) return
+              try {
+                const bytes = value && typeof value.arrayBuffer === 'function' ? Array.from(new Uint8Array(await value.arrayBuffer())) : null
+                resolve({
+                  keys: keys.map((key) => String(key)).sort(),
+                  records: value ? [{ key: modelSentinelKey, name: value.name || null, size: value.size ?? null, type: value.type || null, lastModified: value.lastModified ?? null, bytes }] : [],
+                  io: copyIo(),
+                })
+              } catch (error) { fail(error) }
+            }
+          })
+          db.close()
+          return { available: true, ...result }
+        } catch (error) {
+          return { available: false, error: String(error), io: copyIo() }
+        } finally {
+          window.__M24_MODEL_DB_OBSERVING__ = false
+        }
+      }
+      window.__M24_MODEL_UI_STATUS__ = () => {
+        const modelInputSelector = 'input[type="file"][accept*="glb"], input[type="file"][accept*="gltf"]'
+        const controls = [...document.querySelectorAll('button, label, input')]
+        const controlText = controls.map((element) => (element.textContent || '') + ' ' + (element.getAttribute('aria-label') || '') + ' ' + (element.getAttribute('accept') || '')).join(' ')
+        return {
+          customModelInputVisible: Boolean(document.querySelector(modelInputSelector)),
+          customModelControlsVisible: /3D 模型|模型管理|匯入 GLB|custom model/i.test(controlText),
+        }
+      }
+      window.__M24_MODEL_DB_SETUP__ = (async () => {
+        if (!originalOpen || !originalTransaction || !originalMethods.put) return false
+        let db
+        try {
+          db = await openModelDb()
+          await new Promise((resolve, reject) => {
+            const transaction = originalTransaction.call(db, modelStoreName, 'readwrite')
+            const file = new File([new Uint8Array([77, 79, 66, 73, 69, 45, 83, 69, 78, 84, 73, 78, 69, 76])], 'sentinel.glb', { type: 'model/gltf-binary', lastModified: 1700000000000 })
+            originalMethods.put.call(transaction.objectStore(modelStoreName), file, modelSentinelKey)
+            transaction.oncomplete = resolve
+            transaction.onerror = () => reject(transaction.error || new Error('Could not write sentinel model'))
+            transaction.onabort = () => reject(new Error('Sentinel model write aborted'))
+          })
+          db.close()
+          installModelDbSpies()
+          return true
+        } catch {
+          db?.close()
+          return false
+        }
+      })().then((ready) => { window.__M24_MODEL_DB_READY__ = ready; return ready }, () => { window.__M24_MODEL_DB_READY__ = false; return false })
       window.__M24_CAMERA_REQUESTS__ = 0
       const devices = navigator.mediaDevices
       const original = devices?.getUserMedia
@@ -743,6 +896,8 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     url.searchParams.set('run', `${Date.now()}`)
     await call('Page.navigate', { url: url.href })
     await waitFor('document.readyState === "complete"', 20_000, 'app document')
+    await waitFor('window.__M24_MODEL_DB_READY__ === true', 15_000, 'mz-models sentinel setup')
+    verifyModelDb(await evaluate('window.__M24_MODEL_DB_SNAPSHOT__()'), 'startup')
     await waitFor('Boolean(window.__MOBIE_M24_BASELINE__?.active)', 20_000, 'M24 baseline driver')
     await waitForStores()
     await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title')
@@ -768,7 +923,17 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     checkpoints.push(await capture('settings-v1-migrated', 'real v1→v2 migration and fixed-module omission', { observation: migration }))
     await clickText('更多')
     await waitFor('Boolean(document.querySelector("#tools-menu-more"))', 5_000, 'More menu')
-    checkpoints.push(await capture('tools-more', 'real ToolsMenu expansion'))
+    const toolsModelBoundary = await evaluate(`(() => {
+      const menu = document.querySelector('#tools-menu-more')
+      const text = menu?.textContent || ''
+      const modelUi = window.__M24_MODEL_UI_STATUS__()
+      return {
+        modelToolVisible: /3D 模型|模型管理|匯入 GLB|custom model/i.test(text) || modelUi.customModelControlsVisible,
+        modelInputVisible: modelUi.customModelInputVisible,
+      }
+    })()`)
+    if (toolsModelBoundary.modelToolVisible || toolsModelBoundary.modelInputVisible) throw new Error(`Retired custom model UI is reachable: ${JSON.stringify(toolsModelBoundary)}`)
+    checkpoints.push(await capture('tools-more', 'real ToolsMenu expansion', { observation: { toolsModelBoundary } }))
     scannerOffEvidence = await evaluate(`(() => ({
       scannerVisible: Boolean(document.querySelector('[data-tool="scanner"]')),
       scannerChunkLoaded: [...performance.getEntriesByType('resource')].some((entry) => /CardScanner|jsqr/i.test(entry.name)),
@@ -810,7 +975,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     if (await exists('.modal-card')) await closeTopModal()
 
     await openTool('卡庫', '卡庫')
-    await waitFor('Boolean(document.querySelector(".model-row") || (document.body.innerText || "").includes("卡庫是空的"))', 10_000, 'card library content')
+    await waitFor('Boolean(document.querySelector(".utility-row") || (document.body.innerText || "").includes("卡庫是空的"))', 10_000, 'card library content')
     checkpoints.push(await capture('card-library', 'real IndexedDB card library'))
     await clickText('新增自製卡')
     await waitFor('Boolean(document.querySelector(".lib-matches"))', 5_000, 'card add panel')
@@ -866,28 +1031,50 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await clickSelector('.hatch-reveal')
     await closeTopModal()
 
-    await openTool('3D 模型', '3D 模型')
-    await waitFor('Boolean(document.querySelector(".model-row") || (document.body.innerText || "").includes("沒有舊版模型資料"))', 15_000, 'model manager content')
-    checkpoints.push(await capture('model-manager', 'real isolated model archive'))
-    await closeTopModal()
-
     await openTool('存檔', '存檔')
     await waitFor('Boolean(document.querySelector(".modal-card"))', 8_000, 'save manager')
-    checkpoints.push(await capture('save', 'real save manager'))
+    const saveModelBoundary = await evaluate(`(() => ({
+      modelControlsVisible: window.__M24_MODEL_UI_STATUS__().customModelControlsVisible,
+      modelInputVisible: window.__M24_MODEL_UI_STATUS__().customModelInputVisible,
+      modelCountRowVisible: [...document.querySelectorAll('td, th')].some((el) => (el.textContent || '').trim() === '模型'),
+    }))()`)
+    if (saveModelBoundary.modelControlsVisible || saveModelBoundary.modelInputVisible || saveModelBoundary.modelCountRowVisible) throw new Error(`Retired custom model controls remain in Save: ${JSON.stringify(saveModelBoundary)}`)
+    checkpoints.push(await capture('save', 'real save manager', { observation: { saveModelBoundary } }))
     await holdShareBoundary()
     await clickText('匯出存檔')
     await sleep(35)
     checkpoints.push(await capture('save-busy', 'real export busy window held at share boundary'))
     await releaseShareBoundary()
     await waitFor('Boolean(document.querySelector(".lib-msg"))', 12_000, 'save export result')
-    checkpoints.push(await capture('save-result', 'real save export result'))
-    await setFileInput('input[type="file"][accept*=".save"]', 'invalid.save', Array.from(new TextEncoder().encode('invalid save payload')), 'application/zip')
+    await waitFor('Array.isArray(window.__M24_SHARED_SAVE_BYTES__) && window.__M24_SHARED_SAVE_BYTES__.length > 0', 5_000, 'shared no-model save bytes')
+    const exportedArchive = await evaluate(`(() => {
+      const bytes = window.__M24_SHARED_SAVE_BYTES__ || []
+      const has = (needle) => {
+        const target = Array.from(new TextEncoder().encode(needle))
+        return bytes.some((_, index) => target.every((value, offset) => bytes[index + offset] === value))
+      }
+      return { file: window.__M24_SHARED_SAVE_FILE__, size: bytes.length, hasManifest: has('manifest.json'), hasRoster: has('roster.json'), hasCards: has('cards.json'), hasModelsEntry: has('models/') }
+    })()`)
+    if (!exportedArchive.file || !exportedArchive.hasManifest || !exportedArchive.hasRoster || !exportedArchive.hasCards || exportedArchive.hasModelsEntry) throw new Error(`Exported save is not fixed no-model shape: ${JSON.stringify(exportedArchive)}`)
+    checkpoints.push(await capture('save-result', 'real no-model save export', { observation: { exportedArchive } }))
+    const malformedLegacySaveBytes = await driver('window.__MOBIE_M24_BASELINE__.makeMalformedLegacySave()')
+    await setFileInput('input[type="file"][accept*=".save"]', 'malformed-legacy.save', malformedLegacySaveBytes, 'application/zip')
     await waitFor('Boolean(document.querySelector(".lib-msg"))', 8_000, 'save import validation')
-    checkpoints.push(await capture('save-import-error', 'real invalid save validation'))
+    const malformedLegacyImport = await evaluate(`(() => ({
+      recoverableError: (document.querySelector('.lib-msg')?.textContent || '').includes('校驗失敗'),
+      modelInputVisible: window.__M24_MODEL_UI_STATUS__().customModelInputVisible,
+    }))()`)
+    if (!malformedLegacyImport.recoverableError || malformedLegacyImport.modelInputVisible) throw new Error(`Malformed legacy save was not safely rejected: ${JSON.stringify(malformedLegacyImport)}`)
+    checkpoints.push(await capture('save-import-error', 'real malformed legacy model checksum error', { observation: { malformedLegacyImport } }))
     const olderSaveBytes = await driver('window.__MOBIE_M24_BASELINE__.makeOlderSave()')
     await setFileInput('input[type="file"][accept*=".save"]', 'older.save', olderSaveBytes, 'application/zip')
     await waitFor('Boolean(document.querySelector(".save-compare"))', 12_000, 'older save comparison')
-    checkpoints.push(await capture('save-compare-older', 'real older-save comparison'))
+    const legacyImport = await evaluate(`(() => ({
+      notice: (document.querySelector('.save-compare')?.textContent || '').includes('舊版存檔含'),
+      modelControlsVisible: window.__M24_MODEL_UI_STATUS__().customModelControlsVisible || window.__M24_MODEL_UI_STATUS__().customModelInputVisible,
+    }))()`)
+    if (!legacyImport.notice || legacyImport.modelControlsVisible) throw new Error(`Legacy model import boundary is incomplete: ${JSON.stringify(legacyImport)}`)
+    checkpoints.push(await capture('save-compare-older', 'real legacy model entry checksum-only import', { observation: { legacyImport } }))
     await clickText('我了解', 'label')
     await clickText('仍要覆蓋並匯入')
     await waitFor('(document.body.innerText || "").includes("已匯入存檔")', 15_000, 'save import completion')
@@ -1042,7 +1229,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
       seed: config.seed, device: config.device, viewport, browser: browserInfo,
       startedAt: checkpoints[0]?.capturedAt ?? new Date().toISOString(), finishedAt: new Date().toISOString(),
       seededContent: seeded, journey: JOURNEY, optionalCheckpoints: OPTIONAL_CHECKPOINTS, checkpoints,
-      coverage: { scanner: { reachable: Boolean(scannerOnEvidence), observed: Boolean(scannerOffEvidence && scannerOnEvidence), defaultOff: Boolean(scannerOffEvidence), offHasZeroUiChunkPermission: Boolean(scannerOffEvidence && !scannerOffEvidence.scannerVisible && !scannerOffEvidence.scannerChunkLoaded && scannerOffEvidence.cameraRequests === 0), onFallback: scannerOnEvidence ? 'unsupported' : null, reason: 'Settings v2 keeps the entry absent until explicit enable; the journey then opens the existing lazy scanner and observes its unsupported fallback.' },
+      coverage: { scanner: { reachable: Boolean(scannerOnEvidence), observed: Boolean(scannerOffEvidence && scannerOnEvidence), defaultOff: Boolean(scannerOffEvidence), offHasZeroUiChunkPermission: Boolean(scannerOffEvidence && !scannerOffEvidence.scannerVisible && !scannerOffEvidence.scannerChunkLoaded && scannerOffEvidence.cameraRequests === 0), onFallback: scannerOnEvidence ? 'unsupported' : null, reason: 'Settings v2 keeps the entry absent until explicit enable; the journey then opens the existing lazy scanner and observes its unsupported fallback.' }, customModels: { store: 'mz-models', observed: Boolean(modelDbSignature), zeroAppIo: checkpoints.every((checkpoint) => Object.entries(checkpoint.modelStorage?.io ?? {}).every(([, value]) => Number(value) === 0)), sentinelUnchanged: Boolean(modelDbSignature && checkpoints.every((checkpoint) => JSON.stringify({ keys: checkpoint.modelStorage?.keys, records: checkpoint.modelStorage?.records }) === modelDbSignature)) },
         xstateEvents: ['START', 'SELECT_REGION', 'ENGAGE', 'SELECT_TEAM', 'END_BATTLE', 'ABORT_BATTLE', 'SET_CAPTURED', 'PLAY_AGAIN', 'TO_REGIONS', 'BACK', 'OPEN_TOWER', 'START_TOWER', 'TOWER_CONTINUE', 'TOWER_QUIT'],
         storage: [...new Set(checkpoints.flatMap((checkpoint) => checkpoint.storage ?? []))].sort(),
         lazyBoundaries: [...new Set(checkpoints.flatMap((checkpoint) => CHECKPOINT_CATALOG[checkpoint.checkpoint]?.lazy ?? []))].sort(),

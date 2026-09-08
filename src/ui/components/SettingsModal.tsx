@@ -232,7 +232,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="model-foot">
+        <div className="utility-foot">
           這些偏好只影響操作、回饋、戰鬥畫面與掃卡入口，不影響 Mobie 存檔；預設值會在缺少合法設定時使用。
         </div>
       </motion.div>

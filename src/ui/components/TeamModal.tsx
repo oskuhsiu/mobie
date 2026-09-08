@@ -148,7 +148,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
           })}
         </div>
 
-        <div className="model-foot">
+        <div className="utility-foot">
           點 Mobie 看資訊卡（招式 / 六維 / 個體）。道具效果：強化能力值（S1）/ 提升傷害（S3）/ 回合末回血（S4）。
         </div>
       </motion.div>

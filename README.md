@@ -5,8 +5,9 @@ build a 3-mob team → play a turn-based 3v3 battle with touch QTEs → win, gai
 boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari (iPhone-compatible).
 
 > This is a hobby project for personal use. It bundles **no copyrighted assets** — artwork is loaded
-> at runtime from official PokéAPI URLs, audio is procedurally synthesized, and any 3D models are
-> user-supplied drop-ins. Pokémon and all related marks/data are the property of their respective
+> at runtime from official PokéAPI URLs and audio is procedurally synthesized. Custom GLB/GLTF models
+> are retired; existing `mz-models` data stays on the user's device and is never opened or cleaned.
+> Pokémon and all related marks/data are the property of their respective
 > owners; this project is non-commercial and unaffiliated — see **[ATTRIBUTION.md](ATTRIBUTION.md)**.
 > See also `uninstall.txt`.
 
@@ -25,8 +26,8 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **QR card library** (M2): browse, import (JSON/CSV), make custom cards, and print QR codes. The
   scanner is capability-gated, default-off, and only loads its camera path after the player enables
   it in Settings and selects 掃卡.
-- **3D battle stage** (M3): React-three-fiber arena with PokéAPI artwork billboards; Battle/Capture
-  never read custom GLB/GLTF or model storage.
+- **3D battle stage** (M3): React-three-fiber arena with PokéAPI artwork billboards. Custom GLB/GLTF
+  import and playback are retired; Battle/Capture use artwork and procedural geometry only.
 - **Safe renderer gate** (M23 Ticket 07): Auto starts Balanced, High caps DPR at 1.5, and chunk/WebGL/
   shader/context failures switch one-way to a playable DOM compatibility scene without rerunning turns.
 - **Release quality governor** (M23 Ticket 16): active rendered frames use a 120-gap hysteresis window;
@@ -51,9 +52,10 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
 - **Procedural terrain worlds** (M23 Ticket 12): all 23 terrain IDs resolve to one of eight reusable
   R3F stage silhouettes with distinct palette, lighting, fog, and bounded weather. Mixed terrain keeps
   one primary world plus one sparse accent, with a 400ms palette/weather crossfade and tiered detail.
-- **Portable saves** (M5): export your roster/cards (+ optional 3D models) as a `username.save` (zip)
+- **Portable saves** (M5/M24 Ticket 22): export roster and cards as a no-model `username.save` (zip)
   to your own Google Drive/Files via the iOS share sheet; re-import with old/new detection, consented
-  overwrite, and an automatic pre-import backup. **No backend** — your cloud, your file.
+  overwrite, and an automatic pre-import backup. Legacy model entries are checksum-verified and
+  discarded. **No backend** — your cloud, your file.
 - **Arena vs wild modes** (M6): the arena is neutral, EXP-only, no-capture; wild regions let you capture
   the boss. Mode is a data contract on the region, not a special case in the flow.
 - **Multi-move loadouts** (M19): each Mobie has a species learnset and up to 4 equipped moves
@@ -77,8 +79,8 @@ boss. Built as a **Web/PWA** (React + Vite + TypeScript), targeting iPad Safari 
   partner skills always run through one pure product-runtime seam; Settings only controls real UX
   preferences. Encounter styles are hard-off.
 - **Focused hub navigation**: title and region-select keep **我的 Mobie** and **更多** at the first
-  level. Library / moves / partner skills / dex / achievements / incubator / models / save /
-  settings remain available in the scrollable secondary menu without competing with the hunt loop.
+  level. Library / moves / partner skills / dex / achievements / incubator / save / settings remain
+  available in the scrollable secondary menu without competing with the hunt loop.
   Settings v2 persists real UX preferences, graphics choice, and the scanner capability choice;
   fixed battle features have no module switches.
 - Content: national dex 1–1025 (G1–G9), 16 themed regions (+ arena), 16 cross-type starter cards.
@@ -130,7 +132,6 @@ src/
   ui/         Screens + components; semantic battle HUD/feed/actions/status, shared ToolsMenu
               (title + region hub), MobCard info card, move/partner/team/settings/dex/etc. modals
   scene/battle/ scene/r3f/    Three-free host + one lazy next artwork-billboard entry + compatibility gate
-  scene/models/                Isolated legacy model tooling (not in Battle/Capture graphs)
   audio/  scene/fx/  input/   Audio, per-type battle FX, QTE + gesture seams
 scripts/gen_dex.mjs   PokéAPI data generator
 plan/                 Existing tracked design docs; local generated specs/tickets are gitignored
@@ -159,8 +160,8 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–21 implementation checks
-are complete** for the current Chrome qualification pass — **687 Vitest tests**, typecheck, and build are
+M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–22 implementation checks
+are complete** for the current automated qualification pass — **683 Vitest tests**, typecheck, and build are
 green. Content:
 national dex 1–1025, 16 regions (+ arena),
 16 starters. Current Chrome evidence covers the next renderer and its compatibility fallback. Physical
@@ -173,11 +174,13 @@ the fixed product runtime), persistence round-trips, and CDP real-play (arena EX
 capture → roster growth, extension modules taking effect, tower run, all tool modals) with zero console
 errors. M5 save correctness was earlier cross-validated by an independent **5-agent blind interop test**.
 
-M24 Tickets 20–21 provide the post-M23 non-battle Chrome baseline and Settings v2 capability
-boundary through
+M24 Tickets 20–22 provide the post-M23 non-battle Chrome baseline, Settings v2 capability boundary,
+and custom model retirement through
 `npm run baseline:m24`; its route/state catalog and evidence layout are tracked in
 **[docs/m24-post-m23-chrome-baseline.md](docs/m24-post-m23-chrome-baseline.md)**. The current release
 renderer policy and retirement history are tracked in **[docs/m23-release-b.md](docs/m23-release-b.md)**.
+Run the baseline with a Chrome/CDP target to produce the Ticket 22 sentinel-storage evidence; that
+device run remains an external qualification step when no target is available.
 Physical iPad Safari qualification remains an external device evidence step for Ticket 16; sparse initial
 loadouts and the M22 f–j interaction backlog remain later work. M4 (MediaPipe motion-control QTE) remains
 skipped by the owner. **Owner-only leftover:** M18.e

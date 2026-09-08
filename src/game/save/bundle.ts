@@ -1,14 +1,14 @@
 // M5：可攜存檔檔案 `<profileName>.save`（其實是個 zip）的打包 / 解包。
 //
-// 純函數：輸入是「已從各 store 取出的資料」（roster 陣列 / cards 陣列 / 可選 model bytes），
-// 輸出 / 輸入是 zip 的 Uint8Array。讀 IndexedDB / localStorage 的 I/O 由呼叫端（exportSave /
-// importSave）負責，故本檔可在 node 直接 vitest round-trip。
+// 純函數：輸入是「已從各 store 取出的資料」（roster 陣列 / cards 陣列），輸出 / 輸入是
+// zip 的 Uint8Array。讀 IndexedDB / localStorage 的 I/O 由呼叫端（exportSave / importSave）
+// 負責，故本檔可在 node 直接 vitest round-trip。
 //
 // zip 內容：
 //   manifest.json          ← 信封：版本 / profile / updatedAt / revision / checksum / 計數
 //   roster.json            ← OwnedUnit[]
 //   cards.json             ← Card[]（保全 ivs/nature/shiny）
-//   models/<speciesId>.glb ← 二進位（可選；includesModels=false 時整個省略）
+// 舊版存檔可能另含 models/<speciesId>.glb/.gltf。這些 bytes 只在解包時參與舊 checksum，驗證後丟棄。
 //
 // 解包採「分類錯誤」風格（對齊 cardCode.ts 的 format/version/crc）：壞檔給明確 error 而非默默吞掉。
 
@@ -21,7 +21,7 @@ import { crc32Bytes } from '@/game/crc32'
 const MANIFEST = 'manifest.json'
 const ROSTER = 'roster.json'
 const CARDS = 'cards.json'
-const MODEL_DIR = 'models/'
+const LEGACY_MODEL_DIR = 'models/'
 
 export interface SaveManifest {
   schemaVersion: number
@@ -30,21 +30,20 @@ export interface SaveManifest {
   revision: number
   includesModels: boolean
   counts: { roster: number; cards: number; models: number }
-  /** payload（roster/cards/models 的原始位元組）的 crc32 十六進位；擋下載截斷 / 壞檔 */
+  /** payload（roster/cards 與舊版模型 bytes）的 crc32 十六進位；擋下載截斷 / 壞檔 */
   checksum: string
 }
 
-export interface SaveModel {
+interface LegacyModelEntry {
   speciesId: number
   bytes: Uint8Array
 }
 
-/** packSave 的輸入：已從各 store 取出的純資料。省略 models 即「不含模型」備份。 */
+/** packSave 的輸入：已從各 store 取出的純資料。新格式固定不含 custom model。 */
 export interface SaveSlices {
   meta: SaveMeta
   roster: OwnedUnit[]
   cards: Card[]
-  models?: SaveModel[]
 }
 
 export type UnpackErrorCode =
@@ -61,8 +60,8 @@ export interface UnpackOk {
   manifest: SaveManifest
   roster: OwnedUnit[]
   cards: Card[]
-  models: SaveModel[]
-  includesModels: boolean
+  /** 舊版存檔中通過 checksum 的模型檔案數；bytes 永不離開 codec。 */
+  legacyModelCount: number
 }
 export interface UnpackFail {
   ok: false
@@ -71,16 +70,14 @@ export interface UnpackFail {
 }
 export type UnpackResult = UnpackOk | UnpackFail
 
-/** payload 校驗的固定順序：roster → cards → models(依 speciesId 升冪) 的原始位元組。 */
-function payloadChunks(rosterBytes: Uint8Array, cardsBytes: Uint8Array, models: SaveModel[]): Uint8Array[] {
+/** 舊版 payload 校驗順序：roster → cards → models(依 speciesId 升冪) 的原始位元組。 */
+function payloadChunks(rosterBytes: Uint8Array, cardsBytes: Uint8Array, models: LegacyModelEntry[]): Uint8Array[] {
   const sorted = [...models].sort((a, b) => a.speciesId - b.speciesId)
   return [rosterBytes, cardsBytes, ...sorted.map((m) => m.bytes)]
 }
 
 // ── 打包 ──────────────────────────────────────────────────────────────────
 export function packSave(slices: SaveSlices): Uint8Array {
-  const models = slices.models ?? []
-  const includesModels = models.length > 0
   const rosterBytes = strToU8(JSON.stringify(slices.roster))
   const cardsBytes = strToU8(JSON.stringify(slices.cards))
 
@@ -89,9 +86,9 @@ export function packSave(slices: SaveSlices): Uint8Array {
     profileName: slices.meta.profileName,
     updatedAt: slices.meta.updatedAt,
     revision: slices.meta.revision,
-    includesModels,
-    counts: { roster: slices.roster.length, cards: slices.cards.length, models: models.length },
-    checksum: crc32Bytes(payloadChunks(rosterBytes, cardsBytes, models)),
+    includesModels: false,
+    counts: { roster: slices.roster.length, cards: slices.cards.length, models: 0 },
+    checksum: crc32Bytes(payloadChunks(rosterBytes, cardsBytes, [])),
   }
 
   const files: Record<string, Uint8Array> = {
@@ -99,8 +96,6 @@ export function packSave(slices: SaveSlices): Uint8Array {
     [ROSTER]: rosterBytes,
     [CARDS]: cardsBytes,
   }
-  for (const m of models) files[`${MODEL_DIR}${m.speciesId}.glb`] = m.bytes
-
   return zipSync(files, { level: 6 })
 }
 
@@ -181,20 +176,29 @@ export function unpackSave(bytes: Uint8Array): UnpackResult {
   const cardsBytes = entries[CARDS]
   if (!rosterBytes || !cardsBytes) return fail('bad-payload', '存檔缺少進度資料（roster / cards）。')
 
-  // 收集 model bytes（依檔名 models/<id>.glb）
-  const models: SaveModel[] = []
+  // 舊版 model bytes 僅作為 opaque checksum payload；絕不 parse、寫入或交給 runtime。
+  const legacyModels: LegacyModelEntry[] = []
+  const legacyModelPaths: string[] = []
   for (const [path, data] of Object.entries(entries)) {
-    if (!path.startsWith(MODEL_DIR)) continue
-    const idStr = path.slice(MODEL_DIR.length).replace(/\.glb$/i, '')
-    const speciesId = Number(idStr)
-    if (Number.isInteger(speciesId) && speciesId > 0) models.push({ speciesId, bytes: data })
+    if (!path.startsWith(LEGACY_MODEL_DIR)) continue
+    legacyModelPaths.push(path)
+    const match = /^(\d+)\.(?:glb|gltf)$/i.exec(path.slice(LEGACY_MODEL_DIR.length))
+    const speciesId = Number(match?.[1])
+    if (Number.isInteger(speciesId) && speciesId > 0) {
+      legacyModels.push({ speciesId, bytes: data })
+    }
   }
+  const legacyModelCount = legacyModels.length
 
   // 校驗 payload（用原始位元組，與 pack 同順序）
-  const expect = crc32Bytes(payloadChunks(rosterBytes, cardsBytes, models))
+  const expect = crc32Bytes(payloadChunks(rosterBytes, cardsBytes, legacyModels))
   if (expect !== manifest.checksum) {
     return fail('checksum-mismatch', '存檔校驗失敗，檔案可能在下載 / 傳輸中損毀或被竄改。')
   }
+  // Remove every legacy binary reference before the JSON payload is parsed.
+  for (const path of legacyModelPaths) delete entries[path]
+  legacyModels.length = 0
+  legacyModelPaths.length = 0
 
   let rosterRaw: unknown
   let cardsRaw: unknown
@@ -217,5 +221,5 @@ export function unpackSave(bytes: Uint8Array): UnpackResult {
     revision: manifest.revision,
   }
 
-  return { ok: true, meta, manifest, roster, cards, models, includesModels: manifest.includesModels }
+  return { ok: true, meta, manifest, roster, cards, legacyModelCount }
 }

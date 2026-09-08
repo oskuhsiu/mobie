@@ -190,7 +190,7 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
         {/* 手動輸入（相機不可用時為主要操作，永遠可用） */}
         <div className={`scan-manual ${camLive ? '' : 'scan-manual--primary'}`}>
           <input
-            className="model-search"
+            className="utility-search"
             placeholder="手動輸入卡碼：MZ1:卡號:校驗"
             value={manual}
             onChange={(e) => setManual(e.target.value)}

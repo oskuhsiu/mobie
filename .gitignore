@@ -6,7 +6,7 @@ dist-ssr
 .vite
 /test-runs/
 
-# 使用者本機 drop-in 的 3D 模型，不入庫（責任框架：repo 不散布侵權資產）
+# Keep legacy user model files out of the repository; runtime import is retired.
 public/models/*
 !public/models/.gitkeep
 

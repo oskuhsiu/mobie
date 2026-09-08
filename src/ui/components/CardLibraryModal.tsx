@@ -51,15 +51,15 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
           {panel === 'import' && <ImportPanel key="import" onDone={() => setPanel('none')} />}
         </AnimatePresence>
 
-        <div className="model-list scroll">
+        <div className="utility-list scroll">
           {cards.map((c) => {
             const sp = getSpecies(c.speciesId)
             return (
-              <div className="model-row" key={c.cardId}>
-                <img className="model-row__art" src={sp.artworkUrl} alt={sp.nameZh} loading="lazy" draggable={false} />
-                <div className="model-row__meta">
-                  <div className="model-row__name">{sp.nameZh} <span className="model-row__id">Lv.{c.level}</span></div>
-                  <div className="model-row__status">#{c.cardId}{c.shiny ? '　✦異色' : ''}</div>
+              <div className="utility-row" key={c.cardId}>
+                <img className="utility-row__art" src={sp.artworkUrl} alt={sp.nameZh} loading="lazy" draggable={false} />
+                <div className="utility-row__meta">
+                  <div className="utility-row__name">{sp.nameZh} <span className="utility-row__id">Lv.{c.level}</span></div>
+                  <div className="utility-row__status">#{c.cardId}{c.shiny ? '　✦異色' : ''}</div>
                 </div>
                 <button
                   className="btn btn--ghost btn--sm lib-del"
@@ -71,10 +71,10 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-          {cards.length === 0 && <div className="model-empty">卡庫是空的，先新增或匯入卡。</div>}
+          {cards.length === 0 && <div className="utility-empty">卡庫是空的，先新增或匯入卡。</div>}
         </div>
 
-        <div className="model-foot">卡庫存在你這台瀏覽器（IndexedDB）。QR 只作為卡片識別與列印備份。</div>
+        <div className="utility-foot">卡庫存在你這台瀏覽器（IndexedDB）。QR 只作為卡片識別與列印備份。</div>
       </motion.div>
 
       <AnimatePresence>
@@ -109,7 +109,7 @@ function AddCardPanel({ existing, onDone }: { existing: Card[]; onDone: () => vo
 
   return (
     <motion.div className="lib-panel" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}>
-      <input className="model-search" placeholder="搜尋Mobie名稱/編號…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className="utility-search" placeholder="搜尋Mobie名稱/編號…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="row" style={{ gap: 14, alignItems: 'center' }}>
         <label className="lib-level">Lv.
           <input type="number" min={1} max={100} value={level} onChange={(e) => setLevel(Number(e.target.value))} />
@@ -121,7 +121,7 @@ function AddCardPanel({ existing, onDone }: { existing: Card[]; onDone: () => vo
         {matches.map((sp) => (
           <button key={sp.id} className="lib-match" onClick={() => void add(sp.id)}>
             <img src={sp.artworkUrl} alt={sp.nameZh} loading="lazy" />
-            <span>{sp.nameZh} <span className="model-row__id">#{sp.id}</span></span>
+            <span>{sp.nameZh} <span className="utility-row__id">#{sp.id}</span></span>
           </button>
         ))}
       </div>
