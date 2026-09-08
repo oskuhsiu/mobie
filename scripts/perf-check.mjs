@@ -26,7 +26,8 @@ const scenarioId = args.scenario ?? 'm23-current-parity-v1'
 const driverScenarioId = 'm23-current-parity-v1'
 const seed = args.seed ?? `${scenarioId}-perf`
 const graphics = args.graphics ?? 'auto'
-const rendererRoute = args.renderer ?? args.rendererRoute ?? 'next'
+const requestedRendererRoute = args.renderer ?? args.rendererRoute ?? null
+const rendererRoute = requestedRendererRoute ?? 'next'
 const motion = args.motion ?? 'full'
 const deviceName = args.device ?? 'chrome-local'
 const outputPath = args.output
@@ -228,7 +229,7 @@ async function run(cdp) {
   targetUrl.searchParams.set('m23Scenario', driverScenarioId)
   targetUrl.searchParams.set('seed', seed)
   targetUrl.searchParams.set('graphics', graphics)
-  targetUrl.searchParams.set('renderer', rendererRoute)
+  if (requestedRendererRoute !== null) targetUrl.searchParams.set('renderer', rendererRoute)
   targetUrl.searchParams.set('motion', motion)
   await call('Page.navigate', { url: targetUrl.href })
   await waitFor('Boolean(document.querySelector(".title-screen__adventure"))')

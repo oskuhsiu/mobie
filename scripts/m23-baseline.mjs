@@ -25,6 +25,7 @@ const REQUIRED_CHECKPOINTS = [
 const GRAPHICS = new Set(['auto', 'high', 'balanced', 'compatibility'])
 const RENDERER_ROUTES = new Set(['legacy', 'next', 'compatibility'])
 const MOTION = new Set(['full', 'reduced', 'off'])
+const ARTWORK_FIXTURES = new Set(['artwork-404', 'decode-failure', 'large-texture'])
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms))
 
 function parseArgs(argv) {
@@ -146,6 +147,7 @@ function assertNormalTransactionTrace(trace) {
 }
 
 const args = parseArgs(process.argv.slice(2))
+const requestedRendererRoute = args.renderer ?? args.rendererRoute ?? null
 const config = {
   port: finitePositive(args.port ?? 9222, 'port', { integer: true }),
   app: args.app ?? 'http://127.0.0.1:5173/',
@@ -154,12 +156,20 @@ const config = {
   height: finitePositive(args.height ?? 1366, 'height', { integer: true }),
   dpr: finitePositive(args.dpr ?? 2, 'dpr'),
   graphics: args.graphics ?? 'auto',
-  rendererRoute: args.renderer ?? args.rendererRoute ?? 'next',
+  rendererRoute: requestedRendererRoute ?? 'next',
+  rendererFailure: args.rendererFailure ?? null,
+  artworkFixture: args.artwork ?? null,
   motion: args.motion ?? 'full',
   seed: args.seed ?? `${SCENARIO_ID}-seed`,
 }
 if (!GRAPHICS.has(config.graphics)) throw new Error(`--graphics must be one of ${[...GRAPHICS].join(', ')}`)
 if (!RENDERER_ROUTES.has(config.rendererRoute)) throw new Error(`--renderer must be one of ${[...RENDERER_ROUTES].join(', ')}`)
+if (config.rendererFailure !== null && !['chunk-reject', 'chunk-timeout', 'webgl-unsupported', 'shader-error'].includes(config.rendererFailure)) {
+  throw new Error('--rendererFailure must be one of chunk-reject, chunk-timeout, webgl-unsupported, shader-error')
+}
+if (config.artworkFixture !== null && !ARTWORK_FIXTURES.has(config.artworkFixture)) {
+  throw new Error(`--artwork must be one of ${[...ARTWORK_FIXTURES].join(', ')}`)
+}
 if (!MOTION.has(config.motion)) throw new Error(`--motion must be one of ${[...MOTION].join(', ')}`)
 if (!config.seed.trim()) throw new Error('--seed must not be empty')
 const appUrl = new URL(config.app)
@@ -168,7 +178,8 @@ appUrl.searchParams.set('m23Scenario', SCENARIO_ID)
 appUrl.searchParams.set('width', String(config.width))
 appUrl.searchParams.set('height', String(config.height))
 appUrl.searchParams.set('graphics', config.graphics)
-appUrl.searchParams.set('renderer', config.rendererRoute)
+if (requestedRendererRoute !== null) appUrl.searchParams.set('renderer', config.rendererRoute)
+if (config.rendererFailure !== null) appUrl.searchParams.set('rendererFailure', config.rendererFailure)
 appUrl.searchParams.set('motion', config.motion)
 appUrl.searchParams.set('seed', config.seed)
 appUrl.searchParams.set('cueStep', '0')
@@ -435,6 +446,9 @@ async function run(cdp) {
   await waitFor('[...document.querySelectorAll("button")].some((button) => !button.disabled && button.textContent?.includes("3/3"))', 5_000, 'enabled Team Select engage action')
   await evaluate(`[...document.querySelectorAll('button')].find((button) => !button.disabled && button.textContent?.includes('3/3')).click()`)
   await waitFor('Boolean(document.querySelector("[data-battle-stage]"))', 25_000, 'Battle')
+  if (config.artworkFixture !== null) {
+    await evaluate(`window.__MOBIE_M23_BASELINE__.prepareArtworkFixture(${JSON.stringify(config.artworkFixture)})`)
+  }
 
   try {
     await call('Page.startScreencast', {
@@ -565,6 +579,8 @@ async function run(cdp) {
     viewport: { width: config.width, height: config.height },
     seed: config.seed,
     graphics: diagnostics.requestedGraphics,
+    rendererFailure: config.rendererFailure,
+    artworkFixture: config.artworkFixture,
     requestedRendererRoute: diagnostics.requestedRendererRoute,
     rendererRoute: diagnostics.rendererRoute,
     motion: diagnostics.motion,

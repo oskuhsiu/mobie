@@ -13,10 +13,10 @@ one-way recovery path for renderer failures.
   `release-a-compat/`, and `release-a-next-fallback/` directories. Those runs
   used the same seed and deterministic digest (`5621dba2`) and completed the
   required seeded battle checkpoints without browser errors.
-- The current owner instruction authorizes implementing Ticket 18 after the
-  Release A evidence review. The operational stability period and final
-  production acceptance remain recorded here rather than inferred from a
-  single local run.
+- Owner sign-off for the Ticket 18 implementation and route-promotion
+  decision is recorded with the 2026-09-08 rollout instruction. The
+  one-release stability observation required before Ticket 19 remains a
+  separate future gate.
 
 ## Route policy
 
@@ -45,17 +45,39 @@ route and then the explicit rollback and compatibility routes:
 node scripts/m23-baseline.mjs --seed=m23-current-parity-v1-seed --device=release-b-next
 node scripts/m23-baseline.mjs --renderer=legacy --seed=m23-current-parity-v1-seed --device=release-b-legacy-rollback
 node scripts/m23-baseline.mjs --renderer=compatibility --seed=m23-current-parity-v1-seed --device=release-b-compat
+node scripts/m23-baseline.mjs --renderer=next --artwork=large-texture --seed=m23-current-parity-v1-seed --device=release-b-artwork-success
+node scripts/m23-baseline.mjs --renderer=next --artwork=artwork-404 --seed=m23-current-parity-v1-seed --device=release-b-artwork-failure
+node scripts/m23-baseline.mjs --renderer=next --rendererFailure=chunk-reject --seed=m23-current-parity-v1-seed --device=release-b-chunk-reject
 npm run perf:check -- --renderer=next --evidence=true --device=release-b-next
 ```
 
 Repeat the next route once with the existing browser profile and once with a
-fresh profile. The normal artwork journey is the success case; in the DEV
-driver, exercise `prepareArtworkFixture('artwork-404')` and
-`prepareArtworkFixture('decode-failure')` after the battle is initialized and
-before continuing the journey for the failure cases. Each must retain the same
-layout and finish the seeded journey.
+fresh profile. The normal artwork journey is the success case. The harness
+also supports `--artwork=large-texture` for a deterministic successful load and
+`--artwork=artwork-404` or `--artwork=decode-failure` for failure cases; each
+fixture is applied after the battle is initialized and before the journey
+continues. Each must retain the same layout and finish the seeded journey.
 Store the resulting three-file checkpoint directories under
 `test-runs/m23/<device>/`.
+
+The current Chrome evidence includes the following completed runs:
+
+| Run | Requested/effective route | Result | Evidence |
+|---|---|---|---|
+| Existing profile default (absent route) | `next` / `next` | 9 checkpoints, digest `5621dba2`, 0 errors | `test-runs/m23/release-b-default-no-route/` |
+| Existing profile rollback | `legacy` / `legacy` | 9 checkpoints, digest `5621dba2`, 0 errors | `test-runs/m23/release-b-legacy-rollback/` |
+| Existing profile compatibility | `compatibility` / `compatibility` | 9 checkpoints, digest `5621dba2`, 0 errors | `test-runs/m23/release-b-compatibility/` |
+| Fresh profile default (absent route) | `next` / `next` | 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-no-route/` |
+| Fresh profile artwork success | `next` / `next` | `large-texture`, 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-artwork-success/` |
+| Fresh profile artwork failure | `next` / `next` | `artwork-404`, 9 checkpoints, digest `5621dba2`, 0 errors; SwiftShader functional-only | `test-runs/m23/release-b-fresh-artwork-404/` |
+| Injected chunk rejection | `next` / `compatibility` | 9 checkpoints, digest `5621dba2`, 0 errors; reason `chunk-reject` | `test-runs/m23/release-b-next-chunk-reject/` |
+
+The observed automatic fallback rate is `0/4` for the healthy next runs in
+this table and `1/1` for the deliberately injected chunk-rejection run. The injected
+case is the expected failure-path rate; this app has no uploaded telemetry for
+a natural production denominator. The haptics wrapper also skips vibration
+when Chromium reports no active user gesture, keeping these programmatic
+journeys free of browser warnings.
 
 For every route, record the requested route, effective route, seed, digest,
 fallback reason, browser errors, and final result. The injected Release A

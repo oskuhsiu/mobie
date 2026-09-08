@@ -1,7 +1,6 @@
-import { Component, Suspense, useEffect, useMemo, type ReactNode } from 'react'
-import { useLoader } from '@react-three/fiber'
+import { useEffect, useMemo, useState } from 'react'
 import { Billboard } from '@react-three/drei'
-import { CanvasTexture, DoubleSide, TextureLoader } from 'three'
+import { CanvasTexture, DoubleSide, TextureLoader, type Texture } from 'three'
 import { releaseArtworkTexture, retainArtworkTexture } from './artworkResourceCache'
 
 interface MobieVisualProps {
@@ -15,14 +14,7 @@ interface MobieVisualProps {
 export function MobieVisual({ artworkUrl, name = '?', shiny, onModeChange }: MobieVisualProps) {
   const fallback = <ProceduralSilhouette name={name} shiny={shiny} onVisible={onModeChange} />
   if (!artworkUrl.trim()) return fallback
-  // 此元件自我保護，呼叫端（Combatant3D / CaptureStage）無須再外包邊界。
-  return (
-    <VisualBoundary key={artworkUrl} fallback={fallback}>
-      <Suspense fallback={fallback}>
-        <BillboardSprite url={artworkUrl} shiny={shiny} onVisible={onModeChange} />
-      </Suspense>
-    </VisualBoundary>
-  )
+  return <BillboardSprite url={artworkUrl} name={name} shiny={shiny} onVisible={onModeChange} />
 }
 
 /** Stable no-asset fallback used while artwork loads or when decoding fails. */
@@ -71,21 +63,56 @@ function ProceduralSilhouette({ name, shiny, onVisible }: {
 }
 
 /** billboard fallback：artwork 貼圖平面，只繞 Y 軸面向相機（保持直立站在地台上）。 */
-function BillboardSprite({ url, shiny, onVisible }: {
+function BillboardSprite({ url, name, shiny, onVisible }: {
   url: string
+  name: string
   shiny?: boolean
   onVisible?: MobieVisualProps['onModeChange']
 }) {
-  const tex = useLoader(TextureLoader, url)
-  const img = tex.image as { width: number; height: number } | undefined
-  const aspect = img && img.height ? img.width / img.height : 1
-  const h = 2.3
-  const w = h * aspect
+  const [loaded, setLoaded] = useState<{ url: string; texture: Texture | null; failed: boolean }>({
+    url: '',
+    texture: null,
+    failed: false,
+  })
   useEffect(() => {
+    let disposed = false
+    let resolved: Texture | null = null
+    setLoaded({ url, texture: null, failed: false })
+    const pending = new TextureLoader().load(
+      url,
+      (texture) => {
+        resolved = texture
+        if (disposed) {
+          texture.dispose()
+          return
+        }
+        setLoaded({ url, texture, failed: false })
+      },
+      undefined,
+      () => {
+        if (!disposed) setLoaded({ url, texture: null, failed: true })
+      },
+    )
+    return () => {
+      disposed = true
+      if (!resolved) pending.dispose()
+    }
+  }, [url])
+
+  const tex = loaded.url === url && !loaded.failed ? loaded.texture : null
+  useEffect(() => {
+    if (!tex) return
     retainArtworkTexture(url, tex)
     onVisible?.('artwork')
     return () => releaseArtworkTexture(url, tex)
   }, [onVisible, tex, url])
+
+  if (!tex) return <ProceduralSilhouette name={name} shiny={shiny} onVisible={onVisible} />
+
+  const img = tex.image as { width: number; height: number } | undefined
+  const aspect = img && img.height ? img.width / img.height : 1
+  const h = 2.3
+  const w = h * aspect
   return (
     <Billboard lockX lockZ position={[0, h / 2, 0]}>
       <mesh>
@@ -102,15 +129,4 @@ function BillboardSprite({ url, shiny, onVisible }: {
       </mesh>
     </Billboard>
   )
-}
-
-/** Artwork 載入失敗時退回 fallback，不讓整個 canvas 崩掉。 */
-class VisualBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children
-  }
 }
