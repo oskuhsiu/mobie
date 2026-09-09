@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createOwnedUnit } from '@/game/growth'
 import {
   MemoryRosterGrowthPersistence,
@@ -65,9 +65,27 @@ describe('roster result settlement', () => {
     expect((await persistence.loadMarkers())[0]?.status).toBe('settled')
   })
 
+  it('does not roll back a later roster change while reconciling a pending marker', async () => {
+    const persistence = new MemoryRosterGrowthPersistence([unit])
+    const destination = new RosterGrowthDestination(persistence, () => 250)
+    persistence.failMarker = true
+    await expect(destination.applyOnce(identity, payload)).rejects.toMatchObject({ code: 'receipt' })
+    persistence.failMarker = false
+
+    const settledUnit = persistence.roster[0]
+    if (!settledUnit) throw new Error('expected canonical roster unit')
+    persistence.roster = [{ ...settledUnit, exp: settledUnit.exp + 100, heldItemId: 'lifeorb' }]
+    const retry = await destination.applyOnce(identity, payload)
+
+    expect(retry.status).toBe('already-applied')
+    expect(persistence.roster[0]).toMatchObject({ exp: settledUnit.exp + 100, heldItemId: 'lifeorb' })
+    expect(persistence.saveCount).toBe(1)
+  })
+
   it('reconciles a child apply when the coordinator receipt write fails', async () => {
     const persistence = new MemoryRosterGrowthPersistence([unit])
     const destination = new RosterGrowthDestination(persistence, () => 300)
+    const hasApplied = vi.spyOn(destination, 'hasApplied')
     const journal = new MemorySettlementJournal()
     journal.failOnSave = 2
     const coordinator = new ResultSettlementCoordinator(destination, journal, () => 300)
@@ -80,10 +98,12 @@ describe('roster result settlement', () => {
     expect(retry.status).toBe('already-applied')
     expect(persistence.saveCount).toBe(1)
     expect((await journal.load())[0]).toMatchObject({ status: 'settled', resultId: identity.resultId })
+    expect(hasApplied).toHaveBeenCalledTimes(1)
 
     const remount = await coordinator.settle(identity, { ...payload, ratio: 0.01 })
     expect(remount.status).toBe('already-applied')
     expect(persistence.saveCount).toBe(1)
+    expect(hasApplied).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -96,6 +116,7 @@ describe('result marker retention', () => {
     createdAt: id,
     settledAt: id,
     leftResultAt,
+    before: [],
     updates: [],
     receipt: {
       resultId: `battle-${id}`,

@@ -79,6 +79,8 @@ export interface RosterGrowthMarker extends ResultIdentity {
   settledAt?: number
   leftResultAt?: number
   outcome?: ResultOutcome
+  /** Canonical subset before the operation, retained for late retry reconciliation. */
+  before?: OwnedUnit[]
   updates: OwnedUnit[]
   receipt: Omit<RosterGrowthReceipt, 'status'>
 }
@@ -176,14 +178,58 @@ function sameUnit(left: OwnedUnit | undefined, right: OwnedUnit): boolean {
   return Boolean(left && stableJson(left) === stableJson(right))
 }
 
+function mergeGrowthUnit(current: OwnedUnit, update: OwnedUnit): OwnedUnit {
+  const learnedMoveIds = [...new Set([
+    ...(current.learnedMoveIds ?? []),
+    ...(update.learnedMoveIds ?? []),
+  ])]
+  return {
+    ...update,
+    // These fields are not touched by EXP/evolution. Preserve a later item or
+    // individual edit if a pending settlement resumes after that edit.
+    ivs: current.ivs,
+    nature: current.nature,
+    seed: current.seed,
+    shiny: current.shiny,
+    ...(current.heldItemId === undefined
+      ? (update.heldItemId === undefined ? {} : { heldItemId: update.heldItemId })
+      : { heldItemId: current.heldItemId }),
+    ...(learnedMoveIds.length > 0 ? { learnedMoveIds } : {}),
+    ...(current.equippedMoveIds === undefined && update.equippedMoveIds === undefined
+      ? {}
+      : { equippedMoveIds: current.equippedMoveIds ?? update.equippedMoveIds }),
+  }
+}
+
 function mergeUpdates(roster: readonly OwnedUnit[], updates: readonly OwnedUnit[]): OwnedUnit[] {
   const byId = new Map(updates.map((unit) => [unit.id, unit]))
-  return roster.map((unit) => byId.get(unit.id) ?? unit)
+  return roster.map((unit) => {
+    const update = byId.get(unit.id)
+    return update ? mergeGrowthUnit(unit, update) : unit
+  })
 }
 
 function updatesApplied(roster: readonly OwnedUnit[], updates: readonly OwnedUnit[]): boolean {
   const byId = new Map(roster.map((unit) => [unit.id, unit]))
   return updates.every((update) => sameUnit(byId.get(update.id), update))
+}
+
+function updatesAreAtOrBeyond(
+  roster: readonly OwnedUnit[],
+  before: readonly OwnedUnit[] | undefined,
+  updates: readonly OwnedUnit[],
+): boolean {
+  const currentById = new Map(roster.map((unit) => [unit.id, unit]))
+  const beforeById = new Map((before ?? []).map((unit) => [unit.id, unit]))
+  return updates.every((update) => {
+    const current = currentById.get(update.id)
+    const original = beforeById.get(update.id)
+    if (!current || !original) return false
+    const progressed = current.exp > original.exp
+      || current.level > original.level
+      || current.speciesId !== original.speciesId
+    return progressed && current.exp >= update.exp && current.level >= update.level
+  })
 }
 
 /** Pure roster reward/evolution calculation used by the destination. */
@@ -242,6 +288,7 @@ function makeReceipt(
 function markerFor(
   identity: ResultIdentity,
   receipt: RosterGrowthReceipt,
+  before: OwnedUnit[],
   updates: OwnedUnit[],
   now: number,
   status: ResultMarkerStatus,
@@ -259,6 +306,7 @@ function markerFor(
     ...((outcome ?? previous?.outcome) !== undefined
       ? { outcome: outcome ?? previous?.outcome }
       : {}),
+    before: previous?.before ?? before,
     updates,
     receipt: {
       resultId: receipt.resultId,
@@ -367,8 +415,11 @@ export class RosterGrowthDestination {
       // A pending marker is a write-ahead record.  If the canonical units are
       // already present, only finalize the marker; this is the
       // canonical-write-success/receipt-failure recovery path.
-      if (!updatesApplied(roster, existing.updates)) {
-        const reconciled = mergeUpdates(roster, existing.updates)
+      const updates = existing.updates ?? []
+      const alreadyApplied = updatesApplied(roster, updates)
+        || updatesAreAtOrBeyond(roster, existing.before, updates)
+      if (!alreadyApplied) {
+        const reconciled = mergeUpdates(roster, updates)
         try {
           await this.persistence.savePending(reconciled, markers)
         } catch (cause) {
@@ -381,7 +432,9 @@ export class RosterGrowthDestination {
         settledAt: existing.settledAt ?? this.now(),
       }
       try {
-        await this.persistence.saveMarkers(retainResultMarkers(replaceMarker(markers, settled)))
+        // Settlement must not prune another marker. Retention runs only from
+        // the explicit Result-leave boundary.
+        await this.persistence.saveMarkers(replaceMarker(markers, settled))
       } catch (cause) {
         throw new ResultSettlementError('receipt', identity, 'Result 結算已寫入，但回條保存失敗；請重試以完成對帳。', cause)
       }
@@ -391,8 +444,9 @@ export class RosterGrowthDestination {
     const calculated = calculateRosterGrowth(roster, payload)
     const appliedAt = this.now()
     const receipt = makeReceipt(identity, calculated, appliedAt, 'applied')
+    const before = roster.filter((unit) => payload.unitIds.includes(unit.id))
     const updates = calculated.results.map((result) => result.unit)
-    const pending = markerFor(identity, receipt, updates, appliedAt, 'pending', payload.outcome)
+    const pending = markerFor(identity, receipt, before, updates, appliedAt, 'pending', payload.outcome)
     const pendingMarkers = replaceMarker(markers, pending)
     try {
       // Marker intent is durable before the canonical write.  If either write
@@ -401,9 +455,11 @@ export class RosterGrowthDestination {
     } catch (cause) {
       throw new ResultSettlementError('storage', identity, '保存 Mobie 成長結果失敗，請重試。', cause)
     }
-    const settled = markerFor(identity, receipt, updates, appliedAt, 'settled', payload.outcome, pending)
+    const settled = markerFor(identity, receipt, before, updates, appliedAt, 'settled', payload.outcome, pending)
     try {
-      await this.persistence.saveMarkers(retainResultMarkers(replaceMarker(pendingMarkers, settled)))
+      // Settlement must not prune another marker. Retention runs only from
+      // the explicit Result-leave boundary.
+      await this.persistence.saveMarkers(replaceMarker(pendingMarkers, settled))
     } catch (cause) {
       throw new ResultSettlementError('receipt', identity, 'Result 結算已寫入，但回條保存失敗；請重試以完成對帳。', cause)
     }
@@ -458,11 +514,19 @@ export class ResultSettlementCoordinator {
     const existing = entries.find((item) => item.resultId === identity.resultId)
     if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
 
-    if (existing?.status === 'settled' && existing.rosterGrowth) {
-      // The journal is only orchestration state. Always ask the child
-      // destination to reconcile its own marker before returning an existing
-      // receipt; a journal entry alone is never proof that the roster write
-      // happened.
+    let childAlreadyApplied = false
+    if (existing) {
+      // Reconciliation starts with the child authority. The journal is only
+      // orchestration state and cannot prove that the roster write happened.
+      try {
+        childAlreadyApplied = await this.destination.hasApplied(identity)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, 'Result 成長回條對帳失敗，請重試。', error)
+      }
+    }
+
+    if (existing?.status === 'settled' && existing.rosterGrowth && childAlreadyApplied) {
       let childReceipt: RosterGrowthReceipt
       try {
         childReceipt = await this.destination.applyOnce(identity, payload)
@@ -473,13 +537,15 @@ export class ResultSettlementCoordinator {
       return { ...childReceipt, status: 'already-applied' }
     }
 
-    const running: SettlementJournalEntry = existing ?? {
-      resultId: identity.resultId,
-      resultFingerprint: identity.resultFingerprint,
-      status: 'pending',
-      createdAt: this.now(),
-      ...(payload.outcome ? { outcome: payload.outcome } : {}),
-    }
+    const running: SettlementJournalEntry = existing
+      ? { ...existing, status: 'pending', error: undefined }
+      : {
+          resultId: identity.resultId,
+          resultFingerprint: identity.resultFingerprint,
+          status: 'pending',
+          createdAt: this.now(),
+          ...(payload.outcome ? { outcome: payload.outcome } : {}),
+        }
     try {
       await this.journal.save(replaceJournal(entries, running))
     } catch (cause) {
@@ -502,7 +568,9 @@ export class ResultSettlementCoordinator {
       error: undefined,
     }
     try {
-      await this.journal.save(retainResultMarkers(replaceJournal(entries, settled)))
+      // Do not prune while the coordinator is still settling. The leave
+      // action performs bounded retention after the player exits Result.
+      await this.journal.save(replaceJournal(entries, settled))
     } catch (cause) {
       // The child destination is now durable.  Keeping the journal in its
       // running state lets retry reconcile via destination.applyOnce.

@@ -33,6 +33,12 @@ const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ 
 /** 戰敗仍給的經驗比例（相對勝利全額）——讓每場都有累積，破解「要先贏才能變強」死結 */
 const LOSS_EXP_RATIO = 0.15
 
+// Compatibility meta registration remains outside this ticket's canonical
+// roster destination. Keep one process-wide receipt key so StrictMode,
+// remount, and a late retry cannot count the same evolution twice; a fresh
+// page can still reconcile an unrecorded receipt on the next Result mount.
+const evolutionMetaRecorded = new Set<string>()
+
 function Pokeball({ size = 64, color = '#ff5161' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64">
@@ -360,8 +366,10 @@ export function ResultScreen() {
         .then((receipt) => {
           setSettlementStatus('settled')
           // Meta evolution registration remains a compatibility side effect;
-          // only the first canonical roster apply is allowed to emit it.
-          if (receipt.status === 'applied' && receipt.evolutions.length > 0) {
+          // only one receipt per stable result identity is allowed to emit it.
+          const evolutionKey = `${resultIdentity.resultId}:${resultIdentity.resultFingerprint}`
+          if (receipt.evolutions.length > 0 && !evolutionMetaRecorded.has(evolutionKey)) {
+            evolutionMetaRecorded.add(evolutionKey)
             useMeta.getState().recordEvolutions(receipt.evolutions)
           }
         })

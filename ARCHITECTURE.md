@@ -253,7 +253,8 @@ and the per-session usage ledger. The tower remains a game mode entered from `re
 | S6 `postGrowth` | roster growth boundary | `unit → unit` | evolution |
 
 The fixed runtime passes one `ExtBundle` to every production `resolveTurn`, prepares both teams together
-(items/abilities on both, synergy on player only), and applies evolution inside `grantBattleExp`. Replay
+(items/abilities on both, synergy on player only), and applies evolution inside the roster settlement
+destination (`settleBattleResult`). Replay
 snapshots and events therefore derive from the same prepared canonical battle rather than a second config.
 
 **Modules** (`game/ext/`, hand-authored data — no PokéAPI, emoji icons, zero IP):
@@ -280,15 +281,17 @@ warnings.
 - **`game/persistence.ts`** — `PersistenceAdapter` interface; `LocalStorageAdapter` (key `mz.roster.v2`)
   serializes only canonical `OwnedUnit[]`. `MemoryAdapter` for tests.
 - **`store/rosterStore.ts`** — `load`, `grantBattleExp(unitIds, foeLevels, ratio)` (win = full,
-  loss ≈ 0.15), `captureUnit(card)` (builds a canonical unit from the captured boss and persists it),
-  `replaceAll(units)` (whole-roster replace used by save import).
+  loss ≈ 0.15), `settleBattleResult(identity, payload)` (durable roster growth/evolution applyOnce),
+  `captureUnit(card)` (builds a canonical unit from the captured boss and persists it), `replaceAll(units)`
+  (whole-roster replace used by save import).
 - **`game/growth.ts`** — Medium-Fast `n³` exp curve, `applyExp`, `createOwnedUnit`, `ownedToCard`.
 - **`game/recommend.ts`** — pure team-selection scoring vs the *whole* foe team (offense type
   effectiveness minus defensive risk + level/stat tiebreak); powers advisory badges and the revealed
   recommended trio. Advice never mutates selection: the player still chooses and orders the team.
 
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
-`heldItemId`) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
+`heldItemId`) · `mobie.roster.growth.v1` (roster settlement marker) · `mobie.result.settlement.v1`
+(Result orchestration journal) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
 `mobie.settings.v1` (read-only migration/rollback source) ·
@@ -299,6 +302,22 @@ warnings.
 The retired `mz-models` IndexedDB may still exist on a user's device. It is deliberately absent from
 the migration list and every product store path: the app does not open, read, write, or delete it, and
 does not perform a cleanup migration.
+
+### 7.3 Result settlement (M24 Ticket 29)
+
+`game/resultSettlement.ts` is the first durable Result child destination. `ResultScreen` forwards the
+battle handoff pair (`resultId = battleSessionId`, independent `resultFingerprint`) and keeps `outcome` in
+the reward payload. `ResultSettlementCoordinator` is orchestration only; `RosterGrowthDestination` owns the
+canonical roster EXP, level, learned-move, and evolution mutation. Its serialized write-ahead marker stores
+the exact before/after unit subset, so a canonical write followed by a failed receipt write can reconcile
+without recalculating or rolling back later roster edits.
+
+The destination marker is persisted under `mobie.roster.growth.v1`; the coordinator journal is persisted under
+`mobie.result.settlement.v1`. Both retain the result identity pair and reject an ID reused with a different
+fingerprint. Pending markers remain durable until reconciled. Retention is invoked only after the Result leave
+boundary and keeps current/unsettled entries plus the newest 128 settled entries. The journal never serves as
+the exactly-once authority: every replayed settled receipt asks the child destination to reconcile its own
+marker first. SP, meta, capture, tower, and incubator writes remain separate destinations for later M24 tickets.
 
 ### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
 

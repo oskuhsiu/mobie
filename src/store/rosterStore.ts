@@ -98,9 +98,12 @@ export const useRoster = create<RosterState>((set, get) => {
     new LocalStorageSettlementJournal(),
   )
 
-  const publishGrowthReceipt = (receipt: RosterGrowthReceipt): void => {
-    const updates = new Map(receipt.results.map((result) => [result.unit.id, result.unit]))
-    const roster = get().roster.map((unit) => updates.get(unit.id) ?? unit)
+  const publishGrowthReceipt = async (receipt: RosterGrowthReceipt): Promise<void> => {
+    // Rehydrate from the canonical persistence boundary before publishing a
+    // replayed receipt. Never replace live units with historical receipt
+    // snapshots after a later item/move/growth edit.
+    const persisted = await adapter.loadRoster()
+    const roster = persisted.length > 0 ? persisted : get().roster
     set({
       roster,
       lastResults: receipt.results,
@@ -114,7 +117,7 @@ export const useRoster = create<RosterState>((set, get) => {
     payload: RosterGrowthPayload,
   ): Promise<RosterGrowthReceipt> => {
     const receipt = await settlementCoordinator.settle(identity, payload)
-    publishGrowthReceipt(receipt)
+    await publishGrowthReceipt(receipt)
     // Only the first canonical apply bumps save metadata. A retry/re-mount
     // receives `already-applied` and must not manufacture a new save revision.
     if (receipt.status === 'applied') bumpSaveMeta(receipt.appliedAt)
