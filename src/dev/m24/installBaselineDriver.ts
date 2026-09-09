@@ -42,7 +42,7 @@ export interface M24BaselineDriver {
   options: M24BaselineDriverOptions
   configure: (options?: Partial<M24BaselineDriverOptions>) => M24BaselineDriverOptions
   ready: () => boolean
-  seedContent: () => Promise<M24SeedSnapshot>
+  seedContent: (options?: { learnedPartnerSkills?: string[] }) => Promise<M24SeedSnapshot>
   prepareArtworkFailure: () => void
   prepareBattleChoice: () => void
   prepareBattleError: () => void
@@ -132,7 +132,7 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     return { ...options, viewport: { ...options.viewport } }
   }
 
-  const seedContent = async (): Promise<M24SeedSnapshot> => {
+  const seedContent = async (seedOptions: { learnedPartnerSkills?: string[] } = {}): Promise<M24SeedSnapshot> => {
     if (seeded) return snapshot()
     if (!storesReady()) throw new Error('M24 stores are not loaded yet')
 
@@ -154,7 +154,13 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     useMeta.getState().recordWin('wild')
     useMeta.getState().recordWin('arena')
     useSkillPoints.getState().add(12)
-    usePlayerSkills.getState().learn('rally')
+    // The default M24 baseline keeps its historical learned rally fixture. A
+    // ticket-specific journey can request a clean locked account and exercise
+    // the real unlock transaction through the modal instead.
+    const learnedPartnerSkills = seedOptions.learnedPartnerSkills ?? ['rally']
+    usePlayerSkills.setState({ learnedSkillIds: [], loaded: true, loadError: null })
+    try { localStorage.removeItem('mobie.playerskills.v1') } catch { /* private mode */ }
+    for (const skillId of learnedPartnerSkills) usePlayerSkills.getState().learn(skillId)
     useRun.getState().recordFloor(2)
 
     const incubator = useIncubator.getState()

@@ -35,6 +35,10 @@ export interface PartnerSkillDef {
   mode: PartnerSkillMode
   /** SP 解鎖成本（與 M19 招式分池顯示）；0＝起始技能（預設已習得、不需花 SP）。 */
   cost: number
+  /** 帳號畫面要直接說明的解鎖條件；不要讓玩家靠猜測理解資源門檻。 */
+  unlockCondition: string
+  /** 戰鬥 command deck 只在此規則允許的相位顯示；技能本身不佔回合。 */
+  battleUse: string
   /** active：揭露對手當前 Mobie 的深度資訊（招式/數值/特性/星級）。 */
   reveal?: boolean
   /** support：開戰一次性灌注全隊的增益清單（寫 fieldState.teamStatuses）。 */
@@ -55,6 +59,8 @@ export const PARTNER_SKILLS: PartnerSkillDef[] = [
     mode: 'active',
     cost: 0,
     reveal: true,
+    unlockCondition: '起始技能；開啟夥伴技能後立即可用，不需 SP。',
+    battleUse: '在 playerChoice 使用一次；不耗回合，對手不會回擊。',
     desc: '看穿對手當前 Mobie 的招式、能力值、特性與星級（每場一次，不耗回合、對手不會回擊）。',
   },
   {
@@ -67,6 +73,8 @@ export const PARTNER_SKILLS: PartnerSkillDef[] = [
       { stat: 'atk', mult: 1.2, turns: 3 },
       { stat: 'spa', mult: 1.2, turns: 3 },
     ],
+    unlockCondition: '帳號 SP ≥ 6；解鎖後跨所有 Mobie 共用。',
+    battleUse: '在 playerChoice 使用一次；不耗回合，為全隊提升攻擊與特攻 3 回合。',
     desc: '使出後為全隊灌注士氣，攻擊與特攻短暫提升 3 回合（每場一次）。',
   },
 ]

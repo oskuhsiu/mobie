@@ -20,6 +20,8 @@ describe('M17 partnerSkills catalog 護欄', () => {
       expect(s.cost).toBeGreaterThanOrEqual(0)
       expect(s.id.length).toBeGreaterThan(0)
       expect(s.name.length).toBeGreaterThan(0)
+      expect(s.unlockCondition.length).toBeGreaterThan(0)
+      expect(s.battleUse.length).toBeGreaterThan(0)
     }
   })
 

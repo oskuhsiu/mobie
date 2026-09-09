@@ -108,8 +108,28 @@ const CHECKPOINT_CATALOG = {
     storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'recoverable storage error with unchanged ledger',
   },
   'partner-skills': {
-    route: 'title/modal:partner-skills', event: 'ToolsMenu.open(partner)', next: ['解鎖 SP', '關閉'],
+    route: 'title/modal:partner-skills', event: 'ToolsMenu.open(partner)', next: ['解鎖 SP', '重新載入帳號', '關閉'],
     storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1'], lazy: ['PartnerSkillModal'], capability: 'account skill wallet',
+  },
+  'partner-skills-insufficient-sp': {
+    route: 'title/modal:partner-skills', event: 'SP=0→Partner unlock disabled', next: ['補充 SP', '關閉'],
+    storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1'], lazy: ['PartnerSkillModal'], capability: 'insufficient-resource reason and no spend',
+  },
+  'partner-skills-stale-account': {
+    route: 'title/modal:partner-skills', event: 'canonical account changed outside current modal', next: ['重新載入帳號', '再試一次', '關閉'],
+    storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1'], lazy: ['PartnerSkillModal'], capability: 'stale account recovery without spend',
+  },
+  'partner-skills-storage-error': {
+    route: 'title/modal:partner-skills', event: 'Partner persistence failure', next: ['重新載入帳號', '再試一次', '關閉'],
+    storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1'], lazy: ['PartnerSkillModal'], capability: 'recoverable storage error with unchanged account ledger',
+  },
+  'partner-skills-unlock': {
+    route: 'title/modal:partner-skills', event: 'PartnerSkill.unlockWithSp(rally)', next: ['battle', 'reload', '關閉'],
+    storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1', 'mobie.savemeta.v1'], lazy: ['PartnerSkillModal'], capability: 'single account unlock and SP deduction',
+  },
+  'partner-skills-reloaded': {
+    route: 'title/modal:partner-skills', event: 'Page.reload→PartnerSkillModal', next: ['battle', '關閉'],
+    storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1'], lazy: ['PartnerSkillModal'], capability: 'learned state and SP survive reload',
   },
   dex: {
     route: 'title/modal:dex', event: 'ToolsMenu.open(dex)', next: ['filter', '關閉'],
@@ -207,6 +227,10 @@ const CHECKPOINT_CATALOG = {
     route: 'battle', event: 'SELECT_TEAM', next: ['ATTACK', 'SWITCH', 'END_BATTLE', 'ABORT_BATTLE'],
     storage: ['mobie.settings.v2', 'mz-replays'], lazy: ['NextBattleScene'], capability: 'M23 renderer handoff',
   },
+  'battle-partner-result': {
+    route: 'battle/playerChoice', event: 'PartnerSkill.commit→PartnerSkillResultIntent', next: ['ATTACK', 'SWITCH', 'use once', 'END_BATTLE'],
+    storage: ['mobie.playerskills.v1'], lazy: [], capability: 'learned Partner action returns to playerChoice without a turn',
+  },
   'battle-artwork-fallback': {
     route: 'battle', event: 'artwork load failure', next: ['continue battle', 'ABORT_BATTLE'],
     storage: [], lazy: [], capability: 'silhouette fallback boundary',
@@ -261,11 +285,12 @@ const JOURNEY = [
   'title', 'settings-v1-migrated', 'tools-more', 'scanner-off', 'replay-load-start', 'replay-empty', 'incubator-empty',
   'my-mobies', 'my-mobies-detail', 'move-trainer-detail', 'move-trainer-actions', 'card-library', 'card-library-add',
   'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open', 'move-trainer-reloaded', 'move-trainer-insufficient-sp', 'move-trainer-storage-error',
-  'partner-skills', 'dex', 'dex-registered', 'achievements', 'achievements-claimed',
+  'partner-skills', 'partner-skills-stale-account', 'partner-skills-insufficient-sp', 'partner-skills-storage-error', 'partner-skills-unlock', 'partner-skills-reloaded',
+  'dex', 'dex-registered', 'achievements', 'achievements-claimed',
   'incubator-ready', 'incubator-hatch-reveal', 'save', 'save-busy',
   'save-result', 'save-import-error', 'save-compare-older', 'save-backup-ready',
   'save-restore-result', 'settings-malformed-recovery', 'settings', 'settings-reloaded', 'scanner-on-fallback', 'region-select', 'encounter', 'team-select',
-  'team-select-advice', 'battle-handoff', 'battle-artwork-fallback', 'battle-error', 'wild-win-result',
+  'team-select-advice', 'battle-handoff', 'battle-partner-result', 'battle-artwork-fallback', 'battle-error', 'wild-win-result',
   'practice-result', 'practice-play-again-encounter', 'tower-setup', 'tower-win-result',
   'tower-continue-battle', 'tower-lose-result', 'lose-result',
   'replays-populated', 'replay-player',
@@ -985,7 +1010,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     checkpoints.push(await capture('incubator-empty', 'real empty localStorage state', { behavior: await probeEscape() }))
     if (await exists('.modal-card')) await closeTopModal()
 
-    const seeded = await driver('window.__MOBIE_M24_BASELINE__.seedContent()')
+    const seeded = await driver('window.__MOBIE_M24_BASELINE__.seedContent({ learnedPartnerSkills: [] })')
     await waitFor('Boolean(window.__MOBIE_M24_BASELINE__.snapshot().readyEggs > 0)', 8_000, 'seeded baseline content')
 
     await clickSelector('.tools-menu-primary__mobies')
@@ -1163,8 +1188,124 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Move Trainer state restore')
 
     await openTool('夥伴技能', '夥伴技能')
-    await waitFor('Boolean(document.querySelector(".team-row"))', 8_000, 'partner skill content')
+    await waitFor('Boolean(document.querySelector("[data-partner-skills]"))', 8_000, 'partner skill content')
     checkpoints.push(await capture('partner-skills', 'real player skill wallet'))
+    const partnerInitial = await evaluate(`(() => ({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      rallyState: document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState ?? null,
+      unlockAction: Boolean(document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])')),
+      hasBattleUseCopy: (document.querySelector('[data-partner-skill-id="rally"]')?.textContent || '').includes('戰鬥使用'),
+    }))()`)
+    if (partnerInitial.rallyState !== 'available' || !partnerInitial.unlockAction || !partnerInitial.hasBattleUseCopy) throw new Error(`Partner catalog is not unlock-ready: ${JSON.stringify(partnerInitial)}`)
+
+    // Simulate another tab changing the shared wallet while this modal is
+    // open. The transaction must refuse the stale snapshot and keep both
+    // the rendered balance and learned state unchanged until refresh.
+    await evaluate('localStorage.setItem("mobie.skillpoints.v1", "10")')
+    await clickSelector('[data-partner-skill-id="rally"] button:not([disabled])')
+    await waitFor('Boolean(document.querySelector("[data-partner-notice]"))', 8_000, 'Partner stale account notice')
+    const partnerStale = await evaluate(`(() => ({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      state: document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState ?? null,
+      notice: document.querySelector('[data-partner-notice]')?.textContent ?? '',
+      storedSp: localStorage.getItem('mobie.skillpoints.v1'),
+      storedLearned: (() => { try { return JSON.parse(localStorage.getItem('mobie.playerskills.v1') ?? 'null') } catch { return null } })(),
+    }))()`)
+    if (partnerStale.sp !== String(savedSkillPoints) || partnerStale.state !== 'available' || !partnerStale.notice.includes('其他分頁') || partnerStale.storedLearned?.learnedSkillIds?.includes('rally')) throw new Error(`Partner stale account guard failed: ${JSON.stringify(partnerStale)}`)
+    checkpoints.push(await capture('partner-skills-stale-account', 'real stale account unlock recovery', { observation: partnerStale }))
+    await evaluate(`localStorage.setItem('mobie.skillpoints.v1', ${JSON.stringify(savedSkillPoints)})`)
+    await clickText('重新載入帳號')
+    await waitFor(`Boolean(document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])'))`, 8_000, 'Partner stale account refresh')
+
+    // The same account wallet must expose a real disabled reason at SP=0 and
+    // recover by reloading the persisted snapshot before any unlock attempt.
+    await evaluate('localStorage.setItem("mobie.skillpoints.v1", "0")')
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'Partner insufficient SP reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Partner insufficient SP reload')
+    await openTool('夥伴技能', '夥伴技能')
+    await waitFor(`Boolean(document.querySelector('[data-disabled-reason="sp-insufficient"]'))`, 8_000, 'Partner insufficient SP reason')
+    const partnerInsufficient = await evaluate(`(() => ({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      state: document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState ?? null,
+      disabled: [...document.querySelectorAll('[data-disabled-reason="sp-insufficient"]')].map((element) => ({ label: element.getAttribute('aria-label'), reason: element.getAttribute('aria-describedby') ? document.getElementById(element.getAttribute('aria-describedby'))?.textContent ?? '' : '' })),
+      storedLearned: (() => { try { return JSON.parse(localStorage.getItem('mobie.playerskills.v1') ?? 'null') } catch { return null } })(),
+    }))()`)
+    if (partnerInsufficient.sp !== '0' || partnerInsufficient.state !== 'locked' || partnerInsufficient.disabled.length === 0 || partnerInsufficient.storedLearned?.learnedSkillIds?.includes('rally')) throw new Error(`Partner insufficient SP guard failed: ${JSON.stringify(partnerInsufficient)}`)
+    checkpoints.push(await capture('partner-skills-insufficient-sp', 'real SP=0 disabled Partner unlock', { observation: partnerInsufficient }))
+    await closeTopModal()
+    await evaluate(`localStorage.setItem('mobie.skillpoints.v1', ${JSON.stringify(savedSkillPoints)})`)
+
+    // Fail the canonical write after the SP step. The store must roll the
+    // wallet back and expose a retryable notice without granting rally.
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'Partner storage failure reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Partner storage failure reload')
+    await openTool('夥伴技能', '夥伴技能')
+    await waitFor(`Boolean(document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])'))`, 8_000, 'Partner unlock action')
+    const partnerStorageFailure = await evaluate(`(() => {
+      window.__M24_OLD_STORAGE_SET_ITEM__ = Storage.prototype.setItem
+      Storage.prototype.setItem = function () { throw new Error('M24 simulated Partner storage failure') }
+      const action = document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])')
+      action?.click()
+      return Boolean(action)
+    })()`)
+    if (!partnerStorageFailure) throw new Error('Could not find Partner unlock action for storage failure checkpoint')
+    await waitFor('Boolean(document.querySelector("[data-partner-notice]"))', 8_000, 'Partner storage error notice')
+    const partnerStorageEvidence = await evaluate(`(() => ({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      state: document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState ?? null,
+      notice: document.querySelector('[data-partner-notice]')?.textContent ?? '',
+      storedSp: localStorage.getItem('mobie.skillpoints.v1'),
+      storedLearned: (() => { try { return JSON.parse(localStorage.getItem('mobie.playerskills.v1') ?? 'null') } catch { return null } })(),
+    }))()`)
+    if (partnerStorageEvidence.sp !== String(savedSkillPoints) || partnerStorageEvidence.state !== 'available' || !partnerStorageEvidence.notice.includes('保存失敗') || partnerStorageEvidence.storedLearned?.learnedSkillIds?.includes('rally')) throw new Error(`Partner storage failure was not recoverable: ${JSON.stringify(partnerStorageEvidence)}`)
+    checkpoints.push(await capture('partner-skills-storage-error', 'real simulated Partner storage failure and rollback', { observation: partnerStorageEvidence }))
+    await evaluate(`(() => { Storage.prototype.setItem = window.__M24_OLD_STORAGE_SET_ITEM__; delete window.__M24_OLD_STORAGE_SET_ITEM__; localStorage.setItem('mobie.skillpoints.v1', ${JSON.stringify(savedSkillPoints)}); return true })()`)
+    await closeTopModal()
+
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'Partner unlock reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Partner unlock reload')
+    await openTool('夥伴技能', '夥伴技能')
+    await waitFor(`Boolean(document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])'))`, 8_000, 'Partner unlock retry action')
+    const partnerKeyboardFocus = await evaluate(`(() => {
+      const action = document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])')
+      if (!action) return false
+      action.focus()
+      if (document.activeElement !== action) return false
+      action.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }))
+      return true
+    })()`)
+    if (!partnerKeyboardFocus) throw new Error('Partner unlock action did not accept focus before keyboard activation')
+    await waitFor(`document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState === 'learned'`, 8_000, 'Partner unlock commit')
+    const partnerUnlock = await evaluate(`(() => ({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      state: document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState ?? null,
+      keyboardFocus: ${JSON.stringify(partnerKeyboardFocus)},
+      unlockActionStillPresent: Boolean(document.querySelector('[data-partner-skill-id="rally"] button:not([disabled])')),
+      storedSp: localStorage.getItem('mobie.skillpoints.v1'),
+      storedLearned: (() => { try { return JSON.parse(localStorage.getItem('mobie.playerskills.v1') ?? 'null') } catch { return null } })(),
+      notice: document.querySelector('[data-partner-notice]')?.textContent ?? '',
+    }))()`)
+    if (partnerUnlock.sp !== String(Number(savedSkillPoints) - 6) || partnerUnlock.state !== 'learned' || !partnerUnlock.storedLearned?.learnedSkillIds?.includes('rally') || partnerUnlock.unlockActionStillPresent) throw new Error(`Partner unlock commit failed: ${JSON.stringify(partnerUnlock)}`)
+    checkpoints.push(await capture('partner-skills-unlock', 'real single-click Partner unlock and SP deduction', { observation: partnerUnlock }))
+    await closeTopModal()
+
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'Partner learned state reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Partner learned state reload')
+    await openTool('夥伴技能', '夥伴技能')
+    await waitFor(`document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState === 'learned'`, 8_000, 'Partner learned state after reload')
+    const partnerReloaded = await evaluate(`(() => ({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      state: document.querySelector('[data-partner-skill-id="rally"]')?.dataset.partnerSkillState ?? null,
+      storedSp: localStorage.getItem('mobie.skillpoints.v1'),
+      storedLearned: (() => { try { return JSON.parse(localStorage.getItem('mobie.playerskills.v1') ?? 'null') } catch { return null } })(),
+      focusInside: Boolean(document.querySelector('[data-modal-surface]')?.contains(document.activeElement)),
+    }))()`)
+    if (partnerReloaded.sp !== String(Number(savedSkillPoints) - 6) || partnerReloaded.state !== 'learned' || !partnerReloaded.storedLearned?.learnedSkillIds?.includes('rally') || !partnerReloaded.focusInside) throw new Error(`Partner reload persistence failed: ${JSON.stringify(partnerReloaded)}`)
+    checkpoints.push(await capture('partner-skills-reloaded', 'real learned Partner state after page reload', { observation: partnerReloaded }))
     await closeTopModal()
 
     await openTool('圖鑑', '圖鑑')
@@ -1326,6 +1467,25 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await waitFor('Boolean(document.querySelector(".hunt-target"))', 15_000, 'wild result encounter')
     await clickOptionalSelector('.supply-opt')
     await enterBattleFromEncounter()
+    // Use the newly unlocked account skill through the real battle command
+    // deck. The intent returns to playerChoice without advancing the turn.
+    await waitFor(`Boolean(document.querySelector('[data-battle-action="partner"][data-partner-skill-id="rally"]:not([disabled])'))`, 12_000, 'unlocked Partner battle action')
+    const partnerActionBefore = await evaluate(`(() => ({
+      phase: document.querySelector('[data-command-phase]')?.getAttribute('data-command-phase') ?? null,
+      action: document.querySelector('[data-battle-action="partner"][data-partner-skill-id="rally"]')?.getAttribute('aria-label') ?? null,
+      latestFeed: document.querySelector('.battle-feed__latest-text')?.textContent ?? '',
+    }))()`)
+    await clickSelector('[data-battle-action="partner"][data-partner-skill-id="rally"]')
+    await waitFor(`document.querySelector('[data-command-phase]')?.getAttribute('data-command-phase') === 'playerChoice' && (document.querySelector('.battle-feed__latest-text')?.textContent || '').includes('訓練師加油')`, 20_000, 'Partner result intent')
+    const partnerBattleResult = await evaluate(`(() => ({
+      beforePhase: ${JSON.stringify(partnerActionBefore.phase)},
+      phase: document.querySelector('[data-command-phase]')?.getAttribute('data-command-phase') ?? null,
+      latestFeed: document.querySelector('.battle-feed__latest-text')?.textContent ?? '',
+      actionUsed: Boolean(document.querySelector('[data-battle-action="partner"][data-partner-skill-id="rally"]')?.disabled),
+      actionLabel: document.querySelector('[data-battle-action="partner"][data-partner-skill-id="rally"]')?.getAttribute('aria-label') ?? null,
+    }))()`)
+    if (partnerBattleResult.beforePhase !== 'playerChoice' || partnerBattleResult.phase !== 'playerChoice' || !partnerBattleResult.latestFeed.includes('訓練師加油') || !partnerBattleResult.actionUsed) throw new Error(`Partner battle intent did not return to legal choice: ${JSON.stringify(partnerBattleResult)}`)
+    checkpoints.push(await capture('battle-partner-result', 'real Partner action and non-turn result intent', { observation: partnerBattleResult }))
     await driver('window.__MOBIE_M24_BASELINE__.prepareRecordedWin()')
     await playRecordedTurn()
     await waitFor('Boolean(document.querySelector(".exp-summary") || document.querySelector(".capture-companion-actions"))', 20_000, 'recorded wild win result')

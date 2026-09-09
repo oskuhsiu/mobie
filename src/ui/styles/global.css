@@ -2038,6 +2038,50 @@ body {
 .trainer-state { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 26px 16px; border: 1px dashed var(--stroke); border-radius: var(--radius-sm); }
 .trainer-state h3 { color: var(--text); font-size: 20px; }
 
+/* ============ M24 Ticket 38 Partner Skills ============ */
+.partner-skill-surface { width: min(96vw, 900px); height: min(92dvh, 860px); }
+.partner-skill-surface .modal-surface__body { overflow-y: auto; }
+.partner-skills { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
+.partner-skill-ledger {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 14px; border: 1px solid rgba(255,210,63,0.32); border-radius: var(--radius-sm);
+  background: rgba(255,210,63,0.08); color: var(--text-dim); font-size: 12px; line-height: 1.45;
+}
+.partner-skill-ledger > div { display: flex; align-items: baseline; gap: 12px; }
+.partner-skill-ledger strong { color: var(--accent); font-size: 24px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.partner-skill-ledger > span { max-width: 52ch; }
+.partner-skill-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.partner-skill-card {
+  display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 13px;
+  border: 1px solid var(--stroke); border-radius: 14px; background: var(--panel);
+}
+.partner-skill-card:focus-visible { outline: 3px solid rgba(255,210,63,0.95); outline-offset: 3px; }
+.partner-skill-card--available { border-color: rgba(122,224,255,0.35); background: rgba(122,224,255,0.06); }
+.partner-skill-card--learned { border-color: rgba(74,222,128,0.34); background: rgba(74,222,128,0.06); }
+.partner-skill-card__head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.partner-skill-card__icon { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; font-size: 27px; border-radius: 12px; background: rgba(255,255,255,0.08); }
+.partner-skill-card__heading { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.partner-skill-card__name { font-size: 17px; font-weight: 900; overflow-wrap: anywhere; }
+.partner-skill-card__status { flex: 0 0 auto; padding: 5px 8px; border-radius: 999px; font-size: 11px; font-weight: 850; white-space: nowrap; }
+.partner-skill-card__status--learned { color: #b8f8c8; background: rgba(74,222,128,0.16); border: 1px solid rgba(74,222,128,0.34); }
+.partner-skill-card__status--available { color: #c7f4ff; background: rgba(122,224,255,0.15); border: 1px solid rgba(122,224,255,0.34); }
+.partner-skill-card__status--locked { color: var(--text-dim); background: rgba(255,255,255,0.07); border: 1px solid var(--stroke); }
+.partner-skill-card__desc { color: var(--text); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.partner-skill-card__facts { display: flex; flex-direction: column; gap: 5px; margin: 0; }
+.partner-skill-card__facts > div { display: grid; grid-template-columns: 5.2em minmax(0, 1fr); gap: 8px; font-size: 11px; line-height: 1.4; }
+.partner-skill-card__facts dt { color: var(--accent); font-weight: 850; }
+.partner-skill-card__facts dd { color: var(--text-dim); overflow-wrap: anywhere; }
+.partner-skill-card__action { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: auto; }
+.partner-skill-card__action .trainer-action { max-width: 100%; }
+.partner-skill-card__reason { color: var(--text-dim); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.partner-skill-card__busy { color: #c7f4ff; font-size: 12px; }
+.partner-skill-notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; font-size: 12px; line-height: 1.45; }
+.partner-skill-notice--status { color: #cdf6ff; background: rgba(122,224,255,0.1); border: 1px solid rgba(122,224,255,0.25); }
+.partner-skill-notice--error { color: #ffd1d1; background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.35); }
+.partner-skill-account-state { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; color: var(--text-dim); background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.35); font-size: 12px; line-height: 1.4; }
+.partner-skill-account-state strong { color: var(--text); }
+.partner-skill-account-state .btn { margin-left: auto; }
+
 /* ============ M16 Mobie 資訊卡 ============ */
 .mobcard__art { width: 72px; height: 72px; flex: 0 0 auto; }
 .mobcard-growth {
@@ -2191,4 +2235,8 @@ body {
   .trainer-move-list { grid-template-columns: minmax(0, 1fr); }
   .trainer-section__head { align-items: flex-start; flex-direction: column; }
   .trainer-section__meta { text-align: left; }
+  .partner-skill-surface { width: min(96vw, 620px); height: min(90dvh, 820px); }
+  .partner-skill-list { grid-template-columns: minmax(0, 1fr); }
+  .partner-skill-ledger > div { flex-basis: 100%; }
+  .partner-skill-account-state .btn { margin-left: 0; }
 }

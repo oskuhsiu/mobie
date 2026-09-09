@@ -22,7 +22,7 @@ import { makeWildEvents } from '@/game/accidents'
 import { makeRng } from '@/game/rng'
 import type { ReplayInput, DisplayUnitSnapshot } from '@/game/replay/types'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
-import { learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
+import { isPartnerSkillLearned, learnedPartnerSkills, teamBuffStatuses, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { TimingBar } from '@/ui/components/TimingBar'
 import { MobCard } from '@/ui/components/MobCard'
 import { DamageNumbers, type DamageNumbersHandle } from '@/ui/components/DamageNumbers'
@@ -1859,6 +1859,9 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
     const store = useBattleStore.getState()
     const battleState = store.battle
     if (!battleState) return
+    // Re-read the account authority at the action boundary. A stale battle
+    // render must not activate a skill that was removed or never unlocked.
+    if (!isPartnerSkillLearned(skill.id, usePlayerSkills.getState().learnedSkillIds)) return
     const statuses = teamBuffStatuses(skill)
     const revealFoeIndex = skill.reveal ? battleState.foe.activeIndex : undefined
     const receipt = store.commitPartnerSkillOnce({
@@ -2260,10 +2263,11 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
                       key={skill.id}
                       className="btn btn--ghost btn--sm"
                       data-battle-action="partner"
+                      data-partner-skill-id={skill.id}
                       whileTap={used ? undefined : { scale: 0.95 }}
                       disabled={used}
-                      title={skill.desc}
-                      aria-label={`${skill.name}${used ? '，本場已使用' : `，${skill.desc}`}`}
+                      title={skill.battleUse}
+                      aria-label={`${skill.name}${used ? '，本場已使用' : `，${skill.battleUse}`}`}
                       onClick={() => activatePartnerSkill(skill)}
                     >
                       {skill.icon} {skill.name}{used ? ' ✓' : ''}
