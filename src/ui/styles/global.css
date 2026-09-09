@@ -729,43 +729,123 @@ body {
 .battle-error-panel p { margin: 0; line-height: 1.55; }
 .battle-error-detail { color: var(--text-dim); font-size: 12px; overflow-wrap: anywhere; }
 
-/* ============ 練習場入口 ============ */
+/* ============ Region Hub ============ */
+.region-hub {
+  display: flex; flex: 1 1 auto; flex-direction: column; gap: 12px;
+  width: 100%; min-width: 0; min-height: 0; overflow: hidden;
+}
+.region-hub__scroll {
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+  overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; padding: 2px 2px 28px;
+}
+.region-hub__topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-width: 0; padding: 0 2px 10px;
+}
+.region-hub__topbar .eyebrow { min-width: 0; overflow-wrap: anywhere; }
+.region-hub__header { gap: 8px; padding: 8px 0 22px; }
+.region-hub__header .task-header__title { font-size: clamp(30px, 6vw, 54px); }
+.region-hub__header .task-header__tagline { max-width: 720px; }
+.region-hub__section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.region-hub__section + .region-hub__section { margin-top: 18px; }
+.region-hub__section-heading {
+  display: flex; align-items: end; justify-content: space-between; gap: 16px; min-width: 0;
+}
+.region-hub__section-heading > div { min-width: 0; }
+.region-hub__section-heading h2 { margin-top: 3px; font-size: clamp(21px, 3.5vw, 30px); line-height: 1.1; }
+.region-hub__section-heading p {
+  max-width: 440px; color: var(--text-dim); font-size: 13px; line-height: 1.45; text-align: right;
+}
+.region-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+
+/* ============ Mode entries ============ */
 .practice-cta {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 18px; border-radius: var(--radius);
-  background: linear-gradient(135deg, rgba(58, 74, 114, 0.55), rgba(25, 31, 51, 0.55));
-  border: 1px dashed var(--accent);
-  box-shadow: var(--shadow);
-  text-align: left;
+  display: flex; align-items: center; gap: 14px; min-width: 0;
+  padding: 16px 18px; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(58, 74, 114, 0.68), rgba(25, 31, 51, 0.72));
+  border: 1px dashed var(--accent); box-shadow: var(--shadow); text-align: left;
 }
 .practice-cta:active { transform: translateY(2px) scale(0.99); }
-.practice-cta__icon { font-size: 34px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4)); }
-.practice-cta__body { flex: 1; }
-.practice-cta__title { font-size: 19px; font-weight: 900; }
-.practice-cta__sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-.practice-cta__go { font-size: 14px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.practice-cta__icon { flex: 0 0 auto; font-size: 34px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4)); }
+.practice-cta__body { display: flex; flex: 1 1 auto; flex-direction: column; gap: 3px; min-width: 0; }
+.practice-cta__title { font-size: 19px; font-weight: 900; overflow-wrap: anywhere; }
+.practice-cta__sub { color: var(--text-dim); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.practice-cta__go { flex: 0 0 auto; color: var(--accent); font-size: 14px; font-weight: 800; white-space: nowrap; }
+.region-mode-card__eyebrow {
+  color: rgba(255,255,255,0.72); font-size: 11px; font-weight: 900; letter-spacing: 0.05em;
+  overflow-wrap: anywhere;
+}
+.region-mode-card__meta { color: rgba(255,255,255,0.7); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.tower-cta { border-color: rgba(122, 224, 255, 0.7); background: linear-gradient(135deg, rgba(35, 75, 105, 0.68), rgba(15, 26, 53, 0.78)); }
 
-/* ============ Region cards ============ */
-.region-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
-@media (min-width: 760px) { .region-grid { grid-template-columns: repeat(3, 1fr); } }
-.region-tools { flex: 0 0 auto; border-top: 1px solid var(--stroke); padding-top: 12px; }
+/* ============ Region atlas ============ */
+.region-grid { display: flex; flex-direction: column; }
+.region-atlas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+.region-tools {
+  flex: 0 0 auto; width: 100%; padding: 12px 0 2px;
+  border-top: 1px solid var(--stroke); background: rgba(8, 12, 32, 0.28);
+}
+.region-hub__footer { position: relative; z-index: 2; }
 .region-card {
-  position: relative; overflow: hidden;
-  border-radius: var(--radius); padding: 22px;
-  min-height: 168px; display: flex; flex-direction: column; justify-content: space-between;
-  border: 1px solid var(--stroke); box-shadow: var(--shadow);
+  position: relative; display: flex; flex-direction: column; justify-content: space-between;
+  gap: 15px; min-width: 0; min-height: 190px; overflow: hidden; padding: 18px;
+  border: 1px solid var(--stroke); border-radius: var(--radius); box-shadow: var(--shadow);
   text-align: left;
 }
-.region-card__icon { font-size: 46px; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4)); }
-.region-card__name { font-size: 24px; font-weight: 900; }
-.region-card__blurb { font-size: 13px; color: rgba(255,255,255,0.82); margin-top: 4px; }
-.region-card__terrain {
-  display: inline-block; margin-top: 7px;
-  font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
-  padding: 2px 9px; border-radius: 999px;
-  background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.2);
+.region-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.region-card__icon { flex: 0 0 auto; font-size: 42px; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4)); }
+.region-card__mode {
+  max-width: 72%; padding: 4px 9px; border: 1px solid rgba(255,255,255,0.3); border-radius: 999px;
+  background: rgba(0,0,0,0.28); color: #fff; font-size: 11px; font-weight: 900; line-height: 1.2;
+  text-align: right; overflow-wrap: anywhere;
 }
+.region-card__body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.region-card__name { font-size: clamp(20px, 3vw, 25px); font-weight: 900; line-height: 1.1; overflow-wrap: anywhere; }
+.region-card__blurb { color: rgba(255,255,255,0.84); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.region-card__meta { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.region-card__terrain,
+.region-card__capture,
+.region-card__levels {
+  display: inline-flex; align-items: center; min-width: 0; max-width: 100%; padding: 4px 8px;
+  border: 1px solid rgba(255,255,255,0.22); border-radius: 999px; background: rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.9); font-size: 11px; font-weight: 800; line-height: 1.2; overflow-wrap: anywhere;
+}
+.region-card__capture--yes { border-color: rgba(74,222,128,0.65); color: #c8ffd9; }
+.region-card__capture--no { border-color: rgba(255,210,63,0.52); color: #ffeaa2; }
 .region-card__glow { position: absolute; inset: 0; background: radial-gradient(circle at 80% 0%, rgba(255,255,255,0.18), transparent 55%); pointer-events: none; }
+.region-hub--error { display: grid; place-items: center; padding: 18px; overflow: auto; }
+.region-hub__error {
+  display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(560px, 100%);
+  padding: clamp(24px, 6vw, 44px); border: 1px solid rgba(255,107,107,0.52); border-radius: var(--radius);
+  background: rgba(17,24,48,0.86); box-shadow: var(--shadow); text-align: center;
+}
+.region-hub__error-icon { font-size: 40px; }
+.region-hub__error h1 { font-size: clamp(25px, 6vw, 40px); }
+.region-hub__error .h-sub { max-width: 440px; line-height: 1.55; overflow-wrap: anywhere; }
+.region-hub__error-actions { flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+
+@media (min-width: 680px) {
+  .region-atlas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1120px) {
+  .region-atlas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .region-modes { grid-template-columns: minmax(0, 1fr); }
+  .region-hub__section-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .region-hub__section-heading p { max-width: none; text-align: left; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .region-hub__scroll { padding-bottom: 18px; }
+  .region-hub__header { padding-bottom: 12px; }
+  .region-hub__section + .region-hub__section { margin-top: 12px; }
+  .region-card { min-height: 152px; padding: 13px; gap: 9px; }
+  .region-card__icon { font-size: 32px; }
+  .region-card__name { font-size: 19px; }
+  .region-card__blurb { font-size: 11px; }
+  .region-card__terrain, .region-card__capture, .region-card__levels { font-size: 10px; padding: 3px 6px; }
+}
 
 /* ============ 對手陣容條（選隊時對照） ============ */
 .foe-strip {

@@ -1,92 +1,160 @@
 import { motion } from 'framer-motion'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGame } from '@/app/GameProvider'
-import type { Region } from '@/game/types'
-import { REGIONS } from '@/game/data/regions'
-import { PRACTICE_REGION } from '@/game/data/practiceRegion'
-import { terrainDefsOf } from '@/game/data/terrains'
+import { canCaptureIn } from '@/game/data/regionLookup'
 import { ToolsMenu } from '@/ui/components/ToolsMenu'
-import { UtilityDock } from '@/ui/shell/AppShell'
-
-/** 區域地形提示文案（M8）：隨機地形區標「隨機」，否則列出固定/混合地形 icon+名。 */
-function terrainHint(r: Region): string | null {
-  if (r.randomTerrain) return '🌀 隨機地形'
-  const defs = terrainDefsOf(r.terrains ?? [])
-  if (defs.length === 0) return null
-  return defs.map((d) => `${d.icon} ${d.name}`).join(' + ')
-}
+import {
+  TaskHeader,
+  UtilityDock,
+} from '@/ui/shell/AppShell'
+import {
+  readRegionHubCatalog,
+  regionCaptureLabel,
+  regionLevelLabel,
+  regionModeLabel,
+  regionTerrainLabel,
+  shouldInjectRegionHubFailure,
+  type RegionHubCatalogResult,
+} from './regionHub'
 
 export function RegionSelectScreen() {
   const { send } = useGame()
   const primaryRegionRef = useRef<HTMLButtonElement>(null)
+  const [catalogState, setCatalogState] = useState<RegionHubCatalogResult>(() => readRegionHubCatalog(shouldInjectRegionHubFailure()))
 
   useEffect(() => { primaryRegionRef.current?.focus() }, [])
 
+  if (catalogState.status === 'error') {
+    return (
+      <div className="region-hub region-hub--error" data-region-hub data-region-hub-state="error">
+        <div className="region-hub__error" role="alert" data-region-error>
+          <div className="region-hub__error-icon" aria-hidden="true">⚠️</div>
+          <div className="eyebrow">Adventure Hub</div>
+          <h1 className="h-title">區域資料需要再試一次</h1>
+          <p className="h-sub">{catalogState.message}</p>
+          <div className="row region-hub__error-actions">
+            <button className="btn" data-region-error-retry onClick={() => setCatalogState(readRegionHubCatalog())}>重新嘗試</button>
+            <button className="btn btn--ghost" data-region-error-back onClick={() => send({ type: 'BACK' })}>返回首頁</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const { practice, regions } = catalogState.catalog
+
   return (
-    <div className="col" style={{ flex: 1, gap: 18, minHeight: 0 }}>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <div className="col" style={{ gap: 4 }}>
-          <div className="eyebrow">Step 1</div>
-          <div className="h-title">選擇區域</div>
-          <div className="h-sub">前往不同地帶遭遇野生Mobie；新手可先去競技場練等</div>
+    <div className="region-hub" data-region-hub data-region-hub-state="ready">
+      <div className="region-hub__scroll region-grid" data-region-scroll-owner>
+        <div className="region-hub__topbar">
+          <span className="eyebrow">Adventure Hub</span>
+          <button className="btn btn--ghost btn--sm" onClick={() => send({ type: 'BACK' })}>🏠 首頁</button>
         </div>
-        <button className="btn btn--ghost btn--sm" onClick={() => send({ type: 'BACK' })}>🏠 首頁</button>
-      </div>
 
-      {/* 競技場入口：中性地形、純得經驗、不可捕獲，低風險刷經驗 */}
-      <motion.button
-        ref={primaryRegionRef}
-        className="practice-cta"
-        whileTap={{ scale: 0.98 }}
-        onClick={() => send({ type: 'SELECT_REGION', regionId: PRACTICE_REGION.id })}
-      >
-        <span className="practice-cta__icon">{PRACTICE_REGION.icon}</span>
-        <div className="practice-cta__body">
-          <div className="practice-cta__title">{PRACTICE_REGION.name}</div>
-          <div className="practice-cta__sub">{PRACTICE_REGION.blurb}</div>
-        </div>
-        <span className="practice-cta__go">開始 →</span>
-      </motion.button>
+        <TaskHeader
+          className="region-hub__header"
+          eyebrow="Step 1 · Choose a destination"
+          title="選擇目的地"
+          tagline="先看懂模式與場域，再決定今天要練等、爬塔，或捕獲新的夥伴。"
+        />
 
-      {/* M11 連勝塔入口：連續 escalating 戰鬥、Ascension 難度、依深度給 SP */}
-      <motion.button
-        className="practice-cta tower-cta"
-        whileTap={{ scale: 0.98 }}
-        onClick={() => send({ type: 'OPEN_TOWER' })}
-      >
-        <span className="practice-cta__icon">🗼</span>
-        <div className="practice-cta__body">
-          <div className="practice-cta__title">連勝塔 · 遠征</div>
-          <div className="practice-cta__sub">連續對戰、樓層越高敵越強；通關得 SP 與難度解鎖。輸一場即結算。</div>
-        </div>
-        <span className="practice-cta__go">挑戰 →</span>
-      </motion.button>
-
-      <div className="region-grid scroll-y" style={{ paddingBottom: 8 }}>
-        {REGIONS.map((r) => (
-          <motion.button
-            key={r.id}
-            className="region-card"
-            style={{ background: `linear-gradient(150deg, ${r.gradient[0]}, ${r.gradient[1]})` }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => send({ type: 'SELECT_REGION', regionId: r.id })}
-          >
-            <span className="region-card__glow" />
-            <div className="region-card__icon">{r.icon}</div>
+        <section className="region-hub__section" aria-labelledby="region-modes-heading">
+          <div className="region-hub__section-heading">
             <div>
-              <div className="region-card__name">{r.name}</div>
-              <div className="region-card__blurb">{r.blurb}</div>
-              {terrainHint(r) && <div className="region-card__terrain">{terrainHint(r)}</div>}
+              <div className="eyebrow">Modes</div>
+              <h2 id="region-modes-heading">先選模式</h2>
             </div>
-          </motion.button>
-        ))}
+            <p>先用競技場熟悉節奏，或挑戰連勝塔累積更高的遠征獎勵。</p>
+          </div>
+          <div className="region-modes">
+            <motion.button
+              ref={primaryRegionRef}
+              className="practice-cta region-mode-card"
+              data-region-mode="arena"
+              whileTap={{ scale: 0.98 }}
+              onClick={() => send({ type: 'SELECT_REGION', regionId: practice.id })}
+            >
+              <span className="practice-cta__icon" aria-hidden="true">{practice.icon}</span>
+              <span className="practice-cta__body">
+                <span className="region-mode-card__eyebrow">{regionModeLabel(practice)} · {regionCaptureLabel(practice)}</span>
+                <span className="practice-cta__title">{practice.name}</span>
+                <span className="practice-cta__sub">{practice.blurb}</span>
+                <span className="region-mode-card__meta">{regionTerrainLabel(practice)} · {regionLevelLabel(practice)}</span>
+              </span>
+              <span className="practice-cta__go">開始 →</span>
+            </motion.button>
+
+            <motion.button
+              className="practice-cta tower-cta region-mode-card"
+              data-region-mode="tower"
+              whileTap={{ scale: 0.98 }}
+              onClick={() => send({ type: 'OPEN_TOWER' })}
+            >
+              <span className="practice-cta__icon" aria-hidden="true">🗼</span>
+              <span className="practice-cta__body">
+                <span className="region-mode-card__eyebrow">連勝 Tower · 連續戰鬥</span>
+                <span className="practice-cta__title">連勝塔 · 遠征</span>
+                <span className="practice-cta__sub">連續對戰、樓層越高敵越強；通關得 SP 與難度解鎖。輸一場即結算。</span>
+                <span className="region-mode-card__meta">固定隊伍 · 不可捕獲</span>
+              </span>
+              <span className="practice-cta__go">挑戰 →</span>
+            </motion.button>
+          </div>
+        </section>
+
+        <section className="region-hub__section" aria-labelledby="region-atlas-heading">
+          <div className="region-hub__section-heading">
+            <div>
+              <div className="eyebrow">Wild atlas · {regions.length} destinations</div>
+              <h2 id="region-atlas-heading">捕獲區域</h2>
+            </div>
+            <p>每張卡都標示真實地形、遭遇等級與首領捕獲資格。</p>
+          </div>
+          <div className="region-atlas" data-region-atlas>
+            {regions.map((region) => {
+              const modeLabel = regionModeLabel(region)
+              const captureLabel = regionCaptureLabel(region)
+              const terrainLabel = regionTerrainLabel(region)
+              const captureEligible = canCaptureIn(region.id)
+              const descriptionId = `region-description-${region.id}`
+              const metadataId = `region-metadata-${region.id}`
+              return (
+                <motion.button
+                  key={region.id}
+                  className="region-card"
+                  data-region-card
+                  data-region-id={region.id}
+                  data-region-mode={region.mode}
+                  data-capture-eligibility={captureEligible ? 'capturable' : 'uncapturable'}
+                  aria-label={`${region.name}，${modeLabel}`}
+                  aria-describedby={`${descriptionId} ${metadataId}`}
+                  style={{ background: `linear-gradient(150deg, ${region.gradient[0]}, ${region.gradient[1]})` }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => send({ type: 'SELECT_REGION', regionId: region.id })}
+                >
+                  <span className="region-card__glow" />
+                  <span className="region-card__head">
+                    <span className="region-card__icon" aria-hidden="true">{region.icon}</span>
+                    <span className="region-card__mode">{modeLabel}</span>
+                  </span>
+                  <span className="region-card__body">
+                    <span className="region-card__name">{region.name}</span>
+                    <span id={descriptionId} className="region-card__blurb">{region.blurb}</span>
+                  </span>
+                  <span id={metadataId} className="region-card__meta">
+                    <span className="region-card__terrain" data-region-terrain>{terrainLabel}</span>
+                    <span className={`region-card__capture ${captureEligible ? 'region-card__capture--yes' : 'region-card__capture--no'}`} data-capture-label>{captureLabel}</span>
+                    <span className="region-card__levels">{regionLevelLabel(region)}</span>
+                  </span>
+                </motion.button>
+              )
+            })}
+          </div>
+        </section>
       </div>
 
-      {/* 遊戲中樞的共用工具列：開始遊戲後仍可開隊伍/招式/圖鑑/設定等（修「首頁功能開始後就找不到」） */}
-      <div className="region-tools">
-        <UtilityDock>
-          <ToolsMenu />
-        </UtilityDock>
+      <div className="region-tools region-hub__footer">
+        <UtilityDock><ToolsMenu /></UtilityDock>
       </div>
     </div>
   )
