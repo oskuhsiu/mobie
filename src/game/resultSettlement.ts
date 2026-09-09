@@ -4,6 +4,8 @@ import { effectiveLearnedMoves, newlyLearned } from '@/game/learnset'
 import { getSpecies } from '@/game/data/species'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import { addRegistered, bumpStat, type MetaState } from '@/game/meta'
+import { isSupportedEggSource, type Egg, type IncubatorState } from '@/game/incubator'
+import { ASCENSIONS, isBossFloor } from '@/game/tower'
 
 /**
  * Result settlement is keyed by the logical battle, not by a React mount or a
@@ -15,7 +17,7 @@ export interface ResultIdentity {
   resultFingerprint: string
 }
 
-export type ResultSettlementErrorCode = 'collision' | 'storage' | 'receipt'
+export type ResultSettlementErrorCode = 'collision' | 'storage' | 'receipt' | 'invalid-source'
 
 export class ResultSettlementError extends Error {
   readonly code: ResultSettlementErrorCode
@@ -39,6 +41,11 @@ export const RESULT_SETTLEMENT_JOURNAL_KEY = 'mobie.result.settlement.v1'
 export const ROSTER_GROWTH_MARKER_KEY = 'mobie.roster.growth.v1'
 export const SKILL_POINTS_SETTLEMENT_MARKER_KEY = 'mobie.skillpoints.settlement.v1'
 export const META_SETTLEMENT_MARKER_KEY = 'mobie.meta.settlement.v1'
+export const TOWER_SETTLEMENT_MARKER_KEY = 'mobie.tower.settlement.v1'
+export const INCUBATOR_SETTLEMENT_MARKER_KEY = 'mobie.incubator.settlement.v1'
+// Descriptive aliases retained for callers that name the progression child explicitly.
+export const TOWER_PROGRESSION_SETTLEMENT_MARKER_KEY = TOWER_SETTLEMENT_MARKER_KEY
+export const INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY = INCUBATOR_SETTLEMENT_MARKER_KEY
 
 export type ResultOutcome = 'win' | 'lose'
 
@@ -53,6 +60,20 @@ export interface MetaSettlementPayload {
   evolutions?: Array<{ toSpecies: number }>
 }
 
+/** Tower run metadata forwarded by Result; in-run floor/team state stays in XState. */
+export interface TowerProgressionPayload {
+  floor: number
+  ascension: number
+  outcome: ResultOutcome
+}
+
+/** Existing incubator eggs only. This child never creates a new egg. */
+export interface IncubatorProgressionPayload {
+  amount: number
+  /** Optional source guard for future producer flows; Tower is intentionally rejected. */
+  source?: string
+}
+
 export interface RosterGrowthPayload {
   unitIds: string[]
   foeLevels: number[]
@@ -65,6 +86,8 @@ export interface RosterGrowthPayload {
 export interface ResultSettlementPayload extends RosterGrowthPayload {
   skillPoints?: SkillPointsSettlementPayload
   meta?: MetaSettlementPayload
+  tower?: TowerProgressionPayload
+  incubator?: IncubatorProgressionPayload
 }
 
 export interface MoveLearnReceipt {
@@ -96,9 +119,40 @@ export interface MetaSettlementReceipt extends ResultIdentity {
   appliedAt: number
 }
 
+export interface TowerProgressionState {
+  bestFloor: number
+  ascensionUnlocked: number
+}
+
+export interface TowerProgressionReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  floor: number
+  ascension: number
+  outcome: ResultOutcome
+  before: TowerProgressionState
+  after: TowerProgressionState
+  appliedAt: number
+}
+
+export interface IncubatorProgressUpdate {
+  eggId: string
+  source: Egg['source']
+  beforeProgress: number
+  afterProgress: number
+}
+
+export interface IncubatorProgressionReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  amount: number
+  updates: IncubatorProgressUpdate[]
+  appliedAt: number
+}
+
 export interface ResultSettlementReceipt extends RosterGrowthReceipt {
   skillPoints?: SkillPointsSettlementReceipt
   meta?: MetaSettlementReceipt
+  tower?: TowerProgressionReceipt
+  incubator?: IncubatorProgressionReceipt
 }
 
 export interface EvolutionReceipt {
@@ -154,15 +208,45 @@ export interface MetaSettlementMarker extends ResultIdentity {
   receipt: Omit<MetaSettlementReceipt, 'status'>
 }
 
+export interface TowerProgressionMarker extends ResultIdentity {
+  destination: 'tower-progression'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  canonicalApplied?: boolean
+  payload: TowerProgressionPayload
+  before: TowerProgressionState
+  after: TowerProgressionState
+  receipt: Omit<TowerProgressionReceipt, 'status'>
+}
+
+export interface IncubatorProgressionMarker extends ResultIdentity {
+  destination: 'incubator-progression'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  canonicalApplied?: boolean
+  payload: IncubatorProgressionPayload
+  updates: IncubatorProgressUpdate[]
+  receipt: Omit<IncubatorProgressionReceipt, 'status'>
+}
+
 export interface SettlementJournalEntry extends ResultIdentity {
   status: ResultMarkerStatus
   createdAt: number
   settledAt?: number
   leftResultAt?: number
   outcome?: ResultOutcome
+  /** Original child intent retained when a stage fails before its receipt is journaled. */
+  towerPayload?: TowerProgressionPayload
+  incubatorPayload?: IncubatorProgressionPayload
   rosterGrowth?: RosterGrowthReceipt
   skillPoints?: SkillPointsSettlementReceipt
   meta?: MetaSettlementReceipt
+  tower?: TowerProgressionReceipt
+  incubator?: IncubatorProgressionReceipt
   error?: string
 }
 
@@ -199,9 +283,29 @@ export interface MetaSettlementPersistence {
   saveMarkers: (markers: MetaSettlementMarker[]) => Promise<void>
 }
 
+export interface TowerProgressionPersistence {
+  loadRun: () => Promise<TowerProgressionState>
+  loadMarkers: () => Promise<TowerProgressionMarker[]>
+  /** Durable write-ahead step: pending marker + canonical tower metadata. */
+  savePending: (run: TowerProgressionState, markers: TowerProgressionMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical tower write has succeeded. */
+  saveMarkers: (markers: TowerProgressionMarker[]) => Promise<void>
+}
+
+export interface IncubatorProgressionPersistence {
+  loadState: () => Promise<IncubatorState>
+  loadMarkers: () => Promise<IncubatorProgressionMarker[]>
+  /** Durable write-ahead step: pending marker + canonical incubator state. */
+  savePending: (state: IncubatorState, markers: IncubatorProgressionMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical incubator write has succeeded. */
+  saveMarkers: (markers: IncubatorProgressionMarker[]) => Promise<void>
+}
+
 export interface ResultSettlementChildren {
   skillPoints?: SkillPointsDestination
   meta?: MetaSettlementDestination
+  tower?: TowerProgressionDestination
+  incubator?: IncubatorProgressionDestination
 }
 
 export interface SettlementJournalPersistence {
@@ -476,7 +580,7 @@ export class RosterGrowthDestination {
         if (!marker) return
         if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
         const next = replaceMarker(markers, { ...marker, leftResultAt: this.now() })
-        await this.persistence.saveMarkers(retainResultMarkers(next))
+        await this.persistence.saveMarkers(retainResultMarkers(next, identity))
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
         throw new ResultSettlementError('storage', identity, '保存 Result 離場標記失敗，請重試。', error)
@@ -687,6 +791,7 @@ export class SkillPointsDestination {
         if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
         await this.persistence.saveMarkers(retainResultMarkers(
           replaceSkillPointsMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
         ))
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
@@ -819,6 +924,7 @@ export class MetaSettlementDestination {
         if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
         await this.persistence.saveMarkers(retainResultMarkers(
           replaceMetaMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
         ))
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
@@ -908,6 +1014,546 @@ export class MetaSettlementDestination {
   }
 }
 
+function cloneTowerProgressionState(state: TowerProgressionState): TowerProgressionState {
+  return {
+    bestFloor: Number.isFinite(state.bestFloor) ? Math.max(0, Math.floor(state.bestFloor)) : 0,
+    ascensionUnlocked: Number.isFinite(state.ascensionUnlocked)
+      ? Math.max(0, Math.min(ASCENSIONS.length - 1, Math.floor(state.ascensionUnlocked)))
+      : 0,
+  }
+}
+
+function normalizeTowerPayload(payload: TowerProgressionPayload): TowerProgressionPayload {
+  return {
+    floor: Number.isFinite(payload.floor) ? Math.max(1, Math.floor(payload.floor)) : 1,
+    ascension: Number.isFinite(payload.ascension)
+      ? Math.max(0, Math.min(ASCENSIONS.length - 1, Math.floor(payload.ascension)))
+      : 0,
+    outcome: payload.outcome === 'win' ? 'win' : 'lose',
+  }
+}
+
+/** Pure tower metadata update used by the tower child boundary. */
+export function calculateTowerProgression(
+  run: TowerProgressionState,
+  payload: TowerProgressionPayload,
+): { run: TowerProgressionState; payload: TowerProgressionPayload } {
+  const before = cloneTowerProgressionState(run)
+  const normalized = normalizeTowerPayload(payload)
+  const reachedFloor = normalized.outcome === 'win' ? normalized.floor : Math.max(0, normalized.floor - 1)
+  const unlocked = normalized.outcome === 'win' && isBossFloor(normalized.floor)
+    ? Math.min(ASCENSIONS.length - 1, normalized.ascension + 1)
+    : 0
+  return {
+    payload: normalized,
+    run: {
+      bestFloor: Math.max(before.bestFloor, reachedFloor),
+      ascensionUnlocked: Math.max(before.ascensionUnlocked, unlocked),
+    },
+  }
+}
+
+function towerProgressionReceipt(
+  identity: ResultIdentity,
+  payload: TowerProgressionPayload,
+  before: TowerProgressionState,
+  after: TowerProgressionState,
+  appliedAt: number,
+  status: TowerProgressionReceipt['status'],
+): TowerProgressionReceipt {
+  return {
+    ...identity,
+    status,
+    floor: payload.floor,
+    ascension: payload.ascension,
+    outcome: payload.outcome,
+    before: cloneTowerProgressionState(before),
+    after: cloneTowerProgressionState(after),
+    appliedAt,
+  }
+}
+
+function replaceTowerMarker(
+  markers: readonly TowerProgressionMarker[],
+  marker: TowerProgressionMarker,
+): TowerProgressionMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function towerMarkerFor(
+  identity: ResultIdentity,
+  receipt: TowerProgressionReceipt,
+  payload: TowerProgressionPayload,
+  before: TowerProgressionState,
+  after: TowerProgressionState,
+  now: number,
+  status: ResultMarkerStatus,
+  previous?: TowerProgressionMarker,
+): TowerProgressionMarker {
+  return {
+    ...identity,
+    destination: 'tower-progression',
+    status,
+    createdAt: previous?.createdAt ?? now,
+    ...(status === 'settled' ? { settledAt: previous?.settledAt ?? now } : {}),
+    ...(previous?.leftResultAt === undefined ? {} : { leftResultAt: previous.leftResultAt }),
+    canonicalApplied: previous?.canonicalApplied ?? false,
+    payload: { ...payload },
+    before: cloneTowerProgressionState(previous?.before ?? before),
+    after: cloneTowerProgressionState(previous?.after ?? after),
+    receipt: {
+      resultId: receipt.resultId,
+      resultFingerprint: receipt.resultFingerprint,
+      floor: receipt.floor,
+      ascension: receipt.ascension,
+      outcome: receipt.outcome,
+      before: cloneTowerProgressionState(receipt.before),
+      after: cloneTowerProgressionState(receipt.after),
+      appliedAt: receipt.appliedAt,
+    },
+  }
+}
+
+/** Durable Result child for monotonic Tower floor/unlock metadata. */
+export class TowerProgressionDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: TowerProgressionPersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: TowerProgressionPayload): Promise<TowerProgressionReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return marker.status === 'settled' || marker.canonicalApplied === true
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取連勝塔結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceTowerMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存連勝塔 Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(
+    identity: ResultIdentity,
+    payload: TowerProgressionPayload,
+  ): Promise<TowerProgressionReceipt> {
+    let markers: TowerProgressionMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取連勝塔結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (existing?.status === 'settled') {
+      return {
+        ...existing.receipt,
+        before: cloneTowerProgressionState(existing.receipt.before),
+        after: cloneTowerProgressionState(existing.receipt.after),
+        status: 'already-applied',
+      }
+    }
+
+    let run: TowerProgressionState
+    try {
+      run = cloneTowerProgressionState(await this.persistence.loadRun())
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical 連勝塔進度失敗，請重試。', cause)
+    }
+
+    if (existing) {
+      if (existing.canonicalApplied !== true) {
+        const reconciled = {
+          bestFloor: Math.max(run.bestFloor, existing.after.bestFloor),
+          ascensionUnlocked: Math.max(run.ascensionUnlocked, existing.after.ascensionUnlocked),
+        }
+        try {
+          await this.persistence.savePending(reconciled, markers, identity.resultId)
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復連勝塔結算資料失敗，請重試。', cause)
+        }
+      }
+      const settled: TowerProgressionMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceTowerMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, '連勝塔進度已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return {
+        ...existing.receipt,
+        before: cloneTowerProgressionState(existing.receipt.before),
+        after: cloneTowerProgressionState(existing.receipt.after),
+        status: 'already-applied',
+      }
+    }
+
+    let calculated: { run: TowerProgressionState; payload: TowerProgressionPayload }
+    try {
+      calculated = calculateTowerProgression(run, payload)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '連勝塔結算資料無效，請重試。', cause)
+    }
+    const appliedAt = this.now()
+    const receipt = towerProgressionReceipt(identity, calculated.payload, run, calculated.run, appliedAt, 'applied')
+    const pending = towerMarkerFor(
+      identity,
+      receipt,
+      calculated.payload,
+      run,
+      calculated.run,
+      appliedAt,
+      'pending',
+    )
+    try {
+      await this.persistence.savePending(calculated.run, replaceTowerMarker(markers, pending), identity.resultId)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存連勝塔結算結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled = towerMarkerFor(
+      identity,
+      receipt,
+      calculated.payload,
+      run,
+      calculated.run,
+      appliedAt,
+      'settled',
+      pending,
+    )
+    try {
+      await this.persistence.saveMarkers(replaceTowerMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, '連勝塔進度已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
+function cloneEgg(egg: Egg): Egg {
+  return {
+    ...egg,
+    speciesPool: [...egg.speciesPool],
+  }
+}
+
+function cloneIncubatorState(state: IncubatorState): IncubatorState {
+  return {
+    schemaVersion: state.schemaVersion,
+    nextId: state.nextId,
+    eggs: state.eggs.map(cloneEgg),
+  }
+}
+
+function normalizedProgressAmount(amount: number): number {
+  return Number.isFinite(amount) ? Math.max(0, Math.floor(amount)) : 0
+}
+
+function invalidIncubatorSource(identity: ResultIdentity, source: string): never {
+  throw new ResultSettlementError(
+    'invalid-source',
+    identity,
+    `孵化進度來源無效：${source}；只接受 achievement 或 duplicate。`,
+  )
+}
+
+/** Pure incubator progress update. It only advances already-existing supported eggs. */
+export function calculateIncubatorProgression(
+  state: IncubatorState,
+  payload: IncubatorProgressionPayload,
+): { state: IncubatorState; amount: number; updates: IncubatorProgressUpdate[] } {
+  const amount = normalizedProgressAmount(payload.amount)
+  const updates: IncubatorProgressUpdate[] = []
+  const next = cloneIncubatorState(state)
+  next.eggs = next.eggs.map((egg) => {
+    if (!isSupportedEggSource(egg.source)) return egg
+    if (payload.source !== undefined && payload.source !== egg.source) return egg
+    const beforeProgress = Math.max(0, Math.floor(egg.progress))
+    const afterProgress = Math.min(egg.requiredProgress, beforeProgress + amount)
+    if (afterProgress !== beforeProgress) {
+      updates.push({ eggId: egg.id, source: egg.source, beforeProgress, afterProgress })
+    }
+    return { ...egg, progress: afterProgress }
+  })
+  return { state: next, amount, updates }
+}
+
+function mergeIncubatorProgress(
+  state: IncubatorState,
+  updates: readonly IncubatorProgressUpdate[],
+): IncubatorState {
+  const byId = new Map(updates.map((update) => [update.eggId, update]))
+  return {
+    ...cloneIncubatorState(state),
+    eggs: state.eggs.map((egg) => {
+      const update = byId.get(egg.id)
+      if (!update || !isSupportedEggSource(egg.source)) return cloneEgg(egg)
+      return { ...egg, progress: Math.max(egg.progress, Math.min(egg.requiredProgress, update.afterProgress)) }
+    }),
+  }
+}
+
+function cloneProgressUpdates(updates: readonly IncubatorProgressUpdate[]): IncubatorProgressUpdate[] {
+  return updates.map((update) => ({ ...update }))
+}
+
+function incubatorProgressionReceipt(
+  identity: ResultIdentity,
+  amount: number,
+  updates: readonly IncubatorProgressUpdate[],
+  appliedAt: number,
+  status: IncubatorProgressionReceipt['status'],
+): IncubatorProgressionReceipt {
+  return {
+    ...identity,
+    status,
+    amount,
+    updates: cloneProgressUpdates(updates),
+    appliedAt,
+  }
+}
+
+function replaceIncubatorMarker(
+  markers: readonly IncubatorProgressionMarker[],
+  marker: IncubatorProgressionMarker,
+): IncubatorProgressionMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function incubatorMarkerFor(
+  identity: ResultIdentity,
+  receipt: IncubatorProgressionReceipt,
+  payload: IncubatorProgressionPayload,
+  updates: readonly IncubatorProgressUpdate[],
+  now: number,
+  status: ResultMarkerStatus,
+  previous?: IncubatorProgressionMarker,
+): IncubatorProgressionMarker {
+  return {
+    ...identity,
+    destination: 'incubator-progression',
+    status,
+    createdAt: previous?.createdAt ?? now,
+    ...(status === 'settled' ? { settledAt: previous?.settledAt ?? now } : {}),
+    ...(previous?.leftResultAt === undefined ? {} : { leftResultAt: previous.leftResultAt }),
+    canonicalApplied: previous?.canonicalApplied ?? false,
+    payload: { ...payload },
+    updates: cloneProgressUpdates(previous?.updates ?? updates),
+    receipt: {
+      resultId: receipt.resultId,
+      resultFingerprint: receipt.resultFingerprint,
+      amount: receipt.amount,
+      updates: cloneProgressUpdates(receipt.updates),
+      appliedAt: receipt.appliedAt,
+    },
+  }
+}
+
+/** Durable Result child for progress on already-created achievement/duplicate eggs. */
+export class IncubatorProgressionDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: IncubatorProgressionPersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: IncubatorProgressionPayload): Promise<IncubatorProgressionReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return marker.status === 'settled' || marker.canonicalApplied === true
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取孵化進度結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceIncubatorMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存孵化進度 Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(
+    identity: ResultIdentity,
+    payload: IncubatorProgressionPayload,
+  ): Promise<IncubatorProgressionReceipt> {
+    let markers: IncubatorProgressionMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取孵化進度結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (payload.source !== undefined && !isSupportedEggSource(payload.source)) {
+      invalidIncubatorSource(identity, payload.source)
+    }
+    if (existing?.status === 'settled') {
+      return {
+        ...existing.receipt,
+        updates: cloneProgressUpdates(existing.receipt.updates),
+        status: 'already-applied',
+      }
+    }
+
+    let state: IncubatorState
+    try {
+      state = cloneIncubatorState(await this.persistence.loadState())
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical 孵化所進度失敗，請重試。', cause)
+    }
+
+    if (existing) {
+      if (existing.canonicalApplied !== true) {
+        const reconciled = mergeIncubatorProgress(state, existing.updates)
+        try {
+          await this.persistence.savePending(reconciled, markers, identity.resultId)
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復孵化進度結算資料失敗，請重試。', cause)
+        }
+      }
+      const settled: IncubatorProgressionMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceIncubatorMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, '孵化進度已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return {
+        ...existing.receipt,
+        updates: cloneProgressUpdates(existing.receipt.updates),
+        status: 'already-applied',
+      }
+    }
+
+    const calculated = calculateIncubatorProgression(state, payload)
+    const appliedAt = this.now()
+    const receipt = incubatorProgressionReceipt(identity, calculated.amount, calculated.updates, appliedAt, 'applied')
+    const normalizedPayload: IncubatorProgressionPayload = {
+      amount: calculated.amount,
+      ...(payload.source !== undefined ? { source: payload.source } : {}),
+    }
+    const pending = incubatorMarkerFor(
+      identity,
+      receipt,
+      normalizedPayload,
+      calculated.updates,
+      appliedAt,
+      'pending',
+    )
+    try {
+      await this.persistence.savePending(calculated.state, replaceIncubatorMarker(markers, pending), identity.resultId)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存孵化進度結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled = incubatorMarkerFor(
+      identity,
+      receipt,
+      normalizedPayload,
+      calculated.updates,
+      appliedAt,
+      'settled',
+      pending,
+    )
+    try {
+      await this.persistence.saveMarkers(replaceIncubatorMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, '孵化進度已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
+// Explicit aliases keep the boundary vocabulary readable to future Tickets 32–33 callers.
+export { TowerProgressionDestination as TowerSettlementDestination }
+export { TowerProgressionDestination as TowerProgressDestination }
+export { TowerProgressionDestination as TowerDestination }
+export { IncubatorProgressionDestination as IncubatorSettlementDestination }
+export { IncubatorProgressionDestination as IncubatorProgressDestination }
+export { IncubatorProgressionDestination as IncubatorDestination }
+export type TowerSettlementPayload = TowerProgressionPayload
+export type IncubatorSettlementPayload = IncubatorProgressionPayload
+export type TowerSettlementMarker = TowerProgressionMarker
+export type IncubatorSettlementMarker = IncubatorProgressionMarker
+export type TowerSettlementPersistence = TowerProgressionPersistence
+export type IncubatorSettlementPersistence = IncubatorProgressionPersistence
+
 /** Result-level journal; it never mutates the roster and is not exactly-once authority. */
 export class ResultSettlementCoordinator {
   private queue: Promise<unknown> = Promise.resolve()
@@ -934,11 +1580,14 @@ export class ResultSettlementCoordinator {
         if (entry) {
           await this.journal.save(retainResultMarkers(
             entries.map((item) => item.resultId === identity.resultId ? { ...item, leftResultAt: this.now() } : item),
+            identity,
           ))
         }
         await this.destination.markResultLeft(identity)
         if (this.children.skillPoints) await this.children.skillPoints.markResultLeft(identity)
         if (this.children.meta) await this.children.meta.markResultLeft(identity)
+        if (this.children.tower) await this.children.tower.markResultLeft(identity)
+        if (this.children.incubator) await this.children.incubator.markResultLeft(identity)
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
         throw new ResultSettlementError('storage', identity, '保存 Result 離場標記失敗，請重試。', error)
@@ -961,6 +1610,20 @@ export class ResultSettlementCoordinator {
     let childAlreadyApplied = false
     let skillPointsAlreadyApplied = false
     let metaAlreadyApplied = false
+    let towerAlreadyApplied = false
+    let incubatorAlreadyApplied = false
+    const towerPayload = payload.tower ?? existing?.towerPayload ?? (existing?.tower
+      ? {
+          floor: existing.tower.floor,
+          ascension: existing.tower.ascension,
+          outcome: existing.tower.outcome,
+        }
+      : undefined)
+    const incubatorPayload = payload.incubator ?? existing?.incubatorPayload ?? (existing?.incubator
+      ? { amount: existing.incubator.amount }
+      : undefined)
+    const towerRequired = Boolean(this.children.tower && towerPayload)
+    const incubatorRequired = Boolean(this.children.incubator && incubatorPayload)
     if (existing) {
       // Reconciliation starts with the child authority. The journal is only
       // orchestration state and cannot prove that the roster write happened.
@@ -968,6 +1631,8 @@ export class ResultSettlementCoordinator {
         childAlreadyApplied = await this.destination.hasApplied(identity)
         if (this.children.skillPoints) skillPointsAlreadyApplied = await this.children.skillPoints.hasApplied(identity)
         if (this.children.meta) metaAlreadyApplied = await this.children.meta.hasApplied(identity)
+        if (towerRequired && this.children.tower) towerAlreadyApplied = await this.children.tower.hasApplied(identity)
+        if (incubatorRequired && this.children.incubator) incubatorAlreadyApplied = await this.children.incubator.hasApplied(identity)
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
         throw new ResultSettlementError('storage', identity, 'Result 子結算回條對帳失敗，請重試。', error)
@@ -979,6 +1644,8 @@ export class ResultSettlementCoordinator {
       && childAlreadyApplied
       && (!this.children.skillPoints || (existing.skillPoints && skillPointsAlreadyApplied))
       && (!this.children.meta || (existing.meta && metaAlreadyApplied))
+      && (!towerRequired || (existing.tower && towerAlreadyApplied))
+      && (!incubatorRequired || (existing.incubator && incubatorAlreadyApplied))
     if (allChildrenSettled) {
       let childReceipt: ResultSettlementReceipt
       try {
@@ -995,10 +1662,18 @@ export class ResultSettlementCoordinator {
         const metaReceipt = this.children.meta
           ? await this.children.meta.applyOnce(identity, metaPayload)
           : undefined
+        const towerReceipt = towerRequired && this.children.tower && towerPayload
+          ? await this.children.tower.applyOnce(identity, towerPayload)
+          : undefined
+        const incubatorReceipt = incubatorRequired && this.children.incubator && incubatorPayload
+          ? await this.children.incubator.applyOnce(identity, incubatorPayload)
+          : undefined
         childReceipt = {
           ...rosterReceipt,
           ...(skillPointsReceipt ? { skillPoints: skillPointsReceipt } : {}),
           ...(metaReceipt ? { meta: metaReceipt } : {}),
+          ...(towerReceipt ? { tower: towerReceipt } : {}),
+          ...(incubatorReceipt ? { incubator: incubatorReceipt } : {}),
         }
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
@@ -1009,17 +1684,27 @@ export class ResultSettlementCoordinator {
         status: 'already-applied',
         ...(childReceipt.skillPoints ? { skillPoints: { ...childReceipt.skillPoints, status: 'already-applied' } } : {}),
         ...(childReceipt.meta ? { meta: { ...childReceipt.meta, status: 'already-applied' } } : {}),
+        ...(childReceipt.tower ? { tower: { ...childReceipt.tower, status: 'already-applied' } } : {}),
+        ...(childReceipt.incubator ? { incubator: { ...childReceipt.incubator, status: 'already-applied' } } : {}),
       }
     }
 
     const running: SettlementJournalEntry = existing
-      ? { ...existing, status: 'pending', error: undefined }
+      ? {
+          ...existing,
+          status: 'pending',
+          ...(towerPayload ? { towerPayload } : {}),
+          ...(incubatorPayload ? { incubatorPayload } : {}),
+          error: undefined,
+        }
       : {
           resultId: identity.resultId,
           resultFingerprint: identity.resultFingerprint,
           status: 'pending',
           createdAt: this.now(),
           ...(payload.outcome ? { outcome: payload.outcome } : {}),
+          ...(towerPayload ? { towerPayload } : {}),
+          ...(incubatorPayload ? { incubatorPayload } : {}),
         }
     try {
       await this.journal.save(replaceJournal(entries, running))
@@ -1064,6 +1749,26 @@ export class ResultSettlementCoordinator {
       }
     }
 
+    let towerReceipt: TowerProgressionReceipt | undefined
+    if (towerRequired && this.children.tower) {
+      try {
+        if (towerPayload) towerReceipt = await this.children.tower.applyOnce(identity, towerPayload)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '連勝塔結算失敗，請重試。', error)
+      }
+    }
+
+    let incubatorReceipt: IncubatorProgressionReceipt | undefined
+    if (incubatorRequired && this.children.incubator) {
+      try {
+        if (incubatorPayload) incubatorReceipt = await this.children.incubator.applyOnce(identity, incubatorPayload)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '孵化進度結算失敗，請重試。', error)
+      }
+    }
+
     const settled: SettlementJournalEntry = {
       ...running,
       status: 'settled',
@@ -1071,6 +1776,8 @@ export class ResultSettlementCoordinator {
       rosterGrowth: receipt,
       ...(skillPointsReceipt ? { skillPoints: skillPointsReceipt } : {}),
       ...(metaReceipt ? { meta: metaReceipt } : {}),
+      ...(towerReceipt ? { tower: towerReceipt } : {}),
+      ...(incubatorReceipt ? { incubator: incubatorReceipt } : {}),
       error: undefined,
     }
     try {
@@ -1086,6 +1793,8 @@ export class ResultSettlementCoordinator {
       ...receipt,
       ...(skillPointsReceipt ? { skillPoints: skillPointsReceipt } : {}),
       ...(metaReceipt ? { meta: metaReceipt } : {}),
+      ...(towerReceipt ? { tower: towerReceipt } : {}),
+      ...(incubatorReceipt ? { incubator: incubatorReceipt } : {}),
     }
   }
 }
@@ -1312,6 +2021,118 @@ export class LocalStorageMetaSettlementPersistence implements MetaSettlementPers
   }
 }
 
+/** Browser persistence for the Tower progression child boundary. */
+export class LocalStorageTowerProgressionPersistence implements TowerProgressionPersistence {
+  constructor(
+    private readonly run: {
+      loadRun: () => Promise<TowerProgressionState> | TowerProgressionState
+      saveRunWithMarkers: (run: TowerProgressionState, markers: TowerProgressionMarker[]) => Promise<void> | void
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadRun(): Promise<TowerProgressionState> {
+    return Promise.resolve(this.run.loadRun())
+  }
+
+  async loadMarkers(): Promise<TowerProgressionMarker[]> {
+    if (!this.storage) return []
+    const embedded = readEmbeddedMarkers<TowerProgressionMarker>(
+      this.storage.getItem('mobie.run.v1'),
+      '連勝塔結算標記',
+    )
+    if (embedded) return embedded
+    return parseArray<TowerProgressionMarker>(
+      this.storage.getItem(TOWER_PROGRESSION_SETTLEMENT_MARKER_KEY),
+      '連勝塔結算標記',
+    )
+  }
+
+  async savePending(
+    run: TowerProgressionState,
+    markers: TowerProgressionMarker[],
+    operationId?: string,
+  ): Promise<void> {
+    const completed = markers.map((marker) => marker.resultId === operationId
+      ? { ...marker, canonicalApplied: true }
+      : marker)
+    try {
+      await this.run.saveRunWithMarkers(run, completed)
+      try { this.storage?.setItem(TOWER_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存連勝塔結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: TowerProgressionMarker[]): Promise<void> {
+    try {
+      const run = await this.loadRun()
+      await this.run.saveRunWithMarkers(run, markers)
+      try { this.storage?.setItem(TOWER_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存連勝塔結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
+/** Browser persistence for the incubator progression child boundary. */
+export class LocalStorageIncubatorProgressionPersistence implements IncubatorProgressionPersistence {
+  constructor(
+    private readonly incubator: {
+      loadState: () => Promise<IncubatorState> | IncubatorState
+      saveStateWithMarkers: (state: IncubatorState, markers: IncubatorProgressionMarker[]) => Promise<void> | void
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadState(): Promise<IncubatorState> {
+    return Promise.resolve(this.incubator.loadState())
+  }
+
+  async loadMarkers(): Promise<IncubatorProgressionMarker[]> {
+    if (!this.storage) return []
+    const embedded = readEmbeddedMarkers<IncubatorProgressionMarker>(
+      this.storage.getItem('mobie.incubator.v1'),
+      '孵化進度結算標記',
+    )
+    if (embedded) return embedded
+    return parseArray<IncubatorProgressionMarker>(
+      this.storage.getItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY),
+      '孵化進度結算標記',
+    )
+  }
+
+  async savePending(
+    state: IncubatorState,
+    markers: IncubatorProgressionMarker[],
+    operationId?: string,
+  ): Promise<void> {
+    const completed = markers.map((marker) => marker.resultId === operationId
+      ? { ...marker, canonicalApplied: true }
+      : marker)
+    try {
+      await this.incubator.saveStateWithMarkers(state, completed)
+      try { this.storage?.setItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存孵化進度結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: IncubatorProgressionMarker[]): Promise<void> {
+    try {
+      const state = await this.loadState()
+      await this.incubator.saveStateWithMarkers(state, markers)
+      try { this.storage?.setItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存孵化進度結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
+// Compatibility aliases used by the Result settlement vocabulary.
+export { LocalStorageTowerProgressionPersistence as LocalStorageTowerSettlementPersistence }
+export { LocalStorageIncubatorProgressionPersistence as LocalStorageIncubatorSettlementPersistence }
+
 /** Test-friendly in-memory marker/journal implementations. */
 export class MemorySettlementJournal implements SettlementJournalPersistence {
   entries: SettlementJournalEntry[] = []
@@ -1325,6 +2146,15 @@ export class MemorySettlementJournal implements SettlementJournalPersistence {
       rosterGrowth: entry.rosterGrowth ? { ...entry.rosterGrowth } : undefined,
       skillPoints: entry.skillPoints ? { ...entry.skillPoints } : undefined,
       meta: entry.meta ? { ...entry.meta, meta: cloneMeta(entry.meta.meta) } : undefined,
+      tower: entry.tower ? {
+        ...entry.tower,
+        before: cloneTowerProgressionState(entry.tower.before),
+        after: cloneTowerProgressionState(entry.tower.after),
+      } : undefined,
+      incubator: entry.incubator ? {
+        ...entry.incubator,
+        updates: cloneProgressUpdates(entry.incubator.updates),
+      } : undefined,
     }))
   }
 
@@ -1336,6 +2166,15 @@ export class MemorySettlementJournal implements SettlementJournalPersistence {
       rosterGrowth: entry.rosterGrowth ? { ...entry.rosterGrowth } : undefined,
       skillPoints: entry.skillPoints ? { ...entry.skillPoints } : undefined,
       meta: entry.meta ? { ...entry.meta, meta: cloneMeta(entry.meta.meta) } : undefined,
+      tower: entry.tower ? {
+        ...entry.tower,
+        before: cloneTowerProgressionState(entry.tower.before),
+        after: cloneTowerProgressionState(entry.tower.after),
+      } : undefined,
+      incubator: entry.incubator ? {
+        ...entry.incubator,
+        updates: cloneProgressUpdates(entry.incubator.updates),
+      } : undefined,
     }))
   }
 }
@@ -1495,6 +2334,123 @@ export class MemoryMetaSettlementPersistence implements MetaSettlementPersistenc
           : {}),
       },
       receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+  }
+}
+
+export class MemoryTowerProgressionPersistence implements TowerProgressionPersistence {
+  run: TowerProgressionState
+  markers: TowerProgressionMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(run: TowerProgressionState = { bestFloor: 0, ascensionUnlocked: 0 }) {
+    this.run = cloneTowerProgressionState(run)
+  }
+
+  async loadRun(): Promise<TowerProgressionState> {
+    return cloneTowerProgressionState(this.run)
+  }
+
+  async loadMarkers(): Promise<TowerProgressionMarker[]> {
+    return this.markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      before: cloneTowerProgressionState(marker.before),
+      after: cloneTowerProgressionState(marker.after),
+      receipt: {
+        ...marker.receipt,
+        before: cloneTowerProgressionState(marker.receipt.before),
+        after: cloneTowerProgressionState(marker.receipt.after),
+      },
+    }))
+  }
+
+  async savePending(run: TowerProgressionState, markers: TowerProgressionMarker[], operationId?: string): Promise<void> {
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      before: cloneTowerProgressionState(marker.before),
+      after: cloneTowerProgressionState(marker.after),
+      receipt: {
+        ...marker.receipt,
+        before: cloneTowerProgressionState(marker.receipt.before),
+        after: cloneTowerProgressionState(marker.receipt.after),
+      },
+    }))
+    if (this.failPending) throw new Error('tower pending write failed')
+    this.saveCount += 1
+    this.run = cloneTowerProgressionState(run)
+    this.markers = this.markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+    }))
+  }
+
+  async saveMarkers(markers: TowerProgressionMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('tower marker write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      before: cloneTowerProgressionState(marker.before),
+      after: cloneTowerProgressionState(marker.after),
+      receipt: {
+        ...marker.receipt,
+        before: cloneTowerProgressionState(marker.receipt.before),
+        after: cloneTowerProgressionState(marker.receipt.after),
+      },
+    }))
+  }
+}
+
+export class MemoryIncubatorProgressionPersistence implements IncubatorProgressionPersistence {
+  state: IncubatorState
+  markers: IncubatorProgressionMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(state: IncubatorState) {
+    this.state = cloneIncubatorState(state)
+  }
+
+  async loadState(): Promise<IncubatorState> {
+    return cloneIncubatorState(this.state)
+  }
+
+  async loadMarkers(): Promise<IncubatorProgressionMarker[]> {
+    return this.markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      updates: cloneProgressUpdates(marker.updates),
+      receipt: { ...marker.receipt, updates: cloneProgressUpdates(marker.receipt.updates) },
+    }))
+  }
+
+  async savePending(state: IncubatorState, markers: IncubatorProgressionMarker[], operationId?: string): Promise<void> {
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      updates: cloneProgressUpdates(marker.updates),
+      receipt: { ...marker.receipt, updates: cloneProgressUpdates(marker.receipt.updates) },
+    }))
+    if (this.failPending) throw new Error('incubator pending write failed')
+    this.saveCount += 1
+    this.state = cloneIncubatorState(state)
+    this.markers = this.markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+    }))
+  }
+
+  async saveMarkers(markers: IncubatorProgressionMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('incubator marker write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      updates: cloneProgressUpdates(marker.updates),
+      receipt: { ...marker.receipt, updates: cloneProgressUpdates(marker.receipt.updates) },
     }))
   }
 }

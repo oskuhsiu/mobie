@@ -10,7 +10,6 @@ import { useSettings } from '@/store/settingsStore'
 import { interactModeOf, INTENSITY_BY_MODE } from '@/game/settings'
 import { SwipeThrow, CircleSeal } from '@/ui/components/CaptureGestures'
 import { useAccidents } from '@/store/accidentStore'
-import { useRun } from '@/store/runStore'
 import { floorReward, towerExpMult, isBossFloor, getAscension } from '@/game/tower'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
@@ -320,22 +319,6 @@ export function ResultScreen() {
   const [settlementAttempt, setSettlementAttempt] = useState(0)
   const legacySettlementStartedRef = useRef(false)
 
-  // Tower run and incubator progress remain on their existing owners until
-  // Tickets 31–32. Real battle SP/meta writes are forwarded below instead of
-  // mutating those stores from the Result component.
-  const progressionStartedRef = useRef(false)
-  useEffect(() => {
-    if (!outcome || progressionStartedRef.current) return
-    progressionStartedRef.current = true
-    // M11 連勝塔 meta：記錄到達樓層（勝＝清掉本樓、敗＝清到前一樓）；清 boss 樓解鎖下一難度階
-    if (tower) {
-      useRun.getState().recordFloor(isWin ? tower.floor : tower.floor - 1)
-      if (isWin && isBossFloor(tower.floor)) useRun.getState().unlockAscension(tower.ascension + 1)
-    }
-    // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
-    useIncubator.getState().advance(isWin ? 2 : 1)
-  }, [isWin, outcome, tower])
-
   // Roster EXP/evolution has one durable destination. The stable identity
   // makes a second effect run a reconciliation instead of a second reward.
   useEffect(() => {
@@ -359,6 +342,14 @@ export function ResultScreen() {
         outcome,
         skillPoints: { delta: spReward },
         meta: isWin ? { winMode: resultMode } : {},
+        ...(tower ? {
+          tower: {
+            floor: tower.floor,
+            ascension: tower.ascension,
+            outcome,
+          },
+        } : {}),
+        incubator: { amount: isWin ? 2 : 1 },
       })
         .then(() => {
           setSettlementStatus('settled')

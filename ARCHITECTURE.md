@@ -291,7 +291,10 @@ warnings.
 
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
 `heldItemId`) · `mobie.roster.growth.v1` (roster settlement marker) · `mobie.skillpoints.settlement.v1`
-(SP child marker) · `mobie.meta.settlement.v1` (Meta child marker) · `mobie.result.settlement.v1`
+(SP child marker) · `mobie.meta.settlement.v1` (Meta child marker) ·
+`mobie.run.v1` (canonical Tower run metadata) · `mobie.incubator.v1` (canonical incubator eggs/progress) ·
+`mobie.tower.settlement.v1` (Tower child mirror) · `mobie.incubator.settlement.v1`
+(incubator child mirror) · `mobie.result.settlement.v1`
 (Result orchestration journal) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
@@ -304,7 +307,7 @@ The retired `mz-models` IndexedDB may still exist on a user's device. It is deli
 the migration list and every product store path: the app does not open, read, write, or delete it, and
 does not perform a cleanup migration.
 
-### 7.3 Result settlement (M24 Tickets 29–30)
+### 7.3 Result settlement (M24 Tickets 29–31)
 
 `game/resultSettlement.ts` is the first durable Result child destination. `ResultScreen` forwards the
 battle handoff pair (`resultId = battleSessionId`, independent `resultFingerprint`) and keeps `outcome` in
@@ -326,10 +329,17 @@ envelopes carry a `resultSettlements` field) as the authoritative state; the sta
 `mobie.skillpoints.settlement.v1` and `mobie.meta.settlement.v1` are best-effort evidence mirrors, and old
 number/object values remain readable. Each child exposes `applyOnce`/`hasApplied`/`markResultLeft`. The coordinator
 serializes roster, SP, and Result meta receipts independently; a failed child is retried through its
-own marker without rolling back or resending another child. Meta settlement currently covers the
+own marker without rolling back or resending another child. The coordinator now also serializes Tower
+run and incubator-progress receipts independently; a failed child is retried from its own marker without
+rolling back or resending another child. Meta settlement currently covers the
 Result win counter and evolution receipt derived from the roster child; capture/Dex writes remain a
-later destination. Existing capture, tower, and incubator writes remain separate owners for Tickets
-31–32.
+later destination. Ticket 31 adds two independent children: `TowerProgressionDestination` owns the
+monotonic `mobie.run.v1` floor/unlock metadata, and `IncubatorProgressionDestination` advances only
+already-created achievement or duplicate-capture eggs in `mobie.incubator.v1`. Each canonical envelope
+stores its `resultSettlements` marker beside the mutation; standalone progression marker keys are best-effort
+inspection mirrors. Tower never creates an egg, and legacy `tower` egg records remain readable without being
+advanced by the Result child. Capture, duplicate-egg creation, and capture/Dex writes remain Ticket 32
+ownership.
 
 ### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
 

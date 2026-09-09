@@ -14,7 +14,7 @@ import type { OwnedUnit } from '@/game/types'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
 import { useOverlayController } from '@/ui/shell/OverlayController'
 
-const SOURCE_LABEL: Record<Egg['source'], string> = { achievement: '成就', duplicate: '重複轉化', tower: '連勝塔' }
+const SOURCE_LABEL: Record<Egg['source'], string> = { achievement: '成就', duplicate: '重複轉化', tower: '舊資料' }
 
 export function IncubatorModal({ onClose }: { onClose: () => void }) {
   const eggs = useIncubator((s) => s.state.eggs)
@@ -54,7 +54,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
   return (
     <ModalSurface
       title="🥚 孵化所"
-      description="蛋隨每場戰鬥累積進度；滿了即可孵化。來源：成就 / 重複捕獲 / 連勝塔"
+      description="蛋隨每場戰鬥累積進度；滿了即可孵化。來源：成就 / 重複捕獲"
       onClose={onClose}
       className="incubator-surface"
     >

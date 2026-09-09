@@ -6,16 +6,21 @@ import {
   MemorySkillPointsPersistence,
   MemorySettlementJournal,
   MetaSettlementDestination,
+  MemoryIncubatorProgressionPersistence,
+  MemoryTowerProgressionPersistence,
+  IncubatorProgressionDestination,
   ResultSettlementCoordinator,
   RosterGrowthDestination,
   ResultSettlementError,
   RESULT_MARKER_LIMIT,
   SkillPointsDestination,
+  TowerProgressionDestination,
   retainResultMarkers,
   type ResultIdentity,
   type RosterGrowthMarker,
 } from './resultSettlement'
 import { defaultMeta, bumpStat } from './meta'
+import { addEgg, defaultIncubator } from './incubator'
 
 const identity: ResultIdentity = { resultId: 'battle-1', resultFingerprint: 'fp-1' }
 const unit = createOwnedUnit('unit-1', 1, 15)
@@ -223,6 +228,117 @@ describe('SP and Meta result settlement children', () => {
     expect(spPersistence.points).toBe(4)
     expect(metaPersistence.meta.stats.wins).toBe(1)
     expect(metaPersistence.meta.stats.arenaWins).toBe(0)
+  })
+})
+
+describe('Tower and incubator result settlement children', () => {
+  it('applies tower floor and boss unlock once, then rejects fingerprint collision', async () => {
+    const persistence = new MemoryTowerProgressionPersistence()
+    const destination = new TowerProgressionDestination(persistence, () => 500)
+
+    const first = await destination.applyOnce(identity, { floor: 5, ascension: 1, outcome: 'win' })
+    const second = await destination.applyOnce(identity, { floor: 9, ascension: 3, outcome: 'win' })
+
+    expect(first).toMatchObject({ status: 'applied', floor: 5, ascension: 1, outcome: 'win' })
+    expect(first.after).toEqual({ bestFloor: 5, ascensionUnlocked: 2 })
+    expect(second).toMatchObject({ status: 'already-applied', after: first.after })
+    expect(persistence.run).toEqual(first.after)
+    expect(persistence.saveCount).toBe(1)
+    await expect(destination.applyOnce({ ...identity, resultFingerprint: 'tower-collision' }, {
+      floor: 5,
+      ascension: 1,
+      outcome: 'win',
+    })).rejects.toMatchObject({ code: 'collision' })
+  })
+
+  it('reconciles tower canonical progress after its receipt write fails without a second mutation', async () => {
+    const persistence = new MemoryTowerProgressionPersistence()
+    const destination = new TowerProgressionDestination(persistence, () => 510)
+    persistence.failMarker = true
+
+    await expect(destination.applyOnce(identity, { floor: 10, ascension: 0, outcome: 'win' }))
+      .rejects.toMatchObject({ code: 'receipt' })
+    expect(persistence.run).toEqual({ bestFloor: 10, ascensionUnlocked: 1 })
+    expect(await destination.hasApplied(identity)).toBe(true)
+
+    persistence.failMarker = false
+    const retry = await destination.applyOnce(identity, { floor: 1, ascension: 4, outcome: 'lose' })
+    expect(retry).toMatchObject({ status: 'already-applied', after: { bestFloor: 10, ascensionUnlocked: 1 } })
+    expect(persistence.saveCount).toBe(1)
+  })
+
+  it('advances only existing supported eggs and validates an explicit source guard', async () => {
+    let state = addEgg(defaultIncubator(), { source: 'achievement', speciesPool: [1], label: 'A' })
+    state = addEgg(state, { source: 'duplicate', speciesPool: [4], label: 'D' })
+    state = addEgg(state, { source: 'tower', speciesPool: [7], label: 'legacy tower' })
+    const persistence = new MemoryIncubatorProgressionPersistence(state)
+    const destination = new IncubatorProgressionDestination(persistence, () => 520)
+
+    const first = await destination.applyOnce(identity, { amount: 2 })
+    const second = await destination.applyOnce(identity, { amount: 99 })
+
+    expect(first).toMatchObject({ status: 'applied', amount: 2 })
+    expect(first.updates.map((update) => update.source)).toEqual(['achievement', 'duplicate'])
+    expect(persistence.state.eggs.map((egg) => egg.progress)).toEqual([2, 2, 0])
+    expect(second).toMatchObject({ status: 'already-applied', amount: 2 })
+    expect(persistence.saveCount).toBe(1)
+    await expect(destination.applyOnce({ ...identity, resultFingerprint: 'incubator-collision' }, { amount: 1 }))
+      .rejects.toMatchObject({ code: 'collision' })
+    await expect(destination.applyOnce({ resultId: 'invalid-source', resultFingerprint: 'fp' }, { amount: 1, source: 'tower' }))
+      .rejects.toMatchObject({ code: 'invalid-source' })
+  })
+
+  it('reconciles incubator progress after receipt failure and preserves later egg changes', async () => {
+    const state = addEgg(defaultIncubator(), { source: 'duplicate', speciesPool: [1], label: 'D' })
+    const persistence = new MemoryIncubatorProgressionPersistence(state)
+    const destination = new IncubatorProgressionDestination(persistence, () => 530)
+    persistence.failMarker = true
+
+    await expect(destination.applyOnce(identity, { amount: 2 })).rejects.toMatchObject({ code: 'receipt' })
+    expect(persistence.state.eggs[0]?.progress).toBe(2)
+    persistence.state.eggs[0] = { ...persistence.state.eggs[0]!, progress: 3 }
+    persistence.state = addEgg(persistence.state, { source: 'achievement', speciesPool: [4], label: 'later' })
+    persistence.failMarker = false
+
+    const retry = await destination.applyOnce(identity, { amount: 99 })
+    expect(retry.status).toBe('already-applied')
+    expect(persistence.state.eggs.map((egg) => egg.progress)).toEqual([3, 0])
+    expect(persistence.saveCount).toBe(1)
+  })
+
+  it('retries only the incomplete tower or incubator child after a partial coordinator failure', async () => {
+    const rosterPersistence = new MemoryRosterGrowthPersistence([unit])
+    const roster = new RosterGrowthDestination(rosterPersistence, () => 540)
+    const towerPersistence = new MemoryTowerProgressionPersistence()
+    const tower = new TowerProgressionDestination(towerPersistence, () => 541)
+    const incubatorPersistence = new MemoryIncubatorProgressionPersistence(
+      addEgg(defaultIncubator(), { source: 'achievement', speciesPool: [1], label: 'A' }),
+    )
+    const incubator = new IncubatorProgressionDestination(incubatorPersistence, () => 542)
+    const journal = new MemorySettlementJournal()
+    const coordinator = new ResultSettlementCoordinator(roster, journal, () => 543, { tower, incubator })
+    towerPersistence.failMarker = true
+
+    await expect(coordinator.settle(identity, {
+      ...payload,
+      tower: { floor: 5, ascension: 0, outcome: 'win' },
+      incubator: { amount: 2 },
+    })).rejects.toMatchObject({ code: 'receipt' })
+    expect(rosterPersistence.saveCount).toBe(1)
+    expect(towerPersistence.saveCount).toBe(1)
+    expect(incubatorPersistence.saveCount).toBe(0)
+
+    towerPersistence.failMarker = false
+    const retry = await coordinator.settle(identity, {
+      ...payload,
+    })
+    expect(retry.status).toBe('already-applied')
+    expect(retry.tower).toMatchObject({ status: 'already-applied' })
+    expect(retry.incubator).toMatchObject({ status: 'applied', amount: 2 })
+    expect(rosterPersistence.saveCount).toBe(1)
+    expect(towerPersistence.saveCount).toBe(1)
+    expect(incubatorPersistence.saveCount).toBe(1)
+    expect(incubatorPersistence.state.eggs[0]?.progress).toBe(2)
   })
 })
 

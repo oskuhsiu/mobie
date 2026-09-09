@@ -52,7 +52,7 @@ const CHECKPOINT_CATALOG = {
     storage: ['mz-replays'], lazy: ['ReplayListModal'], capability: 'empty-state; no replay data',
   },
   'incubator-empty': {
-    route: 'title/modal:incubator', event: 'ToolsMenu.open(incubator)', next: ['取得成就/重複捕獲/塔獎勵', '關閉'],
+    route: 'title/modal:incubator', event: 'ToolsMenu.open(incubator)', next: ['取得成就/重複捕獲', '關閉'],
     storage: ['mobie.incubator.v1'], lazy: ['IncubatorModal'], capability: 'empty-state',
   },
   'my-mobies': {

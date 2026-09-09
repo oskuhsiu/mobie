@@ -4,38 +4,108 @@
 
 import { create } from 'zustand'
 import { ASCENSIONS } from '@/game/tower'
+import type { TowerProgressionMarker } from '@/game/resultSettlement'
 
 const KEY = 'mobie.run.v1'
+const SETTLEMENT_FIELD = 'resultSettlements'
+const SETTLEMENT_MIRROR_KEY = 'mobie.tower.settlement.v1'
 
-interface Persisted {
+export interface RunProgressState {
   bestFloor: number
   ascensionUnlocked: number
 }
 
-function load(): Persisted {
-  const def: Persisted = { bestFloor: 0, ascensionUnlocked: 0 }
+function normalize(raw: unknown): RunProgressState {
+  const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
+  return {
+    bestFloor: typeof o.bestFloor === 'number' && o.bestFloor >= 0 ? Math.floor(o.bestFloor) : 0,
+    ascensionUnlocked: typeof o.ascensionUnlocked === 'number'
+      ? Math.max(0, Math.min(ASCENSIONS.length - 1, Math.floor(o.ascensionUnlocked)))
+      : 0,
+  }
+}
+
+function load(): RunProgressState {
+  const def: RunProgressState = { bestFloor: 0, ascensionUnlocked: 0 }
   if (typeof localStorage === 'undefined') return def
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return def
-    const o = JSON.parse(raw)
-    return {
-      bestFloor: typeof o?.bestFloor === 'number' && o.bestFloor >= 0 ? Math.floor(o.bestFloor) : 0,
-      ascensionUnlocked: typeof o?.ascensionUnlocked === 'number' ? Math.max(0, Math.min(ASCENSIONS.length - 1, Math.floor(o.ascensionUnlocked))) : 0,
-    }
+    return normalize(JSON.parse(raw))
   } catch {
     return def
   }
 }
 
-function save(p: Persisted): void {
+/** Strict read used by the Result tower destination so malformed storage is recoverable. */
+export function loadRunStrict(): RunProgressState {
+  const def: RunProgressState = { bestFloor: 0, ascensionUnlocked: 0 }
+  if (typeof localStorage === 'undefined') return def
+  const raw = localStorage.getItem(KEY)
+  if (raw === null) return def
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (cause) {
+    throw new Error(`讀取連勝塔進度失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('讀取連勝塔進度失敗：資料格式無效')
+  }
+  return normalize(parsed)
+}
+
+function existingSettlementMarkers(): unknown[] | undefined {
+  if (typeof localStorage === 'undefined') return undefined
+  try {
+    const raw = localStorage.getItem(KEY)
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const markers = (parsed as Record<string, unknown>)[SETTLEMENT_FIELD]
+        if (Array.isArray(markers)) return markers
+      }
+    }
+    const mirror = localStorage.getItem(SETTLEMENT_MIRROR_KEY)
+    if (!mirror) return undefined
+    const parsedMirror: unknown = JSON.parse(mirror)
+    return Array.isArray(parsedMirror) ? parsedMirror : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function encode(p: RunProgressState, markers: unknown[] | undefined): string {
+  return JSON.stringify({
+    ...p,
+    ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
+  })
+}
+
+function save(p: RunProgressState): void {
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(KEY, JSON.stringify(p))
+    localStorage.setItem(KEY, encode(p, existingSettlementMarkers()))
   } catch {
     /* 配額/隱私模式：忽略 */
   }
 }
+
+/** Tower child-boundary write: canonical run progress and its markers share one envelope. */
+export function saveRunWithSettlementMarkersStrict(
+  state: RunProgressState,
+  markers: TowerProgressionMarker[] | unknown[],
+): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(KEY, encode(state, markers))
+  } catch (cause) {
+    throw new Error(`保存連勝塔結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+// Compatibility name for persistence adapters and future callers.
+export const saveRunStateWithSettlementMarkersStrict = saveRunWithSettlementMarkersStrict
 
 interface RunStore {
   bestFloor: number

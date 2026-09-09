@@ -2,7 +2,7 @@
 //
 // 用遊玩進度換隨機新Mobie（**非付費 gacha**），複用 individual 決定論 roll。防線（plan/10 §5.2 寫死）：
 //   egg 只存 seed/source/speciesPool/progress——**孵化才生成 OwnedUnit**、不可付費、不可刷池、不可存預生成結果。
-// 進度來源＝有效戰鬥完成數 + 塔層數（不用真實時間/每日/步數，避免手遊體力感）。獨立 slice，與 roster 不同命名空間。
+// 進度來源＝有效戰鬥完成數（不用真實時間/每日/步數，避免手遊體力感）。獨立 slice，與 roster 不同命名空間。
 
 import type { OwnedUnit } from '@/game/types'
 import { createOwnedUnit } from '@/game/growth'
@@ -12,8 +12,16 @@ import { teachableOf } from '@/game/learnset'
 
 export const INCUBATOR_SCHEMA_VERSION = 1
 const KEY = 'mobie.incubator.v1'
+const SETTLEMENT_FIELD = 'resultSettlements'
+const SETTLEMENT_MIRROR_KEY = 'mobie.incubator.settlement.v1'
 
 export type EggSource = 'achievement' | 'duplicate' | 'tower'
+/** Sources with a real producer in the current product. `tower` remains readable for legacy data. */
+export type SupportedEggSource = Exclude<EggSource, 'tower'>
+export const SUPPORTED_EGG_SOURCES: readonly SupportedEggSource[] = ['achievement', 'duplicate']
+export function isSupportedEggSource(source: unknown): source is SupportedEggSource {
+  return source === 'achievement' || source === 'duplicate'
+}
 
 export interface Egg {
   id: string
@@ -147,8 +155,37 @@ export function loadIncubatorStrict(): IncubatorState {
 export function saveIncubatorState(state: IncubatorState): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(KEY, JSON.stringify(state))
+    let markers: unknown[] | undefined
+    const current = localStorage.getItem(KEY)
+    if (current) {
+      const parsed: unknown = JSON.parse(current)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const embedded = (parsed as Record<string, unknown>)[SETTLEMENT_FIELD]
+        if (Array.isArray(embedded)) markers = embedded
+      }
+    }
+    if (!markers) {
+      const mirror = localStorage.getItem(SETTLEMENT_MIRROR_KEY)
+      if (mirror) {
+        const parsedMirror: unknown = JSON.parse(mirror)
+        if (Array.isArray(parsedMirror)) markers = parsedMirror
+      }
+    }
+    localStorage.setItem(KEY, JSON.stringify({
+      ...state,
+      ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
+    }))
   } catch {
     /* 配額/隱私模式：忽略 */
+  }
+}
+
+/** Incubator child-boundary write: canonical eggs and progression markers share one envelope. */
+export function saveIncubatorStateWithSettlementMarkersStrict(state: IncubatorState, markers: unknown[]): void {
+  if (!hasLS()) return
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ ...state, [SETTLEMENT_FIELD]: markers }))
+  } catch (cause) {
+    throw new Error(`保存孵化進度結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }

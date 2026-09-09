@@ -21,15 +21,26 @@ import {
   LocalStorageRosterGrowthPersistence,
   LocalStorageSkillPointsPersistence,
   LocalStorageMetaSettlementPersistence,
+  LocalStorageTowerProgressionPersistence,
+  LocalStorageIncubatorProgressionPersistence,
   LocalStorageSettlementJournal,
   MetaSettlementDestination,
   ResultSettlementCoordinator,
   RosterGrowthDestination,
   SkillPointsDestination,
+  TowerProgressionDestination,
+  IncubatorProgressionDestination,
   type ResultIdentity,
   type ResultSettlementPayload,
   type ResultSettlementReceipt,
 } from '@/game/resultSettlement'
+import {
+  loadRunStrict,
+  saveRunWithSettlementMarkersStrict,
+  useRun,
+} from '@/store/runStore'
+import { loadIncubatorStrict, saveIncubatorStateWithSettlementMarkersStrict } from '@/game/incubator'
+import { useIncubator } from '@/store/incubatorStore'
 
 /** 一隻於本場戰後升級新領悟的招（M19.e，給結算「學會新招」提示）。 */
 export interface MoveLearnEvent {
@@ -133,11 +144,34 @@ export const useRoster = create<RosterState>((set, get) => {
   })
   const skillPointsDestination = new SkillPointsDestination(skillPointsPersistence)
   const metaDestination = new MetaSettlementDestination(metaPersistence)
+  const towerPersistence = new LocalStorageTowerProgressionPersistence({
+    loadRun: loadRunStrict,
+    saveRunWithMarkers: (run, markers) => {
+      saveRunWithSettlementMarkersStrict(run, markers)
+      // Canonical run metadata is written above; this is only the live Zustand projection.
+      useRun.setState(run)
+    },
+  })
+  const towerDestination = new TowerProgressionDestination(towerPersistence)
+  const incubatorPersistence = new LocalStorageIncubatorProgressionPersistence({
+    loadState: loadIncubatorStrict,
+    saveStateWithMarkers: (state, markers) => {
+      saveIncubatorStateWithSettlementMarkersStrict(state, markers)
+      // Canonical incubator state is written above; this is only the live Zustand projection.
+      useIncubator.setState({ state })
+    },
+  })
+  const incubatorDestination = new IncubatorProgressionDestination(incubatorPersistence)
   const settlementCoordinator = new ResultSettlementCoordinator(
     growthDestination,
     new LocalStorageSettlementJournal(),
     () => Date.now(),
-    { skillPoints: skillPointsDestination, meta: metaDestination },
+    {
+      skillPoints: skillPointsDestination,
+      meta: metaDestination,
+      tower: towerDestination,
+      incubator: incubatorDestination,
+    },
   )
 
   const publishGrowthReceipt = async (receipt: ResultSettlementReceipt): Promise<void> => {
