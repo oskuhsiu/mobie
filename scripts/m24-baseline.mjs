@@ -63,6 +63,14 @@ const CHECKPOINT_CATALOG = {
     route: 'title/modal:team/detail', event: 'TeamModal.openDetail', next: ['Escape', '關閉'],
     storage: ['mobie.roster.v2'], lazy: ['TeamModal'], capability: 'owner-full info card',
   },
+  'move-trainer-detail': {
+    route: 'title/modal:team/detail/move-trainer', event: 'MobCard.openMoveTrainer', next: ['學新招', '裝備', '卸下', '排序', '關閉'],
+    storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'owner detail handoff with focused canonical target',
+  },
+  'move-trainer-actions': {
+    route: 'title/modal:team/detail/move-trainer/loadout', event: 'MoveTrainer atomic learn/equip/unequip/reorder', next: ['reload', '關閉'],
+    storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'SP ledger and fixed four-slot battle handoff',
+  },
   'card-library': {
     route: 'title/modal:card-library', event: 'ToolsMenu.open(library)', next: ['新增自製卡', '匯入 JSON/CSV', 'QR', '關閉'],
     storage: ['mz-cards', 'mobie.savemeta.v1'], lazy: ['CardLibraryModal', 'qrcode'], capability: 'IndexedDB cards',
@@ -86,6 +94,18 @@ const CHECKPOINT_CATALOG = {
   'move-trainer-open': {
     route: 'title/modal:moves/loadout', event: 'MoveTrainer.openId', next: ['toggle move', '學新招', '關閉'],
     storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'SP-gated loadout',
+  },
+  'move-trainer-reloaded': {
+    route: 'title/modal:moves/loadout', event: 'Page.reload→MoveTrainer.openId', next: ['確認順序', '關閉'],
+    storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'canonical loadout survives reload',
+  },
+  'move-trainer-insufficient-sp': {
+    route: 'title/modal:moves/loadout', event: 'SP=0→learn disabled', next: ['補充 SP', '關閉'],
+    storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'insufficient-resource reason and no spend',
+  },
+  'move-trainer-storage-error': {
+    route: 'title/modal:moves/loadout', event: 'MoveTrainer persistence failure', next: ['再試一次', '關閉'],
+    storage: ['mobie.roster.v2', 'mobie.skillpoints.v1'], lazy: ['MoveTrainerModal'], capability: 'recoverable storage error with unchanged ledger',
   },
   'partner-skills': {
     route: 'title/modal:partner-skills', event: 'ToolsMenu.open(partner)', next: ['解鎖 SP', '關閉'],
@@ -239,8 +259,8 @@ const CHECKPOINT_CATALOG = {
 
 const JOURNEY = [
   'title', 'settings-v1-migrated', 'tools-more', 'scanner-off', 'replay-load-start', 'replay-empty', 'incubator-empty',
-  'my-mobies', 'my-mobies-detail', 'card-library', 'card-library-add',
-  'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open',
+  'my-mobies', 'my-mobies-detail', 'move-trainer-detail', 'move-trainer-actions', 'card-library', 'card-library-add',
+  'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open', 'move-trainer-reloaded', 'move-trainer-insufficient-sp', 'move-trainer-storage-error',
   'partner-skills', 'dex', 'dex-registered', 'achievements', 'achievements-claimed',
   'incubator-ready', 'incubator-hatch-reveal', 'save', 'save-busy',
   'save-result', 'save-import-error', 'save-compare-older', 'save-backup-ready',
@@ -973,9 +993,75 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     checkpoints.push(await capture('my-mobies', 'real roster and growth store'))
     await clickSelector('button.team-row__main')
     await waitFor('Boolean(document.querySelector(".mobcard"))', 5_000, 'MobCard detail')
-    checkpoints.push(await capture('my-mobies-detail', 'real owner info card', { behavior: await probeEscape() }))
-    if (await exists('.modal-card')) await closeTopModal()
-    if (await exists('.modal-card')) await closeTopModal()
+    // Keep the detail panel open for the Ticket 37 handoff; Escape coverage is
+    // exercised by the surrounding overlay checkpoints.
+    checkpoints.push(await capture('my-mobies-detail', 'real owner info card'))
+
+    // Ticket 37's primary path starts from the owner MobCard. Exercise the
+    // real SP/loadout boundary here before returning to the collection shell.
+    await clickSelector('[data-mobcard-move-trainer]')
+    await waitFor('Boolean(document.querySelector("[data-move-trainer]"))', 8_000, 'Move Trainer from MobCard')
+    checkpoints.push(await capture('move-trainer-detail', 'owner detail → focused Move Trainer'))
+    const trainerActionEvidence = await evaluate(`(async () => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+      const rosterRead = () => {
+        try { return JSON.parse(localStorage.getItem('mobie.roster.v2') ?? '[]') } catch { return [] }
+      }
+      const rosterOf = () => {
+        const value = rosterRead()
+        return Array.isArray(value) ? value : value?.roster ?? []
+      }
+      const targetId = document.querySelector('[data-trainer-unit]')?.dataset.trainerUnit ?? null
+      const beforeSp = Number(document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? -1)
+      const learnButton = [...document.querySelectorAll('[data-move-state="learnable"] button')].find((button) => !button.disabled)
+      if (!targetId || !learnButton) return { targetId, beforeSp, error: 'no legal learn action' }
+      const moveId = Number(learnButton.closest('[data-move-id]')?.getAttribute('data-move-id') ?? NaN)
+      const moveName = learnButton.getAttribute('aria-label') ?? ''
+      learnButton.click()
+      await wait(450)
+      const afterLearn = rosterOf().find((unit) => unit.id === targetId)
+      const learned = Array.isArray(afterLearn?.learnedMoveIds) && afterLearn.learnedMoveIds.includes(moveId)
+      const spAfterLearn = Number(document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? -1)
+      const equipButton = [...document.querySelectorAll('[data-move-state="learned"] button')].find((button) => !button.disabled && button.getAttribute('aria-label')?.includes(moveName.replace(/^花費 [0-9]+ SP 學習 /, '')))
+        ?? [...document.querySelectorAll('[data-move-state="learned"] button')].find((button) => !button.disabled)
+      equipButton?.click()
+      await wait(350)
+      const afterEquip = rosterOf().find((unit) => unit.id === targetId)
+      const equippedAfterEquip = Array.isArray(afterEquip?.equippedMoveIds) ? afterEquip.equippedMoveIds : []
+      const reorderButton = [...document.querySelectorAll('[data-move-slot] button[aria-label*="往前移"]')].find((button) => !button.disabled)
+      reorderButton?.click()
+      await wait(350)
+      const afterReorder = rosterOf().find((unit) => unit.id === targetId)
+      const equippedAfterReorder = Array.isArray(afterReorder?.equippedMoveIds) ? afterReorder.equippedMoveIds : []
+      const duplicateFree = new Set(equippedAfterReorder).size === equippedAfterReorder.length && equippedAfterReorder.length >= 1 && equippedAfterReorder.length <= 4
+      const unequipButton = [...document.querySelectorAll('[data-move-slot] button[aria-label*="卸下"]')].find((button) => button.getAttribute('aria-label')?.includes(moveName.replace(/^花費 [0-9]+ SP 學習 /, '')))
+        ?? [...document.querySelectorAll('[data-move-slot] button[aria-label*="卸下"]')].at(-1)
+      unequipButton?.click()
+      await wait(350)
+      const afterUnequip = rosterOf().find((unit) => unit.id === targetId)
+      const learnedAfterUnequip = Array.isArray(afterUnequip?.learnedMoveIds) && afterUnequip.learnedMoveIds.includes(moveId)
+      const equippedAfterUnequip = Array.isArray(afterUnequip?.equippedMoveIds) ? afterUnequip.equippedMoveIds : []
+      const spAfter = Number(document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? -1)
+      return {
+        targetId, moveId, beforeSp, spAfterLearn, spAfter,
+        learned, learnedAfterUnequip,
+        equippedAfterEquip, equippedAfterReorder, equippedAfterUnequip,
+        duplicateFree, moveName,
+      }
+    })()`)
+    if (!trainerActionEvidence.learned || !trainerActionEvidence.learnedAfterUnequip || !trainerActionEvidence.duplicateFree || trainerActionEvidence.spAfter !== trainerActionEvidence.spAfterLearn) {
+      throw new Error(`Move Trainer canonical action boundary failed: ${JSON.stringify(trainerActionEvidence)}`)
+    }
+    checkpoints.push(await capture('move-trainer-actions', 'real learn/equip/unequip/reorder with SP ledger', { observation: trainerActionEvidence }))
+    // A pushed overlay swaps the single visible modal surface, so wait for
+    // the parent stack entry after closing the trainer before closing TeamModal.
+    await clickText('關閉', '[data-modal-close]')
+    await waitFor(`(() => { const id = document.querySelector('[data-overlay-host]')?.dataset.overlayId ?? ''; return id === 'team' || id.startsWith('mobie-detail:') })()`, 5_000, 'return to My Mobies after trainer')
+    if (await evaluate(`document.querySelector('[data-overlay-host]')?.dataset.overlayId?.startsWith('mobie-detail:') ?? false`)) {
+      await clickText('關閉', '[data-modal-close]')
+      await waitFor(`document.querySelector('[data-overlay-host]')?.dataset.overlayId === 'team'`, 5_000, 'return to collection after compact trainer')
+    }
+    await closeTopModal()
 
     await openTool('卡庫', '卡庫')
     await waitFor('Boolean(document.querySelector(".utility-row") || (document.body.innerText || "").includes("卡庫是空的"))', 10_000, 'card library content')
@@ -1002,6 +1088,79 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await clickSelector('.team-row__item-btn')
     checkpoints.push(await capture('move-trainer-open', 'real loadout editor'))
     await closeTopModal()
+
+    // Reload is a first-class part of the trainer contract: the next route
+    // must read the exact canonical order rather than a component draft.
+    const savedSkillPoints = await evaluate('localStorage.getItem("mobie.skillpoints.v1")')
+    const savedLoadout = await evaluate(`(() => {
+      try {
+        const raw = JSON.parse(localStorage.getItem('mobie.roster.v2') ?? '[]')
+        const roster = Array.isArray(raw) ? raw : raw?.roster ?? []
+        return roster[0]?.equippedMoveIds ?? []
+      } catch { return [] }
+    })()`)
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'Move Trainer reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Move Trainer reload')
+    await openTool('招式', '招式訓練所')
+    await clickSelector('.team-row__item-btn')
+    await waitFor('Boolean(document.querySelector("[data-trainer-panel]"))', 8_000, 'Move Trainer panel after reload')
+    const reloadedLoadout = await evaluate(`(() => ({
+      storage: (() => { try { const raw = JSON.parse(localStorage.getItem('mobie.roster.v2') ?? '[]'); const roster = Array.isArray(raw) ? raw : raw?.roster ?? []; return roster[0]?.equippedMoveIds ?? [] } catch { return [] } })(),
+      slots: (() => { const unit = document.querySelector('[data-trainer-unit]'); return unit ? [...unit.querySelectorAll('[data-move-slot][data-slot-state="filled"] [data-move-definition]')].map((element) => Number(element.getAttribute('data-move-id'))) : [] })(),
+    }))()`)
+    if (JSON.stringify(reloadedLoadout.storage) !== JSON.stringify(savedLoadout) || JSON.stringify(reloadedLoadout.slots) !== JSON.stringify(savedLoadout)) {
+      throw new Error(`Move Trainer loadout did not survive reload: ${JSON.stringify({ savedLoadout, reloadedLoadout })}`)
+    }
+    checkpoints.push(await capture('move-trainer-reloaded', 'real canonical loadout after page reload', { observation: { savedLoadout, reloadedLoadout } }))
+    await closeTopModal()
+
+    // Force the wallet to zero for a real disabled-resource checkpoint, then
+    // restore the exact marker-bearing value before continuing the journey.
+    await evaluate('localStorage.setItem("mobie.skillpoints.v1", "0")')
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'insufficient SP reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after insufficient SP reload')
+    await openTool('招式', '招式訓練所')
+    await clickSelector('.team-row__item-btn')
+    await waitFor(`Boolean(document.querySelector('[data-disabled-reason="sp-insufficient"]'))`, 8_000, 'insufficient SP disabled reason')
+    const insufficientEvidence = await evaluate(`({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      disabled: [...document.querySelectorAll('[data-disabled-reason="sp-insufficient"]')].slice(0, 4).map((element) => ({ label: element.getAttribute('aria-label'), describedBy: element.getAttribute('aria-describedby'), reason: element.parentElement?.querySelector('[id]')?.textContent ?? '' })),
+    })`)
+    if (insufficientEvidence.sp !== '0' || insufficientEvidence.disabled.length === 0) throw new Error(`SP insufficient guard failed: ${JSON.stringify(insufficientEvidence)}`)
+    checkpoints.push(await capture('move-trainer-insufficient-sp', 'real SP=0 disabled learn actions', { observation: insufficientEvidence }))
+    await closeTopModal()
+    await evaluate(`localStorage.setItem('mobie.skillpoints.v1', ${JSON.stringify(savedSkillPoints)})`)
+
+    // Make localStorage fail at the canonical write boundary. The modal must
+    // retain the old wallet and expose a retryable alert instead of a half-applied move.
+    await evaluate('localStorage.setItem("mobie.skillpoints.v1", "10")')
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'storage failure reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after storage failure reload')
+    await openTool('招式', '招式訓練所')
+    await clickSelector('.team-row__item-btn')
+    await waitFor('Boolean(document.querySelector("[data-trainer-panel]"))', 8_000, 'Move Trainer storage failure panel')
+    const storageFailure = await evaluate(`(() => {
+      window.__M24_OLD_STORAGE_SET_ITEM__ = Storage.prototype.setItem
+      Storage.prototype.setItem = function () { throw new Error('M24 simulated storage failure') }
+      const action = [...document.querySelectorAll('[data-move-state="learnable"] button')].find((button) => !button.disabled)
+      action?.click()
+      return Boolean(action)
+    })()`)
+    if (!storageFailure) throw new Error('Could not find a learn action for storage failure checkpoint')
+    await waitFor('Boolean(document.querySelector("[data-trainer-notice]"))', 8_000, 'Move Trainer storage error')
+    const storageFailureEvidence = await evaluate(`({
+      sp: document.querySelector('[data-sp-ledger]')?.dataset.spCurrent ?? null,
+      notice: document.querySelector('[data-trainer-notice]')?.textContent ?? '',
+    })`)
+    if (storageFailureEvidence.sp !== '10' || !storageFailureEvidence.notice.includes('保存失敗')) throw new Error(`Storage error was not recoverable: ${JSON.stringify(storageFailureEvidence)}`)
+    checkpoints.push(await capture('move-trainer-storage-error', 'real simulated storage failure and unchanged SP', { observation: storageFailureEvidence }))
+    await evaluate(`(() => { Storage.prototype.setItem = window.__M24_OLD_STORAGE_SET_ITEM__; delete window.__M24_OLD_STORAGE_SET_ITEM__; localStorage.setItem('mobie.skillpoints.v1', ${JSON.stringify(savedSkillPoints)}); return true })()`)
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'Move Trainer state restore')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after Move Trainer state restore')
 
     await openTool('夥伴技能', '夥伴技能')
     await waitFor('Boolean(document.querySelector(".team-row"))', 8_000, 'partner skill content')

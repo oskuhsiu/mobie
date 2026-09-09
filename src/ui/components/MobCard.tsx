@@ -111,6 +111,8 @@ export interface MobCardProps {
   ownerExp?: number
   revealed: boolean
   onClose: () => void
+  /** Owner detail can hand off to the canonical Move Trainer without changing battle state. */
+  onOpenMoveTrainer?: () => void
   /** CollectionShell uses a non-modal detail panel on wide viewports. */
   layout?: 'modal' | 'panel'
   closeRef?: Ref<HTMLButtonElement>
@@ -120,7 +122,7 @@ export interface MobCardProps {
  * Mobie 資訊卡（M16，純 UI／顯示層，不動 reducer/engine/持久化）。
  * owner 或已看穿的對手會顯示完整深度資訊；未看穿的對手只顯示基本面和遮罩。
  */
-export function MobCard({ mon, owner, ownerExp, revealed, onClose, layout = 'modal', closeRef }: MobCardProps) {
+export function MobCard({ mon, owner, ownerExp, revealed, onClose, onOpenMoveTrainer, layout = 'modal', closeRef }: MobCardProps) {
   const visibility = owner ? 'owner' : revealed ? 'opponent-revealed' : 'opponent-masked'
   const title = cardTitle(mon)
   const description = cardDescription(mon, owner, revealed)
@@ -146,7 +148,12 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose, layout = 'mod
               </div>
             </div>
           </div>
-          <button ref={closeRef} className="btn btn--ghost btn--sm" data-mobcard-close onClick={onClose}>關閉</button>
+          <div className="mobcard-panel__actions">
+            {owner && onOpenMoveTrainer && (
+              <button className="btn btn--ghost btn--sm" data-mobcard-move-trainer onClick={onOpenMoveTrainer}>📖 管理招式</button>
+            )}
+            <button ref={closeRef} className="btn btn--ghost btn--sm" data-mobcard-close onClick={onClose}>關閉</button>
+          </div>
         </header>
         <div className="mobcard-panel__body" data-mobcard-body>
           <CardSections mon={mon} owner={owner} ownerExp={ownerExp} revealed={revealed} />
@@ -162,6 +169,7 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose, layout = 'mod
       onClose={onClose}
       className={className}
       headerLeading={<div className="mobcard__art"><MobieSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} /></div>}
+      headerAside={owner && onOpenMoveTrainer ? <button className="btn btn--ghost btn--sm" data-mobcard-move-trainer onClick={onOpenMoveTrainer}>📖 管理招式</button> : undefined}
       restoreFocus={false}
     >
       <div data-mobcard data-mobcard-layout="modal" data-mobcard-visibility={visibility}>

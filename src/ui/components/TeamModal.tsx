@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRoster } from '@/store/rosterStore'
 import { useBag } from '@/store/bagStore'
@@ -13,6 +13,8 @@ import type { OwnedUnit } from '@/game/types'
 import { audio } from '@/audio/audioEngine'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
 import { useOverlayController } from '@/ui/shell/OverlayController'
+
+const MoveTrainerModal = lazy(() => import('@/ui/components/MoveTrainerModal').then((module) => ({ default: module.MoveTrainerModal })))
 
 const COLLECTION_BREAKPOINT = 760
 const PAGE_SIZE = 24
@@ -113,6 +115,22 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
     for (const delay of [120, 320, 700]) window.setTimeout(focusInvoker, delay)
   }, [controller])
 
+  const openMoveTrainer = useCallback((unitId: string) => {
+    const invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    audio.play('select')
+    controller.push({
+      id: `move-trainer:${unitId}`,
+      policy: 'escape-and-backdrop',
+      content: <MoveTrainerModal initialUnitId={unitId} onClose={controller.pop} />,
+    }, {
+      invoker,
+      restoreFocus: () => document.querySelector<HTMLElement>('[data-mobcard-move-trainer]')
+        ?? [...document.querySelectorAll<HTMLElement>('[data-mobie-invoker]')]
+          .find((element) => element.dataset.mobieInvoker === unitId)
+        ?? null,
+    })
+  }, [controller])
+
   const openDetail = useCallback((unit: OwnedUnit) => {
     const mon = buildOwnedMobieForDisplay(unit)
     lastSelectedId.current = unit.id
@@ -123,7 +141,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
       controller.push({
         id: `mobie-detail:${unit.id}`,
         policy: 'escape-and-backdrop',
-        content: <MobCard mon={mon} owner ownerExp={unit.exp} revealed onClose={() => closeCompactDetail(unit.id)} />,
+        content: <MobCard mon={mon} owner ownerExp={unit.exp} revealed onClose={() => closeCompactDetail(unit.id)} onOpenMoveTrainer={() => openMoveTrainer(unit.id)} />,
       }, {
         // The root TeamModal is temporarily unmounted while the pushed entry
         // is active, so resolve the remounted DOM equivalent after pop.
@@ -133,7 +151,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
       return
     }
     setSelectedId(unit.id)
-  }, [compact, closeCompactDetail, controller])
+  }, [compact, closeCompactDetail, controller, openMoveTrainer])
 
   const choose = useCallback(async (unitId: string, itemId: string | null) => {
     if (pendingEquip) return
@@ -365,6 +383,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                   ownerExp={selectedUnit.exp}
                   revealed
                   onClose={closeDetail}
+                  onOpenMoveTrainer={() => openMoveTrainer(selectedUnit.id)}
                   layout="panel"
                   closeRef={detailCloseRef}
                 />

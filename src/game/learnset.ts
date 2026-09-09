@@ -12,6 +12,12 @@ import { MOVES, getMove } from '@/game/data/moves'
 /** 出戰招式槽上限（plan/17：4 槽，攻擊招＋變化招）。 */
 export const MOVE_SLOT_CAP = 4
 
+/** 學習一招所需的 SP。成本規則是純資料邏輯，UI 與 roster/SP transaction 共用。 */
+export function moveLearnCost(move: Pick<Move, 'category' | 'power'>): number {
+  if (move.category === 'status') return 2
+  return move.power >= 95 ? 4 : move.power >= 70 ? 3 : 2
+}
+
 /** 某屬性的**攻擊招** id（由 MOVES 派生、由弱到強；不綁 id 命名規則）。
  *  排除變化招（power 0 / category 'status'，M19.d）——派生 loadout 維持純攻擊招、向後相容；
  *  變化招由產生檔 learnset（M19.f）或訓練所（M19.e）顯式授予。 */
@@ -88,7 +94,7 @@ export function resolveEquippedMoves(
 ): Move[] {
   const source =
     equippedMoveIds && equippedMoveIds.length > 0 ? equippedMoveIds : autoEquip(species, level)
-  const ids = source.filter((id) => MOVES[id]).slice(0, MOVE_SLOT_CAP)
+  const ids = [...new Set(source.filter((id) => MOVES[id]))].slice(0, MOVE_SLOT_CAP)
   const finalIds = ids.length > 0 ? ids : [species.moveId]
   return finalIds.map(getMove)
 }
@@ -115,4 +121,21 @@ export function newlyLearned(species: Species, fromLevel: number, toLevel: numbe
 export function teachableNotLearned(unit: Pick<OwnedUnit, 'learnedMoveIds' | 'level'>, species: Species): number[] {
   const learned = new Set(effectiveLearnedMoves(unit, species))
   return teachableOf(species).filter((id) => !learned.has(id) && MOVES[id])
+}
+
+/**
+ * 正規化 canonical loadout：只接受該單位已學（或出生自帶）的招、去重、保留順序、截四槽，
+ * 並保證至少有一個可用 action。`undefined` 代表舊存檔，使用當前等級的自動 loadout；空陣列
+ * 則是明確清空後回到出生招，讓「至少一招」規則不會被繞過。
+ */
+export function normalizeEquippedMoveIds(
+  equippedMoveIds: readonly number[] | undefined,
+  unit: Pick<OwnedUnit, 'learnedMoveIds' | 'level'>,
+  species: Species,
+): number[] {
+  const source = equippedMoveIds === undefined ? autoEquip(species, unit.level) : [...equippedMoveIds]
+  const allow = new Set<number>([...effectiveLearnedMoves(unit, species), species.moveId])
+  const valid = [...new Set(source.filter((id) => Number.isInteger(id) && allow.has(id) && MOVES[id]))]
+    .slice(0, MOVE_SLOT_CAP)
+  return valid.length > 0 ? valid : [species.moveId]
 }

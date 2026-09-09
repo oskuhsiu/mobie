@@ -1,6 +1,6 @@
 // M19.e 招式訓練所 + SP 經濟：learnset 訓練助手 + SP 錢包純邏輯測試。
 import { describe, it, expect } from 'vitest'
-import { effectiveLearnedMoves, newlyLearned, teachableNotLearned, learnedAtLevel, teachableOf } from './learnset'
+import { effectiveLearnedMoves, newlyLearned, teachableNotLearned, learnedAtLevel, teachableOf, moveLearnCost, normalizeEquippedMoveIds, MOVE_SLOT_CAP } from './learnset'
 import { getSpecies } from '@/game/data/species'
 import { useSkillPoints } from '@/store/skillPointsStore'
 
@@ -8,6 +8,21 @@ const bulba = getSpecies(1) // grass/poison，特攻向 → L24 學瞑想
 const pika = getSpecies(25) // electric，物理向 → L24 學劍舞
 
 describe('M19.e learnset 訓練助手', () => {
+  it('moveLearnCost：攻擊招依威力分級，變化招固定低成本', () => {
+    expect(moveLearnCost({ category: 'status', power: 0 })).toBe(2)
+    expect(moveLearnCost({ category: 'physical', power: 45 })).toBe(2)
+    expect(moveLearnCost({ category: 'special', power: 70 })).toBe(3)
+    expect(moveLearnCost({ category: 'special', power: 95 })).toBe(4)
+  })
+
+  it('normalizeEquippedMoveIds：保留順序、去重、過濾非法並保證至少一招', () => {
+    const unit = { learnedMoveIds: [bulba.moveId, 1041, 1070, 1071, 1072], level: 30 }
+    const normalized = normalizeEquippedMoveIds([1070, 1070, 999999, 1041, 1071, 1072], unit, bulba)
+    expect(normalized).toEqual([1070, 1041, 1071, 1072])
+    expect(normalized).toHaveLength(MOVE_SLOT_CAP)
+    expect(normalizeEquippedMoveIds([], unit, bulba)).toEqual([bulba.moveId])
+  })
+
   it('effectiveLearnedMoves：缺省 learnedMoveIds → 依等級派生領悟', () => {
     const eff = effectiveLearnedMoves({ learnedMoveIds: undefined, level: 30 }, bulba)
     expect(eff).toEqual(learnedAtLevel(bulba, 30))

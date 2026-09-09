@@ -3,7 +3,12 @@ import type { Card, OwnedUnit } from '@/game/types'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { getSpecies } from '@/game/data/species'
 import { createOwnedUnit, type ExpResult } from '@/game/growth'
-import { effectiveLearnedMoves, MOVE_SLOT_CAP } from '@/game/learnset'
+import {
+  effectiveLearnedMoves,
+  moveLearnCost,
+  normalizeEquippedMoveIds,
+  teachableOf,
+} from '@/game/learnset'
 import { MOVES } from '@/game/data/moves'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { LocalStorageAdapter, type PersistenceAdapter } from '@/game/persistence'
@@ -56,6 +61,33 @@ export interface MoveLearnEvent {
   moveIds: number[]
 }
 
+export type MoveTrainingErrorCode =
+  | 'missing-mobie'
+  | 'unknown-move'
+  | 'not-teachable'
+  | 'already-learned'
+  | 'insufficient-sp'
+  | 'storage-error'
+
+/** Recoverable failure surfaced by Move Trainer; no UI code enters the store. */
+export class MoveTrainingError extends Error {
+  readonly code: MoveTrainingErrorCode
+
+  constructor(code: MoveTrainingErrorCode, message: string) {
+    super(message)
+    this.name = 'MoveTrainingError'
+    this.code = code
+  }
+}
+
+export interface MoveLearnResult {
+  status: 'applied' | 'already-learned'
+  unitId: string
+  moveId: number
+  cost: number
+  remainingSp: number
+}
+
 /** 一隻於本場戰後進化（S6 postGrowth）的紀錄，給結算畫面演出。 */
 export interface EvolutionEvent {
   unitId: string
@@ -103,6 +135,8 @@ interface RosterState {
   setHeldItem: (unitId: string, itemId: string | undefined) => Promise<string | undefined>
   /** M19.e 訓練所學招：把 moveId 併入該單位 canonical learnedMoveIds（物化完整已學集）；存檔。回 true=新學會。 */
   learnMove: (unitId: string, moveId: number) => Promise<boolean>
+  /** Atomic Move Trainer boundary: validate target, spend SP, and persist learned move exactly once. */
+  learnMoveWithSp: (unitId: string, moveId: number) => Promise<MoveLearnResult>
   /** M19.e 調整出戰 loadout：設 equippedMoveIds（過濾⊆已學∪slot0、截≤4、保證非空）；存檔。 */
   setEquippedMoves: (unitId: string, moveIds: number[]) => Promise<void>
   /** 匯入存檔：整批取代 roster（已 sanitize），存檔。meta 由匯入流程的 adoptMeta 設定，故此處不 bump。 */
@@ -216,6 +250,25 @@ export const useRoster = create<RosterState>((set, get) => {
       incubator: incubatorDestination,
       capture: captureCoordinator,
     },
+  )
+
+  // Move Trainer actions share one transaction queue. React already disables the
+  // visible controls while an operation is pending, but the store boundary must
+  // remain safe when a keyboard repeat, remount, or another caller submits twice.
+  let moveMutationQueue: Promise<unknown> = Promise.resolve()
+  const enqueueMoveMutation = <T,>(task: () => Promise<T> | T): Promise<T> => {
+    const next = moveMutationQueue.then(() => task(), () => task())
+    moveMutationQueue = next.then(() => undefined, () => undefined)
+    return next
+  }
+
+  const moveStorageError = (cause: unknown): MoveTrainingError => new MoveTrainingError(
+    'storage-error',
+    `招式資料保存失敗：${cause instanceof Error ? cause.message : String(cause)}。目前進度未完成，請再試一次。`,
+  )
+
+  const sameMoveOrder = (left: readonly number[] | undefined, right: readonly number[]): boolean => Boolean(
+    left && left.length === right.length && left.every((id, index) => id === right[index]),
   )
 
   const publishGrowthReceipt = async (receipt: ResultSettlementReceipt): Promise<void> => {
@@ -348,37 +401,88 @@ export const useRoster = create<RosterState>((set, get) => {
     return prev
   },
 
-  learnMove: async (unitId, moveId) => {
+  learnMove: (unitId, moveId) => enqueueMoveMutation(async () => {
     if (!MOVES[moveId]) return false
-    let learnedNew = false
-    const roster = get().roster.map((u) => {
-      if (u.id !== unitId) return u
-      const species = getSpecies(u.speciesId)
-      const current = effectiveLearnedMoves(u, species) // 物化完整已學集（含等級領悟）
-      if (current.includes(moveId)) return u // 已會＝no-op
-      learnedNew = true
-      return { ...u, learnedMoveIds: [...new Set([...current, moveId])] }
-    })
-    if (!learnedNew) return false
+    const currentRoster = get().roster
+    const unit = currentRoster.find((candidate) => candidate.id === unitId)
+    if (!unit) return false
+    const species = getSpecies(unit.speciesId)
+    const current = effectiveLearnedMoves(unit, species) // 物化完整已學集（含等級領悟）
+    if (current.includes(moveId)) return false // 已會＝no-op
+    const roster = currentRoster.map((candidate) => candidate.id === unitId
+      ? { ...candidate, learnedMoveIds: [...new Set([...current, moveId])] }
+      : candidate)
+    try {
+      await strictSaveRoster(roster)
+    } catch (cause) {
+      throw moveStorageError(cause)
+    }
     set({ roster })
-    await adapter.saveRoster(roster)
     bumpSaveMeta(Date.now())
     return true
-  },
+  }),
 
-  setEquippedMoves: async (unitId, moveIds) => {
-    const roster = get().roster.map((u) => {
-      if (u.id !== unitId) return u
-      const species = getSpecies(u.speciesId)
-      const allow = new Set<number>([...effectiveLearnedMoves(u, species), species.moveId])
-      const equipped = [...new Set(moveIds.filter((id) => allow.has(id) && MOVES[id]))].slice(0, MOVE_SLOT_CAP)
-      const finalEquipped = equipped.length > 0 ? equipped : [species.moveId] // 保證非空（至少 slot0）
-      return { ...u, equippedMoveIds: finalEquipped }
-    })
-    set({ roster })
-    await adapter.saveRoster(roster)
+  learnMoveWithSp: (unitId, moveId) => enqueueMoveMutation(async () => {
+    const currentRoster = get().roster
+    const unit = currentRoster.find((candidate) => candidate.id === unitId)
+    if (!unit) throw new MoveTrainingError('missing-mobie', '找不到這隻 Mobie；請返回收藏後重新開啟。')
+    const move = MOVES[moveId]
+    if (!move) throw new MoveTrainingError('unknown-move', '這個招式已不存在，請重新整理招式清單。')
+    const species = getSpecies(unit.speciesId)
+    if (!teachableOf(species).includes(moveId)) {
+      throw new MoveTrainingError('not-teachable', `${species.nameZh} 不能在訓練所學習「${move.nameZh}」。`)
+    }
+    const current = effectiveLearnedMoves(unit, species)
+    const cost = moveLearnCost(move)
+    const currentSp = useSkillPoints.getState().sp
+    if (current.includes(moveId)) {
+      return { status: 'already-learned', unitId, moveId, cost, remainingSp: currentSp }
+    }
+    if (currentSp < cost) {
+      throw new MoveTrainingError('insufficient-sp', `SP 不足：學習「${move.nameZh}」需要 ${cost} SP，目前只有 ${currentSp} SP。`)
+    }
+
+    const nextSp = currentSp - cost
+    const nextRoster = currentRoster.map((candidate) => candidate.id === unitId
+      ? { ...candidate, learnedMoveIds: [...new Set([...current, moveId])] }
+      : candidate)
+
+    // SP is written first so an interrupted browser write cannot grant a move
+    // without paying for it. If the roster write fails, restore the old wallet
+    // and roster best-effort, then surface one retryable error to the UI.
+    try {
+      saveSkillPointsStrict(nextSp)
+      await strictSaveRoster(nextRoster)
+    } catch (cause) {
+      try { saveSkillPointsStrict(currentSp) } catch { /* keep the in-memory wallet unchanged below */ }
+      try { await strictSaveRoster(currentRoster) } catch { /* the original error is more actionable */ }
+      throw moveStorageError(cause)
+    }
+
+    useSkillPoints.setState({ sp: nextSp })
+    set({ roster: nextRoster })
     bumpSaveMeta(Date.now())
-  },
+    return { status: 'applied', unitId, moveId, cost, remainingSp: nextSp }
+  }),
+
+  setEquippedMoves: (unitId, moveIds) => enqueueMoveMutation(async () => {
+    const currentRoster = get().roster
+    const unit = currentRoster.find((candidate) => candidate.id === unitId)
+    if (!unit) throw new MoveTrainingError('missing-mobie', '找不到這隻 Mobie；請返回收藏後重新開啟。')
+    const species = getSpecies(unit.speciesId)
+    const equippedMoveIds = normalizeEquippedMoveIds(moveIds, unit, species)
+    if (sameMoveOrder(unit.equippedMoveIds, equippedMoveIds)) return
+    const nextRoster = currentRoster.map((candidate) => candidate.id === unitId
+      ? { ...candidate, equippedMoveIds }
+      : candidate)
+    try {
+      await strictSaveRoster(nextRoster)
+    } catch (cause) {
+      throw moveStorageError(cause)
+    }
+    set({ roster: nextRoster })
+    bumpSaveMeta(Date.now())
+  }),
 
   replaceAll: async (units) => {
     const clean = sanitizeRoster(units)

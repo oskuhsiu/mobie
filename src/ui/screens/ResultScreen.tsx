@@ -275,7 +275,7 @@ function TowerView({
           <MobieSprite src={lead.artworkUrl} alt={lead.nameZh} />
         </motion.div>
       )}
-      <h2 id="tower-result-hero-title" className="h-title tower-result-hero__title">{title}</h2>
+      <div id="tower-result-hero-title" className="h-title tower-result-hero__title">{title}</div>
       <p className="h-sub tower-result-hero__description">{description}</p>
 
       <div className="tower-result-facts" role="list" aria-label="Tower 本場資訊">
