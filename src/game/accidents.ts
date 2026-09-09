@@ -55,7 +55,7 @@ export interface EncounterAccidents {
 }
 
 /** 由 region + foeTeam 決定論 roll 出 encounter 意外旗標（同一遭遇穩定、不隨 re-render 變）。 */
-export function rollEncounterAccidents(region: Region, foeTeam: Card[]): EncounterAccidents {
+export function rollEncounterAccidents(region: Region, foeTeam: readonly Card[]): EncounterAccidents {
   if (region.mode !== 'wild') return { luckyExpMult: 1, supply: null }
   const rng = mulberry32(hashSeed(`accident|${region.id}|${foeTeam.map((c) => c.cardId).join(',')}`))
   const luckyExpMult = rng() < LUCKY_BONUS_CHANCE ? 1.5 : 1

@@ -9,14 +9,20 @@ interface MobieSpriteProps {
   /** EXT.1.d：idle 微浮動（CSS transform，低頻）。由呼叫端依 juice 決定是否開（off＝靜止）。 */
   idle?: boolean
   className?: string
+  /** Notify an owner when remote artwork completes or falls back. */
+  onStateChange?: (state: 'loading' | 'loaded' | 'failed') => void
 }
 
-export function MobieSprite({ src, alt, shiny, flip, idle, className }: MobieSpriteProps) {
+export function MobieSprite({ src, alt, shiny, flip, idle, className, onStateChange }: MobieSpriteProps) {
   const [state, setState] = useState<'loading' | 'loaded' | 'failed'>(() => src ? 'loading' : 'failed')
 
   useEffect(() => {
     setState(src ? 'loading' : 'failed')
   }, [src])
+
+  useEffect(() => {
+    onStateChange?.(state)
+  }, [onStateChange, state])
 
   const initial = useMemo(() => {
     const compact = alt.trim().replace(/\s+/g, '')

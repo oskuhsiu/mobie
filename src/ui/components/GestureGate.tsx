@@ -8,7 +8,7 @@ import { normPt } from '@/ui/components/gestureUtil'
 import { audio } from '@/audio/audioEngine'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
 
-export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, onCancel, timeoutMs = 6000 }: {
+export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, onCancel, timeoutMs = 6000, skipLabel, timeoutHint }: {
   title: string
   icon: string
   hint: string
@@ -17,6 +17,10 @@ export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, 
   onComplete: () => void
   onCancel: () => void
   timeoutMs?: number
+  /** Optional explicit bypass for gates where the gesture is only presentation. */
+  skipLabel?: string
+  /** Additional copy explaining what timeout does for this gate. */
+  timeoutHint?: string
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const rectRef = useRef<DOMRect | null>(null)
@@ -83,9 +87,13 @@ export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, 
         >
           <div ref={iconRef} className="gesture-gate__icon">{icon}</div>
           <div className="gesture-hint">{hint}</div>
+          {timeoutHint && <div className="h-sub" data-gesture-timeout-hint>{timeoutHint}</div>}
         </div>
         <div className="gesture-gate__track"><div ref={barRef} className="gesture-gate__fill" /></div>
-        <button className="btn btn--ghost btn--sm" style={{ alignSelf: 'center' }} onClick={onCancel}>取消</button>
+        <div className="row" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+          {skipLabel && <button className="btn btn--ghost btn--sm" data-gesture-skip onClick={finish}>{skipLabel}</button>}
+          <button className="btn btn--ghost btn--sm" style={{ alignSelf: 'center' }} onClick={onCancel}>取消</button>
+        </div>
     </ModalSurface>
   )
 }

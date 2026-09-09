@@ -43,6 +43,7 @@ export interface BattleResultHandoff {
 export type GameEvent =
   | { type: 'START' }
   | { type: 'SELECT_REGION'; regionId: string }
+  | { type: 'RETRY_ENCOUNTER' }
   | { type: 'ENGAGE' }
   | { type: 'BACK' }
   | { type: 'SELECT_TEAM'; cards: Card[] }
@@ -156,6 +157,7 @@ export const gameMachine = setup({
     },
     encounter: {
       on: {
+        RETRY_ENCOUNTER: { actions: 'rerollFoes' },
         ENGAGE: 'cardSelect',
         BACK: 'regionSelect',
       },

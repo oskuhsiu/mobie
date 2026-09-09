@@ -887,6 +887,8 @@ body {
 }
 .foe-strip__mon--boss { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .foe-strip__mon img { width: 40px; height: 40px; object-fit: contain; }
+.foe-strip__art { display: block; width: 40px; height: 40px; }
+.foe-strip__art .sprite { width: 100%; height: 100%; }
 .foe-strip__types { display: flex; gap: 3px; transform: scale(0.78); transform-origin: center; }
 .capture-target-label { color: var(--accent); }
 
@@ -899,6 +901,85 @@ body {
 }
 .hunt-target__promise { color: #b9f6cf; font-weight: 750; }
 .hunt-target__team-label { margin-top: 7px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ============ M24 Ticket 27：Encounter context / recovery ============ */
+.encounter-screen {
+  flex: 1 1 auto; min-height: 0; min-width: 0; gap: 14px; padding-bottom: 20px;
+}
+.encounter-back { flex: 0 0 auto; }
+.encounter-context {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  width: min(100%, 960px); margin: 0 auto; padding: 10px 14px;
+  border-radius: 14px; background: rgba(0,0,0,0.28); border: 1px solid var(--stroke);
+}
+.encounter-context__title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.encounter-context__flags { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.accident-tag--supply { background: rgba(122,224,255,0.14); border-color: rgba(122,224,255,0.48); color: #cdf6ff; }
+.encounter-main {
+  display: grid; grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr); align-items: center;
+  gap: clamp(18px, 4vw, 56px); width: min(100%, 960px); margin: 0 auto;
+}
+.encounter-target { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.encounter-target__art { width: min(52vw, 300px); height: min(52vw, 300px); min-width: 170px; min-height: 170px; position: relative; }
+.encounter-target__art .sprite { width: 100%; height: 100%; }
+.encounter-target__details { align-items: flex-start; gap: 9px; min-width: 0; }
+.encounter-target__name { font-size: clamp(28px, 5vw, 42px); line-height: 1.05; }
+.encounter-target__details .type-badges { justify-content: flex-start; }
+.encounter-artwork-error {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; width: min(100%, 360px);
+  padding: 8px 10px; border-radius: 10px; color: #ffd9d9; background: rgba(255,107,107,0.12); border: 1px solid rgba(255,107,107,0.42);
+  font-size: 12px; line-height: 1.4; text-align: center;
+}
+.encounter-roster {
+  width: min(100%, 960px); margin: 0 auto; padding: 12px 14px;
+  border-radius: 16px; background: rgba(0,0,0,0.24); border: 1px solid var(--stroke);
+}
+.encounter-roster__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.encounter-roster__head h2 { font-size: 20px; }
+.encounter-roster__list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.encounter-roster__member {
+  position: relative; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px;
+  border-radius: 12px; text-align: left; background: var(--panel); border: 1px solid var(--stroke); color: var(--text);
+}
+.encounter-roster__member--boss { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(255,210,63,0.18) inset; }
+.encounter-roster__sprite { width: 54px; height: 54px; flex: 0 0 auto; }
+.encounter-roster__sprite .sprite { width: 100%; height: 100%; }
+.encounter-roster__meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.encounter-roster__meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.encounter-roster__meta > span { color: var(--text-dim); font-size: 12px; }
+.encounter-roster__meta .type-badges { transform: scale(0.8); transform-origin: left center; width: max-content; }
+.encounter-roster__boss { position: absolute; top: 5px; right: 6px; color: var(--accent); font-size: 9px; font-weight: 900; letter-spacing: 0.08em; }
+.encounter-engage { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 0 0 auto; }
+.encounter-engage__notice {
+  max-width: min(92vw, 600px); padding: 7px 12px; border-radius: 999px; text-align: center;
+  color: #ffeaa2; background: rgba(255,210,63,0.1); border: 1px solid rgba(255,210,63,0.36); font-size: 12px;
+}
+.encounter-error { display: grid; place-items: center; flex: 1 1 auto; min-height: 0; padding: 18px; overflow: auto; }
+.encounter-error__card {
+  display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(560px, 100%); padding: clamp(24px, 6vw, 44px);
+  border: 1px solid rgba(255,107,107,0.52); border-radius: var(--radius); background: rgba(17,24,48,0.86); box-shadow: var(--shadow); text-align: center;
+}
+.encounter-error__icon { font-size: 40px; }
+.encounter-error__card h1 { font-size: clamp(25px, 6vw, 40px); }
+.encounter-error__card .h-sub { max-width: 440px; line-height: 1.55; overflow-wrap: anywhere; }
+.encounter-error__actions { flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+.encounter-supply-surface { width: min(94vw, 480px); }
+.encounter-supply { display: flex; flex-direction: column; gap: 12px; }
+.encounter-supply__required { padding: 9px 11px; border-radius: 10px; color: #ffeaa2; background: rgba(255,210,63,0.1); border: 1px solid rgba(255,210,63,0.34); font-size: 12px; line-height: 1.45; }
+.encounter-supply__options { display: flex; flex-direction: column; gap: 8px; }
+.encounter-supply__option { min-height: 68px; }
+.encounter-supply__copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.encounter-supply__copy span { color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+.encounter-supply__choose { flex: 0 0 auto; color: var(--accent); font-size: 12px; font-weight: 900; }
+
+@media (max-width: 700px) {
+  .encounter-main { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .encounter-target__details { align-items: center; text-align: center; }
+  .encounter-target__details .type-badges { justify-content: center; }
+  .encounter-roster__list { grid-template-columns: minmax(0, 1fr); }
+  .encounter-roster__member { min-height: 68px; }
+  .encounter-context__flags { justify-content: flex-start; }
+}
 
 /* ============ 選卡相剋徽章 / 推薦 ============ */
 .matchup-badges { position: absolute; top: 9px; right: 10px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; z-index: 2; }

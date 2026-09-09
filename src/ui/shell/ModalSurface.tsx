@@ -17,6 +17,7 @@ export function ModalSurface({
   footer,
   headerLeading,
   headerAside,
+  closeLabel = '關閉',
   className = '',
   style,
   portal = true,
@@ -30,6 +31,7 @@ export function ModalSurface({
   footer?: ReactNode
   headerLeading?: ReactNode
   headerAside?: ReactNode
+  closeLabel?: ReactNode
   className?: string
   style?: CSSProperties
   portal?: boolean
@@ -164,7 +166,7 @@ export function ModalSurface({
             </div>
           </div>
           {headerAside}
-          <button ref={closeRef} className="btn btn--ghost btn--sm" data-modal-close onClick={onClose}>關閉</button>
+          <button ref={closeRef} className="btn btn--ghost btn--sm" data-modal-close onClick={onClose}>{closeLabel}</button>
         </div>
         <div className="modal-surface__body" data-modal-body>{children}</div>
         {footer && <div className="modal-surface__footer" data-modal-footer>{footer}</div>}
