@@ -15,6 +15,7 @@ import { listCards } from '@/game/cardLibrary'
 import type { UnpackOk } from '@/game/save/bundle'
 import { audio } from '@/audio/audioEngine'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { resultSettlementBusy, useResultSettlementProjectionStore } from '@/store/resultSettlementProjection'
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -43,6 +44,7 @@ const DIR_COLOR: Record<SaveComparison, string> = {
  */
 export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   const roster = useRoster((s) => s.roster)
+  const settlementRunning = useResultSettlementProjectionStore((s) => s.projection.status === 'running')
   const [name, setName] = useState('')
   const [cardsCount, setCardsCount] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -77,12 +79,17 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   const filename = `${sanitizeProfileName(name) ?? 'trainer'}.save`
 
   const commitName = () => {
+    if (resultSettlementBusy()) return
     const m = setProfileName(name)
     setMeta(m)
     setName(m.profileName)
   }
 
   const doExport = async () => {
+    if (resultSettlementBusy()) {
+      setMsg('Result 結算進行中，請等待完成後再匯出。')
+      return
+    }
     setBusy(true)
     setMsg(null)
     commitName()
@@ -100,6 +107,10 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   }
 
   const onPickFile = async (file: File) => {
+    if (resultSettlementBusy()) {
+      setMsg('Result 結算進行中，請等待完成後再匯入。')
+      return
+    }
     setMsg(null)
     setImportErr(null)
     setPending(null)
@@ -113,6 +124,10 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
 
   const doImport = async () => {
     if (!pending) return
+    if (resultSettlementBusy()) {
+      setMsg('Result 結算進行中，請等待完成後再匯入。')
+      return
+    }
     setBusy(true)
     setMsg(null)
     try {
@@ -133,6 +148,10 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   }
 
   const doRestore = async () => {
+    if (resultSettlementBusy()) {
+      setMsg('Result 結算進行中，請等待完成後再還原。')
+      return
+    }
     setBusy(true)
     setMsg(null)
     try {
@@ -156,6 +175,11 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
       footer={<div className="utility-foot">目前進度：{roster.length} 隻Mobie。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。</div>}
     >
       <div className="modal-surface__stack">
+        {settlementRunning && (
+          <div className="settlement-status" role="status" aria-live="polite" data-save-settlement-gate>
+            Result 結算進行中，匯出、匯入與還原暫時停用。
+          </div>
+        )}
           {/* ── 匯出 ── */}
           <div className="lib-panel" style={{ overflow: 'visible' }}>
             <div className="col" style={{ gap: 4 }}>
@@ -164,6 +188,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
                 className="utility-search"
                 value={name}
                 maxLength={24}
+                disabled={busy || settlementRunning}
                 placeholder="trainer"
                 onChange={(e) => setName(e.target.value)}
                 onBlur={commitName}
@@ -174,20 +199,21 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
               新存檔固定只含 Mobie 與卡片進度；custom GLB/GLTF 已停用，既有本機資料不會被讀取或刪除。
             </div>
 
-            <button className="btn" style={{ marginTop: 8 }} onClick={() => void doExport()} disabled={busy}>
-              {busy ? '處理中…' : '⬆ 匯出存檔'}
+            <button className="btn" style={{ marginTop: 8 }} onClick={() => void doExport()} disabled={busy || settlementRunning}>
+              {busy ? '處理中…' : settlementRunning ? '結算中…' : '⬆ 匯出存檔'}
             </button>
           </div>
 
           {/* ── 匯入 ── */}
           <div className="lib-panel" style={{ overflow: 'visible' }}>
             <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 2 }}>從 .save 檔還原進度</div>
-            <label className="btn btn--ghost btn--sm" style={{ alignSelf: 'flex-start' }}>
+            <label className="btn btn--ghost btn--sm" style={{ alignSelf: 'flex-start', opacity: settlementRunning ? 0.55 : undefined }} aria-disabled={settlementRunning}>
               📂 選擇 .save 檔…
               <input
                 type="file"
                 accept=".save,.zip,application/zip"
                 hidden
+                disabled={busy || settlementRunning}
                 onChange={(e) => {
                   const f = e.target.files?.[0]
                   if (f) void onPickFile(f)
@@ -242,11 +268,11 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
                     <button
                       className="btn btn--sm"
                       onClick={() => void doImport()}
-                      disabled={busy || (direction === 'older' && !confirmOlder)}
+                      disabled={busy || settlementRunning || (direction === 'older' && !confirmOlder)}
                     >
                       {direction === 'older' ? '仍要覆蓋並匯入' : '覆蓋並匯入'}
                     </button>
-                    <button className="btn btn--ghost btn--sm" onClick={() => setPending(null)} disabled={busy}>取消</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => setPending(null)} disabled={busy || settlementRunning}>取消</button>
                   </div>
                 </motion.div>
               )}
@@ -255,7 +281,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
             {backup && !pending && (
               <div className="lib-hint" style={{ marginLeft: 0, marginTop: 6 }}>
                 有匯入前備份（{fmtTime(backup.at)}）。
-                <button className="btn btn--ghost btn--sm" style={{ marginLeft: 8 }} onClick={() => void doRestore()} disabled={busy}>
+                <button className="btn btn--ghost btn--sm" style={{ marginLeft: 8 }} onClick={() => void doRestore()} disabled={busy || settlementRunning}>
                   ↩ 還原
                 </button>
               </div>

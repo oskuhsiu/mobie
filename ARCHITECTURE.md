@@ -354,6 +354,18 @@ capture markers share their canonical envelopes with their existing Result child
 reconcilable after a receipt failure. The Result UI only presents the stored decision and never writes capture,
 Dex, roster, or egg state directly.
 
+Ticket 33 adds `ResultSettlementProjectionController` and the
+`store/resultSettlementProjection.ts` adapter. The adapter assembles the
+complete Result payload once, prepares any capture plan before child writes,
+and exposes only the `idle` / `running` / `settled` / `error` projection to
+`ResultScreen`; receipt data, capture outcome, growth rows, and evolution rows
+are read from that projection. A generation fence ignores late Promise
+completions after a new result or collision, while same-pair remounts reuse the
+active operation and retry delegates back to each destination's `applyOnce`.
+The process-local `resultSettlementGuard` is checked by Save Manager UI and
+`saveIO` export/import/restore commands, so those commands cannot race a
+running Result settlement.
+
 ### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
 
 Canonical = a structured JSON log (`ReplayLog`: header with `battleSeed`/`DisplayUnitSnapshot[]` + ordered

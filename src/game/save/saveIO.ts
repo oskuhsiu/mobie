@@ -9,6 +9,7 @@ import { loadMeta, adoptMeta, type SaveMeta } from './saveMeta'
 import { listCards, replaceAllCards } from '@/game/cardLibrary'
 import { saveBackup, loadBackupBytes } from './backupStore'
 import { useRoster } from '@/store/rosterStore'
+import { assertResultSettlementIdle } from '@/game/resultSettlementGuard'
 
 export interface BuiltSave {
   bytes: Uint8Array
@@ -23,6 +24,7 @@ export interface BuiltSave {
  * cards 從 IndexedDB 取。新格式固定只含 canonical roster / cards。
  */
 export async function buildSaveFile(roster: OwnedUnit[]): Promise<BuiltSave> {
+  assertResultSettlementIdle('匯出')
   const meta = loadMeta()
   const cards = await listCards()
   const bytes = packSave({ meta, roster, cards })
@@ -77,6 +79,7 @@ export async function readSaveFile(file: File): Promise<UnpackResult> {
  * 備份內容 = 當前 roster + cards 打包（不含模型；模型可重新 drop-in，進度才不可逆）。
  */
 export async function backupCurrentSave(now: number): Promise<void> {
+  assertResultSettlementIdle('備份')
   const meta = loadMeta()
   const roster = useRoster.getState().roster
   const cards = await listCards()
@@ -90,6 +93,7 @@ export async function backupCurrentSave(now: number): Promise<void> {
  * `mz-models`。
  */
 export async function applyImportedSave(parsed: UnpackOk): Promise<void> {
+  assertResultSettlementIdle('匯入')
   await useRoster.getState().replaceAll(parsed.roster)
   await replaceAllCards(parsed.cards)
   adoptMeta(parsed.meta)
@@ -97,6 +101,7 @@ export async function applyImportedSave(parsed: UnpackOk): Promise<void> {
 
 /** 還原最近一次「匯入前備份」。無備份回 null；有則解析並套用（不再建立新備份）。 */
 export async function restoreBackup(): Promise<UnpackResult | null> {
+  assertResultSettlementIdle('還原')
   const bytes = await loadBackupBytes()
   if (!bytes) return null
   const parsed = unpackSave(bytes)

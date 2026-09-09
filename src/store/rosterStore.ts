@@ -38,6 +38,7 @@ import {
   TowerProgressionDestination,
   IncubatorProgressionDestination,
   type ResultIdentity,
+  type ResultSettlementPreparation,
   type ResultSettlementPayload,
   type ResultSettlementReceipt,
 } from '@/game/resultSettlement'
@@ -90,6 +91,7 @@ interface RosterState {
    */
   grantBattleExp: (unitIds: string[], foeLevels: number[], ratio?: number, identity?: ResultIdentity) => Promise<ExpResult[]>
   /** Result-owned roster growth/evolution destination. The identity is stable across remounts. */
+  prepareResultSettlement: (identity: ResultIdentity, payload: ResultSettlementPayload) => Promise<ResultSettlementPreparation>
   settleBattleResult: (identity: ResultIdentity, payload: ResultSettlementPayload) => Promise<ResultSettlementReceipt>
   /** Mark a Result as left so its durable marker becomes eligible for bounded retention. */
   markBattleResultLeft: (identity: ResultIdentity) => Promise<void>
@@ -245,6 +247,11 @@ export const useRoster = create<RosterState>((set, get) => {
     return receipt
   }
 
+  const prepareResultSettlement = async (
+    identity: ResultIdentity,
+    payload: ResultSettlementPayload,
+  ): Promise<ResultSettlementPreparation> => settlementCoordinator.prepare(identity, payload)
+
   const hydrateRoster = async (
     loadRoster: () => Promise<OwnedUnit[]>,
     saveRoster: (units: OwnedUnit[]) => Promise<void>,
@@ -296,6 +303,7 @@ export const useRoster = create<RosterState>((set, get) => {
     return results
   },
 
+  prepareResultSettlement,
   settleBattleResult,
 
   markBattleResultLeft: (identity) => settlementCoordinator.markResultLeft(identity),

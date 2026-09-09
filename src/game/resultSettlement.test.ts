@@ -546,6 +546,17 @@ describe('deterministic capture settlement children', () => {
     const journal = new MemorySettlementJournal()
     const coordinator = new ResultSettlementCoordinator(growth, journal, () => 624, { capture })
     const caughtIdentity = identityWithCapture(true)
+    const prepared = await coordinator.prepare(caughtIdentity, {
+      ...payload,
+      capture: { target: captureCard, captureMult: 1 },
+    })
+    expect(prepared.capturePlan).toMatchObject({ outcome: 'captured-new', decision: { caught: true } })
+    expect((await journal.load())[0]).toMatchObject({
+      status: 'pending',
+      capturePlan: { outcome: 'captured-new' },
+    })
+    expect(captureRosterPersistence.saveCount).toBe(0)
+
     const first = await coordinator.settle(caughtIdentity, {
       ...payload,
       capture: { target: captureCard, captureMult: 1 },

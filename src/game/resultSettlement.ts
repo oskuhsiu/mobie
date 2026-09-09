@@ -241,6 +241,15 @@ export interface ResultSettlementReceipt extends RosterGrowthReceipt {
   capture?: CaptureSettlementReceipt
 }
 
+/**
+ * Read-only preparation returned before a Result child mutation starts.
+ * Capture presentation consumes the persisted decision from this seam; the
+ * screen never rolls a second stream or reconstructs an outcome locally.
+ */
+export interface ResultSettlementPreparation extends ResultIdentity {
+  capturePlan?: CaptureSettlementPlan
+}
+
 export interface EvolutionReceipt {
   unitId: string
   fromSpecies: number
@@ -2654,6 +2663,23 @@ export class ResultSettlementCoordinator {
     private readonly children: ResultSettlementChildren = {},
   ) {}
 
+  /**
+   * Prepare the durable presentation decision before any Result child writes.
+   *
+   * The journal remains orchestration state; the capture destination still
+   * owns the canonical mutation. Persisting the plan here means a remount or
+   * retry can render the exact same ball/outcome without asking the UI to roll
+   * again, even when the first child later fails.
+   */
+  prepare(
+    identity: ResultIdentity,
+    payload: ResultSettlementPayload,
+  ): Promise<ResultSettlementPreparation> {
+    const run = this.queue.then(() => this.prepareSerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
   settle(identity: ResultIdentity, payload: ResultSettlementPayload): Promise<ResultSettlementReceipt> {
     const run = this.queue.then(() => this.settleSerialized(identity, payload))
     this.queue = run.catch(() => undefined)
@@ -2690,6 +2716,68 @@ export class ResultSettlementCoordinator {
     })
     this.queue = run.catch(() => undefined)
     return run
+  }
+
+  private async prepareSerialized(
+    identity: ResultIdentity,
+    payload: ResultSettlementPayload,
+  ): Promise<ResultSettlementPreparation> {
+    let entries: SettlementJournalEntry[]
+    try {
+      entries = await this.journal.load()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 Result 結算進度失敗，請重試。', cause)
+    }
+    const existing = entries.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+
+    const capturePayload = payload.capture ?? existing?.capturePayload
+    if (!capturePayload || !this.children.capture) {
+      return {
+        ...identity,
+        ...(existing?.capturePlan ? { capturePlan: cloneCapturePlan(existing.capturePlan) } : {}),
+      }
+    }
+
+    let capturePlan = existing?.capturePlan
+    if (!capturePlan) {
+      try {
+        capturePlan = await this.children.capture.prepare(identity, capturePayload)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '建立捕獲結算判定失敗，請重試。', error)
+      }
+    } else if (capturePlan.resultFingerprint !== identity.resultFingerprint) {
+      collision(identity)
+    }
+
+    // Avoid an unnecessary journal write when the plan is already durable.
+    if (existing?.capturePlan) {
+      return { ...identity, capturePlan: cloneCapturePlan(capturePlan) }
+    }
+
+    const nextEntry: SettlementJournalEntry = existing
+      ? {
+          ...existing,
+          capturePayload,
+          capturePlan,
+          error: undefined,
+        }
+      : {
+          resultId: identity.resultId,
+          resultFingerprint: identity.resultFingerprint,
+          status: 'pending',
+          createdAt: this.now(),
+          ...(payload.outcome ? { outcome: payload.outcome } : {}),
+          capturePayload,
+          capturePlan,
+        }
+    try {
+      await this.journal.save(replaceJournal(entries, nextEntry))
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存捕獲結算判定失敗，請重試。', cause)
+    }
+    return { ...identity, capturePlan: cloneCapturePlan(capturePlan) }
   }
 
   private async settleSerialized(identity: ResultIdentity, payload: ResultSettlementPayload): Promise<ResultSettlementReceipt> {
@@ -2924,6 +3012,209 @@ export class ResultSettlementCoordinator {
       ...(incubatorReceipt ? { incubator: incubatorReceipt } : {}),
       ...(captureReceipt ? { capture: captureReceipt } : {}),
     }
+  }
+}
+
+/** The only lifecycle states a Result presentation is allowed to observe. */
+export type ResultSettlementProjectionStatus = 'idle' | 'running' | 'settled' | 'error'
+
+export interface ResultSettlementProjection {
+  status: ResultSettlementProjectionStatus
+  identity: ResultIdentity | null
+  attempt: number
+  captureDecision: CaptureDecision | null
+  captureOutcome: CaptureOutcome | null
+  receipt: ResultSettlementReceipt | null
+  error: ResultSettlementError | null
+}
+
+export interface ResultSettlementProjectionRequest {
+  identity: ResultIdentity
+  payload: ResultSettlementPayload
+}
+
+export interface ResultSettlementProjectionDriver {
+  prepare: (
+    identity: ResultIdentity,
+    payload: ResultSettlementPayload,
+  ) => Promise<ResultSettlementPreparation>
+  settle: (
+    identity: ResultIdentity,
+    payload: ResultSettlementPayload,
+  ) => Promise<ResultSettlementReceipt>
+  markResultLeft: (identity: ResultIdentity) => Promise<void>
+}
+
+/**
+ * Orchestration state for the Result screen.  It is intentionally independent
+ * from React: one instance can survive StrictMode remounts while stale Promise
+ * completions are fenced by the request generation.
+ */
+export class ResultSettlementProjectionController {
+  private snapshot: ResultSettlementProjection = {
+    status: 'idle',
+    identity: null,
+    attempt: 0,
+    captureDecision: null,
+    captureOutcome: null,
+    receipt: null,
+    error: null,
+  }
+  private request: ResultSettlementProjectionRequest | null = null
+  private generation = 0
+  private readonly listeners = new Set<() => void>()
+
+  constructor(private readonly driver: ResultSettlementProjectionDriver) {}
+
+  getSnapshot = (): ResultSettlementProjection => this.snapshot
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  start(request: ResultSettlementProjectionRequest | null): void {
+    if (!request) {
+      this.request = null
+      this.generation += 1
+      this.publish({
+        status: 'idle',
+        identity: null,
+        attempt: this.snapshot.attempt,
+        captureDecision: null,
+        captureOutcome: null,
+        receipt: null,
+        error: null,
+      })
+      return
+    }
+
+    const current = this.request
+    if (current && current.identity.resultId === request.identity.resultId
+      && current.identity.resultFingerprint !== request.identity.resultFingerprint) {
+      this.generation += 1
+      // Keep the colliding pair fenced so a React re-render cannot silently
+      // treat it as a fresh request.  Retry is intentionally disabled for a
+      // collision; the caller must leave and start a new battle identity.
+      this.request = request
+      this.publish({
+        status: 'error',
+        identity: request.identity,
+        attempt: this.snapshot.attempt,
+        captureDecision: null,
+        captureOutcome: null,
+        receipt: null,
+        error: new ResultSettlementError(
+          'collision',
+          request.identity,
+          `結果識別碼碰撞：${request.identity.resultId} 已綁定不同的 fingerprint，請重新開始本場。`,
+        ),
+      })
+      return
+    }
+
+    if (current && current.identity.resultId === request.identity.resultId
+      && current.identity.resultFingerprint === request.identity.resultFingerprint) {
+      // React remounts normally deliver the same payload and must be a no-op.
+      // A durable journal may, however, contain an earlier partial shape (for
+      // example a Tower child becoming required after a route re-entry).  Let
+      // the coordinator reconcile that new child once the previous run is no
+      // longer active; its destination markers still fence every mutation.
+      if (stableJson(current.payload) === stableJson(request.payload)
+        || this.snapshot.status === 'running'
+        || this.snapshot.status === 'error') return
+      this.request = request
+      const generation = ++this.generation
+      this.publish({
+        status: 'running',
+        identity: request.identity,
+        attempt: this.snapshot.attempt + 1,
+        captureDecision: this.snapshot.captureDecision,
+        captureOutcome: this.snapshot.captureOutcome,
+        receipt: null,
+        error: null,
+      })
+      void this.run(request, generation)
+      return
+    }
+
+    this.request = request
+    const generation = ++this.generation
+    this.publish({
+      status: 'running',
+      identity: request.identity,
+      attempt: this.snapshot.attempt + 1,
+      captureDecision: null,
+      captureOutcome: null,
+      receipt: null,
+      error: null,
+    })
+    void this.run(request, generation)
+  }
+
+  retry(): void {
+    if (this.snapshot.status !== 'error' || !this.request || this.snapshot.error?.code === 'collision') return
+    const request = this.request
+    const generation = ++this.generation
+    this.publish({
+      ...this.snapshot,
+      status: 'running',
+      attempt: this.snapshot.attempt + 1,
+      captureDecision: this.snapshot.captureDecision,
+      captureOutcome: this.snapshot.captureOutcome,
+      receipt: null,
+      error: null,
+    })
+    void this.run(request, generation)
+  }
+
+  async markResultLeft(identity: ResultIdentity | null = this.snapshot.identity): Promise<void> {
+    if (!identity) return
+    await this.driver.markResultLeft(identity)
+  }
+
+  private isCurrent(generation: number, request: ResultSettlementProjectionRequest): boolean {
+    return this.generation === generation
+      && this.request?.identity.resultId === request.identity.resultId
+      && this.request.identity.resultFingerprint === request.identity.resultFingerprint
+  }
+
+  private async run(request: ResultSettlementProjectionRequest, generation: number): Promise<void> {
+    try {
+      const preparation = await this.driver.prepare(request.identity, request.payload)
+      if (!this.isCurrent(generation, request)) return
+      this.publish({
+        ...this.snapshot,
+        captureDecision: preparation.capturePlan?.decision ?? this.snapshot.captureDecision,
+        captureOutcome: preparation.capturePlan?.outcome ?? this.snapshot.captureOutcome,
+      })
+
+      const receipt = await this.driver.settle(request.identity, request.payload)
+      if (!this.isCurrent(generation, request)) return
+      this.publish({
+        ...this.snapshot,
+        status: 'settled',
+        captureDecision: receipt.capture?.decision ?? preparation.capturePlan?.decision ?? this.snapshot.captureDecision,
+        captureOutcome: receipt.capture?.outcome ?? preparation.capturePlan?.outcome ?? this.snapshot.captureOutcome,
+        receipt,
+        error: null,
+      })
+    } catch (cause) {
+      if (!this.isCurrent(generation, request)) return
+      const error = cause instanceof ResultSettlementError
+        ? cause
+        : new ResultSettlementError('storage', request.identity, 'Result 結算失敗，請重試。', cause)
+      this.publish({
+        ...this.snapshot,
+        status: 'error',
+        error,
+      })
+    }
+  }
+
+  private publish(next: ResultSettlementProjection): void {
+    this.snapshot = next
+    for (const listener of this.listeners) listener()
   }
 }
 
