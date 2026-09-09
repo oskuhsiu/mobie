@@ -666,7 +666,10 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     }
   }
   const selectFirstThreeCards = async (label) => {
-    for (let index = 0; index < 3; index += 1) await clickSelector('.hand .poke-card', index)
+    // Team Select and Tower Setup keep the selectable action inside each
+    // card.  Target the aria-pressed control so the info-card button is never
+    // mistaken for a team selection during a real CDP journey.
+    for (let index = 0; index < 3; index += 1) await clickSelector('.hand .poke-card button[aria-pressed]', index)
     await waitFor('[...document.querySelectorAll("button")].some((button) => !button.disabled && (button.textContent || "").includes("3/3"))', 5_000, `${label} selection ready`)
   }
   const chooseTeam = async () => {

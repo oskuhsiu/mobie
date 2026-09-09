@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import type { Card, OwnedUnit } from '@/game/types'
-import type { BattleResultHandoff, GameContext, Outcome, TowerRun } from '@/game/machine/gameMachine'
+import { isValidTowerRun, type BattleResultHandoff, type GameContext, type Outcome, type TowerRun } from '@/game/machine/gameMachine'
 import { canCaptureIn } from '@/game/data/regionLookup'
 import { captureTargetOf } from '@/game/hunt'
 import { floorReward, towerExpMult } from '@/game/tower'
@@ -20,6 +20,7 @@ import {
   type ResultSettlementPayload,
   type ResultSettlementProjection,
   type ResultSettlementProjectionRequest,
+  type TowerProgressionReceipt,
 } from '@/game/resultSettlement'
 import { useRoster } from '@/store/rosterStore'
 
@@ -39,6 +40,8 @@ export interface ResultSettlementViewModel {
   outcome: Outcome | null
   isWin: boolean
   tower: TowerRun | null
+  /** True when the route carried a malformed or stale Tower battle context. */
+  invalidTowerContext: boolean
   canCapture: boolean
   resultMode: 'wild' | 'arena'
   captureDecision: CaptureDecision | null
@@ -51,6 +54,7 @@ export interface ResultSettlementViewModel {
   evolutions: NonNullable<ResultSettlementProjection['receipt']>['evolutions']
   moveLearns: NonNullable<ResultSettlementProjection['receipt']>['moveLearns']
   skillPoints: NonNullable<ResultSettlementProjection['receipt']>['skillPoints'] | null
+  towerReceipt: TowerProgressionReceipt | null
   incubator: NonNullable<ResultSettlementProjection['receipt']>['incubator'] | null
   spReward: number
   captureMode: InteractMode
@@ -102,6 +106,24 @@ function identityFor(context: ResultSettlementScreenContext, outcome: Outcome): 
   })
 }
 
+function sameCardOrder(left: readonly Card[], right: readonly Card[]): boolean {
+  return left.length === right.length && left.every((card, index) => {
+    const paired = right[index]
+    return paired?.cardId === card.cardId
+      && paired.speciesId === card.speciesId
+      && paired.level === card.level
+      && paired.shiny === card.shiny
+      && paired.nature === card.nature
+      && JSON.stringify(paired.ivs ?? null) === JSON.stringify(card.ivs ?? null)
+  })
+}
+
+function validTowerBattleContext(context: ResultSettlementScreenContext): boolean {
+  if (!context.tower) return true
+  return isValidTowerRun(context.tower)
+    && sameCardOrder(context.tower.teamCards, context.playerTeam)
+}
+
 function payloadFor(
   context: ResultSettlementScreenContext,
   captureMult: number,
@@ -142,9 +164,12 @@ function payloadFor(
 function requestFor(
   context: ResultSettlementScreenContext,
   captureMult: number,
-): { request: ResultSettlementProjectionRequest | null; identity: ResultIdentity | null; canCapture: boolean; resultMode: 'wild' | 'arena'; spReward: number } {
-  if (!context.outcome) return { request: null, identity: null, canCapture: false, resultMode: 'arena', spReward: 0 }
+): { request: ResultSettlementProjectionRequest | null; identity: ResultIdentity | null; canCapture: boolean; resultMode: 'wild' | 'arena'; spReward: number; invalidTowerContext: boolean } {
+  if (!context.outcome) return { request: null, identity: null, canCapture: false, resultMode: 'arena', spReward: 0, invalidTowerContext: Boolean(context.tower) }
   const identity = identityFor(context, context.outcome)
+  if (!validTowerBattleContext(context)) {
+    return { request: null, identity, canCapture: false, resultMode: 'arena', spReward: 0, invalidTowerContext: true }
+  }
   const built = payloadFor(context, captureMult)
   return {
     request: { identity, payload: built.payload },
@@ -152,6 +177,7 @@ function requestFor(
     canCapture: built.canCapture,
     resultMode: built.resultMode,
     spReward: built.spReward,
+    invalidTowerContext: false,
   }
 }
 
@@ -208,6 +234,7 @@ export function useResultSettlementProjection(context: ResultSettlementScreenCon
     outcome,
     isWin: outcome === 'win',
     tower: context.tower,
+    invalidTowerContext: built.invalidTowerContext,
     canCapture: built.canCapture,
     resultMode: built.resultMode,
     captureDecision: matches
@@ -222,6 +249,7 @@ export function useResultSettlementProjection(context: ResultSettlementScreenCon
     evolutions: receipt?.evolutions ?? [],
     moveLearns: receipt?.moveLearns ?? [],
     skillPoints: receipt?.skillPoints ?? null,
+    towerReceipt: receipt?.tower ?? null,
     incubator: receipt?.incubator ?? null,
     spReward: built.spReward,
     captureMode,

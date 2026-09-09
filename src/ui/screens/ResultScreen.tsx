@@ -1,4 +1,4 @@
-import { lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { buildBattleMobie } from '@/game/stats'
@@ -19,8 +19,9 @@ import type {
   CaptureOutcome,
   CaptureSettlementReceipt,
   EvolutionReceipt,
+  TowerProgressionReceipt,
 } from '@/game/resultSettlement'
-import type { GameEvent, TowerRun } from '@/game/machine/gameMachine'
+import type { GameEvent, Outcome, TowerRun } from '@/game/machine/gameMachine'
 import { TaskHeader } from '@/ui/shell/AppShell'
 import { useOverlayController, type OverlayControllerApi } from '@/ui/shell/OverlayController'
 import {
@@ -221,33 +222,79 @@ function WinView({
   )
 }
 
-/** M11 連勝塔結算畫面：突破/敗北 + 樓層 + 難度階；無捕獲。 */
-function TowerView({ isWin, tower }: { isWin: boolean; tower: TowerRun }) {
-  const { context } = useGame()
-  const lead = useMemo(() => (context.playerTeam[0] ? buildBattleMobie(context.playerTeam[0]) : null), [context.playerTeam])
+/** M11 連勝塔 Result hero：只讀 XState 的 battle context，不產生任何進度副作用。 */
+function TowerView({
+  outcome,
+  reason,
+  tower,
+}: {
+  outcome: Outcome | null
+  reason?: 'timeout'
+  tower: TowerRun
+}) {
+  const isWin = outcome === 'win'
   const asc = getAscension(tower.ascension)
+  const members = useMemo(() => tower.teamCards.map((card, index) => {
+    try {
+      return { card, index, mon: buildBattleMobie(card) }
+    } catch {
+      return { card, index, mon: null }
+    }
+  }), [tower.teamCards])
+  const lead = members[0]?.mon
+  const outcomeKey = !outcome ? 'pending' : reason === 'timeout' ? 'timeout' : isWin ? 'win' : 'lose'
+  const title = !outcome
+    ? '等待 Tower battle 結果'
+    : reason === 'timeout'
+      ? `第 ${tower.floor} 層時間到，${isWin ? '依剩餘 HP 判定突破' : '遠征結束'}`
+      : isWin
+        ? `第 ${tower.floor} 層突破！${isBossFloor(tower.floor) ? ' 🏆 BOSS' : ''}`
+        : `第 ${tower.floor} 層止步，遠征結束`
+  const description = !outcome
+    ? '戰鬥結果尚未送達；獎勵整理完成前不能進入下一步。'
+    : reason === 'timeout'
+      ? `回合上限已到，勝負依剩餘 HP 判定；${isWin ? '你已突破本層。' : '本場遠征已結束。'}進度仍以已儲存的結果為準。`
+      : isWin
+        ? `已完成第 ${tower.floor} 層的 ${asc.name} 難度戰鬥，可以在獎勵整理完成後選擇第 ${tower.floor + 1} 層或結束遠征。`
+        : '本場失敗會安全結束 run；已完成的 EXP、SP 與 Tower 進度仍會保留。'
+
   return (
-    <div className="tower-result-hero center">
-      <motion.div className="eyebrow" style={{ color: isWin ? 'var(--good)' : 'var(--bad)' }}
-        initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>🗼 連勝塔 · {asc.name}</motion.div>
+    <section
+      className="tower-result-hero"
+      aria-labelledby="tower-result-hero-title"
+      data-tower-result-hero
+      data-tower-result-outcome={outcomeKey}
+      data-tower-floor={tower.floor}
+      data-tower-ascension={tower.ascension}
+    >
+      <div className="tower-result-hero__eyebrow eyebrow" style={{ color: !outcome ? 'var(--text-dim)' : isWin ? 'var(--good)' : 'var(--bad)' }}>
+        🗼 連勝塔 · {asc.name} · 第 {tower.floor} 層
+      </div>
       {lead && (
-        <motion.div className="tower-result-hero__art"
-          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 140, damping: 13 }}>
+        <motion.div className="tower-result-hero__art" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', stiffness: 140, damping: 13 }}>
           <MobieSprite src={lead.artworkUrl} alt={lead.nameZh} />
         </motion.div>
       )}
-      {isWin ? (
-        <>
-          <div className="h-title" style={{ fontSize: 28 }}>第 {tower.floor} 層突破！{isBossFloor(tower.floor) ? ' 🏆 BOSS' : ''}</div>
-          <div className="h-sub">繼續攻向第 {tower.floor + 1} 層，或見好就收結算。</div>
-        </>
-      ) : (
-        <>
-          <div className="h-title" style={{ fontSize: 28 }}>遠征結束 · 到達第 {tower.floor} 層</div>
-          <div className="h-sub">已結算本場經驗與 SP。下次挑戰更高樓層！</div>
-        </>
-      )}
-    </div>
+      <h2 id="tower-result-hero-title" className="h-title tower-result-hero__title">{title}</h2>
+      <p className="h-sub tower-result-hero__description">{description}</p>
+
+      <div className="tower-result-facts" role="list" aria-label="Tower 本場資訊">
+        <div role="listitem"><span>本場 stakes</span><strong>{!outcome ? '等待戰鬥結果' : isWin ? `突破第 ${tower.floor} 層` : `止步第 ${tower.floor} 層`}</strong></div>
+        <div role="listitem"><span>隊伍順序</span><strong>1 → 2 → 3 固定沿用</strong></div>
+        <div role="listitem"><span>捕獲規則</span><strong>連勝塔不開放捕獲</strong></div>
+      </div>
+
+      <ol className="tower-result-team" aria-label="本場 Tower 隊伍順序" data-tower-result-team>
+        {members.map(({ card, index, mon }) => (
+          <li key={card.cardId} data-tower-result-team-slot={index + 1}>
+            <span className="tower-result-team__order">{index + 1}</span>
+            {mon ? <span aria-hidden="true"><MobieSprite src={mon.artworkUrl} alt="" className="tower-result-team__sprite" /></span> : <span className="tower-result-team__fallback" aria-hidden="true">✦</span>}
+            <span className="tower-result-team__name">{mon?.nameZh ?? `Mobie #${card.speciesId}`}</span>
+            <span className="tower-result-team__level">Lv.{card.level}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
@@ -294,22 +341,22 @@ function RewardSection({
       kind="rewards"
       eyebrow="01 · Rewards"
       title="本場獎勵"
-      description={status === 'idle' ? '等待 battle handoff 回條；收到結果後才會整理 EXP 與 SP。' : isWin ? '戰鬥回條已分開記錄 EXP 與 SP。' : '敗北仍保留已完成的戰鬥經驗；本場不發 SP。'}
+      description={status === 'idle' ? '等待戰鬥結果；收到後才會整理 EXP 與 SP。' : isWin ? '戰鬥結果已分開記錄 EXP 與 SP。' : '敗北仍保留已完成的戰鬥經驗；本場不發 SP。'}
     >
       <div className="result-reward-grid">
         <article className={`result-reward-card ${settled ? '' : 'result-reward-card--pending'}`} data-result-reward="exp" data-result-reward-status={status}>
           <div className="result-reward-card__label">戰鬥 EXP</div>
           <strong>{settled ? `+${expTotal} EXP` : '結算中…'}</strong>
-          <span>{settled ? (results.length > 0 ? `${results.length} 位參戰夥伴各自收到回條。` : '本場沒有可顯示的 EXP 變更。') : '等待 roster 回條完成。'}</span>
+          <span>{settled ? (results.length > 0 ? `${results.length} 位參戰夥伴各自收到 EXP。` : '本場沒有可顯示的 EXP 變更。') : '等待 EXP 整理完成。'}</span>
         </article>
         <article className={`result-reward-card ${settled ? '' : 'result-reward-card--pending'}`} data-result-reward="sp" data-result-reward-status={status}>
           <div className="result-reward-card__label">帳號 SP</div>
           <strong>{settled ? `+${spDelta} SP` : '結算中…'}</strong>
-          <span>{status === 'idle' ? '等待結果回條。' : isWin ? '可在招式訓練與夥伴技能使用。' : '敗北不增加技能點。'}</span>
+          <span>{status === 'idle' ? '等待結果整理完成。' : isWin ? '可在招式訓練與夥伴技能使用。' : '敗北不增加技能點。'}</span>
         </article>
       </div>
       {settled && (
-        <div className="result-reward-list exp-summary" role="list" aria-label="參戰夥伴 EXP 回條">
+        <div className="result-reward-list exp-summary" role="list" aria-label="參戰夥伴 EXP 進度">
           {results.length > 0 ? results.map((result) => (
             <div className="result-reward-row" role="listitem" key={result.unit.id}>
               <span className="result-reward-row__name">{getSpecies(result.unit.speciesId).nameZh}</span>
@@ -328,19 +375,20 @@ function ProgressionSection({
   moveLearns,
   incubator,
   status,
-}: Pick<ResultSettlementViewModel, 'results' | 'moveLearns' | 'incubator' | 'status'>) {
+  eyebrow = '02 · Progression',
+}: Pick<ResultSettlementViewModel, 'results' | 'moveLearns' | 'incubator' | 'status'> & { eyebrow?: string }) {
   const settled = status === 'settled'
   const levelUps = results.filter((result) => result.leveledUp)
   const eggUpdates = incubator?.updates ?? []
   return (
     <ResultSection
       kind="progression"
-      eyebrow="02 · Progression"
+      eyebrow={eyebrow}
       title="成長進度"
       description="EXP、升級、招式學習與既有孵化進度各自呈現，互不覆蓋。"
     >
       {!settled ? (
-        <div className="result-pending-card">正在整理參戰夥伴的成長回條…</div>
+        <div className="result-pending-card">正在整理參戰夥伴的成長進度…</div>
       ) : (
         <div className="result-progression-grid">
           <article className="result-progression-card" data-result-progression="levels">
@@ -398,7 +446,7 @@ function DuplicateEggSummary({ receipt }: { receipt: CaptureSettlementReceipt | 
             </div>
             {inherited && <div className="result-duplicate-egg__move">🧬 蛋招：{inherited.nameZh}</div>}
           </>
-        ) : <div className="result-empty-copy">孵化蛋回條正在同步，請稍後到孵化所查看。</div>}
+        ) : <div className="result-empty-copy">孵化蛋進度正在同步，請稍後到孵化所查看。</div>}
       </div>
     </article>
   )
@@ -487,12 +535,12 @@ function CaptureEvolutionSection({
       kind="capture-evolution"
       eyebrow="03 · Capture / evolution"
       title="收服與進化"
-      description={canCapture ? '收服結果來自 projection 回條；演出只呈現已決定的結果。' : '本場不開放收服，仍完整保留進化回條。'}
+      description={canCapture ? '收服結果以已儲存的判定為準；演出只呈現已決定的結果。' : '本場不開放收服，仍完整保留進化回條。'}
     >
       <div className="result-evolution-summary" data-result-evolution-state={evolutions.length > 0 ? 'completed' : 'none'}>
         <div className="result-evolution-summary__head"><span>進化</span><b>{status === 'settled' ? evolutionText : '結算中…'}</b></div>
         {status === 'settled' && evolutions.length > 0 ? (
-          <div className="result-evolution-summary__list" role="list" aria-label="進化回條">
+          <div className="result-evolution-summary__list" role="list" aria-label="進化紀錄">
             {evolutions.map((evolution) => (
               <div key={`${evolution.unitId}:${evolution.toSpecies}`} role="listitem">
                 <span>{getSpecies(evolution.fromSpecies).nameZh}</span>
@@ -526,13 +574,13 @@ function CaptureEvolutionSection({
             )}
             {captureDone && (captureOutcome === 'captured-duplicate-egg' || duplicateConverted) && <DuplicateEggSummary receipt={captureReceipt} />}
           </>
-        ) : <div className="result-pending-card" data-result-capture-state="pending">捕獲回條尚未可讀，請稍候。</div>
+        ) : <div className="result-pending-card" data-result-capture-state="pending">捕獲判定尚未完成，請稍候。</div>
       ) : (
         <div className="result-no-capture" data-result-capture-state="unavailable">
           <span className="result-no-capture__icon" aria-hidden="true">{status === 'idle' ? '⏳' : isWin ? '⚔️' : '🛡️'}</span>
           <div>
             <strong>{status === 'idle' ? '等待戰鬥結果' : isWin && resultMode === 'arena' ? '競技場不開放捕獲' : '敗北不進入捕獲階段'}</strong>
-            <p>{status === 'idle' ? 'battle handoff 尚未送達；目前沒有任何獎勵或下一步操作可提交。' : isWin && resultMode === 'arena' ? '這場只結算 EXP、SP 與既有進度；想收服夥伴請前往野外區域。' : '你被擊敗了；先整理隊伍與屬性，再從區域重新挑戰。'}</p>
+            <p>{status === 'idle' ? '戰鬥結果尚未送達；目前沒有任何獎勵或下一步操作可提交。' : isWin && resultMode === 'arena' ? '這場只結算 EXP、SP 與既有進度；想收服夥伴請前往野外區域。' : '你被擊敗了；先整理隊伍與屬性，再從區域重新挑戰。'}</p>
           </div>
         </div>
       )}
@@ -544,17 +592,19 @@ function ResultErrorPanel({
   projection,
   retry,
   onBack,
+  backRef,
 }: {
   projection: ResultSettlementViewModel['projection']
   retry: () => void
   onBack: () => void
+  backRef?: React.RefObject<HTMLButtonElement>
 }) {
   return (
     <div className="result-error" role="alert" data-result-error>
       <div className="result-error__copy">
         <span className="eyebrow">Result recovery</span>
-        <strong>{projection.error?.message ?? 'Result 結算失敗，請重試。'}</strong>
-        <span>已完成的子回條會在重試時對帳，捕獲判定不會重新抽取。</span>
+        <strong>{projection.error?.message ?? '結果整理失敗，請重試。'}</strong>
+        <span>已完成的獎勵會在重試時對帳，捕獲判定不會重新抽取。</span>
       </div>
       <div className="result-error__actions">
         <button
@@ -566,7 +616,7 @@ function ResultErrorPanel({
         >
           重試結算
         </button>
-        <button className="btn btn--ghost btn--sm" data-result-error-back onClick={onBack}>回到區域</button>
+        <button ref={backRef} className="btn btn--ghost btn--sm" data-result-error-back onClick={onBack}>回到區域</button>
       </div>
     </div>
   )
@@ -600,7 +650,7 @@ function NextActionSection({
       kind="next"
       eyebrow="04 · Next action"
       title="下一步"
-      description={ready ? '選擇下一場，或回到區域查看其他目的地。' : '完成必要的回條與演出後，合法操作才會開啟。'}
+      description={ready ? '選擇下一場，或回到區域查看其他目的地。' : '完成必要的整理與演出後，合法操作才會開啟。'}
     >
       {ready ? (
         <div className="result-next__actions" data-result-next-actions>
@@ -616,56 +666,220 @@ function NextActionSection({
   )
 }
 
-function TowerResultBody({
-  isWin,
+function TowerProgressionSection({
   tower,
+  receipt,
+  receiptMatches,
   status,
-  projection,
-  results,
-  evolutions,
-  showEvo,
-  retry,
-  onContinue,
-  onQuit,
-  onEvolutionDone,
 }: {
-  isWin: boolean
   tower: TowerRun
+  receipt: TowerProgressionReceipt | null
+  receiptMatches: boolean
   status: ResultSettlementViewModel['status']
-  projection: ResultSettlementViewModel['projection']
-  results: ResultSettlementViewModel['results']
-  evolutions: EvolutionReceipt[]
-  showEvo: boolean
-  retry: () => void
-  onContinue: () => void
-  onQuit: () => void
-  onEvolutionDone: () => void
 }) {
   return (
-    <>
-      <TowerView isWin={isWin} tower={tower} />
-      {results.length > 0 && (
-        <div className="exp-summary" data-result-tower-exp>
-          <div className="exp-summary__head">獲得經驗</div>
-          {results.map((result) => (
-            <div key={result.unit.id} className="exp-row">
-              <span className="exp-row__name">{getSpecies(result.unit.speciesId).nameZh}</span>
-              <span className="exp-row__exp">+{result.gained} EXP</span>
-              {result.leveledUp && <span className="exp-row__up">Lv.{result.fromLevel}→{result.toLevel}！</span>}
+    <ResultSection
+      kind="tower-progression"
+      eyebrow="02 · Tower progression"
+      title="連勝塔進度"
+      description="最高樓層與 Ascension 解鎖只在進度儲存完成後顯示。"
+    >
+      {status !== 'settled' ? (
+        <div className="result-pending-card" data-result-tower-receipt="pending">等待 Tower 進度儲存完成；完成前不能繼續下一層。</div>
+      ) : !receipt ? (
+        <div className="result-missing-receipt" role="alert" data-result-tower-receipt="missing">
+          <strong>Tower 進度尚未完成儲存</strong>
+          <span>目前只保留安全返回；請重試結果整理或回到 Region Hub，已完成的獎勵不會重複發放。</span>
+        </div>
+      ) : !receiptMatches ? (
+        <div className="result-missing-receipt" role="alert" data-result-tower-receipt="stale">
+          <strong>儲存的 Tower 進度與本場不一致</strong>
+          <span>目前樓層 {tower.floor} 的結果已標記為過期，不能繼續下一層。</span>
+        </div>
+      ) : (
+        <div className="result-tower-progression" data-result-tower-receipt="ready" data-result-tower-run-state={receipt.outcome === 'win' ? 'continue' : 'ended'}>
+          <div className="result-tower-progression__grid" role="list" aria-label="Tower 已保存進度">
+            <article role="listitem" data-result-tower-metric="floor">
+              <span>本場樓層</span>
+              <strong>第 {receipt.floor} 層</strong>
+              <small>{receipt.outcome === 'win' ? '已突破，下一層會沿用這支隊伍重新開始。' : '本場止步，遠征已安全結束。'}</small>
+            </article>
+            <article role="listitem" data-result-tower-metric="best-floor">
+              <span>歷史最高</span>
+              <strong>第 {receipt.after.bestFloor} 層</strong>
+              <small>只會向上保留，不受離開 Result 影響。</small>
+            </article>
+            <article role="listitem" data-result-tower-metric="ascension">
+              <span>Ascension 解鎖</span>
+              <strong>A{receipt.after.ascensionUnlocked} · {getAscension(receipt.after.ascensionUnlocked).name}</strong>
+              <small>{receipt.after.ascensionUnlocked > receipt.before.ascensionUnlocked ? '本場解鎖新難度。' : '沒有新增難度，既有解鎖保持不變。'}</small>
+            </article>
+          </div>
+        </div>
+      )}
+    </ResultSection>
+  )
+}
+
+function TowerEvolutionSection({
+  evolutions,
+  receiptMatches,
+  status,
+}: {
+  evolutions: EvolutionReceipt[]
+  receiptMatches: boolean
+  status: ResultSettlementViewModel['status']
+}) {
+  return (
+    <ResultSection
+      kind="tower-evolution"
+      eyebrow="04 · Evolution"
+      title="進化紀錄"
+      description="進化只呈現已儲存的成長結果；演出完成後才能離開這場遠征。"
+    >
+      {status !== 'settled' ? (
+        <div className="result-pending-card">正在整理進化進度…</div>
+      ) : !receiptMatches ? (
+        <div className="result-missing-receipt">進化進度與本場不一致，請安全返回區域。</div>
+      ) : evolutions.length === 0 ? (
+        <div className="result-empty-copy">本場沒有進化，已完成的 EXP 與 Tower 進度仍會保留。</div>
+      ) : (
+        <div className="result-evolution-summary__list" role="list" aria-label="Tower 進化紀錄">
+          {evolutions.map((evolution) => (
+            <div key={`${evolution.unitId}:${evolution.toSpecies}`} role="listitem">
+              <span>{getSpecies(evolution.fromSpecies).nameZh}</span>
+              <strong>→ {getSpecies(evolution.toSpecies).nameZh} · Lv.{evolution.atLevel}</strong>
             </div>
           ))}
         </div>
       )}
-      {status === 'running' && <div className="settlement-status" role="status" aria-live="polite" data-settlement-announcement>結算進行中，獎勵完成後才能繼續。<span data-result-cta-state="disabled">下一步操作暫時停用。</span></div>}
-      {status === 'error' && <ResultErrorPanel projection={projection} retry={retry} onBack={onQuit} />}
-      <AnimatePresence>
-        {status === 'settled' && !showEvo && (
-          <motion.div className="row center result-tower-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            {isWin && <button className="btn" data-result-next="tower-continue" onClick={onContinue}>⬆ 攻向第 {tower.floor + 1} 層</button>}
-            <button className="btn btn--ghost" data-result-next="tower-quit" onClick={onQuit}>🏳 結束遠征</button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    </ResultSection>
+  )
+}
+
+function TowerRecoveryPanel({
+  title,
+  copy,
+  actionLabel,
+  actionRef,
+  onAction,
+  disabled = false,
+}: {
+  title: string
+  copy: string
+  actionLabel: string
+  actionRef: React.RefObject<HTMLButtonElement>
+  onAction: () => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="result-tower-recovery" role="alert" data-result-tower-recovery>
+      <div>
+        <span className="eyebrow">Tower Result recovery</span>
+        <strong>{title}</strong>
+        <p>{copy}</p>
+      </div>
+      <button ref={actionRef} type="button" className="btn btn--ghost btn--sm" onClick={onAction} disabled={disabled}>{actionLabel}</button>
+    </div>
+  )
+}
+
+function TowerResultBody({
+  outcome,
+  reason,
+  tower,
+  status,
+  projection,
+  results,
+  skillPoints,
+  spReward,
+  moveLearns,
+  incubator,
+  towerReceipt,
+  receiptMatches,
+  evolutions,
+  showEvo,
+  leaving,
+  retry,
+  onContinue,
+  onQuit,
+  onEvolutionDone,
+  primaryActionRef,
+}: {
+  outcome: Outcome | null
+  reason?: 'timeout'
+  tower: TowerRun
+  status: ResultSettlementViewModel['status']
+  projection: ResultSettlementViewModel['projection']
+  results: ResultSettlementViewModel['results']
+  skillPoints: ResultSettlementViewModel['skillPoints']
+  spReward: number
+  moveLearns: ResultSettlementViewModel['moveLearns']
+  incubator: ResultSettlementViewModel['incubator']
+  towerReceipt: TowerProgressionReceipt | null
+  receiptMatches: boolean
+  evolutions: EvolutionReceipt[]
+  showEvo: boolean
+  leaving: boolean
+  retry: () => void
+  onContinue: () => void
+  onQuit: () => void
+  onEvolutionDone: () => void
+  primaryActionRef: React.RefObject<HTMLButtonElement>
+}) {
+  const isWin = outcome === 'win'
+  const canContinue = status === 'settled' && isWin && receiptMatches && !showEvo && !leaving
+  return (
+    <>
+      <TowerView outcome={outcome} reason={reason} tower={tower} />
+      <RewardSection results={results} skillPoints={skillPoints} spReward={spReward} status={status} isWin={isWin} />
+      <TowerProgressionSection tower={tower} receipt={towerReceipt} receiptMatches={receiptMatches} status={status} />
+      <ProgressionSection results={results} moveLearns={moveLearns} incubator={incubator} status={status} eyebrow="03 · Progression" />
+      <TowerEvolutionSection evolutions={evolutions} receiptMatches={receiptMatches} status={status} />
+
+      {status === 'running' && (
+        <div className="settlement-status result-settlement-status" role="status" aria-live="polite" data-settlement-announcement>
+          獎勵整理進行中，EXP、SP、孵化與 Tower 進度儲存完成前，下一層暫時停用。
+        </div>
+      )}
+      {status === 'error' && <ResultErrorPanel projection={projection} retry={retry} onBack={onQuit} backRef={primaryActionRef} />}
+      {status === 'idle' && (
+        <TowerRecoveryPanel
+          title="尚未收到 Tower 戰鬥結果"
+          copy="目前沒有可用的結果資料；請安全返回 Region Hub 後重新開始遠征。"
+          actionLabel="安全返回區域"
+          actionRef={primaryActionRef}
+          onAction={onQuit}
+          disabled={leaving}
+        />
+      )}
+      {status === 'settled' && !receiptMatches && (
+        <TowerRecoveryPanel
+          title="這場遠征暫時不能繼續"
+          copy="Tower 進度尚未完成或與本場不一致；請重試結果整理，或安全返回，已完成的獎勵不會重複發放。"
+          actionLabel="安全返回區域"
+          actionRef={primaryActionRef}
+          onAction={onQuit}
+          disabled={leaving}
+        />
+      )}
+
+      {!showEvo && status === 'settled' && receiptMatches && (
+        <motion.div className="row center result-tower-actions" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} data-result-next-actions>
+          {isWin && <button ref={primaryActionRef} type="button" className="btn" data-result-next="tower-continue" onClick={onContinue} disabled={!canContinue} aria-disabled={!canContinue}>⬆ 攻向第 {tower.floor + 1} 層</button>}
+          <button ref={!isWin ? primaryActionRef : undefined} type="button" className="btn btn--ghost" data-result-next="tower-quit" onClick={onQuit} disabled={leaving}>🏳 結束遠征</button>
+        </motion.div>
+      )}
+      {status === 'running' && (
+        <TowerRecoveryPanel
+          title="可以安全離開目前 Result"
+          copy="離開後會安全完成已開始的獎勵整理，不會重複發放已完成的獎勵。"
+          actionLabel="安全返回區域"
+          actionRef={primaryActionRef}
+          onAction={onQuit}
+          disabled={leaving}
+        />
+      )}
       <AnimatePresence>
         {showEvo && <EvolutionOverlay evolutions={evolutions} onDone={onEvolutionDone} />}
       </AnimatePresence>
@@ -696,9 +910,11 @@ export function ResultScreen() {
     evolutions: lastEvolutions,
     moveLearns: lastMoveLearns,
     skillPoints,
+    towerReceipt,
     incubator,
     spReward,
     captureMode,
+    invalidTowerContext,
     retry: retrySettlement,
     markLeft,
   } = settlement
@@ -709,11 +925,13 @@ export function ResultScreen() {
   const presentationIdentity = `${settlementIdentity?.resultId ?? ''}:${settlementIdentity?.resultFingerprint ?? ''}`
   const [mountedIdentity, setMountedIdentity] = useState(presentationIdentity)
   const [evoDone, setEvoDone] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   useEffect(() => {
     if (mountedIdentity === presentationIdentity) return
     setMountedIdentity(presentationIdentity)
     setCaptureDone(!canCapture)
     setEvoDone(false)
+    setLeaving(false)
   }, [canCapture, mountedIdentity, presentationIdentity])
   const showEvo = settlementStatus === 'settled' && captureDone && !evoDone && lastEvolutions.length > 0
 
@@ -727,36 +945,148 @@ export function ResultScreen() {
   const leaveResult = useCallback((event: GameEvent) => {
     if (leavingRef.current) return
     leavingRef.current = true
+    setLeaving(true)
     void markLeft().catch(() => undefined).finally(() => send(event))
   }, [markLeft, send])
 
   const inspectRef = useRef<HTMLButtonElement>(null)
   const collectionRef = useRef<HTMLButtonElement>(null)
+  const towerActionRef = useRef<HTMLButtonElement>(null)
 
-  if (tower) {
+  // Result reuses the route viewport between Battle and Result. Reset its
+  // scroll position for each logical result, then focus the first safe CTA so
+  // keyboard and screen-reader users remain inside the current Tower flow.
+  useLayoutEffect(() => {
+    const viewport = document.querySelector<HTMLElement>('[data-screen-viewport]')
+    viewport?.scrollTo?.({ top: 0, left: 0 })
+  }, [presentationIdentity, tower])
+
+  useLayoutEffect(() => {
+    if (!tower) return
+    const shouldFocus = invalidTowerContext
+      || settlementStatus === 'idle'
+      || settlementStatus === 'error'
+      || (settlementStatus === 'settled' && !showEvo)
+    if (!shouldFocus) return
+    const focus = () => towerActionRef.current?.focus({ preventScroll: true })
+    focus()
+    queueMicrotask(focus)
+  }, [invalidTowerContext, settlementStatus, showEvo, tower])
+
+  useEffect(() => {
+    if (!tower) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || document.body.dataset.overlayOpen === 'true') return
+      event.preventDefault()
+      leaveResult({ type: 'TOWER_QUIT' })
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [leaveResult, tower])
+
+  if (tower && invalidTowerContext) {
     return (
       <div
         className="result-screen result-screen--tower col"
         data-result
         data-result-mode="tower"
         data-result-outcome={outcome ?? 'pending'}
+        data-result-tower-result-state="invalid"
+        data-result-settlement-status={settlementStatus}
+        data-result-settlement-attempt={projection.attempt}
+      >
+        <TaskHeader
+          className="result-screen__header"
+          eyebrow="Step 4 · Result · Tower"
+          title="Tower 結果需要恢復"
+          tagline="目前的樓層或隊伍資料已過期，沒有任何結果或獎勵會在這裡重新套用。"
+        />
+        <TowerRecoveryPanel
+          title="找不到合法的遠征內容"
+          copy="請返回 Region Hub 重新選擇遠征；已儲存的進度會保留，安全返回不會重複發放獎勵。"
+          actionLabel="返回 Region Hub"
+          actionRef={towerActionRef}
+          onAction={() => leaveResult({ type: 'TOWER_QUIT' })}
+          disabled={leaving}
+        />
+      </div>
+    )
+  }
+
+  if (tower) {
+    const towerTitle = !outcome
+      ? '等待 Tower battle 結果'
+      : context.battleResult?.reason === 'timeout'
+        ? `第 ${tower.floor} 層時間到，${isWin ? '依 HP 判定突破' : '遠征結束'}`
+        : isWin
+          ? `第 ${tower.floor} 層突破`
+          : `第 ${tower.floor} 層遠征結束`
+    const towerTagline = !outcome
+      ? '戰鬥結果尚未送達；獎勵整理完成後才會顯示下一步。'
+      : context.battleResult?.reason === 'timeout'
+        ? `回合上限判定本場結果；${isWin ? '你已依剩餘 HP 突破本層。' : '本場遠征已結束。'}進度仍以已儲存內容為準。`
+        : isWin
+          ? `固定隊伍已完成 ${getAscension(tower.ascension).name} 難度；獎勵整理完成後可攻向第 ${tower.floor + 1} 層，或結束遠征。`
+          : '本場失敗會安全結束 run；已完成的 EXP、SP、孵化與解鎖進度會保留。'
+    const receiptMatches = Boolean(
+      towerReceipt
+      && outcome
+      && towerReceipt.outcome === outcome
+      && towerReceipt.floor === tower.floor
+      && towerReceipt.ascension === tower.ascension,
+    )
+    const towerReceiptState = !towerReceipt ? 'missing' : receiptMatches ? 'ready' : 'stale'
+    const towerRunState = settlementStatus !== 'settled'
+      ? 'pending'
+      : receiptMatches && towerReceipt?.outcome === 'win'
+        ? 'continue'
+        : outcome
+          ? 'ended'
+          : 'pending'
+    const continueTower = () => {
+      if (settlementStatus !== 'settled' || !isWin || !receiptMatches || showEvo || leaving) return
+      leaveResult({ type: 'TOWER_CONTINUE' })
+    }
+    const quitTower = () => leaveResult({ type: 'TOWER_QUIT' })
+    return (
+      <div
+        className="result-screen result-screen--tower col"
+        data-result
+        data-result-mode="tower"
+        data-result-outcome={outcome ?? 'pending'}
+        data-result-reason={context.battleResult?.reason ?? 'natural'}
+        data-result-tower-result-state={!outcome ? 'pending' : context.battleResult?.reason === 'timeout' ? 'timeout' : isWin ? 'win' : 'lose'}
+        data-result-tower-run-state={towerRunState}
+        data-result-tower-receipt={towerReceiptState}
         data-result-settlement-status={settlementStatus}
         data-result-settlement-attempt={projection.attempt}
         aria-busy={settlementStatus === 'running'}
       >
-        <TowerResultBody
-          isWin={isWin}
-          tower={tower}
-          status={settlementStatus}
-          projection={projection}
-          results={lastResults}
-          evolutions={lastEvolutions}
-          showEvo={showEvo}
-          retry={retrySettlement}
-          onContinue={() => leaveResult({ type: 'TOWER_CONTINUE' })}
-          onQuit={() => leaveResult({ type: 'TOWER_QUIT' })}
-          onEvolutionDone={() => setEvoDone(true)}
-        />
+        <TaskHeader className="result-screen__header" eyebrow="Step 4 · Result · Tower" title={towerTitle} tagline={towerTagline} />
+        <div className="result-summary" data-result-summary>
+          <TowerResultBody
+            outcome={outcome}
+            reason={context.battleResult?.reason}
+            tower={tower}
+            status={settlementStatus}
+            projection={projection}
+            results={lastResults}
+            skillPoints={skillPoints}
+            spReward={spReward}
+            moveLearns={lastMoveLearns}
+            incubator={incubator}
+            towerReceipt={towerReceipt}
+            receiptMatches={receiptMatches}
+            evolutions={lastEvolutions}
+            showEvo={showEvo}
+            leaving={leaving}
+            retry={retrySettlement}
+            onContinue={continueTower}
+            onQuit={quitTower}
+            onEvolutionDone={() => setEvoDone(true)}
+            primaryActionRef={towerActionRef}
+          />
+        </div>
       </div>
     )
   }
@@ -768,7 +1098,7 @@ export function ResultScreen() {
       ? resultMode === 'arena' ? '競技勝利！' : `${modeLabel}勝利`
       : '戰鬥失敗'
   const outcomeTagline = !outcome
-    ? 'battle handoff 尚未送達；結果回條完成後才會開放下一步。'
+    ? '戰鬥結果尚未送達；獎勵整理完成後才會開放下一步。'
     : isWin
       ? resultMode === 'wild' ? '先確認戰鬥獎勵，再完成收服與進化，最後選擇下一步。' : '競技場只結算實際 EXP、SP 與成長進度，不會進入捕獲。'
       : `這場${modeLabel}對戰已結束；已完成的 EXP 會保留，整理好隊伍後再挑戰。`

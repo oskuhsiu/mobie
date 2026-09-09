@@ -1764,6 +1764,7 @@ export function BattleScreen({ graphicsPreference = 'auto', rendererRoute }: Bat
                   resultId: token.battleSessionId,
                   resultFingerprint: token.resultFingerprint,
                   outcome: result.outcome.outcome,
+                  ...(result.outcome.reason ? { reason: result.outcome.reason } : {}),
                 })
               }
             }

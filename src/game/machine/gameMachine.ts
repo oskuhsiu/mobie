@@ -3,7 +3,7 @@ import type { Card } from '@/game/types'
 import { lookupRegion } from '@/game/data/regionLookup'
 import { rollEncounterTeam } from '@/game/encounter'
 import { maybeRareBoss } from '@/game/accidents'
-import { towerFoeTeam } from '@/game/tower'
+import { ASCENSIONS, towerFoeTeam } from '@/game/tower'
 
 export type Outcome = 'win' | 'lose'
 
@@ -38,6 +38,27 @@ export interface BattleResultHandoff {
   resultId: string
   resultFingerprint: string
   outcome: Outcome
+  /** A turn-cap result is still a normal win/lose outcome, but Result keeps the reason for a truthful summary. */
+  reason?: 'timeout'
+}
+
+/** Runtime guard for restored or externally seeded Tower Result contexts. */
+export function isValidTowerRun(value: unknown): value is TowerRun {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const candidate = value as Partial<TowerRun>
+  if (!Number.isInteger(candidate.floor) || (candidate.floor ?? 0) < 1) return false
+  if (!Number.isInteger(candidate.ascension) || (candidate.ascension ?? -1) < 0 || (candidate.ascension ?? Infinity) >= ASCENSIONS.length) return false
+  if (typeof candidate.seed !== 'string' || candidate.seed.trim().length === 0) return false
+  if (!Array.isArray(candidate.teamCards) || candidate.teamCards.length !== TEAM_SIZE) return false
+  const ids = new Set<string>()
+  return candidate.teamCards.every((card) => {
+    if (!card || typeof card !== 'object') return false
+    if (typeof card.cardId !== 'string' || card.cardId.trim().length === 0 || ids.has(card.cardId)) return false
+    if (!Number.isInteger(card.speciesId) || card.speciesId < 1) return false
+    if (!Number.isInteger(card.level) || card.level < 1) return false
+    ids.add(card.cardId)
+    return true
+  })
 }
 
 export type GameEvent =
@@ -96,6 +117,7 @@ export const gameMachine = setup({
           resultId: event.resultId,
           resultFingerprint: event.resultFingerprint,
           outcome: event.outcome,
+          ...(event.reason ? { reason: event.reason } : {}),
         },
       }
     }),

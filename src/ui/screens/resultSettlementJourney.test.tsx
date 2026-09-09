@@ -121,4 +121,131 @@ describe('Result roster settlement journey', () => {
     expect(localStorage.getItem('mobie.run.v1')).toBe(runSnapshot)
     expect(localStorage.getItem('mobie.incubator.v1')).toBe(incubatorSnapshot)
   }, 8_000)
+
+  it('projects the saved Tower receipt before enabling the next-floor CTA', async () => {
+    const towerContext = {
+      ...resultContext,
+      tower: {
+        floor: 5,
+        ascension: 0,
+        seed: 'journey-tower-projection',
+        teamCards: playerTeam,
+      },
+    }
+
+    renderGameJourney({ state: 'result', context: towerContext })
+
+    const continueButton = await screen.findByRole('button', { name: /攻向第 6 層/ }, { timeout: 4_000 })
+    expect(screen.getByRole('heading', { name: '第 5 層突破' })).toBeTruthy()
+    expect(screen.getByText(/連勝塔進度/)).toBeTruthy()
+    expect(screen.getByText(/A1 · 熟練/)).toBeTruthy()
+    expect(continueButton).toHaveProperty('disabled', false)
+
+    expect(document.querySelector('[data-result-next-actions]')).toBeTruthy()
+  }, 8_000)
+
+  it('blocks a stale floor from reusing an earlier Tower receipt', async () => {
+    const firstContext = {
+      ...resultContext,
+      battleResult: {
+        resultId: 'result-journey-stale',
+        resultFingerprint: 'result-journey-stale-fingerprint',
+        outcome: 'win' as const,
+      },
+      tower: {
+        floor: 5,
+        ascension: 0,
+        seed: 'journey-tower-stale',
+        teamCards: playerTeam,
+      },
+    }
+    renderGameJourney({ state: 'result', context: firstContext })
+    await screen.findByRole('button', { name: /攻向第 6 層/ }, { timeout: 4_000 })
+    cleanup()
+
+    renderGameJourney({
+      state: 'result',
+      context: {
+        ...firstContext,
+        tower: { ...firstContext.tower, floor: 6 },
+      },
+    })
+
+    expect(await screen.findByText('儲存的 Tower 進度與本場不一致', {}, { timeout: 4_000 })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /攻向第 7 層/ })).toBeNull()
+    expect(document.querySelector('[data-result-tower-receipt="stale"]')).toBeTruthy()
+  }, 8_000)
+
+  it('blocks malformed Tower context without starting a settlement write', async () => {
+    renderGameJourney({
+      state: 'result',
+      context: {
+        ...resultContext,
+        tower: {
+          floor: 0,
+          ascension: 0,
+          seed: 'bad-tower',
+          teamCards: playerTeam,
+        } as never,
+      },
+    })
+
+    expect(await screen.findByText('Tower 結果需要恢復')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '返回 Region Hub' })).toHaveProperty('disabled', false)
+    expect(localStorage.getItem('mobie.run.v1')).toBeNull()
+  })
+
+  it('labels a Tower timeout separately while preserving the settled lose flow', async () => {
+    const towerContext = {
+      ...resultContext,
+      outcome: 'lose' as const,
+      battleResult: {
+        resultId: 'result-journey-timeout',
+        resultFingerprint: 'result-journey-timeout-fingerprint',
+        outcome: 'lose' as const,
+        reason: 'timeout' as const,
+      },
+      tower: {
+        floor: 3,
+        ascension: 1,
+        seed: 'journey-tower-timeout',
+        teamCards: playerTeam,
+      },
+    }
+
+    renderGameJourney({ state: 'result', context: towerContext })
+    await screen.findByRole('button', { name: /結束遠征/ }, { timeout: 4_000 })
+
+    const result = document.querySelector<HTMLElement>('[data-result]')
+    expect(result?.dataset.resultReason).toBe('timeout')
+    expect(result?.dataset.resultTowerResultState).toBe('timeout')
+    expect(screen.getByRole('heading', { name: /第 3 層時間到/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /攻向第 4 層/ })).toBeNull()
+  }, 8_000)
+
+  it('explains a timeout victory while keeping the next-floor action legal', async () => {
+    renderGameJourney({
+      state: 'result',
+      context: {
+        ...resultContext,
+        battleResult: {
+          resultId: 'result-journey-timeout-win',
+          resultFingerprint: 'result-journey-timeout-win-fingerprint',
+          outcome: 'win' as const,
+          reason: 'timeout' as const,
+        },
+        tower: {
+          floor: 4,
+          ascension: 0,
+          seed: 'journey-tower-timeout-win',
+          teamCards: playerTeam,
+        },
+      },
+    })
+
+    const continueButton = await screen.findByRole('button', { name: /攻向第 5 層/ }, { timeout: 4_000 })
+    expect(screen.getByRole('heading', { name: /第 4 層時間到，依 HP 判定突破/ })).toBeTruthy()
+    expect(screen.getByText(/回合上限已到，勝負依剩餘 HP 判定/)).toBeTruthy()
+    expect(continueButton).toHaveProperty('disabled', false)
+  }, 8_000)
 })

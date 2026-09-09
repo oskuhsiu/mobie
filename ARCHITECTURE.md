@@ -354,6 +354,12 @@ capture markers share their canonical envelopes with their existing Result child
 reconcilable after a receipt failure. The Result UI only presents the stored decision and never writes capture,
 Dex, roster, or egg state directly.
 
+Ticket 36 extends that projection to Tower Result. The screen reads EXP, SP, incubator, evolution, floor,
+best-floor, and Ascension data from the settled child receipts; Continue is enabled only when the stored
+Tower outcome, floor, and Ascension match the current run. Running, missing, stale, malformed, and timeout
+states keep a recoverable status and safe Region Hub exit, while `TOWER_CONTINUE` creates the next floor
+from the existing XState run context without granting a second reward.
+
 Ticket 33 adds `ResultSettlementProjectionController` and the
 `store/resultSettlementProjection.ts` adapter. The adapter assembles the
 complete Result payload once, prepares any capture plan before child writes,

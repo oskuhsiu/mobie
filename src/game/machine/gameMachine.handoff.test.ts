@@ -40,6 +40,21 @@ describe('gameMachine result handoff', () => {
     actor.stop()
   })
 
+  it('keeps the timeout reason on the stable Result handoff', () => {
+    const actor = battleActor()
+    const handoff = {
+      resultId: 'battle-timeout',
+      resultFingerprint: 'fingerprint-timeout',
+      outcome: 'win' as const,
+      reason: 'timeout' as const,
+    }
+
+    actor.send({ type: 'END_BATTLE', ...handoff })
+
+    expect(actor.getSnapshot().context.battleResult).toEqual(handoff)
+    actor.stop()
+  })
+
   it('retains a restored handoff and exposes a deterministic cold-reload collision', () => {
     let call = 0
     const crypto: BattleIdentityCrypto = {
