@@ -2,7 +2,7 @@
 // ref/DOM style，絕不進 React 頂層 state；每個 component 只在完成/逾時時 onDone 一次（doneRef 守）。
 // **不改捕獲機率**：手勢只決定演出與推進時機，caught 由 WinView 掛載時預先決定。
 
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { swipeFromPointer, swipeThrowValid, angleTo, wrapAngle, type Pt } from '@/input/gestures'
 import type { InteractMode } from '@/game/settings'
 import { normPt } from '@/ui/components/gestureUtil'
@@ -62,6 +62,11 @@ export function SwipeThrow({ mode, onThrow, timeoutMs = 6000 }: {
       if (dotRef.current) dotRef.current.style.opacity = '0'
     }
   }
+  const keyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    finish(0)
+  }
 
   return (
     <div
@@ -71,8 +76,10 @@ export function SwipeThrow({ mode, onThrow, timeoutMs = 6000 }: {
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
+      onKeyDown={keyDown}
       role="button"
       tabIndex={0}
+      aria-label="向上甩動丟出寶貝球；按 Enter 可略過"
     >
       <div className="gesture-hint">👆 向上甩動丟出寶貝球！</div>
       <div ref={dotRef} className="gesture-dot" style={{ opacity: 0 }} />
@@ -133,6 +140,11 @@ export function CircleSeal({ targetRad, onSealed, label = '✦ 畫圈封印！',
   const up = () => {
     draggingRef.current = false
   }
+  const keyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    finish()
+  }
 
   return (
     <div
@@ -142,8 +154,10 @@ export function CircleSeal({ targetRad, onSealed, label = '✦ 畫圈封印！',
       onPointerMove={move}
       onPointerUp={up}
       onPointerCancel={up}
+      onKeyDown={keyDown}
       role="button"
       tabIndex={0}
+      aria-label="畫圈封印；按 Enter 可略過"
     >
       <div ref={ringRef} className="gesture-seal-ring" />
       <div className="gesture-hint gesture-hint--seal">{label}</div>

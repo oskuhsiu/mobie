@@ -1,7 +1,7 @@
 // M10 — 進化演出（結算畫面）。剪影→閃光→定格「XX 進化成 YY！」，依序播放本場每隻進化。
 // 純展示層（讀已完成的 EvolutionEvent，roster 早已寫入進化後 speciesId）；可點擊跳過。
 import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import type { EvolutionEvent } from '@/store/rosterStore'
 import { getSpecies } from '@/game/data/species'
 import { MobieSprite } from '@/ui/components/MobieSprite'
@@ -15,23 +15,27 @@ export function EvolutionOverlay({ evolutions, onDone }: {
 }) {
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<Phase>('morph')
+  const reducedMotion = useReducedMotion() ?? false
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
 
   const ev = evolutions[idx]
 
-  // 每隻：morph（剪影閃爍 ~1.4s）→ revealed（定格 + audio ~1.7s）→ 下一隻 / 結束
+  // 每隻：morph（剪影閃爍）→ revealed（定格 + audio）→ 下一隻 / 結束。
+  // Result 必須保留可讀回條又快速回到合法 CTA，避免多隻進化把下一步鎖太久。
   useEffect(() => {
     if (!ev) return
     setPhase('morph')
     audio.play('select')
-    const t1 = setTimeout(() => { setPhase('revealed'); audio.play('victory') }, 1400)
+    const morphMs = reducedMotion ? 0 : 700
+    const revealMs = reducedMotion ? 260 : 900
+    const t1 = setTimeout(() => { setPhase('revealed'); audio.play('victory') }, morphMs)
     const t2 = setTimeout(() => {
       if (idx + 1 < evolutions.length) setIdx(idx + 1)
       else onDoneRef.current()
-    }, 1400 + 1700)
+    }, morphMs + revealMs)
     return () => { clearTimeout(t1); clearTimeout(t2) }
-  }, [idx, ev, evolutions.length])
+  }, [idx, ev, evolutions.length, reducedMotion])
 
   if (!ev) return null
   const from = getSpecies(ev.fromSpecies)
@@ -43,10 +47,17 @@ export function EvolutionOverlay({ evolutions, onDone }: {
     else onDoneRef.current()
   }
 
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    skip()
+  }
+
   return (
     <motion.div
-      className="evo-overlay" role="button" tabIndex={0} onClick={skip}
+      className="evo-overlay" role="button" tabIndex={0} aria-label="跳過進化演出" onClick={skip} onKeyDown={onKeyDown}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={reducedMotion ? { duration: 0 } : undefined}
     >
       <div className="evo-overlay__stage">
         {/* 進化前剪影（白光淹沒）→ 進化後定格 */}
@@ -57,7 +68,7 @@ export function EvolutionOverlay({ evolutions, onDone }: {
               initial={{ opacity: 1, scale: 1 }}
               animate={{ filter: ['brightness(1)', 'brightness(6)', 'brightness(1)'], scale: [1, 1.06, 1] }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.7, repeat: 1 }}
+              transition={reducedMotion ? { duration: 0 } : { duration: 0.7, repeat: 1 }}
             >
               <MobieSprite src={from.artworkUrl} alt={from.nameZh} />
             </motion.div>
@@ -66,7 +77,7 @@ export function EvolutionOverlay({ evolutions, onDone }: {
               key="to" className="evo-overlay__mon"
               initial={{ opacity: 0, scale: 0.6, filter: 'brightness(5)' }}
               animate={{ opacity: 1, scale: 1, filter: 'brightness(1)' }}
-              transition={{ type: 'spring', stiffness: 150, damping: 13 }}
+              transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 150, damping: 13 }}
             >
               <MobieSprite src={to.artworkUrl} alt={to.nameZh} />
             </motion.div>

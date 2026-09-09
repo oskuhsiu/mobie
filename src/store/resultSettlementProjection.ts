@@ -14,6 +14,7 @@ import {
   legacyResultIdentity,
   ResultSettlementProjectionController,
   type CaptureDecision,
+  type CaptureOutcome,
   type CaptureSettlementReceipt,
   type ResultIdentity,
   type ResultSettlementPayload,
@@ -41,12 +42,17 @@ export interface ResultSettlementViewModel {
   canCapture: boolean
   resultMode: 'wild' | 'arena'
   captureDecision: CaptureDecision | null
+  captureOutcome: CaptureOutcome | null
   captureReceipt: CaptureSettlementReceipt | null
   capturedUnit: OwnedUnit | null
   capturedMobie: ReturnType<typeof buildOwnedMobieForDisplay> | null
   duplicateConverted: boolean
   results: NonNullable<ResultSettlementProjection['receipt']>['results']
   evolutions: NonNullable<ResultSettlementProjection['receipt']>['evolutions']
+  moveLearns: NonNullable<ResultSettlementProjection['receipt']>['moveLearns']
+  skillPoints: NonNullable<ResultSettlementProjection['receipt']>['skillPoints'] | null
+  incubator: NonNullable<ResultSettlementProjection['receipt']>['incubator'] | null
+  spReward: number
   captureMode: InteractMode
   retry: () => void
   markLeft: () => Promise<void>
@@ -207,12 +213,17 @@ export function useResultSettlementProjection(context: ResultSettlementScreenCon
     captureDecision: matches
       ? projection.captureDecision
       : null,
+    captureOutcome: matches ? projection.captureOutcome : null,
     captureReceipt: receipt?.capture ?? null,
     capturedUnit,
     capturedMobie: capturedUnit ? buildOwnedMobieForDisplay(capturedUnit) : null,
     duplicateConverted: matches && projection.captureOutcome === 'captured-duplicate-egg',
     results: receipt?.results ?? [],
     evolutions: receipt?.evolutions ?? [],
+    moveLearns: receipt?.moveLearns ?? [],
+    skillPoints: receipt?.skillPoints ?? null,
+    incubator: receipt?.incubator ?? null,
+    spReward: built.spReward,
     captureMode,
     retry,
     markLeft: () => markLeft(built.identity),
