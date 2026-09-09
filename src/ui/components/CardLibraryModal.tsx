@@ -8,6 +8,8 @@ import { parseCardsImport } from '@/game/cardsImport'
 import { makeCardCode } from '@/game/cardCode'
 import { audio } from '@/audio/audioEngine'
 import type { Card } from '@/game/types'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { useOverlayController } from '@/ui/shell/OverlayController'
 
 type Panel = 'none' | 'add' | 'import'
 
@@ -15,7 +17,7 @@ type Panel = 'none' | 'add' | 'import'
 export function CardLibraryModal({ onClose }: { onClose: () => void }) {
   const [cards, setCards] = useState<Card[]>([])
   const [panel, setPanel] = useState<Panel>('none')
-  const [qrCard, setQrCard] = useState<Card | null>(null)
+  const controller = useOverlayController()
 
   useEffect(() => {
     let alive = true
@@ -24,23 +26,25 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
     return subscribeCards(() => { if (alive) refresh() })
   }, [])
 
-  return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>🗂 卡庫</div>
-            <div className="h-sub">{cards.length} 張卡。匯入清單、新增自製卡，或產生可列印的 QR。</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
+  const openQr = (card: Card) => {
+    controller.push({
+      id: `card-qr:${card.cardId}`,
+      policy: 'escape-and-backdrop',
+      content: <QrOverlay card={card} onClose={controller.pop} />,
+    }, {
+      restoreFocus: () => [...document.querySelectorAll<HTMLElement>('[data-card-qr-invoker]')]
+        .find((element) => element.dataset.cardQrInvoker === card.cardId) ?? null,
+    })
+  }
 
+  return (
+    <ModalSurface
+      title="🗂 卡庫"
+      description={`${cards.length} 張卡。匯入清單、新增自製卡，或產生可列印的 QR。`}
+      onClose={onClose}
+      footer={<div className="utility-foot">卡庫存在你這台瀏覽器（IndexedDB）。QR 只作為卡片識別與列印備份。</div>}
+    >
+      <div className="modal-surface__stack">
         <div className="row" style={{ gap: 8 }}>
           <button className={`btn btn--sm ${panel === 'add' ? '' : 'btn--ghost'}`} onClick={() => setPanel(panel === 'add' ? 'none' : 'add')}>➕ 新增自製卡</button>
           <button className={`btn btn--sm ${panel === 'import' ? '' : 'btn--ghost'}`} onClick={() => setPanel(panel === 'import' ? 'none' : 'import')}>📥 匯入 JSON/CSV</button>
@@ -51,7 +55,7 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
           {panel === 'import' && <ImportPanel key="import" onDone={() => setPanel('none')} />}
         </AnimatePresence>
 
-        <div className="utility-list scroll">
+        <div className="utility-list">
           {cards.map((c) => {
             const sp = getSpecies(c.speciesId)
             return (
@@ -67,20 +71,14 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
                 >
                   刪除
                 </button>
-                <button className="btn btn--sm" onClick={() => setQrCard(c)}>QR</button>
+                <button className="btn btn--sm" data-card-qr-invoker={c.cardId} onClick={() => openQr(c)}>QR</button>
               </div>
             )
           })}
           {cards.length === 0 && <div className="utility-empty">卡庫是空的，先新增或匯入卡。</div>}
         </div>
-
-        <div className="utility-foot">卡庫存在你這台瀏覽器（IndexedDB）。QR 只作為卡片識別與列印備份。</div>
-      </motion.div>
-
-      <AnimatePresence>
-        {qrCard && <QrOverlay card={qrCard} onClose={() => setQrCard(null)} />}
-      </AnimatePresence>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }
 
@@ -185,17 +183,15 @@ function QrOverlay({ card, onClose }: { card: Card; onClose: () => void }) {
   }, [code])
 
   return (
-    <motion.div className="modal-backdrop" style={{ zIndex: 110 }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="qr-card" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
-        <div className="qr-card__title">{sp.nameZh} Lv.{card.level}</div>
+    <ModalSurface title={`${sp.nameZh} Lv.${card.level}`} onClose={onClose} className="qr-surface">
+      <div className="qr-card">
         {dataUrl ? <img className="qr-card__img" src={dataUrl} alt="QR" /> : <div className="qr-card__img qr-card__img--loading">產生中…</div>}
         <div className="qr-card__code">{code}</div>
         <div className="qr-card__hint">列印或保存此 QR 作為卡片備份。</div>
         <div className="row" style={{ gap: 8, justifyContent: 'center' }}>
           <button className="btn btn--sm" onClick={() => window.print()}>列印</button>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }

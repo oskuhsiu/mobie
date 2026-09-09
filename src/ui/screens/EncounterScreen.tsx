@@ -1,5 +1,5 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef } from 'react'
 import { useGame } from '@/app/GameProvider'
 import { buildBattleMobie } from '@/game/stats'
 import { useMeta } from '@/store/metaStore'
@@ -17,18 +17,43 @@ import { useSettings } from '@/store/settingsStore'
 import { interactModeOf, juiceLevelOf } from '@/game/settings'
 import { audio } from '@/audio/audioEngine'
 import { captureTargetOf } from '@/game/hunt'
+import { useOverlayController } from '@/ui/shell/OverlayController'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 export function EncounterScreen() {
   const { context, send } = useGame()
+  const controller = useOverlayController()
+  const controllerRef = useRef(controller)
+  controllerRef.current = controller
   // M22.h：遭遇前撥草（純演出）。off＝直接出戰；開啟＝撥開草叢手勢後才 ENGAGE。
   const grassOn = useSettings((s) => interactModeOf(s.settings, 'encounter') !== 'off')
   const spriteIdle = useSettings((s) => juiceLevelOf(s.settings) !== 'off') // EXT.1.d：野生立繪 idle 浮動
-  const [grassGate, setGrassGate] = useState(false)
-  const engage = () => { if (grassOn) setGrassGate(true); else send({ type: 'ENGAGE' }) }
+  const engage = () => {
+    if (!grassOn) { send({ type: 'ENGAGE' }); return }
+    controller.push({
+      id: 'encounter-grass-gate',
+      policy: 'explicit-action-only',
+      content: (
+        <GestureGate
+          title="🌿 撥開草叢"
+          icon="🌿"
+          hint="來回撥動，撥開草叢找出對手！"
+          onComplete={() => { controller.pop(); send({ type: 'ENGAGE' }) }}
+          onCancel={controller.pop}
+        />
+      ),
+    })
+  }
   const foes = useMemo(() => context.foeTeam.map(buildBattleMobie), [context.foeTeam])
   // M16：點對手開資訊卡（對手＝基本面，深度遮罩待 M17 看穿）
-  const [cardMon, setCardMon] = useState<BattleMobie | null>(null)
-  const openCard = (m: BattleMobie) => { audio.play('select'); setCardMon(m) }
+  const openCard = (m: BattleMobie) => {
+    audio.play('select')
+    controller.push({
+      id: `mobie-detail:${m.speciesId}`,
+      policy: 'escape-and-backdrop',
+      content: <MobCard mon={m} owner={false} revealed={false} onClose={controller.pop} />,
+    })
+  }
   // M11 野外意外：遭遇 roll（決定論）→ luckyBonus 自動加成 + 天降補給三選一 modal。
   const accidents = useMemo(() => {
     const region = context.regionId ? lookupRegion(context.regionId) : null
@@ -37,23 +62,31 @@ export function EncounterScreen() {
   const target = captureTargetOf(foes)
   const captureEligible = canCaptureIn(context.regionId)
   const bossShiny = target?.shiny ?? false
-  const [supplyOpen, setSupplyOpen] = useState(false)
-  // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）；同時套用本場意外旗標。
-  useEffect(() => {
-    if (context.foeTeam.length === 0) return
-    useMeta.getState().recordSeen(context.foeTeam.map((c) => c.speciesId))
-    useAccidents.getState().reset()
-    useAccidents.getState().setExpMult(accidents.luckyExpMult) // 幸運加碼（自動）
-    if (accidents.supply) setSupplyOpen(true) // 天降補給：開場前三選一
-  }, [context.foeTeam, accidents])
+  const supplyShownRef = useRef(false)
 
   const pickSupply = (opt: SupplyOption) => {
     audio.play('super')
     if (opt.kind === 'sp') useSkillPoints.getState().add(3)
     else if (opt.kind === 'exp') useAccidents.getState().setExpMult(Math.max(accidents.luckyExpMult, 1.5))
     else if (opt.kind === 'capture') useAccidents.getState().setCaptureMult(1.3)
-    setSupplyOpen(false)
+    controllerRef.current.pop()
   }
+
+  // 圖鑑：遭遇即把對手隊伍全部記為「看過」（seen；尚未捕獲）；同時套用本場意外旗標。
+  useEffect(() => {
+    if (context.foeTeam.length === 0) return
+    useMeta.getState().recordSeen(context.foeTeam.map((c) => c.speciesId))
+    useAccidents.getState().reset()
+    useAccidents.getState().setExpMult(accidents.luckyExpMult) // 幸運加碼（自動）
+    if (accidents.supply && !supplyShownRef.current) {
+      supplyShownRef.current = true
+      controllerRef.current.push({
+        id: 'encounter-supply',
+        policy: 'explicit-action-only',
+        content: <SupplySurface options={accidents.supply} onPick={pickSupply} onClose={controller.pop} />,
+      })
+    }
+  }, [accidents, context.foeTeam])
 
   if (!target) return null
 
@@ -134,48 +167,34 @@ export function EncounterScreen() {
         ⚔ 出戰
       </motion.button>
 
-      {/* M22.h 撥草 gate（純演出，撥開或逾時即出戰） */}
-      <AnimatePresence>
-        {grassGate && (
-          <GestureGate
-            title="🌿 撥開草叢"
-            icon="🌿"
-            hint="來回撥動，撥開草叢找出對手！"
-            onComplete={() => { setGrassGate(false); send({ type: 'ENGAGE' }) }}
-            onCancel={() => setGrassGate(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {cardMon && <MobCard mon={cardMon} owner={false} revealed={false} onClose={() => setCardMon(null)} />}
-      </AnimatePresence>
-
-      {/* M11 天降補給：開場前三選一（絕不戰鬥中途，守單招心流） */}
-      <AnimatePresence>
-        {supplyOpen && accidents.supply && (
-          <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div
-              className="modal-card" style={{ maxWidth: 420 }}
-              initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}
-            >
-              <div className="h-title" style={{ fontSize: 22 }}>📦 天降補給</div>
-              <div className="h-sub" style={{ marginBottom: 10 }}>野外發現補給箱！三選一帶進這場戰鬥。</div>
-              <div className="col" style={{ gap: 8 }}>
-                {accidents.supply.map((opt) => (
-                  <button key={opt.kind} className="supply-opt" onClick={() => pickSupply(opt)}>
-                    <span className="supply-opt__icon">{opt.icon}</span>
-                    <span className="col" style={{ gap: 2, alignItems: 'flex-start' }}>
-                      <b>{opt.label}</b>
-                      <span className="h-sub" style={{ fontSize: 12 }}>{opt.desc}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
+  )
+}
+
+function SupplySurface({ options, onPick, onClose }: {
+  options: SupplyOption[]
+  onPick: (option: SupplyOption) => void
+  onClose: () => void
+}) {
+  return (
+    <ModalSurface
+      title="📦 天降補給"
+      description="野外發現補給箱！三選一帶進這場戰鬥。"
+      onClose={onClose}
+      policy="explicit-action-only"
+      style={{ maxWidth: 420 }}
+    >
+      <div className="col" style={{ gap: 8 }}>
+        {options.map((opt) => (
+          <button key={opt.kind} className="supply-opt" onClick={() => onPick(opt)}>
+            <span className="supply-opt__icon">{opt.icon}</span>
+            <span className="col" style={{ gap: 2, alignItems: 'flex-start' }}>
+              <b>{opt.label}</b>
+              <span className="h-sub" style={{ fontSize: 12 }}>{opt.desc}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </ModalSurface>
   )
 }

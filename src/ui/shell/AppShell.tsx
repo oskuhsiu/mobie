@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useBootstrap, type BootstrapStatus } from '@/app/bootstrapCoordinator'
+import { OverlayControllerProvider, OverlayHost } from './OverlayController'
 
 export function AppShell({
   children,
@@ -13,16 +14,19 @@ export function AppShell({
   const { snapshot } = useBootstrap()
 
   return (
-    <div
-      className="app app-shell"
-      data-app-shell
-      data-route={route}
-      data-bootstrap-status={snapshot.status}
-      data-bootstrap-attempt={snapshot.attempt}
-      style={{ background, transition: 'background 0.6s ease' }}
-    >
-      {children}
-    </div>
+    <OverlayControllerProvider route={route}>
+      <div
+        className="app app-shell"
+        data-app-shell
+        data-route={route}
+        data-bootstrap-status={snapshot.status}
+        data-bootstrap-attempt={snapshot.attempt}
+        style={{ background, transition: 'background 0.6s ease' }}
+      >
+        {children}
+      </div>
+      <OverlayHost />
+    </OverlayControllerProvider>
   )
 }
 

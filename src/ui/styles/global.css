@@ -182,10 +182,16 @@ body {
 .tools-menu-primary__more { flex: 0 0 auto; min-width: 112px; }
 .tools-menu-more {
   position: absolute; z-index: 15; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
-  width: 100%; max-width: 760px; max-height: min(34vh, 230px); overflow-y: auto;
-  padding: 12px; border-radius: 18px; background: rgba(7, 10, 28, 0.78);
+  width: min(100%, 760px); max-height: min(48vh, 360px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; padding: 14px;
+  border-radius: 18px; background: rgba(7, 10, 28, 0.78);
   border: 1px solid var(--stroke); box-shadow: var(--shadow); backdrop-filter: blur(16px);
 }
+.tools-menu-more__group { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.tools-menu-more__group h2 {
+  color: var(--accent); font-size: 12px; font-weight: 900; letter-spacing: 0.08em;
+}
+.tools-menu-more__items { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 
 /* ============ Type badge ============ */
 .type-badge {
@@ -979,6 +985,10 @@ body {
 .spacer { flex: 1; }
 .center { display: grid; place-items: center; text-align: center; }
 .stack-lg { display: flex; flex-direction: column; gap: 20px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 /* flex 直向佈局中要「填滿剩餘高度並內部捲動」的列表：必須 min-height:0，
    否則 flex item 預設 min-height:auto 會撐到內容全高、溢出被 .app{overflow:hidden}
@@ -989,9 +999,12 @@ body {
 }
 
 /* ============ Shared modal surfaces ============ */
+.overlay-host { position: relative; z-index: 1000; }
+.modal-portal { position: relative; z-index: 1000; }
 .modal-backdrop {
-  position: fixed; inset: 0; z-index: 100;
-  display: grid; place-items: center; padding: 20px;
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(16px, var(--safe-t)) max(16px, var(--safe-r)) max(16px, var(--safe-b)) max(16px, var(--safe-l));
   background: rgba(4, 6, 16, 0.66); backdrop-filter: blur(6px);
 }
 .modal-card {
@@ -1001,6 +1014,31 @@ body {
   background: var(--bg-soft); border: 1px solid var(--stroke); box-shadow: var(--shadow);
 }
 .modal-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.modal-surface {
+  position: relative; width: min(92vw, 560px); height: min(86dvh, 760px); max-height: calc(100dvh - var(--safe-t) - var(--safe-b) - 24px);
+  min-height: 0; overflow: hidden;
+}
+.modal-surface__head { flex: 0 0 auto; align-items: flex-start; }
+.modal-surface__heading { flex: 1 1 auto; min-width: 0; }
+.modal-surface__heading-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.modal-surface__heading-row > div:last-child { min-width: 0; }
+.modal-surface__title { font-size: 24px; line-height: 1.12; }
+.modal-surface__description { margin-top: 5px; line-height: 1.4; }
+.modal-surface__body {
+  display: flex; flex: 1 1 auto; flex-direction: column; gap: 10px; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+}
+.modal-surface__stack { display: flex; flex-direction: column; gap: 10px; min-height: min-content; }
+.modal-surface__footer { flex: 0 0 auto; padding-top: 2px; }
+.settings-surface-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.settings-surface-content { display: flex; flex-direction: column; gap: 10px; }
+.incubator-surface .modal-surface__body { position: relative; }
+.hatch-surface .modal-surface__body { align-items: stretch; }
+.hatch-reveal--surface { position: relative; inset: auto; min-height: 360px; flex: 1 1 auto; }
+.qr-surface { width: min(92vw, 420px); height: auto; }
+.qr-surface .modal-surface__body { align-items: center; }
+.scanner-surface { width: min(94vw, 640px); }
+.mobcard .modal-surface__body { gap: 0; }
 .utility-search {
   width: 100%; padding: 11px 14px; border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.3); border: 1px solid var(--stroke); color: var(--text); font-size: 15px;

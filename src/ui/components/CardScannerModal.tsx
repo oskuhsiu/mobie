@@ -8,6 +8,7 @@ import { getSpecies } from '@/game/data/species'
 import { useRoster } from '@/store/rosterStore'
 import { audio } from '@/audio/audioEngine'
 import type { Card, Species } from '@/game/types'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 type CamStatus = 'starting' | 'scanning' | 'denied' | 'unsupported'
 
@@ -127,22 +128,12 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
   const camLive = status === 'starting' || status === 'scanning'
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>📷 掃卡</div>
-            <div className="h-sub">把實體卡的 QR 對準相機；掃到就加入「我的Mobie」。</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
+    <ModalSurface
+      title="📷 掃卡"
+      description="把實體卡的 QR 對準相機；掃到就加入「我的Mobie」。"
+      onClose={onClose}
+      className="scanner-surface"
+    >
         {/* 掃描結果（相機框內覆蓋 / 無相機時 inline，兩種模式共用） */}
         {(() => {
           const resultEl = result && (
@@ -198,7 +189,6 @@ export function CardScannerModal({ onClose }: { onClose: () => void }) {
           />
           <button className="btn btn--sm" onClick={submitManual} disabled={!manual.trim()}>確認</button>
         </div>
-      </motion.div>
-    </motion.div>
+    </ModalSurface>
   )
 }

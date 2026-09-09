@@ -1,6 +1,6 @@
 // M10 — 圖鑑（Dex）。1–251 三態（未見/看過/已捕）+ 擁有疊加 + Grade 篩選。純讀 meta + roster。
 import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 import { useMeta } from '@/store/metaStore'
 import { useRoster } from '@/store/rosterStore'
 import { SPECIES_SORTED } from '@/game/data/speciesQuery'
@@ -54,20 +54,12 @@ export function DexModal({ onClose }: { onClose: () => void }) {
   }), [filter, cells, gradeBySpecies])
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>📖 圖鑑</div>
-            <div className="h-sub">已捕 {registeredCount} / {total}　擁有 {ownedCount} 種</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
+    <ModalSurface
+      title="📖 圖鑑"
+      description={`已捕 ${registeredCount} / ${total}　擁有 ${ownedCount} 種`}
+      onClose={onClose}
+    >
+      <div className="modal-surface__stack">
         <div className="dex-filters">
           {FILTERS.map((f) => (
             <button key={f.id} className={`chip ${filter === f.id ? 'chip--on' : ''}`} onClick={() => setFilter(f.id)}>
@@ -76,7 +68,7 @@ export function DexModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <div className="scroll dex-grid">
+        <div className="dex-grid">
           {visible.map(({ sp, st, grade }) => {
             const known = st === 'registered' || st === 'owned'
             return (
@@ -99,7 +91,7 @@ export function DexModal({ onClose }: { onClose: () => void }) {
           })}
           {visible.length === 0 && <div className="h-sub" style={{ padding: 20 }}>此篩選下尚無Mobie</div>}
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }

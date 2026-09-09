@@ -955,12 +955,12 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await waitFor('Boolean(document.querySelector(".modal-card"))', 8_000, 'Replay modal mount')
     await waitFor('Boolean(document.querySelector(".replay-empty"))', 8_000, 'empty replay state')
     checkpoints.push(await capture('replay-empty', 'real empty IndexedDB state', { behavior: await probeEscape() }))
-    await closeTopModal()
+    if (await exists('.modal-card')) await closeTopModal()
 
     await openTool('孵化所', '孵化所')
     await waitFor('(document.body.innerText || "").includes("還沒有蛋")', 8_000, 'empty incubator state')
     checkpoints.push(await capture('incubator-empty', 'real empty localStorage state', { behavior: await probeEscape() }))
-    await closeTopModal()
+    if (await exists('.modal-card')) await closeTopModal()
 
     const seeded = await driver('window.__MOBIE_M24_BASELINE__.seedContent()')
     await waitFor('Boolean(window.__MOBIE_M24_BASELINE__.snapshot().readyEggs > 0)', 8_000, 'seeded baseline content')
@@ -985,7 +985,7 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await clickText('QR')
     await waitFor('Boolean(document.querySelector(".qr-card"))', 8_000, 'QR overlay')
     checkpoints.push(await capture('card-library-qr', 'real QR generation'))
-    await clickText('關閉', '.qr-card button')
+    await clickText('關閉', '[data-modal-surface] button')
     await clickText('匯入 JSON/CSV')
     await setValue('.lib-textarea', '{invalid baseline payload')
     await clickText('匯入貼上內容')
@@ -1121,10 +1121,12 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     checkpoints.push(await capture('settings-reloaded', 'real v2 settings after page reload'))
     await closeTopModal()
     await forceUnsupportedCamera()
+    if (!(await exists('#tools-menu-more'))) await clickText('更多')
+    const scannerEntryVisible = await exists('[data-tool="scanner"]')
     await clickText('掃卡')
     await waitFor('Boolean(document.querySelector(".scan-nocam"))', 8_000, 'scanner unsupported fallback')
     scannerOnEvidence = await evaluate(`(() => ({
-      scannerVisible: Boolean(document.querySelector('[data-tool="scanner"]')),
+      scannerVisible: ${JSON.stringify(scannerEntryVisible)},
       scannerChunkLoaded: [...performance.getEntriesByType('resource')].some((entry) => /CardScanner|jsqr/i.test(entry.name)),
       cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0),
       fallbackVisible: Boolean(document.querySelector('.scan-nocam')),

@@ -8,6 +8,7 @@ import { getMove } from '@/game/data/moves'
 import { effectiveLearnedMoves, teachableNotLearned, resolveEquippedMoves, MOVE_SLOT_CAP } from '@/game/learnset'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { audio } from '@/audio/audioEngine'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 /** 學一招花的 SP（變化招便宜、攻擊招依威力 tier）。 */
 function learnCost(move: Move): number {
@@ -73,26 +74,14 @@ export function MoveTrainerModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>📖 招式訓練所</div>
-            <div className="h-sub">學新招（花 SP）／調整出戰 4 招。打倒 boss 獲得 SP。</div>
-          </div>
-          <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-            <span className="sp-badge">✦ SP {sp}</span>
-            <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-          </div>
-        </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <ModalSurface
+      title="📖 招式訓練所"
+      description="學新招（花 SP）／調整出戰 4 招。打倒 boss 獲得 SP。"
+      onClose={onClose}
+      headerAside={<span className="sp-badge">✦ SP {sp}</span>}
+      footer={<div className="utility-foot">升級會自動領悟新招；訓練所可學 teachable 招、調整出戰 4 招。SP 與夥伴技能（M17）共用、分池顯示。</div>}
+    >
+      <div className="modal-surface__stack">
           {roster.map((u) => {
             const species = getSpecies(u.speciesId)
             const equipped = equippedIdsOf(u)
@@ -157,12 +146,7 @@ export function MoveTrainerModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-        </div>
-
-        <div className="utility-foot">
-          升級會自動領悟新招；訓練所可學 teachable 招、調整出戰 4 招。SP 與夥伴技能（M17）共用、分池顯示。
-        </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }

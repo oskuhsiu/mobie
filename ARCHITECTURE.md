@@ -40,7 +40,7 @@ game/       Pure domain logic (no React). The testable core.
   cardCode/cardsImport/cardLibrary   QR card-code parse + import + IndexedDB card store (M2)
 store/      Zustand: battleStore (display), rosterStore (persistence), prefs-only settingsStore,
             bagStore (item bag mz.itembag.v1, M7)
-ui/         React screens + components + global.css + type metadata
+ui/         React screens + components + shell overlay controller/surface + global.css + type metadata
 audio/      Tone.js audio engine (lazy)
 scene/fx/   Canvas particle/flash FX (imperative handle, off React state)
 scene/battle/ Three-free renderer contracts + host, one lazy next entry, DOM compatibility adapter
@@ -73,12 +73,12 @@ title → regionSelect → encounter → cardSelect → battle → result
   runtime through `resetEncounter`, and never records an outcome or result handoff.
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared
   `ui/components/ToolsMenu`. Its first level is deliberately limited to **我的 Mobie** and **更多**;
-  the latter opens a scrollable secondary menu for library / moves / partner skills / dex /
-  achievements / incubator / save / settings, plus Scanner only when its capability is
-  enabled (all utility entries are lazy-loaded). Every utility therefore
+  the latter opens a scrollable secondary menu grouped under **成長與收藏** and **資料與設定** for
+  library / moves / partner skills / dex / achievements / incubator / replay / save / settings, plus
+  Scanner only when its capability is enabled (all utility entries are lazy-loaded). Every utility
   remains reachable without flattening it into the primary hunt loop. `regionSelect` adds
   `BACK → title` (a 🏠 button); it is the in-game hub returned to after each result.
-- **App shell and cold boot (M24 Ticket 23):** `app/bootstrapCoordinator.tsx` owns one cached
+- **App shell and cold boot (M24 Tickets 23–24):** `app/bootstrapCoordinator.tsx` owns one cached
   bootstrap promise and snapshot outside React component lifetime. It starts roster and incubator
   loading together, waits for the canonical roster, then hydrates meta from that roster. The UI only
   exposes `loading`, `ready`, or `partial-error`; a failed attempt stays on the Title with an explicit
@@ -88,6 +88,17 @@ title → regionSelect → encounter → cardSelect → battle → result
   layout concerns. The browser app keeps its one XState actor outside the React root, so a dev/test root
   remount preserves the current route while the coordinator keeps its cached snapshot. Data-dependent
   actions carry a readable disabled reason until bootstrap is ready.
+- **Overlay contract (M24 Ticket 24):** `ui/shell/OverlayController.tsx` is the only top-level overlay
+  owner inside `AppShell`. It records the current route, a stack snapshot, dismiss policy, and the exact
+  invoker for `open` / `push` / `pop` / `close`; `pop` returns to a parent entry and `close` clears the
+  stack back to the root invoker. Route changes clear the stack without restoring focus to the old route.
+  `ui/shell/ModalSurface.tsx` is the shared portal surface: it marks `#root` inert,
+  locks body scrolling, traps focus, exposes labelled dialog header/description/body/footer regions,
+  applies safe-area padding, and implements `escape-and-backdrop`, `escape-only`, or
+  `explicit-action-only`. Tool content keeps its store and gameplay actions, while More→Settings, Team
+  details, replay playback, QR details, encounter supply, and gesture gates use the shared stack.
+  BattleScreen keeps its battle-specific overlay ownership and uses the surface only for its existing
+  MobCard focus contract.
 - `SELECT_REGION { regionId }` rolls foes via `rollEncounterTeam`. The arena (id `'practice'`) resolves
   through `data/regionLookup.lookupRegion` to the hand-authored `data/practiceRegion.ts` — so it reuses
   the entire normal flow with no special-casing.
@@ -375,6 +386,9 @@ scoped Three.js procedural-geometry ticket.
 - `npm run baseline:m24-shell` runs the Ticket 23 Chrome CDP cold-boot journey, including delayed
   loading, a controlled partial failure, Retry recovery, Title→region return, My Mobie/More handoffs,
   route-event counts, and the zoom-capable viewport meta.
+- `npm run baseline:m24-overlay` runs the Ticket 24 Chrome CDP overlay journey: grouped More focus,
+  More→Settings dialog semantics, root inertness, keyboard trap, body-only Settings scrolling, footer
+  visibility, Escape/backdrop invoker restoration, route-change cleanup, and nested Team detail push/pop.
 - Responsive visual verification runs in a real local browser at iPad and narrow-phone viewports;
   semantic assertions stay in Vitest so navigation and decision regressions do not depend on pixels.
   Headless battle screens need software WebGL flags when the environment does not provide a GL context.

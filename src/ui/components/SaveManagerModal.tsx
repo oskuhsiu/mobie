@@ -14,6 +14,7 @@ import { getBackupInfo, type BackupInfo } from '@/game/save/backupStore'
 import { listCards } from '@/game/cardLibrary'
 import type { UnpackOk } from '@/game/save/bundle'
 import { audio } from '@/audio/audioEngine'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -148,23 +149,13 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>☁️ 存檔</div>
-            <div className="h-sub">打包成 .save 檔，自己存到 Google Drive 或其他雲端 / 裝置。</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <ModalSurface
+      title="☁️ 存檔"
+      description="打包成 .save 檔，自己存到 Google Drive 或其他雲端 / 裝置。"
+      onClose={onClose}
+      footer={<div className="utility-foot">目前進度：{roster.length} 隻Mobie。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。</div>}
+    >
+      <div className="modal-surface__stack">
           {/* ── 匯出 ── */}
           <div className="lib-panel" style={{ overflow: 'visible' }}>
             <div className="col" style={{ gap: 4 }}>
@@ -270,13 +261,8 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="utility-foot">
-          目前進度：{roster.length} 隻Mobie。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。
-        </div>
         {msg && <div className="lib-msg" style={{ marginTop: 8 }}>{msg}</div>}
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }

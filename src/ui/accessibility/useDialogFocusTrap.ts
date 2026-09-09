@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
 
-const FOCUSABLE = [
+export const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
   'a[href]',
   'input:not([disabled])',
@@ -9,8 +9,8 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
-function focusableElements(dialog: HTMLElement): HTMLElement[] {
-  return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) => (
+export function focusableElements(dialog: HTMLElement): HTMLElement[] {
+  return [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter((element) => (
     !element.closest('[inert]') && element.getAttribute('aria-hidden') !== 'true'
   ))
 }

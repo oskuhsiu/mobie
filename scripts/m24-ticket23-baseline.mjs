@@ -220,10 +220,15 @@ async function main() {
     await clickText('關閉', '.modal-card button')
     await waitFor('!document.querySelector(".modal-card")', 5_000, 'safe Settings close')
     await waitFor('Boolean(document.querySelector("[data-bootstrap-status=partial-error]"))', 5_000, 'Title partial state after Settings')
+    if (!await evaluate('Boolean(document.querySelector("#tools-menu-more"))')) await clickText('更多')
     const scannerGate = await evaluate('(() => { const button = document.querySelector("[data-tool=\\"scanner\\"]"); return { visible: Boolean(button), disabled: button?.disabled ?? null, gated: button?.dataset.bootstrapGated === "true", title: button?.title ?? null } })()')
     if (!scannerGate.visible || !scannerGate.disabled || !scannerGate.gated || !scannerGate.title?.includes('重新嘗試')) throw new Error('Scanner readiness gate failed')
     checkpoints.push(await capture('bootstrap-scanner-gate', 'scanner stays visible but disabled while canonical data is unavailable', scannerGate))
 
+    if (await evaluate('Boolean(document.querySelector("#tools-menu-more"))')) {
+      await clickText('更多')
+      await waitFor('!document.querySelector("#tools-menu-more")', 5_000, 'More menu close before Retry')
+    }
     const retryStarted = await evaluate(`(() => { window.__MOBIE_BOOTSTRAP_TEST__ = { failStage: null, delayMs: 700 }; document.querySelector('[data-bootstrap-status="partial-error"] button')?.click(); return true })()`)
     if (!retryStarted) throw new Error('Could not start bootstrap retry')
     await sleep(35)
@@ -232,12 +237,18 @@ async function main() {
     checkpoints.push(await capture('bootstrap-retry-loading', 'explicit Retry with simulated slow storage/data load', retryLoading, 0))
     await waitFor('document.querySelector("[data-app-shell]")?.dataset.bootstrapStatus === "ready"', 15_000, 'ready after Retry')
 
-    if (await evaluate('Boolean(document.querySelector("#tools-menu-more"))')) await clickText('更多')
+    if (await evaluate('Boolean(document.querySelector("#tools-menu-more"))')) {
+      await clickText('更多')
+      await waitFor('!document.querySelector("#tools-menu-more")', 5_000, 'More menu close before keyboard action')
+    }
     await evaluate('document.querySelector("button[aria-label=\\"更多\\"]")?.focus()')
+    await waitFor('document.activeElement === document.querySelector("button[aria-label=\\"更多\\"]")', 5_000, 'More button focus')
     await call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
     await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+    const keyboardTriggered = await evaluate('Boolean(document.querySelector("#tools-menu-more"))')
+    if (!keyboardTriggered) throw new Error('Enter did not activate the focused More button')
     await waitFor('Boolean(document.querySelector("#tools-menu-more"))', 5_000, 'keyboard More action')
-    const keyboard = await evaluate('(() => ({ menu: Boolean(document.querySelector("#tools-menu-more")), focused: document.activeElement?.getAttribute("aria-label") ?? null }))()')
+    const keyboard = await evaluate(`(() => ({ menu: Boolean(document.querySelector("#tools-menu-more")), focused: document.activeElement?.getAttribute("aria-label") ?? null, trigger: ${JSON.stringify(keyboardTriggered ? 'Enter' : 'click-fallback')} }))()`)
     if (!keyboard.menu) throw new Error('Keyboard More action failed')
     await clickText('更多')
 
@@ -299,6 +310,7 @@ async function main() {
 
     await clickSelector('.tools-menu-primary__mobies')
     await waitFor('Boolean(document.querySelector("[role=dialog]"))', 10_000, 'My Mobie handoff')
+    await waitFor('Boolean(document.querySelector("[role=dialog] .team-row"))', 10_000, 'My Mobie content')
     const myMobies = await evaluate(`(() => ({ route: document.querySelector('[data-app-shell]')?.dataset.route, title: (document.body.innerText || '').includes('我的 Mobie'), rows: document.querySelectorAll('.team-row').length, routeEvents: window.__MOBIE_ROUTE_EVENTS__ ?? null }))()`)
     if (myMobies.route !== 'title' || !myMobies.title || myMobies.rows === 0) throw new Error(`My Mobie handoff failed: ${JSON.stringify(myMobies)}`)
     checkpoints.push(await capture('my-mobies', 'Title→我的 Mobie safe handoff', myMobies))

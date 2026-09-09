@@ -3,11 +3,11 @@
 // 禁玩家輸入，改放播放控制（播放/暫停/單步/倍速）。沿用 report.ts 投影器 + 既有 modal 樣式。
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import { audio } from '@/audio/audioEngine'
 import type { BattleEvent, Side } from '@/game/battle/reducer'
 import type { ReplayLog, DisplayUnitSnapshot } from '@/game/replay/types'
 import { eventToReportLine, makeReportCtx } from '@/game/replay/report'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 interface Step {
   turnIndex: number
@@ -81,7 +81,7 @@ function TeamColumn({ side, label, units, active }: { side: Side; label: string;
   )
 }
 
-export function ReplayPlayerModal({ log, onClose }: { log: ReplayLog; onClose: () => void }) {
+export function ReplayPlayerModal({ log, onClose, portal = false }: { log: ReplayLog; onClose: () => void; portal?: boolean }) {
   const steps = useMemo(() => buildSteps(log), [log])
   // cursor = 已播放到第幾步（0 = 開場、steps.length = 全部播完）
   const [cursor, setCursor] = useState(0)
@@ -119,16 +119,13 @@ export function ReplayPlayerModal({ log, onClose }: { log: ReplayLog; onClose: (
   const step = (d: number) => { setPlaying(false); setCursor((c) => Math.min(steps.length, Math.max(0, c + d))) }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="modal-card replay-player" initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 22 }}>🎬 回放</div>
-            <div className="h-sub">{log.header.outcome === 'win' ? '勝利' : '落敗'}　·　{steps.length} 個事件</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
+    <ModalSurface
+      title="🎬 回放"
+      description={`${log.header.outcome === 'win' ? '勝利' : '落敗'}　·　${steps.length} 個事件`}
+      onClose={onClose}
+      className="replay-player"
+      portal={portal}
+    >
         <div className="replay-stage">
           <TeamColumn side="foe" label="對手" units={units} active={active.foe} />
           <TeamColumn side="player" label="我方" units={units} active={active.player} />
@@ -152,7 +149,6 @@ export function ReplayPlayerModal({ log, onClose }: { log: ReplayLog; onClose: (
           </div>
         </div>
         <div className="replay-progress"><div className="replay-progress__fill" style={{ width: `${steps.length ? (cursor / steps.length) * 100 : 0}%` }} /></div>
-      </motion.div>
-    </motion.div>
+    </ModalSurface>
   )
 }

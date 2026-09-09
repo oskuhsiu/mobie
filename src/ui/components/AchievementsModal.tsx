@@ -1,8 +1,8 @@
 // M10 — 成就頁。進度條 + 達成狀態 + 領取（→ 孵化所蛋獎勵）。發獎走明確 action（plan/10 §3.3）。
-import { motion } from 'framer-motion'
 import { useMeta } from '@/store/metaStore'
 import { useIncubator } from '@/store/incubatorStore'
 import { computeAchievements } from '@/game/achievements'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 export function AchievementsModal({ onClose }: { onClose: () => void }) {
   const meta = useMeta((s) => s.meta)
@@ -18,21 +18,12 @@ export function AchievementsModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>🏆 成就</div>
-            <div className="h-sub">已達成 {done} / {views.length}　領取可獲得孵化所的蛋</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <ModalSurface
+      title="🏆 成就"
+      description={`已達成 ${done} / ${views.length}　領取可獲得孵化所的蛋`}
+      onClose={onClose}
+    >
+      <div className="modal-surface__stack">
           {views.map((v) => {
             const pct = Math.round((v.progress / v.target) * 100)
             return (
@@ -54,8 +45,7 @@ export function AchievementsModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-        </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }

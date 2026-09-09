@@ -3,10 +3,10 @@
 // 守效能紅線：累積路徑長走 ref、進度條直寫 DOM，不進 React 頂層 state；完成只觸發一次（doneRef 守）。
 
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
-import { motion } from 'framer-motion'
 import { type Pt } from '@/input/gestures'
 import { normPt } from '@/ui/components/gestureUtil'
 import { audio } from '@/audio/audioEngine'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, onCancel, timeoutMs = 6000 }: {
   title: string
@@ -64,9 +64,13 @@ export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, 
   const up = () => { lastRef.current = null }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-      <motion.div className="modal-card gesture-gate" initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} onClick={(e) => e.stopPropagation()}>
-        <div className="h-title" style={{ fontSize: 22, textAlign: 'center' }}>{title}</div>
+    <ModalSurface
+      title={title}
+      description={hint}
+      onClose={onCancel}
+      policy="explicit-action-only"
+      className="gesture-gate"
+    >
         <div
           ref={surfaceRef}
           className="gesture-surface gesture-surface--gate"
@@ -82,7 +86,6 @@ export function GestureGate({ title, icon, hint, targetUnits = 3.2, onComplete, 
         </div>
         <div className="gesture-gate__track"><div ref={barRef} className="gesture-gate__fill" /></div>
         <button className="btn btn--ghost btn--sm" style={{ alignSelf: 'center' }} onClick={onCancel}>取消</button>
-      </motion.div>
-    </motion.div>
+    </ModalSurface>
   )
 }

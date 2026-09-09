@@ -2,13 +2,13 @@
 // 載入時 decodeReplay；壞檔走分類錯誤提示（比照 SaveManager）。.txt 為即時投影、不持久化（plan/15 §7）。
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 import { audio } from '@/audio/audioEngine'
 import { listReplayMetas, getReplay, deleteReplay, subscribeReplays, type ReplayRecordMeta } from '@/game/replay/replayDb'
 import { decodeReplay } from '@/game/replay/codec'
 import { logToReport } from '@/game/replay/report'
-import type { ReplayLog } from '@/game/replay/types'
 import { ReplayPlayerModal } from '@/ui/components/ReplayPlayerModal'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { useOverlayController } from '@/ui/shell/OverlayController'
 
 /** 把一段文字交給使用者（iPad 優先分享面板，桌機退回 <a download>）。 */
 async function shareOrDownloadText(filename: string, text: string): Promise<void> {
@@ -40,8 +40,8 @@ const fmtTime = (ms: number) => {
 
 export function ReplayListModal({ onClose }: { onClose: () => void }) {
   const [metas, setMetas] = useState<ReplayRecordMeta[] | null>(null)
-  const [playing, setPlaying] = useState<ReplayLog | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const controller = useOverlayController()
 
   useEffect(() => {
     let alive = true
@@ -58,7 +58,14 @@ export function ReplayListModal({ onClose }: { onClose: () => void }) {
     const res = decodeReplay(rec.json)
     if (!res.ok) { setError(`回放無法播放：${res.message}`); return }
     audio.play('select')
-    setPlaying(res.log)
+    controller.push({
+      id: `replay:${battleId}`,
+      policy: 'escape-and-backdrop',
+      content: <ReplayPlayerModal log={res.log} onClose={controller.pop} portal />,
+    }, {
+      restoreFocus: () => [...document.querySelectorAll<HTMLElement>('[data-replay-invoker]')]
+        .find((element) => element.dataset.replayInvoker === battleId) ?? null,
+    })
   }
 
   const exportTxt = async (meta: ReplayRecordMeta) => {
@@ -76,19 +83,15 @@ export function ReplayListModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div className="modal-card" initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>🎬 戰鬥回放</div>
-            <div className="h-sub">重播每場戰鬥、匯出文字戰報。需在「⚙️ 設定」開啟錄製才會有新紀錄。</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
+    <ModalSurface
+      title="🎬 戰鬥回放"
+      description="重播每場戰鬥、匯出文字戰報。需在「⚙️ 設定」開啟錄製才會有新紀錄。"
+      onClose={onClose}
+      footer={<div className="utility-foot">回放存於瀏覽器 <b>mz-replays</b>，最多保留最近 50 場（超過自動清最舊）。文字戰報為即時產生、不另存。</div>}
+    >
         {error && <div className="replay-error">{error}</div>}
 
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="modal-surface__stack">
           {metas === null && <div className="h-sub" style={{ padding: 12 }}>載入中…</div>}
           {metas !== null && metas.length === 0 && (
             <div className="replay-empty">
@@ -97,7 +100,7 @@ export function ReplayListModal({ onClose }: { onClose: () => void }) {
           )}
           {metas?.map((m) => (
             <div key={m.battleId} className="replay-item">
-              <div className="replay-item__main" role="button" tabIndex={0} onClick={() => void open(m.battleId)}>
+              <div className="replay-item__main" role="button" tabIndex={0} data-replay-invoker={m.battleId} onClick={() => void open(m.battleId)}>
                 <div className="replay-item__title">
                   <span className={`replay-item__badge replay-item__badge--${m.outcome}`}>{m.outcome === 'win' ? '勝' : '敗'}</span>
                   {m.players.join('、')} <span className="replay-item__vs">vs</span> {m.foes.join('、')}
@@ -109,11 +112,6 @@ export function ReplayListModal({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-
-        <div className="utility-foot">回放存於瀏覽器 <b>mz-replays</b>，最多保留最近 50 場（超過自動清最舊）。文字戰報為即時產生、不另存。</div>
-      </motion.div>
-
-      {playing && <ReplayPlayerModal log={playing} onClose={() => setPlaying(null)} />}
-    </motion.div>
+    </ModalSurface>
   )
 }

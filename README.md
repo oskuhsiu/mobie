@@ -117,6 +117,7 @@ is enabled by `npm install` (the `prepare` script sets `core.hooksPath`) — so 
 | `node scripts/m23-baseline.mjs --renderer=<route>` | Seeded post-M23 Chrome evidence (`next` by default or `compatibility` explicitly) |
 | `npm run baseline:m24 -- --viewport=wide-landscape` | Re-runnable post-M23 non-battle Chrome baseline; use `--all` for the five viewport matrix |
 | `npm run baseline:m24-shell -- --port=9222` | Ticket 23 cold boot, readiness gates, Retry, zoom, and Title handoff evidence |
+| `npm run baseline:m24-overlay -- --port=9222` | Ticket 24 More→Settings overlay, focus, inert, scroll, and route cleanup evidence |
 
 ## Project layout
 
@@ -131,7 +132,8 @@ src/
   store/      Zustand: battle display, persistent roster, prefs-only settings, item bag, skill
               points, player skills, tower run, metadata, incubator
   ui/         Screens + components; semantic battle HUD/feed/actions/status, shared ToolsMenu
-              (title + region hub), shell primitives, MobCard info card, move/partner/team/settings/dex/etc. modals
+              (title + region hub), OverlayController/ModalSurface shell, MobCard info card,
+              move/partner/team/settings/dex/etc. modals
   scene/battle/ scene/r3f/    Three-free host + one lazy next artwork-billboard entry + compatibility gate
   audio/  scene/fx/  input/   Audio, per-type battle FX, QTE + gesture seams
 scripts/gen_dex.mjs   PokéAPI data generator
@@ -161,7 +163,7 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–23 implementation checks
+M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–24 implementation checks
 are complete** for the current automated qualification pass — **683 Vitest tests**, typecheck, and build are
 green. Content:
 national dex 1–1025, 16 regions (+ arena),
@@ -178,8 +180,9 @@ errors. M5 save correctness was earlier cross-validated by an independent **5-ag
 M24 Tickets 20–22 provide the post-M23 non-battle Chrome baseline, Settings v2 capability boundary,
 and custom model retirement through `npm run baseline:m24`. Ticket 23 adds the cached cold-boot
 coordinator, AppShell/Title readiness gates, and a focused Chrome journey through
-`npm run baseline:m24-shell`; its evidence is written under the ignored
-`test-runs/m24/ticket23-app-shell/`. The baseline route/state catalog and evidence layout are tracked in
+`npm run baseline:m24-shell`; Ticket 24 adds the AppShell-owned OverlayController/ModalSurface and
+More→Settings keyboard/focus/scroll journey through `npm run baseline:m24-overlay`. Their evidence is
+written under the ignored `test-runs/m24/` directories. The baseline route/state catalog and evidence layout are tracked in
 **[docs/m24-post-m23-chrome-baseline.md](docs/m24-post-m23-chrome-baseline.md)**. The current release
 renderer policy and retirement history are tracked in **[docs/m23-release-b.md](docs/m23-release-b.md)**.
 Run the baseline with a Chrome/CDP target to produce the Ticket 22 sentinel-storage evidence; that

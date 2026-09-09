@@ -1,8 +1,8 @@
-import { motion } from 'framer-motion'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
 import { PARTNER_SKILLS, isPartnerSkillLearned, type PartnerSkillDef } from '@/game/ext/partnerSkills'
 import { audio } from '@/audio/audioEngine'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 /**
  * 夥伴技能訓練所（M17，plan/19）：訓練師自己的帳號級技能——花 SP 解鎖（看穿為起始免費）。
@@ -26,26 +26,14 @@ export function PartnerSkillModal({ onClose }: { onClose: () => void }) {
   const modeLabel = (m: PartnerSkillDef['mode']) => (m === 'active' ? '戰中主動' : '全隊支援')
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>✨ 夥伴技能</div>
-            <div className="h-sub">訓練師自己的戰術工具（跨 Mobie 共用）。花 SP 解鎖；打倒 boss 獲得 SP。</div>
-          </div>
-          <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-            <span className="sp-badge">✦ SP {sp}</span>
-            <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-          </div>
-        </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <ModalSurface
+      title="✨ 夥伴技能"
+      description="訓練師自己的戰術工具（跨 Mobie 共用）。花 SP 解鎖；打倒 boss 獲得 SP。"
+      onClose={onClose}
+      headerAside={<span className="sp-badge">✦ SP {sp}</span>}
+      footer={<div className="utility-foot">SP 與「📖 招式訓練所」共用同一池，但分池顯示（玩家技能 vs 怪物招式）。玩家技能存於 <b>mobie.playerskills.v1</b>，不掛任何 Mobie。</div>}
+    >
+      <div className="modal-surface__stack">
           {PARTNER_SKILLS.map((skill) => {
             const learned = isPartnerSkillLearned(skill.id, learnedSkillIds)
             const starter = skill.cost === 0
@@ -70,12 +58,7 @@ export function PartnerSkillModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-        </div>
-
-        <div className="utility-foot">
-          SP 與「📖 招式訓練所」共用同一池，但分池顯示（玩家技能 vs 怪物招式）。玩家技能存於 <b>mobie.playerskills.v1</b>，不掛任何 Mobie。
-        </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }

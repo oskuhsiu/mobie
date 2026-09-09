@@ -8,8 +8,10 @@ import { abilityForType, getAbility } from '@/game/ext/abilities'
 import { growthProgress } from '@/game/growth'
 import { buildOwnedMobieForDisplay } from '@/game/ownedMobie'
 import { MobCard } from '@/ui/components/MobCard'
-import type { BattleMobie, OwnedUnit } from '@/game/types'
+import type { OwnedUnit } from '@/game/types'
 import { audio } from '@/audio/audioEngine'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { useOverlayController } from '@/ui/shell/OverlayController'
 
 /**
  * 隊伍養成頁：替每隻Mobie裝備持有道具（M7）。背包庫存走 mobie.itembag.v1（exactly-once 對帳）。
@@ -19,8 +21,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const bag = useBag((s) => s.bag)
   const equip = useBag((s) => s.equip)
   const [openId, setOpenId] = useState<string | null>(null)
-  // 點 Mobie 開資訊卡（M16）：用 owner 全顯模式檢視招式/六維/個體/特性/道具。
-  const [detail, setDetail] = useState<{ mon: BattleMobie; exp: number } | null>(null)
+  const controller = useOverlayController()
   const choose = async (unitId: string, itemId: string | null) => {
     const ok = await equip(unitId, itemId)
     audio.play(ok ? 'select' : 'defeat')
@@ -31,31 +32,24 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const openDetail = (u: OwnedUnit) => {
     const mon = buildOwnedMobieForDisplay(u)
     audio.play('select')
-    setDetail({ mon, exp: u.exp })
+    controller.push({
+      id: `mobie-detail:${u.id}`,
+      policy: 'escape-and-backdrop',
+      content: <MobCard mon={mon} owner ownerExp={u.exp} revealed onClose={controller.pop} />,
+    }, {
+      restoreFocus: () => [...document.querySelectorAll<HTMLElement>('[data-mobie-invoker]')]
+        .find((element) => element.dataset.mobieInvoker === u.id) ?? null,
+    })
   }
 
   return (
-    <>
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-label="我的 Mobie"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>我的 Mobie</div>
-            <div className="h-sub">看看夥伴的成長進度，選一隻深入了解招式、能力與個體。</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <ModalSurface
+      title="我的 Mobie"
+      description="看看夥伴的成長進度，選一隻深入了解招式、能力與個體。"
+      onClose={onClose}
+      footer={<div className="utility-foot">點 Mobie 看資訊卡（招式 / 六維 / 個體）。道具效果：強化能力值（S1）/ 提升傷害（S3）/ 回合末回血（S4）。</div>}
+    >
+      <div className="modal-surface__stack">
           {roster.length === 0 && (
             <div className="my-mobies-empty">
               還沒有夥伴。前往冒險收服 Mobie，或使用「卡庫」建立／匯入卡片吧！
@@ -72,6 +66,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                 <div className="team-row">
                   <button
                     aria-label={`${sp.nameZh} Lv.${u.level}，查看完整資訊`}
+                    data-mobie-invoker={u.id}
                     className="team-row__main"
                     onClick={() => openDetail(u)}
                     title="看資訊卡"
@@ -146,19 +141,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
-        </div>
-
-        <div className="utility-foot">
-          點 Mobie 看資訊卡（招式 / 六維 / 個體）。道具效果：強化能力值（S1）/ 提升傷害（S3）/ 回合末回血（S4）。
-        </div>
-      </motion.div>
-    </motion.div>
-
-    {/* M16 資訊卡：自己的 Mobie 一律全顯（招式/數值/個體/特性/道具）。
-        置於 backdrop 之外的 sibling，避免點 MobCard 背景冒泡關掉整個隊伍頁。 */}
-    <AnimatePresence>
-      {detail && <MobCard mon={detail.mon} owner ownerExp={detail.exp} revealed onClose={() => setDetail(null)} />}
-    </AnimatePresence>
-    </>
+      </div>
+    </ModalSurface>
   )
 }

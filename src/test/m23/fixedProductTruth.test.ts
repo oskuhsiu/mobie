@@ -16,7 +16,7 @@ describe('production truth edges', () => {
     expect(encounter).not.toMatch(/encounterProfile|encounterTags|encounterSkills/)
     expect(tools).toContain("import('@/ui/components/CardScannerModal')")
     expect(tools).toContain('scannerEnabled')
-    expect(tools).toContain("overlay === 'scanner'")
+    expect(tools).toContain("open('scanner'")
     expect(combatant).not.toMatch(/GLTFLoader|useModelUrl|modelStore|\.glb|\.gltf/)
   })
 

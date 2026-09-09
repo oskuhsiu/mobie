@@ -1,5 +1,3 @@
-import { useRef } from 'react'
-import { motion } from 'framer-motion'
 import type { BattleMobie, Move, Stats } from '@/game/types'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
 import { MobieSprite } from '@/ui/components/MobieSprite'
@@ -8,7 +6,7 @@ import { getItem } from '@/game/ext/items'
 import { getAbility } from '@/game/ext/abilities'
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { growthProgress } from '@/game/growth'
-import { useDialogFocusTrap } from '@/ui/accessibility/useDialogFocusTrap'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 const STAT_ROWS: { key: keyof Stats; label: string }[] = [
   { key: 'hp', label: 'HP' }, { key: 'atk', label: '攻' }, { key: 'def', label: '防' },
@@ -48,42 +46,25 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
   revealed: boolean
   onClose: () => void
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const closeRef = useRef<HTMLButtonElement>(null)
   const showDeep = owner || revealed
   const item = getItem(mon.heldItemId)
   const ability = getAbility(mon.abilityId)
   const ownerGrowth = ownerExp === undefined ? null : growthProgress(mon.level, ownerExp)
-  useDialogFocusTrap({ dialogRef, initialFocusRef: closeRef, onEscape: onClose })
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        ref={dialogRef}
-        className="modal-card mobcard"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${mon.nameZh} 完整資訊`}
-        tabIndex={-1}
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
-            <div className="mobcard__art"><MobieSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} /></div>
-            <div>
-              <div className="h-title" style={{ fontSize: 22 }}>
-                {mon.nameZh} <span className="hpbar__lv">Lv.{mon.level}</span>
-                {mon.shiny && <span className="indiv__shiny"> ✦異色</span>}
-              </div>
-              <div style={{ marginTop: 4 }}><TypeBadges types={mon.types} /></div>
-              {!owner && <div className="h-sub" style={{ marginTop: 4 }}>{revealed ? '已看穿' : '對手 · 基本面'}</div>}
-            </div>
-          </div>
-          <button ref={closeRef} className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
+    <ModalSurface
+      title={<>{mon.nameZh} Lv.{mon.level}{mon.shiny ? ' ✦異色' : ''}<span className="sr-only"> 完整資訊</span></>}
+      description={
+        <>
+          <TypeBadges types={mon.types} />
+          {!owner && <span style={{ marginLeft: 8 }}>{revealed ? '已看穿' : '對手 · 基本面'}</span>}
+        </>
+      }
+      onClose={onClose}
+      className="mobcard"
+      headerLeading={<div className="mobcard__art"><MobieSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} /></div>}
+      restoreFocus={false}
+    >
 
         {owner && ownerExp !== undefined && (
           <div className="mobcard-growth">
@@ -128,7 +109,6 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
             </div>
           </div>
         ) : <Masked label="看穿後揭露星級・特性・道具" />}
-      </motion.div>
-    </motion.div>
+    </ModalSurface>
   )
 }

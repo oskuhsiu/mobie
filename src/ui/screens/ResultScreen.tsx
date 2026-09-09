@@ -23,6 +23,7 @@ import { MobieSprite } from '@/ui/components/MobieSprite'
 import { MobCard } from '@/ui/components/MobCard'
 import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
 import type { OwnedUnit } from '@/game/types'
+import { useOverlayController } from '@/ui/shell/OverlayController'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
 const CaptureStage = lazy(() => import('@/scene/r3f/CaptureStage'))
@@ -282,6 +283,7 @@ function TowerView({ isWin }: { isWin: boolean }) {
 
 export function ResultScreen() {
   const { context, send } = useGame()
+  const controller = useOverlayController()
   const outcome = context.battleResult?.outcome ?? context.outcome
   const isWin = outcome === 'win'
   const tower = context.tower
@@ -289,8 +291,6 @@ export function ResultScreen() {
   const canCapture = isWin && !tower && canCaptureIn(context.regionId)
   const [captureDone, setCaptureDone] = useState(!canCapture)
   const [capturedUnit, setCapturedUnit] = useState<OwnedUnit | null>(null)
-  const [captureCardOpen, setCaptureCardOpen] = useState(false)
-  const [collectionOpen, setCollectionOpen] = useState(false)
 
   // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
@@ -368,6 +368,15 @@ export function ResultScreen() {
     return buildOwnedMobieForDisplay(capturedUnit)
   }, [capturedUnit])
 
+  const openCapturedCard = () => {
+    if (!capturedMon) return
+    controller.push({
+      id: `mobie-detail:${capturedMon.speciesId}`,
+      policy: 'escape-and-backdrop',
+      content: <MobCard mon={capturedMon} owner ownerExp={capturedUnit?.exp} revealed onClose={controller.pop} />,
+    })
+  }
+
   return (
     <div className="col" style={{ flex: 1 }}>
       {tower
@@ -398,14 +407,18 @@ export function ResultScreen() {
             <button
               className="btn btn--sm"
               aria-label="查看新夥伴"
-              onClick={() => setCaptureCardOpen(true)}
+              onClick={openCapturedCard}
             >
               🔎 查看新夥伴
             </button>
             <button
               className="btn btn--ghost btn--sm"
               aria-label="我的 Mobie"
-              onClick={() => setCollectionOpen(true)}
+              onClick={() => controller.open({
+                id: 'team',
+                policy: 'escape-and-backdrop',
+                content: <TeamModal onClose={controller.close} />,
+              })}
             >
               ✦ 我的 Mobie
             </button>
@@ -462,23 +475,6 @@ export function ResultScreen() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {captureCardOpen && capturedMon && (
-          <MobCard
-            mon={capturedMon}
-            owner
-            ownerExp={capturedUnit?.exp}
-            revealed
-            onClose={() => setCaptureCardOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      <Suspense fallback={null}>
-        <AnimatePresence>
-          {collectionOpen && <TeamModal onClose={() => setCollectionOpen(false)} />}
-        </AnimatePresence>
-      </Suspense>
     </div>
   )
 }

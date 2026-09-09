@@ -1,6 +1,5 @@
 // M10 — 孵化頁。蛋列表 + 進度條 + 來源標籤 + 孵化（蛋裂→定格新Mobie + Grade 徽章）。
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useIncubator } from '@/store/incubatorStore'
 import { isHatchable, type Egg } from '@/game/incubator'
 import { getSpecies } from '@/game/data/species'
@@ -12,39 +11,54 @@ import { useSettings } from '@/store/settingsStore'
 import { interactModeOf } from '@/game/settings'
 import { audio } from '@/audio/audioEngine'
 import type { OwnedUnit } from '@/game/types'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { useOverlayController } from '@/ui/shell/OverlayController'
 
 const SOURCE_LABEL: Record<Egg['source'], string> = { achievement: '成就', duplicate: '重複轉化', tower: '連勝塔' }
 
 export function IncubatorModal({ onClose }: { onClose: () => void }) {
   const eggs = useIncubator((s) => s.state.eggs)
   const hatch = useIncubator((s) => s.hatch)
-  const [hatched, setHatched] = useState<OwnedUnit | null>(null)
   // M22.i：孵化前摩擦生熱（純演出）。off＝直接孵化；開啟＝來回摩擦蛋後才 hatch。
   const rubOn = useSettings((s) => interactModeOf(s.settings, 'hatch') !== 'off')
-  const [rubEgg, setRubEgg] = useState<string | null>(null)
+  const controller = useOverlayController()
 
   const doHatch = async (id: string) => {
     const u = await hatch(id)
-    if (u) { audio.play('capture'); setHatched(u) }
+    if (u) {
+      audio.play('capture')
+      controller.push({
+        id: `hatch-reveal:${u.id}`,
+        policy: 'escape-and-backdrop',
+        content: <HatchReveal hatched={u} onClose={controller.pop} />,
+      })
+    }
   }
-  const onHatchClick = (id: string) => { if (rubOn) setRubEgg(id); else void doHatch(id) }
+  const onHatchClick = (id: string) => {
+    if (!rubOn) { void doHatch(id); return }
+    controller.push({
+      id: `hatch:${id}`,
+      policy: 'explicit-action-only',
+      content: (
+        <GestureGate
+          title="🔥 摩擦生熱"
+          icon="🥚"
+          hint="來回快速摩擦蛋殼，幫小生命破殼！"
+          onComplete={() => { controller.pop(); void doHatch(id) }}
+          onCancel={controller.pop}
+        />
+      ),
+    })
+  }
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>🥚 孵化所</div>
-            <div className="h-sub">蛋隨每場戰鬥累積進度；滿了即可孵化。來源：成就 / 重複捕獲 / 連勝塔</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
-        </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <ModalSurface
+      title="🥚 孵化所"
+      description="蛋隨每場戰鬥累積進度；滿了即可孵化。來源：成就 / 重複捕獲 / 連勝塔"
+      onClose={onClose}
+      className="incubator-surface"
+    >
+      <div className="modal-surface__stack">
           {eggs.length === 0 && (
             <div className="h-sub" style={{ padding: 20, textAlign: 'center' }}>
               還沒有蛋。領取成就獎勵，或在野外收服已擁有的Mobie（自動轉化為蛋）來獲得！
@@ -73,43 +87,28 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
               </div>
             )
           })}
+      </div>
+
+    </ModalSurface>
+  )
+}
+
+function HatchReveal({ hatched, onClose }: { hatched: OwnedUnit; onClose: () => void }) {
+  const species = getSpecies(hatched.speciesId)
+  return (
+    <ModalSurface title="🎉 孵化結果" description="新的夥伴已加入你的隊伍。" onClose={onClose} className="hatch-surface">
+      <div className="hatch-reveal hatch-reveal--surface" onClick={onClose}>
+        <motion.div className="hatch-reveal__mon"
+          initial={{ scale: 0.4, opacity: 0, filter: 'brightness(5)' }}
+          animate={{ scale: 1, opacity: 1, filter: 'brightness(1)' }}
+          transition={{ type: 'spring', stiffness: 150, damping: 13 }}>
+          <MobieSprite src={species.artworkUrl} alt={species.nameZh} shiny={hatched.shiny} />
+        </motion.div>
+        <div className="hatch-reveal__caption">
+          孵出了 <b>{species.nameZh}</b>！　<GradeBadge indiv={hatched} speciesId={hatched.speciesId} />
         </div>
-
-        {/* 孵化定格 reveal */}
-        <AnimatePresence>
-          {hatched && (() => {
-            const sp = getSpecies(hatched.speciesId)
-            return (
-              <motion.div className="hatch-reveal" onClick={() => setHatched(null)}
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <motion.div className="hatch-reveal__mon"
-                  initial={{ scale: 0.4, opacity: 0, filter: 'brightness(5)' }}
-                  animate={{ scale: 1, opacity: 1, filter: 'brightness(1)' }}
-                  transition={{ type: 'spring', stiffness: 150, damping: 13 }}>
-                  <MobieSprite src={sp.artworkUrl} alt={sp.nameZh} shiny={hatched.shiny} />
-                </motion.div>
-                <div className="hatch-reveal__caption">
-                  孵出了 <b>{sp.nameZh}</b>！　<GradeBadge indiv={hatched} speciesId={hatched.speciesId} />
-                </div>
-                <div className="h-sub">已加入你的隊伍。點擊關閉</div>
-              </motion.div>
-            )
-          })()}
-        </AnimatePresence>
-
-        {/* M22.i 摩擦生熱 gate（純演出，摩擦或逾時即孵化） */}
-        <AnimatePresence>
-          {rubEgg && (
-            <GestureGate
-              title="🔥 摩擦生熱"
-              icon="🥚"
-              hint="來回快速摩擦蛋殼，幫小生命破殼！"
-              onComplete={() => { const id = rubEgg; setRubEgg(null); void doHatch(id) }}
-              onCancel={() => setRubEgg(null)}
-            />
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </motion.div>
+        <div className="h-sub">點擊關閉</div>
+      </div>
+    </ModalSurface>
   )
 }

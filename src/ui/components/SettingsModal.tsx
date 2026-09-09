@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion'
 import { useSettings } from '@/store/settingsStore'
 import type { GraphicsPreference, InteractMode, JuiceLevel } from '@/game/settings'
 import { audio } from '@/audio/audioEngine'
+import { ModalSurface } from '@/ui/shell/ModalSurface'
 
 /** M22 增強互動性三態（plan/22 §1.2, §5.4）：mode 派生強度，不做使用者滑桿。 */
 const INTERACT_OPTIONS: { id: InteractMode; label: string; hint: string }[] = [
@@ -43,23 +43,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const scannerEnabled = settings.prefs.scannerEnabled
 
   return (
-    <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
-      <motion.div
-        className="modal-card"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.97 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-card__head">
-          <div>
-            <div className="h-title" style={{ fontSize: 24 }}>⚙️ 設定</div>
-            <div className="h-sub">調整操作與回饋偏好；變更會立即保存，畫面品質從下一場戰鬥生效。</div>
-          </div>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>關閉</button>
+    <ModalSurface
+      title="⚙️ 設定"
+      description="調整操作與回饋偏好；變更會立即保存，畫面品質從下一場戰鬥生效。"
+      onClose={onClose}
+      footer={(
+        <div className="settings-surface-footer">
+          <div className="utility-foot">這些偏好只影響操作、回饋、戰鬥畫面與掃卡入口，不影響 Mobie 存檔；預設值會在缺少合法設定時使用。</div>
+          <button className="btn btn--ghost btn--sm" data-settings-done onClick={onClose}>完成</button>
         </div>
-
-        <div className="scroll" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      )}
+    >
+      <div className="settings-surface-content">
           {/* M22 增強互動性（UX 偏好，非戰鬥模組）：三態 selector + 兒童向說明 */}
           <div className="interact-pref">
             <div className="interact-pref__head">
@@ -230,12 +225,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <span className="switch__knob" />
             </span>
           </div>
-        </div>
-
-        <div className="utility-foot">
-          這些偏好只影響操作、回饋、戰鬥畫面與掃卡入口，不影響 Mobie 存檔；預設值會在缺少合法設定時使用。
-        </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </ModalSurface>
   )
 }
