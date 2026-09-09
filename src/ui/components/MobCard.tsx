@@ -1,4 +1,5 @@
 import type { BattleMobie, Move, Stats } from '@/game/types'
+import type { Ref } from 'react'
 import { IndividualInfo } from '@/ui/components/IndividualInfo'
 import { MobieSprite } from '@/ui/components/MobieSprite'
 import { TypeBadges } from '@/ui/components/TypeBadge'
@@ -34,17 +35,24 @@ function Masked({ label }: { label: string }) {
   return <div className="mobcard-masked">🔍 {label}</div>
 }
 
-/**
- * Mobie 資訊卡（M16，純 UI／顯示層，不動 reducer/engine/持久化）。
- * 自己（owner）或已看穿（revealed）→ 全顯示招式/六維/星級/特性道具；對手未看穿 → 基本面（名/型別/Lv）+ 深度遮罩。
- * 看穿旗標由 M17 設（battleStore.revealedFoes）；M16 對手 revealed 恆 false → 顯占位「看穿後揭露」。
- */
-export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
+function cardTitle(mon: BattleMobie): string {
+  return `${mon.nameZh} Lv.${mon.level}${mon.shiny ? ' ✦異色' : ''}`
+}
+
+function cardDescription(mon: BattleMobie, owner: boolean, revealed: boolean) {
+  return (
+    <>
+      <TypeBadges types={mon.types} />
+      {!owner && <span style={{ marginLeft: 8 }}>{revealed ? '已看穿' : '對手 · 基本面'}</span>}
+    </>
+  )
+}
+
+function CardSections({ mon, owner, ownerExp, revealed }: {
   mon: BattleMobie
   owner: boolean
   ownerExp?: number
   revealed: boolean
-  onClose: () => void
 }) {
   const showDeep = owner || revealed
   const item = getItem(mon.heldItemId)
@@ -52,63 +60,113 @@ export function MobCard({ mon, owner, ownerExp, revealed, onClose }: {
   const ownerGrowth = ownerExp === undefined ? null : growthProgress(mon.level, ownerExp)
 
   return (
+    <>
+      {owner && ownerExp !== undefined && (
+        <div className="mobcard-growth" data-mobcard-exp>
+          <span>總 EXP {ownerExp}</span>
+          <span>{ownerGrowth?.atMaxLevel ? '已達滿級' : `距離 Lv.${mon.level + 1} 還需 ${ownerGrowth?.remainingExp ?? 0} EXP`}</span>
+        </div>
+      )}
+
+      <div className="mobcard-sec">招式</div>
+      {showDeep
+        ? <div className="mobcard-moves">{mon.moves.map((mv, i) => <MoveRow key={i} move={mv} />)}</div>
+        : <Masked label="看穿後揭露招式" />}
+
+      <div className="mobcard-sec">能力值</div>
+      {showDeep ? (
+        <div className="mobcard-stats">
+          {STAT_ROWS.map(({ key, label }) => {
+            const val = key === 'hp' ? mon.maxHp : mon[key]
+            return (
+              <div key={key} className="mobcard-stat">
+                <span className="mobcard-stat__label">{label}</span>
+                <div className="mobcard-stat__track">
+                  <div className="mobcard-stat__fill" style={{ width: `${Math.min(100, (val / STAT_MAX) * 100)}%` }} />
+                </div>
+                <span className="mobcard-stat__val">{val}</span>
+              </div>
+            )
+          })}
+        </div>
+      ) : <Masked label="看穿後揭露數值" />}
+
+      <div className="mobcard-sec">個體</div>
+      {showDeep ? (
+        <div className="col" style={{ gap: 8 }}>
+          <IndividualInfo mon={mon} detailed />
+          <div className="mobcard-meta">
+            <span>特性：{ability ? `${ability.icon} ${ability.name}` : '—'}</span>
+            <span>道具：{item ? `${item.icon} ${item.name}` : '未裝備'}</span>
+          </div>
+        </div>
+      ) : <Masked label="看穿後揭露星級・特性・道具" />}
+    </>
+  )
+}
+
+export interface MobCardProps {
+  mon: BattleMobie
+  owner: boolean
+  ownerExp?: number
+  revealed: boolean
+  onClose: () => void
+  /** CollectionShell uses a non-modal detail panel on wide viewports. */
+  layout?: 'modal' | 'panel'
+  closeRef?: Ref<HTMLButtonElement>
+}
+
+/**
+ * Mobie 資訊卡（M16，純 UI／顯示層，不動 reducer/engine/持久化）。
+ * owner 或已看穿的對手會顯示完整深度資訊；未看穿的對手只顯示基本面和遮罩。
+ */
+export function MobCard({ mon, owner, ownerExp, revealed, onClose, layout = 'modal', closeRef }: MobCardProps) {
+  const visibility = owner ? 'owner' : revealed ? 'opponent-revealed' : 'opponent-masked'
+  const title = cardTitle(mon)
+  const description = cardDescription(mon, owner, revealed)
+  const className = `mobcard mobcard--${visibility}`
+
+  if (layout === 'panel') {
+    const titleId = `mobcard-panel-title-${mon.speciesId}-${mon.level}`
+    return (
+      <article
+        className={`${className} mobcard--panel`}
+        data-mobcard
+        data-mobcard-layout="panel"
+        data-mobcard-visibility={visibility}
+        aria-labelledby={titleId}
+      >
+        <header className="mobcard-panel__head">
+          <div className="mobcard-panel__heading">
+            <div className="mobcard-panel__heading-row">
+              <div className="mobcard__art"><MobieSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} /></div>
+              <div>
+                <h2 id={titleId} className="h-title mobcard-panel__title">{title}<span className="sr-only"> 完整資訊</span></h2>
+                <p className="h-sub mobcard-panel__description">{description}</p>
+              </div>
+            </div>
+          </div>
+          <button ref={closeRef} className="btn btn--ghost btn--sm" data-mobcard-close onClick={onClose}>關閉</button>
+        </header>
+        <div className="mobcard-panel__body" data-mobcard-body>
+          <CardSections mon={mon} owner={owner} ownerExp={ownerExp} revealed={revealed} />
+        </div>
+      </article>
+    )
+  }
+
+  return (
     <ModalSurface
-      title={<>{mon.nameZh} Lv.{mon.level}{mon.shiny ? ' ✦異色' : ''}<span className="sr-only"> 完整資訊</span></>}
-      description={
-        <>
-          <TypeBadges types={mon.types} />
-          {!owner && <span style={{ marginLeft: 8 }}>{revealed ? '已看穿' : '對手 · 基本面'}</span>}
-        </>
-      }
+      title={<>{title}<span className="sr-only"> 完整資訊</span></>}
+      description={description}
       onClose={onClose}
-      className="mobcard"
+      className={className}
       headerLeading={<div className="mobcard__art"><MobieSprite src={mon.artworkUrl} alt={mon.nameZh} shiny={mon.shiny} /></div>}
       restoreFocus={false}
     >
-
-        {owner && ownerExp !== undefined && (
-          <div className="mobcard-growth">
-            <span>總 EXP {ownerExp}</span>
-            <span>{ownerGrowth?.atMaxLevel ? '已達滿級' : `距離 Lv.${mon.level + 1} 還需 ${ownerGrowth?.remainingExp ?? 0} EXP`}</span>
-          </div>
-        )}
-
-        {/* 招式 loadout（≤4） */}
-        <div className="mobcard-sec">招式</div>
-        {showDeep
-          ? <div className="mobcard-moves">{mon.moves.map((mv, i) => <MoveRow key={i} move={mv} />)}</div>
-          : <Masked label="看穿後揭露招式" />}
-
-        {/* 六維 mini-bar */}
-        <div className="mobcard-sec">能力值</div>
-        {showDeep ? (
-          <div className="mobcard-stats">
-            {STAT_ROWS.map(({ key, label }) => {
-              const val = key === 'hp' ? mon.maxHp : mon[key]
-              return (
-                <div key={key} className="mobcard-stat">
-                  <span className="mobcard-stat__label">{label}</span>
-                  <div className="mobcard-stat__track">
-                    <div className="mobcard-stat__fill" style={{ width: `${Math.min(100, (val / STAT_MAX) * 100)}%` }} />
-                  </div>
-                  <span className="mobcard-stat__val">{val}</span>
-                </div>
-              )
-            })}
-          </div>
-        ) : <Masked label="看穿後揭露數值" />}
-
-        {/* 個體 / 特性 / 道具 */}
-        <div className="mobcard-sec">個體</div>
-        {showDeep ? (
-          <div className="col" style={{ gap: 8 }}>
-            <IndividualInfo mon={mon} detailed />
-            <div className="mobcard-meta">
-              <span>特性：{ability ? `${ability.icon} ${ability.name}` : '—'}</span>
-              <span>道具：{item ? `${item.icon} ${item.name}` : '未裝備'}</span>
-            </div>
-          </div>
-        ) : <Masked label="看穿後揭露星級・特性・道具" />}
+      <div data-mobcard data-mobcard-layout="modal" data-mobcard-visibility={visibility}>
+        <CardSections mon={mon} owner={owner} ownerExp={ownerExp} revealed={revealed} />
+      </div>
     </ModalSurface>
   )
 }

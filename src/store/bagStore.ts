@@ -60,20 +60,31 @@ interface BagStore {
   equip: (unitId: string, itemId: string | null) => Promise<boolean>
 }
 
+// Every equip operation reads the latest roster and bag after the previous
+// operation settles. This keeps two fast taps from spending the same item
+// twice or overwriting a newer held-item assignment.
+let equipQueue: Promise<void> = Promise.resolve()
+
 export const useBag = create<BagStore>((set, get) => ({
   bag: loadBag(),
 
-  equip: async (unitId, itemId) => {
-    const prev = useRoster.getState().roster.find((u) => u.id === unitId)?.heldItemId
-    if (itemId && itemId === prev) return true // 已裝同一個＝no-op
-    const bag = { ...get().bag }
-    if (itemId && (bag[itemId] ?? 0) <= 0) return false // 庫存不足
+  equip: (unitId, itemId) => {
+    const operation = equipQueue.then(async () => {
+      const currentUnit = useRoster.getState().roster.find((u) => u.id === unitId)
+      if (!currentUnit) return false
+      const prev = currentUnit.heldItemId
+      if (itemId && itemId === prev) return true // 已裝同一個＝no-op
+      const bag = { ...get().bag }
+      if (itemId && (bag[itemId] ?? 0) <= 0) return false // 庫存不足
 
-    const real = await useRoster.getState().setHeldItem(unitId, itemId ?? undefined)
-    if (real) bag[real] = (bag[real] ?? 0) + 1 // 歸還卸下的舊道具
-    if (itemId) bag[itemId] = (bag[itemId] ?? 0) - 1 // 扣裝上的新道具
-    set({ bag })
-    saveBag(bag)
-    return true
+      const real = await useRoster.getState().setHeldItem(unitId, itemId ?? undefined)
+      if (real) bag[real] = (bag[real] ?? 0) + 1 // 歸還卸下的舊道具
+      if (itemId) bag[itemId] = Math.max(0, (bag[itemId] ?? 0) - 1) // 扣裝上的新道具
+      set({ bag })
+      saveBag(bag)
+      return true
+    })
+    equipQueue = operation.then(() => undefined, () => undefined)
+    return operation
   },
 }))

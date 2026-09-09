@@ -262,6 +262,31 @@ body {
   background: radial-gradient(circle, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
   animation: pulse 1.2s ease-in-out infinite;
 }
+.sprite__fallback {
+  position: absolute; inset: 4%;
+  display: grid; place-items: center;
+  overflow: hidden; border-radius: 42% 48% 44% 50%;
+  background:
+    radial-gradient(circle at 50% 37%, rgba(255,255,255,0.22) 0 9%, transparent 10%),
+    radial-gradient(ellipse at 50% 78%, rgba(122,224,255,0.34) 0 34%, transparent 35%),
+    linear-gradient(145deg, rgba(122,224,255,0.2), rgba(145,65,203,0.2));
+  border: 1px solid rgba(205,246,255,0.42);
+  box-shadow: inset 0 -10px 18px rgba(0,0,0,0.28), 0 8px 18px rgba(0,0,0,0.22);
+}
+.sprite__fallback::before,
+.sprite__fallback::after {
+  content: ''; position: absolute; top: 25%; width: 16%; height: 16%;
+  border-radius: 50%; background: rgba(4,6,16,0.72);
+  box-shadow: 0 0 0 3px rgba(205,246,255,0.18);
+}
+.sprite__fallback::before { left: 27%; }
+.sprite__fallback::after { right: 27%; }
+.sprite__fallback-mark {
+  position: relative; z-index: 1; margin-top: 28%;
+  max-width: 78%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #cdf6ff; font-size: clamp(11px, 4vw, 24px); font-weight: 900;
+  text-shadow: 0 2px 7px rgba(0,0,0,0.65);
+}
 .sprite--shiny::after {
   content: '✦'; position: absolute; top: 4%; right: 8%;
   color: var(--accent); font-size: 22px;
@@ -1262,7 +1287,11 @@ body {
   border-radius: var(--radius-sm); background: var(--panel-strong); border: 1px solid var(--stroke); color: var(--text); cursor: pointer;
 }
 .team-row__item-btn:active { transform: scale(0.97); }
-.item-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.item-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 10px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.08); }
+.item-picker__head { width: 100%; display: flex; justify-content: space-between; gap: 8px; color: var(--text-dim); font-size: 11px; font-weight: 800; }
+.item-picker__status { width: 100%; color: #cdf6ff; font-size: 12px; line-height: 1.4; }
+.item-picker__status--error { color: #ffd1d1; }
+.item-picker__hint { width: 100%; color: var(--text-dim); font-size: 12px; line-height: 1.45; }
 .item-chip {
   display: flex; align-items: center; gap: 6px; padding: 7px 11px; font-size: 13px;
   border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); color: var(--text); cursor: pointer;
@@ -1270,6 +1299,67 @@ body {
 .item-chip--on { border-color: var(--accent); background: rgba(255,210,63,0.12); }
 .item-chip:disabled { opacity: 0.4; cursor: not-allowed; }
 .item-chip__count { font-size: 11px; color: var(--text-dim); }
+
+/* ============ M24 Ticket 26：CollectionShell / MobCard detail ============ */
+.collection-surface { width: min(96vw, 1080px); height: min(90dvh, 840px); }
+.collection-surface .modal-surface__body { overflow: hidden; gap: 10px; }
+.collection-shell { display: flex; flex: 1 1 auto; flex-direction: column; gap: 10px; min-height: 0; }
+.resource-summary {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; flex: 0 0 auto;
+  padding: 8px 12px; border-radius: var(--radius-sm); background: rgba(122,224,255,0.08);
+  border: 1px solid rgba(122,224,255,0.22); color: var(--text-dim); font-size: 12px;
+}
+.resource-summary b { color: #cdf6ff; font-size: 14px; font-variant-numeric: tabular-nums; }
+.collection-content { display: grid; grid-template-columns: minmax(300px, 0.92fr) minmax(360px, 1.08fr); gap: 12px; flex: 1 1 0; min-height: 0; }
+.collection-list-pane,
+.collection-detail-pane {
+  min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable; padding: 2px 3px 18px;
+}
+.collection-list-pane { border-right: 1px solid rgba(255,255,255,0.08); padding-right: 12px; }
+.collection-pane-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.collection-pane-head h3 { font-size: 20px; line-height: 1.15; }
+.collection-count { color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.collection-search { display: block; margin-bottom: 10px; }
+.collection-entity-list { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.collection-entity { min-width: 0; }
+.team-row--selected { border-color: var(--accent); background: rgba(255,210,63,0.1); box-shadow: 0 0 0 1px rgba(255,210,63,0.14); }
+.team-row__art .sprite { width: 100%; height: 100%; }
+.collection-load-more { width: 100%; margin-top: 12px; }
+.collection-no-results { padding: 20px 12px; color: var(--text-dim); text-align: center; font-size: 13px; }
+.collection-detail-pane { display: flex; flex-direction: column; }
+.collection-detail-empty,
+.collection-state {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px; justify-content: center;
+  min-height: 220px; padding: 24px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.2);
+  border: 1px dashed var(--stroke); color: var(--text-dim);
+}
+.collection-detail-empty h3, .collection-state h3 { color: var(--text); font-size: 20px; }
+.collection-detail-empty p, .collection-state p { max-width: 42em; line-height: 1.55; font-size: 13px; }
+.collection-state { flex: 1 1 auto; align-items: center; text-align: center; }
+.collection-state--error { border-color: rgba(255,107,107,0.5); }
+.collection-state--error h3 { color: #ffd1d1; }
+.mobcard--panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.045); border: 1px solid var(--stroke); }
+.mobcard-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.mobcard-panel__heading { flex: 1 1 auto; min-width: 0; }
+.mobcard-panel__heading-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mobcard-panel__heading-row > div:last-child { min-width: 0; }
+.mobcard-panel__title { font-size: clamp(20px, 2.5vw, 28px); line-height: 1.12; overflow-wrap: anywhere; }
+.mobcard-panel__description { margin-top: 5px; line-height: 1.4; }
+.mobcard-panel__body { min-width: 0; }
+
+@media (max-width: 760px) {
+  .collection-surface { width: min(96vw, 560px); height: min(88dvh, 760px); }
+  .collection-surface .modal-surface__body { overflow-y: auto; }
+  .collection-content { display: block; min-height: 0; }
+  .collection-list-pane, .collection-detail-pane { overflow: visible; border-right: 0; padding-right: 3px; }
+  .collection-shell[data-detail-open='true'] .collection-list-pane { display: none; }
+  .collection-detail-pane { margin-top: 2px; }
+  .collection-detail-empty { min-height: 150px; }
+  .mobcard--panel { padding: 12px; }
+  .mobcard-stats { grid-template-columns: 1fr; }
+}
 
 /* ============ M19.e 招式訓練所 ============ */
 .sp-badge {

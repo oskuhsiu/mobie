@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 interface MobieSpriteProps {
   src: string
@@ -12,21 +12,42 @@ interface MobieSpriteProps {
 }
 
 export function MobieSprite({ src, alt, shiny, flip, idle, className }: MobieSpriteProps) {
-  const [loaded, setLoaded] = useState(false)
+  const [state, setState] = useState<'loading' | 'loaded' | 'failed'>(() => src ? 'loading' : 'failed')
+
+  useEffect(() => {
+    setState(src ? 'loading' : 'failed')
+  }, [src])
+
+  const initial = useMemo(() => {
+    const compact = alt.trim().replace(/\s+/g, '')
+    return compact.slice(0, 2) || '◇'
+  }, [alt])
 
   return (
-    <div className={`sprite ${shiny ? 'sprite--shiny' : ''} ${idle ? 'sprite--idle' : ''} ${className ?? ''}`}>
-      {!loaded && <div className="sprite__skeleton" />}
+    <div
+      className={`sprite ${shiny ? 'sprite--shiny' : ''} ${idle ? 'sprite--idle' : ''} ${className ?? ''}`}
+      data-artwork-state={state}
+      aria-busy={state === 'loading' ? 'true' : undefined}
+      role={state === 'failed' ? 'img' : undefined}
+      aria-label={state === 'failed' ? alt : undefined}
+    >
+      {state === 'loading' && <div className="sprite__skeleton" aria-hidden="true" />}
+      {state === 'failed' && (
+        <div className="sprite__fallback" aria-hidden="true">
+          <span className="sprite__fallback-mark">{initial}</span>
+        </div>
+      )}
       <img
         className="sprite__img"
-        src={src}
-        alt={alt}
+        src={src || undefined}
+        alt={state === 'failed' ? '' : alt}
         style={{
-          opacity: loaded ? 1 : 0,
+          opacity: state === 'loaded' ? 1 : 0,
           transform: flip ? 'scaleX(-1)' : undefined,
           transition: 'opacity 0.35s ease',
         }}
-        onLoad={() => setLoaded(true)}
+        onLoad={() => setState('loaded')}
+        onError={() => setState('failed')}
         draggable={false}
       />
     </div>
