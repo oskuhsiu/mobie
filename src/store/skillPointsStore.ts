@@ -5,25 +5,78 @@
 
 import { create } from 'zustand'
 
-const KEY = 'mobie.skillpoints.v1'
+export const SKILL_POINTS_KEY = 'mobie.skillpoints.v1'
+const SETTLEMENT_FIELD = 'resultSettlements'
 
-function loadSp(): number {
+function decode(raw: string | null): { points: number; settlements?: unknown[] } | null {
+  if (raw === null) return null
+  const parsed: unknown = JSON.parse(raw)
+  if (typeof parsed === 'number') return Number.isFinite(parsed) && parsed >= 0 ? { points: Math.floor(parsed) } : null
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const record = parsed as Record<string, unknown>
+  if (typeof record.sp !== 'number' || !Number.isFinite(record.sp) || record.sp < 0) return null
+  return {
+    points: Math.floor(record.sp),
+    ...(Array.isArray(record[SETTLEMENT_FIELD]) ? { settlements: record[SETTLEMENT_FIELD] } : {}),
+  }
+}
+
+function encode(n: number, settlements?: unknown[]): string {
+  if (!settlements) return JSON.stringify(Math.max(0, Math.floor(n)))
+  return JSON.stringify({ sp: Math.max(0, Math.floor(n)), [SETTLEMENT_FIELD]: settlements })
+}
+
+export function loadSkillPoints(): number {
   if (typeof localStorage === 'undefined') return 0
   try {
-    const raw = localStorage.getItem(KEY)
-    const n = raw ? JSON.parse(raw) : 0
-    return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0
+    return decode(localStorage.getItem(SKILL_POINTS_KEY))?.points ?? 0
   } catch {
     return 0
   }
 }
 
+export function loadSkillPointsStrict(): number {
+  if (typeof localStorage === 'undefined') return 0
+  const raw = localStorage.getItem(SKILL_POINTS_KEY)
+  if (raw === null) return 0
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (cause) {
+    throw new Error(`讀取 SP 失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+  const decoded = decode(JSON.stringify(parsed))
+  if (!decoded) throw new Error('讀取 SP 失敗：資料格式無效')
+  return decoded.points
+}
+
 function saveSp(n: number): void {
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(KEY, JSON.stringify(n))
+    const current = decode(localStorage.getItem(SKILL_POINTS_KEY))
+    localStorage.setItem(SKILL_POINTS_KEY, encode(n, current?.settlements))
   } catch {
     /* 配額/隱私模式：忽略 */
+  }
+}
+
+export function saveSkillPointsStrict(n: number): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const current = decode(localStorage.getItem(SKILL_POINTS_KEY))
+    localStorage.setItem(SKILL_POINTS_KEY, encode(n, current?.settlements))
+  } catch (cause) {
+    throw new Error(`保存 SP 失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Child-boundary write: canonical SP and its settlement markers share one envelope. */
+export function saveSkillPointsWithSettlementMarkersStrict(n: number, markers: unknown[]): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(SKILL_POINTS_KEY, encode(n, markers))
+  } catch (cause) {
+    throw new Error(`保存 SP 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }
 
@@ -36,7 +89,7 @@ interface SkillPointsStore {
 }
 
 export const useSkillPoints = create<SkillPointsStore>((set, get) => ({
-  sp: loadSp(),
+  sp: loadSkillPoints(),
 
   add: (delta) => {
     if (delta <= 0) return

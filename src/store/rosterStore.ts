@@ -8,15 +8,27 @@ import { MOVES } from '@/game/data/moves'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { LocalStorageAdapter, type PersistenceAdapter } from '@/game/persistence'
 import { bumpSaveMeta } from '@/game/save/saveMeta'
+import { loadMetaStrict, saveMetaStateStrict, saveMetaStateWithSettlementMarkersStrict } from '@/game/meta'
+import { useMeta } from '@/store/metaStore'
+import {
+  loadSkillPointsStrict,
+  saveSkillPointsStrict,
+  saveSkillPointsWithSettlementMarkersStrict,
+  useSkillPoints,
+} from '@/store/skillPointsStore'
 import {
   calculateRosterGrowth,
   LocalStorageRosterGrowthPersistence,
+  LocalStorageSkillPointsPersistence,
+  LocalStorageMetaSettlementPersistence,
   LocalStorageSettlementJournal,
+  MetaSettlementDestination,
   ResultSettlementCoordinator,
   RosterGrowthDestination,
+  SkillPointsDestination,
   type ResultIdentity,
-  type RosterGrowthPayload,
-  type RosterGrowthReceipt,
+  type ResultSettlementPayload,
+  type ResultSettlementReceipt,
 } from '@/game/resultSettlement'
 
 /** 一隻於本場戰後升級新領悟的招（M19.e，給結算「學會新招」提示）。 */
@@ -60,7 +72,7 @@ interface RosterState {
    */
   grantBattleExp: (unitIds: string[], foeLevels: number[], ratio?: number, identity?: ResultIdentity) => Promise<ExpResult[]>
   /** Result-owned roster growth/evolution destination. The identity is stable across remounts. */
-  settleBattleResult: (identity: ResultIdentity, payload: RosterGrowthPayload) => Promise<RosterGrowthReceipt>
+  settleBattleResult: (identity: ResultIdentity, payload: ResultSettlementPayload) => Promise<ResultSettlementReceipt>
   /** Mark a Result as left so its durable marker becomes eligible for bounded retention. */
   markBattleResultLeft: (identity: ResultIdentity) => Promise<void>
   /** 收服一隻（由捕獲卡建 canonical OwnedUnit，加入並存檔；個體與戰鬥畫面一致） */
@@ -93,12 +105,42 @@ export const useRoster = create<RosterState>((set, get) => {
     saveRoster: strictSaveRoster,
   })
   const growthDestination = new RosterGrowthDestination(growthPersistence)
+  const skillPointsPersistence = new LocalStorageSkillPointsPersistence({
+    loadPoints: loadSkillPointsStrict,
+    savePoints: async (points) => {
+      saveSkillPointsStrict(points)
+      // Keep the live wallet projection in sync after the canonical write;
+      // the destination, not this projection, remains the exactly-once owner.
+      useSkillPoints.setState({ sp: points })
+    },
+    savePointsWithMarkers: async (points, markers) => {
+      saveSkillPointsWithSettlementMarkersStrict(points, markers)
+      useSkillPoints.setState({ sp: points })
+    },
+  })
+  const metaPersistence = new LocalStorageMetaSettlementPersistence({
+    loadMeta: loadMetaStrict,
+    saveMeta: async (meta) => {
+      saveMetaStateStrict(meta)
+      // Meta's canonical localStorage write is the authority. This update only
+      // hydrates the existing Zustand projection for the current screen.
+      useMeta.setState({ meta })
+    },
+    saveMetaWithMarkers: async (meta, markers) => {
+      saveMetaStateWithSettlementMarkersStrict(meta, markers)
+      useMeta.setState({ meta })
+    },
+  })
+  const skillPointsDestination = new SkillPointsDestination(skillPointsPersistence)
+  const metaDestination = new MetaSettlementDestination(metaPersistence)
   const settlementCoordinator = new ResultSettlementCoordinator(
     growthDestination,
     new LocalStorageSettlementJournal(),
+    () => Date.now(),
+    { skillPoints: skillPointsDestination, meta: metaDestination },
   )
 
-  const publishGrowthReceipt = async (receipt: RosterGrowthReceipt): Promise<void> => {
+  const publishGrowthReceipt = async (receipt: ResultSettlementReceipt): Promise<void> => {
     // Rehydrate from the canonical persistence boundary before publishing a
     // replayed receipt. Never replace live units with historical receipt
     // snapshots after a later item/move/growth edit.
@@ -114,8 +156,8 @@ export const useRoster = create<RosterState>((set, get) => {
 
   const settleBattleResult = async (
     identity: ResultIdentity,
-    payload: RosterGrowthPayload,
-  ): Promise<RosterGrowthReceipt> => {
+    payload: ResultSettlementPayload,
+  ): Promise<ResultSettlementReceipt> => {
     const receipt = await settlementCoordinator.settle(identity, payload)
     await publishGrowthReceipt(receipt)
     // Only the first canonical apply bumps save metadata. A retry/re-mount

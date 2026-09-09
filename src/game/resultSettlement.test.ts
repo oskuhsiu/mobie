@@ -2,15 +2,20 @@ import { describe, expect, it, vi } from 'vitest'
 import { createOwnedUnit } from '@/game/growth'
 import {
   MemoryRosterGrowthPersistence,
+  MemoryMetaSettlementPersistence,
+  MemorySkillPointsPersistence,
   MemorySettlementJournal,
+  MetaSettlementDestination,
   ResultSettlementCoordinator,
   RosterGrowthDestination,
   ResultSettlementError,
   RESULT_MARKER_LIMIT,
+  SkillPointsDestination,
   retainResultMarkers,
   type ResultIdentity,
   type RosterGrowthMarker,
 } from './resultSettlement'
+import { defaultMeta, bumpStat } from './meta'
 
 const identity: ResultIdentity = { resultId: 'battle-1', resultFingerprint: 'fp-1' }
 const unit = createOwnedUnit('unit-1', 1, 15)
@@ -104,6 +109,120 @@ describe('roster result settlement', () => {
     expect(remount.status).toBe('already-applied')
     expect(persistence.saveCount).toBe(1)
     expect(hasApplied).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('SP and Meta result settlement children', () => {
+  it('apply each child once and reject same-id fingerprint collisions', async () => {
+    const spPersistence = new MemorySkillPointsPersistence(4)
+    const sp = new SkillPointsDestination(spPersistence, () => 400)
+    const first = await sp.applyOnce(identity, { delta: 3 })
+    const second = await sp.applyOnce(identity, { delta: 99 })
+    expect(first).toMatchObject({ status: 'applied', before: 4, after: 7, delta: 3 })
+    expect(second).toMatchObject({ status: 'already-applied', after: 7 })
+    expect(spPersistence.points).toBe(7)
+    await expect(sp.applyOnce({ ...identity, resultFingerprint: 'collision' }, { delta: 1 }))
+      .rejects.toMatchObject({ code: 'collision' })
+
+    const metaPersistence = new MemoryMetaSettlementPersistence(defaultMeta())
+    const meta = new MetaSettlementDestination(metaPersistence, () => 401)
+    const metaFirst = await meta.applyOnce(identity, { winMode: 'wild', evolutions: [{ toSpecies: 2 }] })
+    const metaSecond = await meta.applyOnce(identity, { winMode: 'arena', evolutions: [{ toSpecies: 3 }] })
+    expect(metaFirst).toMatchObject({ status: 'applied', winMode: 'wild', evolutionCount: 1 })
+    expect(metaSecond).toMatchObject({ status: 'already-applied', meta: metaFirst.meta })
+    expect(metaPersistence.meta.stats.wins).toBe(1)
+    expect(metaPersistence.meta.stats.arenaWins).toBe(0)
+    expect(metaPersistence.meta.stats.evolutions).toBe(1)
+    await expect(meta.applyOnce({ ...identity, resultFingerprint: 'collision' }, { winMode: 'arena' }))
+      .rejects.toMatchObject({ code: 'collision' })
+  })
+
+  it('reconciles canonical SP/meta writes after receipt failure without a second grant', async () => {
+    const spPersistence = new MemorySkillPointsPersistence(2)
+    const sp = new SkillPointsDestination(spPersistence, () => 410)
+    spPersistence.failMarker = true
+    await expect(sp.applyOnce(identity, { delta: 5 })).rejects.toMatchObject({ code: 'receipt' })
+    expect(spPersistence.points).toBe(7)
+    expect(await sp.hasApplied(identity)).toBe(true)
+    // Spending the exact reward back to the old balance must not make retry
+    // grant it a second time: the canonical envelope carries the marker.
+    spPersistence.points = 2
+    spPersistence.failMarker = false
+    await expect(sp.applyOnce(identity, { delta: 50 })).resolves.toMatchObject({ status: 'already-applied', after: 7 })
+    expect(spPersistence.saveCount).toBe(1)
+    expect(spPersistence.points).toBe(2)
+
+    const failedCanonical = new MemorySkillPointsPersistence(3)
+    const failedDestination = new SkillPointsDestination(failedCanonical, () => 412)
+    failedCanonical.failPending = true
+    await expect(failedDestination.applyOnce({ resultId: 'battle-2', resultFingerprint: 'fp-2' }, { delta: 4 }))
+      .rejects.toMatchObject({ code: 'storage' })
+    failedCanonical.points += 2 // A legitimate later wallet grant.
+    failedCanonical.failPending = false
+    await expect(failedDestination.applyOnce({ resultId: 'battle-2', resultFingerprint: 'fp-2' }, { delta: 99 }))
+      .resolves.toMatchObject({ status: 'already-applied', after: 7 })
+    expect(failedCanonical.points).toBe(9)
+
+    const metaPersistence = new MemoryMetaSettlementPersistence(defaultMeta())
+    const meta = new MetaSettlementDestination(metaPersistence, () => 411)
+    metaPersistence.failMarker = true
+    await expect(meta.applyOnce(identity, { winMode: 'arena' })).rejects.toMatchObject({ code: 'receipt' })
+    expect(metaPersistence.meta.stats.arenaWins).toBe(1)
+    // A later capture write is preserved while the pending result receipt is reconciled.
+    metaPersistence.meta = bumpStat(metaPersistence.meta, 'captures')
+    metaPersistence.failMarker = false
+    await expect(meta.applyOnce(identity, { winMode: 'wild' })).resolves.toMatchObject({ status: 'already-applied' })
+    expect(metaPersistence.meta.stats.arenaWins).toBe(1)
+    expect(metaPersistence.meta.stats.wins).toBe(0)
+    expect(metaPersistence.meta.stats.captures).toBe(1)
+    expect(metaPersistence.saveCount).toBe(1)
+
+    const failedMetaPersistence = new MemoryMetaSettlementPersistence(defaultMeta())
+    const failedMeta = new MetaSettlementDestination(failedMetaPersistence, () => 413)
+    failedMetaPersistence.failPending = true
+    const firstIdentity = { resultId: 'battle-3', resultFingerprint: 'fp-3' }
+    await expect(failedMeta.applyOnce(firstIdentity, { winMode: 'wild' })).rejects.toMatchObject({ code: 'storage' })
+    failedMetaPersistence.meta = bumpStat(failedMetaPersistence.meta, 'wins') // A later, unrelated Result win.
+    failedMetaPersistence.failPending = false
+    await expect(failedMeta.applyOnce(firstIdentity, { winMode: 'arena' })).resolves.toMatchObject({ status: 'already-applied' })
+    expect(failedMetaPersistence.meta.stats.wins).toBe(2)
+    expect(failedMetaPersistence.meta.stats.arenaWins).toBe(0)
+  })
+
+  it('retries only the failed child after a partial coordinator settlement', async () => {
+    const rosterPersistence = new MemoryRosterGrowthPersistence([unit])
+    const roster = new RosterGrowthDestination(rosterPersistence, () => 420)
+    const spPersistence = new MemorySkillPointsPersistence(0)
+    const sp = new SkillPointsDestination(spPersistence, () => 421)
+    const metaPersistence = new MemoryMetaSettlementPersistence(defaultMeta())
+    const meta = new MetaSettlementDestination(metaPersistence, () => 422)
+    const journal = new MemorySettlementJournal()
+    const coordinator = new ResultSettlementCoordinator(roster, journal, () => 423, { skillPoints: sp, meta })
+
+    spPersistence.failMarker = true
+    await expect(coordinator.settle(identity, {
+      ...payload,
+      skillPoints: { delta: 4 },
+      meta: { winMode: 'arena' },
+    })).rejects.toMatchObject({ code: 'receipt' })
+    expect(rosterPersistence.saveCount).toBe(1)
+    expect(spPersistence.points).toBe(4)
+    expect(metaPersistence.meta.stats.arenaWins).toBe(0)
+
+    spPersistence.failMarker = false
+    const retry = await coordinator.settle(identity, {
+      ...payload,
+      ratio: 0.01,
+      skillPoints: { delta: 99 },
+      meta: { winMode: 'wild' },
+    })
+    expect(retry.status).toBe('already-applied')
+    expect(retry.skillPoints).toMatchObject({ status: 'already-applied', after: 4 })
+    expect(retry.meta).toMatchObject({ status: 'applied', winMode: 'wild' })
+    expect(rosterPersistence.saveCount).toBe(1)
+    expect(spPersistence.points).toBe(4)
+    expect(metaPersistence.meta.stats.wins).toBe(1)
+    expect(metaPersistence.meta.stats.arenaWins).toBe(0)
   })
 })
 

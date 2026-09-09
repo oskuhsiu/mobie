@@ -290,7 +290,8 @@ warnings.
   recommended trio. Advice never mutates selection: the player still chooses and orders the team.
 
 **Storage map (all client-side, no backend):** `mz.roster.v2` (localStorage, canonical roster, incl.
-`heldItemId`) · `mobie.roster.growth.v1` (roster settlement marker) · `mobie.result.settlement.v1`
+`heldItemId`) · `mobie.roster.growth.v1` (roster settlement marker) · `mobie.skillpoints.settlement.v1`
+(SP child marker) · `mobie.meta.settlement.v1` (Meta child marker) · `mobie.result.settlement.v1`
 (Result orchestration journal) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
@@ -303,7 +304,7 @@ The retired `mz-models` IndexedDB may still exist on a user's device. It is deli
 the migration list and every product store path: the app does not open, read, write, or delete it, and
 does not perform a cleanup migration.
 
-### 7.3 Result settlement (M24 Ticket 29)
+### 7.3 Result settlement (M24 Tickets 29–30)
 
 `game/resultSettlement.ts` is the first durable Result child destination. `ResultScreen` forwards the
 battle handoff pair (`resultId = battleSessionId`, independent `resultFingerprint`) and keeps `outcome` in
@@ -317,7 +318,18 @@ The destination marker is persisted under `mobie.roster.growth.v1`; the coordina
 fingerprint. Pending markers remain durable until reconciled. Retention is invoked only after the Result leave
 boundary and keeps current/unsettled entries plus the newest 128 settled entries. The journal never serves as
 the exactly-once authority: every replayed settled receipt asks the child destination to reconcile its own
-marker first. SP, meta, capture, tower, and incubator writes remain separate destinations for later M24 tickets.
+marker first.
+
+M24 Ticket 30 adds `SkillPointsDestination` and `MetaSettlementDestination`. Each child owns its
+canonical write plus write-ahead marker (the canonical `mobie.skillpoints.v1` / `mobie.meta.v1`
+envelopes carry a `resultSettlements` field) as the authoritative state; the standalone marker keys
+`mobie.skillpoints.settlement.v1` and `mobie.meta.settlement.v1` are best-effort evidence mirrors, and old
+number/object values remain readable. Each child exposes `applyOnce`/`hasApplied`/`markResultLeft`. The coordinator
+serializes roster, SP, and Result meta receipts independently; a failed child is retried through its
+own marker without rolling back or resending another child. Meta settlement currently covers the
+Result win counter and evolution receipt derived from the roster child; capture/Dex writes remain a
+later destination. Existing capture, tower, and incubator writes remain separate owners for Tickets
+31–32.
 
 ### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
 

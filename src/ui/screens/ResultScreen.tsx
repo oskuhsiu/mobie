@@ -9,7 +9,6 @@ import { useRoster } from '@/store/rosterStore'
 import { useSettings } from '@/store/settingsStore'
 import { interactModeOf, INTENSITY_BY_MODE } from '@/game/settings'
 import { SwipeThrow, CircleSeal } from '@/ui/components/CaptureGestures'
-import { useSkillPoints } from '@/store/skillPointsStore'
 import { useAccidents } from '@/store/accidentStore'
 import { useRun } from '@/store/runStore'
 import { floorReward, towerExpMult, isBossFloor, getAscension } from '@/game/tower'
@@ -32,12 +31,6 @@ const TeamModal = lazy(() => import('@/ui/components/TeamModal').then((m) => ({ 
 
 /** 戰敗仍給的經驗比例（相對勝利全額）——讓每場都有累積，破解「要先贏才能變強」死結 */
 const LOSS_EXP_RATIO = 0.15
-
-// Compatibility meta registration remains outside this ticket's canonical
-// roster destination. Keep one process-wide receipt key so StrictMode,
-// remount, and a late retry cannot count the same evolution twice; a fresh
-// page can still reconcile an unrecorded receipt on the next Result mount.
-const evolutionMetaRecorded = new Set<string>()
 
 function Pokeball({ size = 64, color = '#ff5161' }: { size?: number; color?: string }) {
   return (
@@ -302,6 +295,15 @@ export function ResultScreen() {
   const tower = context.tower
   // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場/連勝塔勝利不進捕獲流程。
   const canCapture = isWin && !tower && canCaptureIn(context.regionId)
+  const resultMode = !tower && canCaptureIn(context.regionId) ? 'wild' as const : 'arena' as const
+  // SP reward rules stay identical to the pre-Ticket-30 Result presentation;
+  // the value is now forwarded to the SP child destination for durable once-only apply.
+  const spReward = useMemo(() => {
+    if (!isWin) return 0
+    if (tower) return floorReward(tower.floor, tower.ascension).sp
+    const bossLevel = captureTargetOf(context.foeTeam)?.level ?? 1
+    return canCapture ? Math.max(1, 2 + Math.floor(bossLevel / 10)) : 1
+  }, [canCapture, context.foeTeam, isWin, tower])
   const [captureDone, setCaptureDone] = useState(!canCapture)
   const [capturedUnit, setCapturedUnit] = useState<OwnedUnit | null>(null)
 
@@ -318,25 +320,13 @@ export function ResultScreen() {
   const [settlementAttempt, setSettlementAttempt] = useState(0)
   const legacySettlementStartedRef = useRef(false)
 
-  // Non-roster rewards remain on their existing compatibility path until
-  // Tickets 30–32 migrate their own destinations. They are still guarded per
-  // mounted Result so this ticket changes only roster growth/evolution.
+  // Tower run and incubator progress remain on their existing owners until
+  // Tickets 31–32. Real battle SP/meta writes are forwarded below instead of
+  // mutating those stores from the Result component.
   const progressionStartedRef = useRef(false)
   useEffect(() => {
     if (!outcome || progressionStartedRef.current) return
     progressionStartedRef.current = true
-    // 圖鑑/成就：勝利依 mode 計數（塔戰算 arena 純戰鬥）；進化在 grant 完成後登錄
-    if (isWin) useMeta.getState().recordWin(!tower && canCaptureIn(context.regionId) ? 'wild' : 'arena')
-    // SP 經濟：塔→樓層獎勵（boss 加碼）；野外 boss→依等級；競技場→1
-    if (isWin) {
-      let spReward: number
-      if (tower) spReward = floorReward(tower.floor, tower.ascension).sp
-      else {
-        const bossLevel = captureTargetOf(context.foeTeam)?.level ?? 1
-        spReward = canCaptureIn(context.regionId) ? Math.max(1, 2 + Math.floor(bossLevel / 10)) : 1
-      }
-      useSkillPoints.getState().add(spReward)
-    }
     // M11 連勝塔 meta：記錄到達樓層（勝＝清掉本樓、敗＝清到前一樓）；清 boss 樓解鎖下一難度階
     if (tower) {
       useRun.getState().recordFloor(isWin ? tower.floor : tower.floor - 1)
@@ -344,7 +334,7 @@ export function ResultScreen() {
     }
     // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
     useIncubator.getState().advance(isWin ? 2 : 1)
-  }, [isWin, outcome, context.regionId, context.playerTeam, context.foeTeam])
+  }, [isWin, outcome, tower])
 
   // Roster EXP/evolution has one durable destination. The stable identity
   // makes a second effect run a reconciliation instead of a second reward.
@@ -362,16 +352,18 @@ export function ResultScreen() {
       : LOSS_EXP_RATIO
 
     if (resultIdentity) {
-      void settleBattleResult(resultIdentity, { unitIds, foeLevels, ratio, outcome })
-        .then((receipt) => {
+      void settleBattleResult(resultIdentity, {
+        unitIds,
+        foeLevels,
+        ratio,
+        outcome,
+        skillPoints: { delta: spReward },
+        meta: isWin ? { winMode: resultMode } : {},
+      })
+        .then(() => {
           setSettlementStatus('settled')
-          // Meta evolution registration remains a compatibility side effect;
-          // only one receipt per stable result identity is allowed to emit it.
-          const evolutionKey = `${resultIdentity.resultId}:${resultIdentity.resultFingerprint}`
-          if (receipt.evolutions.length > 0 && !evolutionMetaRecorded.has(evolutionKey)) {
-            evolutionMetaRecorded.add(evolutionKey)
-            useMeta.getState().recordEvolutions(receipt.evolutions)
-          }
+          // Evolution metadata is part of the Meta child payload derived from
+          // the roster receipt; no direct Result-side write is needed here.
         })
         .catch((cause: unknown) => {
           setSettlementStatus('error')
@@ -404,6 +396,8 @@ export function ResultScreen() {
     resultIdentity,
     settleBattleResult,
     settlementAttempt,
+    resultMode,
+    spReward,
     tower,
   ])
 

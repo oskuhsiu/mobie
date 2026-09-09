@@ -3,6 +3,7 @@ import { applyExp, expYield, type ExpResult } from '@/game/growth'
 import { effectiveLearnedMoves, newlyLearned } from '@/game/learnset'
 import { getSpecies } from '@/game/data/species'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
+import { addRegistered, bumpStat, type MetaState } from '@/game/meta'
 
 /**
  * Result settlement is keyed by the logical battle, not by a React mount or a
@@ -36,8 +37,21 @@ export const RESULT_MARKER_LIMIT = 128
 export const RESULT_SETTLEMENT_SCHEMA_VERSION = 1
 export const RESULT_SETTLEMENT_JOURNAL_KEY = 'mobie.result.settlement.v1'
 export const ROSTER_GROWTH_MARKER_KEY = 'mobie.roster.growth.v1'
+export const SKILL_POINTS_SETTLEMENT_MARKER_KEY = 'mobie.skillpoints.settlement.v1'
+export const META_SETTLEMENT_MARKER_KEY = 'mobie.meta.settlement.v1'
 
 export type ResultOutcome = 'win' | 'lose'
+
+/** Account-level SP reward forwarded by Result. The canonical wallet is owned by the SP child. */
+export interface SkillPointsSettlementPayload {
+  delta: number
+}
+
+/** Existing Result meta progression forwarded by Result. Capture/Dex writes remain Ticket 32. */
+export interface MetaSettlementPayload {
+  winMode?: 'arena' | 'wild'
+  evolutions?: Array<{ toSpecies: number }>
+}
 
 export interface RosterGrowthPayload {
   unitIds: string[]
@@ -45,6 +59,12 @@ export interface RosterGrowthPayload {
   ratio: number
   /** Kept beside (and independent from) the identity pair for future destinations. */
   outcome?: ResultOutcome
+}
+
+/** Complete Result payload forwarded to the independent child destinations. */
+export interface ResultSettlementPayload extends RosterGrowthPayload {
+  skillPoints?: SkillPointsSettlementPayload
+  meta?: MetaSettlementPayload
 }
 
 export interface MoveLearnReceipt {
@@ -58,6 +78,27 @@ export interface RosterGrowthReceipt extends ResultIdentity {
   evolutions: EvolutionReceipt[]
   moveLearns: MoveLearnReceipt[]
   appliedAt: number
+}
+
+export interface SkillPointsSettlementReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  delta: number
+  before: number
+  after: number
+  appliedAt: number
+}
+
+export interface MetaSettlementReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  meta: MetaState
+  winMode?: 'arena' | 'wild'
+  evolutionCount: number
+  appliedAt: number
+}
+
+export interface ResultSettlementReceipt extends RosterGrowthReceipt {
+  skillPoints?: SkillPointsSettlementReceipt
+  meta?: MetaSettlementReceipt
 }
 
 export interface EvolutionReceipt {
@@ -85,6 +126,34 @@ export interface RosterGrowthMarker extends ResultIdentity {
   receipt: Omit<RosterGrowthReceipt, 'status'>
 }
 
+export interface SkillPointsSettlementMarker extends ResultIdentity {
+  destination: 'skill-points'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  /** The canonical wallet write completed inside the child boundary. */
+  canonicalApplied?: boolean
+  delta: number
+  before: number
+  after: number
+  receipt: Omit<SkillPointsSettlementReceipt, 'status'>
+}
+
+export interface MetaSettlementMarker extends ResultIdentity {
+  destination: 'meta'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  /** The canonical Meta write completed inside the child boundary. */
+  canonicalApplied?: boolean
+  before: MetaState
+  after: MetaState
+  payload: MetaSettlementPayload
+  receipt: Omit<MetaSettlementReceipt, 'status'>
+}
+
 export interface SettlementJournalEntry extends ResultIdentity {
   status: ResultMarkerStatus
   createdAt: number
@@ -92,6 +161,8 @@ export interface SettlementJournalEntry extends ResultIdentity {
   leftResultAt?: number
   outcome?: ResultOutcome
   rosterGrowth?: RosterGrowthReceipt
+  skillPoints?: SkillPointsSettlementReceipt
+  meta?: MetaSettlementReceipt
   error?: string
 }
 
@@ -104,6 +175,33 @@ export interface RosterGrowthPersistence {
   savePending: (roster: OwnedUnit[], markers: RosterGrowthMarker[]) => Promise<void>
   /** Final marker step after the canonical roster write has succeeded. */
   saveMarkers: (markers: RosterGrowthMarker[]) => Promise<void>
+}
+
+export interface SkillPointsPersistence {
+  loadPoints: () => Promise<number>
+  /** Must reject a failed canonical write; swallowing quota errors is unsafe here. */
+  savePoints: (points: number) => Promise<void>
+  loadMarkers: () => Promise<SkillPointsSettlementMarker[]>
+  /** Durable write-ahead step: pending marker + canonical wallet. */
+  savePending: (points: number, markers: SkillPointsSettlementMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical wallet write has succeeded. */
+  saveMarkers: (markers: SkillPointsSettlementMarker[]) => Promise<void>
+}
+
+export interface MetaSettlementPersistence {
+  loadMeta: () => Promise<MetaState>
+  /** Must reject a failed canonical write; swallowing quota errors is unsafe here. */
+  saveMeta: (meta: MetaState) => Promise<void>
+  loadMarkers: () => Promise<MetaSettlementMarker[]>
+  /** Durable write-ahead step: pending marker + canonical meta. */
+  savePending: (meta: MetaState, markers: MetaSettlementMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical meta write has succeeded. */
+  saveMarkers: (markers: MetaSettlementMarker[]) => Promise<void>
+}
+
+export interface ResultSettlementChildren {
+  skillPoints?: SkillPointsDestination
+  meta?: MetaSettlementDestination
 }
 
 export interface SettlementJournalPersistence {
@@ -467,6 +565,349 @@ export class RosterGrowthDestination {
   }
 }
 
+function replaceSkillPointsMarker(
+  markers: readonly SkillPointsSettlementMarker[],
+  marker: SkillPointsSettlementMarker,
+): SkillPointsSettlementMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function replaceMetaMarker(
+  markers: readonly MetaSettlementMarker[],
+  marker: MetaSettlementMarker,
+): MetaSettlementMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function cloneMeta(meta: MetaState): MetaState {
+  return {
+    schemaVersion: meta.schemaVersion,
+    registered: [...meta.registered],
+    seen: [...meta.seen],
+    stats: { ...meta.stats },
+    achievements: { ...meta.achievements },
+  }
+}
+
+/** Pure meta update used by the Meta child boundary. */
+export function calculateMetaSettlement(meta: MetaState, payload: MetaSettlementPayload): MetaState {
+  let next = meta
+  if (payload.winMode) {
+    next = bumpStat(next, payload.winMode === 'arena' ? 'arenaWins' : 'wins')
+  }
+  const evolutionIds = (payload.evolutions ?? []).map((event) => event.toSpecies)
+  if (evolutionIds.length > 0) {
+    next = bumpStat(addRegistered(next, evolutionIds), 'evolutions', evolutionIds.length)
+  }
+  return next
+}
+
+function skillPointsReceipt(
+  identity: ResultIdentity,
+  delta: number,
+  before: number,
+  after: number,
+  appliedAt: number,
+  status: SkillPointsSettlementReceipt['status'],
+): SkillPointsSettlementReceipt {
+  return { ...identity, status, delta, before, after, appliedAt }
+}
+
+function metaReceipt(
+  identity: ResultIdentity,
+  meta: MetaState,
+  payload: MetaSettlementPayload,
+  appliedAt: number,
+  status: MetaSettlementReceipt['status'],
+): MetaSettlementReceipt {
+  return {
+    ...identity,
+    status,
+    meta: cloneMeta(meta),
+    ...(payload.winMode ? { winMode: payload.winMode } : {}),
+    evolutionCount: payload.evolutions?.length ?? 0,
+    appliedAt,
+  }
+}
+
+function withoutReceiptStatus<T extends { status: unknown }>(receipt: T): Omit<T, 'status'> {
+  const rest = { ...receipt } as Omit<T, 'status'> & { status?: unknown }
+  delete rest.status
+  return rest
+}
+
+/**
+ * Skill Points child destination. The wallet and its pending marker are
+ * written through one boundary, while Result orchestration remains separate.
+ */
+export class SkillPointsDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: SkillPointsPersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: SkillPointsSettlementPayload): Promise<SkillPointsSettlementReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return marker.status === 'settled' || marker.canonicalApplied === true
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取 SP 結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceSkillPointsMarker(markers, { ...marker, leftResultAt: this.now() }),
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存 SP Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(
+    identity: ResultIdentity,
+    payload: SkillPointsSettlementPayload,
+  ): Promise<SkillPointsSettlementReceipt> {
+    let markers: SkillPointsSettlementMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 SP 結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (existing?.status === 'settled') return { ...existing.receipt, status: 'already-applied' }
+
+    let points: number
+    try {
+      points = await this.persistence.loadPoints()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical SP 失敗，請重試。', cause)
+    }
+
+    if (existing) {
+      // Pending is a durable write-ahead record. The child boundary records
+      // canonicalApplied together with the wallet value; when it is false,
+      // apply the saved delta to the current wallet so later spends/grants are
+      // preserved instead of resetting the balance to an old snapshot.
+      if (existing.canonicalApplied !== true && existing.delta > 0) {
+        try {
+          await this.persistence.savePending(points + existing.delta, markers, identity.resultId)
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復 SP 結算資料失敗，請重試。', cause)
+        }
+      }
+      const settled: SkillPointsSettlementMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceSkillPointsMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, 'SP 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return { ...existing.receipt, status: 'already-applied' }
+    }
+
+    const delta = Number.isFinite(payload.delta) ? Math.max(0, Math.floor(payload.delta)) : 0
+    const after = points + delta
+    const appliedAt = this.now()
+    const receipt = skillPointsReceipt(identity, delta, points, after, appliedAt, 'applied')
+    const pending: SkillPointsSettlementMarker = {
+      ...identity,
+      destination: 'skill-points',
+      status: 'pending',
+      createdAt: appliedAt,
+      canonicalApplied: false,
+      delta,
+      before: points,
+      after,
+      receipt: withoutReceiptStatus(receipt),
+    }
+    try {
+      await this.persistence.savePending(after, replaceSkillPointsMarker(markers, pending), identity.resultId)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存 SP 結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled: SkillPointsSettlementMarker = {
+      ...pending,
+      status: 'settled',
+      settledAt: appliedAt,
+    }
+    try {
+      await this.persistence.saveMarkers(replaceSkillPointsMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, 'SP 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
+/** Meta/Dex progression child destination. Capture writes remain a later child. */
+export class MetaSettlementDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: MetaSettlementPersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: MetaSettlementPayload): Promise<MetaSettlementReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return marker.status === 'settled' || marker.canonicalApplied === true
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取 Meta 結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceMetaMarker(markers, { ...marker, leftResultAt: this.now() }),
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存 Meta Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(identity: ResultIdentity, payload: MetaSettlementPayload): Promise<MetaSettlementReceipt> {
+    let markers: MetaSettlementMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 Meta 結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (existing?.status === 'settled') return { ...existing.receipt, status: 'already-applied', meta: cloneMeta(existing.receipt.meta) }
+
+    let meta: MetaState
+    try {
+      meta = await this.persistence.loadMeta()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical Meta 失敗，請重試。', cause)
+    }
+    if (existing) {
+      if (existing.canonicalApplied !== true) {
+        // The marker payload is the operation delta. Apply it to the current
+        // canonical state so a later win/capture/claim is never overwritten.
+        const reconciled = calculateMetaSettlement(meta, existing.payload)
+        try {
+          await this.persistence.savePending(reconciled, markers, identity.resultId)
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復 Meta 結算資料失敗，請重試。', cause)
+        }
+      }
+      const settled: MetaSettlementMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceMetaMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, 'Meta 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return { ...existing.receipt, status: 'already-applied', meta: cloneMeta(existing.receipt.meta) }
+    }
+
+    const after = calculateMetaSettlement(meta, payload)
+    const appliedAt = this.now()
+    const receipt = metaReceipt(identity, after, payload, appliedAt, 'applied')
+    const pending: MetaSettlementMarker = {
+      ...identity,
+      destination: 'meta',
+      status: 'pending',
+      createdAt: appliedAt,
+      canonicalApplied: false,
+      before: cloneMeta(meta),
+      after: cloneMeta(after),
+      payload: {
+        ...(payload.winMode ? { winMode: payload.winMode } : {}),
+        ...(payload.evolutions ? { evolutions: payload.evolutions.map((event) => ({ toSpecies: event.toSpecies })) } : {}),
+      },
+      receipt: withoutReceiptStatus(receipt),
+    }
+    try {
+      await this.persistence.savePending(after, replaceMetaMarker(markers, pending), identity.resultId)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存 Meta 結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled: MetaSettlementMarker = {
+      ...pending,
+      status: 'settled',
+      settledAt: appliedAt,
+    }
+    try {
+      await this.persistence.saveMarkers(replaceMetaMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, 'Meta 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
 /** Result-level journal; it never mutates the roster and is not exactly-once authority. */
 export class ResultSettlementCoordinator {
   private queue: Promise<unknown> = Promise.resolve()
@@ -475,9 +916,10 @@ export class ResultSettlementCoordinator {
     private readonly destination: RosterGrowthDestination,
     private readonly journal: SettlementJournalPersistence,
     private readonly now: () => number = () => Date.now(),
+    private readonly children: ResultSettlementChildren = {},
   ) {}
 
-  settle(identity: ResultIdentity, payload: RosterGrowthPayload): Promise<RosterGrowthReceipt> {
+  settle(identity: ResultIdentity, payload: ResultSettlementPayload): Promise<ResultSettlementReceipt> {
     const run = this.queue.then(() => this.settleSerialized(identity, payload))
     this.queue = run.catch(() => undefined)
     return run
@@ -495,6 +937,8 @@ export class ResultSettlementCoordinator {
           ))
         }
         await this.destination.markResultLeft(identity)
+        if (this.children.skillPoints) await this.children.skillPoints.markResultLeft(identity)
+        if (this.children.meta) await this.children.meta.markResultLeft(identity)
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
         throw new ResultSettlementError('storage', identity, '保存 Result 離場標記失敗，請重試。', error)
@@ -504,7 +948,7 @@ export class ResultSettlementCoordinator {
     return run
   }
 
-  private async settleSerialized(identity: ResultIdentity, payload: RosterGrowthPayload): Promise<RosterGrowthReceipt> {
+  private async settleSerialized(identity: ResultIdentity, payload: ResultSettlementPayload): Promise<ResultSettlementReceipt> {
     let entries: SettlementJournalEntry[]
     try {
       entries = await this.journal.load()
@@ -515,26 +959,57 @@ export class ResultSettlementCoordinator {
     if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
 
     let childAlreadyApplied = false
+    let skillPointsAlreadyApplied = false
+    let metaAlreadyApplied = false
     if (existing) {
       // Reconciliation starts with the child authority. The journal is only
       // orchestration state and cannot prove that the roster write happened.
       try {
         childAlreadyApplied = await this.destination.hasApplied(identity)
+        if (this.children.skillPoints) skillPointsAlreadyApplied = await this.children.skillPoints.hasApplied(identity)
+        if (this.children.meta) metaAlreadyApplied = await this.children.meta.hasApplied(identity)
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
-        throw new ResultSettlementError('storage', identity, 'Result 成長回條對帳失敗，請重試。', error)
+        throw new ResultSettlementError('storage', identity, 'Result 子結算回條對帳失敗，請重試。', error)
       }
     }
 
-    if (existing?.status === 'settled' && existing.rosterGrowth && childAlreadyApplied) {
-      let childReceipt: RosterGrowthReceipt
+    const allChildrenSettled = existing?.status === 'settled'
+      && existing.rosterGrowth
+      && childAlreadyApplied
+      && (!this.children.skillPoints || (existing.skillPoints && skillPointsAlreadyApplied))
+      && (!this.children.meta || (existing.meta && metaAlreadyApplied))
+    if (allChildrenSettled) {
+      let childReceipt: ResultSettlementReceipt
       try {
-        childReceipt = await this.destination.applyOnce(identity, payload)
+        const rosterReceipt = await this.destination.applyOnce(identity, payload)
+        const skillPointsReceipt = this.children.skillPoints
+          ? await this.children.skillPoints.applyOnce(identity, payload.skillPoints ?? { delta: 0 })
+          : undefined
+        const metaPayload: MetaSettlementPayload = {
+          ...(payload.meta ?? {}),
+          ...(payload.meta?.evolutions
+            ? {}
+            : { evolutions: rosterReceipt.evolutions.map((event) => ({ toSpecies: event.toSpecies })) }),
+        }
+        const metaReceipt = this.children.meta
+          ? await this.children.meta.applyOnce(identity, metaPayload)
+          : undefined
+        childReceipt = {
+          ...rosterReceipt,
+          ...(skillPointsReceipt ? { skillPoints: skillPointsReceipt } : {}),
+          ...(metaReceipt ? { meta: metaReceipt } : {}),
+        }
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
-        throw new ResultSettlementError('storage', identity, 'Result 成長回條對帳失敗，請重試。', error)
+        throw new ResultSettlementError('storage', identity, 'Result 子結算回條對帳失敗，請重試。', error)
       }
-      return { ...childReceipt, status: 'already-applied' }
+      return {
+        ...childReceipt,
+        status: 'already-applied',
+        ...(childReceipt.skillPoints ? { skillPoints: { ...childReceipt.skillPoints, status: 'already-applied' } } : {}),
+        ...(childReceipt.meta ? { meta: { ...childReceipt.meta, status: 'already-applied' } } : {}),
+      }
     }
 
     const running: SettlementJournalEntry = existing
@@ -560,11 +1035,42 @@ export class ResultSettlementCoordinator {
       throw new ResultSettlementError('storage', identity, 'Result 結算失敗，請重試。', error)
     }
 
+    let skillPointsReceipt: SkillPointsSettlementReceipt | undefined
+    if (this.children.skillPoints) {
+      try {
+        skillPointsReceipt = await this.children.skillPoints.applyOnce(
+          identity,
+          payload.skillPoints ?? { delta: 0 },
+        )
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, 'SP 結算失敗，請重試。', error)
+      }
+    }
+
+    let metaReceipt: MetaSettlementReceipt | undefined
+    if (this.children.meta) {
+      const metaPayload: MetaSettlementPayload = {
+        ...(payload.meta ?? {}),
+        ...(payload.meta?.evolutions
+          ? {}
+          : { evolutions: receipt.evolutions.map((event) => ({ toSpecies: event.toSpecies })) }),
+      }
+      try {
+        metaReceipt = await this.children.meta.applyOnce(identity, metaPayload)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, 'Meta 結算失敗，請重試。', error)
+      }
+    }
+
     const settled: SettlementJournalEntry = {
       ...running,
       status: 'settled',
       settledAt: running.settledAt ?? this.now(),
       rosterGrowth: receipt,
+      ...(skillPointsReceipt ? { skillPoints: skillPointsReceipt } : {}),
+      ...(metaReceipt ? { meta: metaReceipt } : {}),
       error: undefined,
     }
     try {
@@ -576,7 +1082,11 @@ export class ResultSettlementCoordinator {
       // running state lets retry reconcile via destination.applyOnce.
       throw new ResultSettlementError('receipt', identity, 'Mobie 成長已保存，但 Result 回條尚未完成；請重試。', cause)
     }
-    return receipt
+    return {
+      ...receipt,
+      ...(skillPointsReceipt ? { skillPoints: skillPointsReceipt } : {}),
+      ...(metaReceipt ? { meta: metaReceipt } : {}),
+    }
   }
 }
 
@@ -603,6 +1113,21 @@ function parseArray<T>(raw: string | null, label: string): T[] {
   }
   if (!Array.isArray(parsed)) throw new Error(`${label} 格式無效：必須是陣列`)
   return parsed as T[]
+}
+
+function readEmbeddedMarkers<T>(raw: string | null, label: string): T[] | null {
+  if (raw === null) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (cause) {
+    throw new Error(`${label} 格式無效：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const markers = (parsed as Record<string, unknown>).resultSettlements
+  if (markers === undefined) return null
+  if (!Array.isArray(markers)) throw new Error(`${label} 格式無效：必須是陣列`)
+  return markers as T[]
 }
 
 function storageFailure(identity: ResultIdentity, message: string, cause: unknown): ResultSettlementError {
@@ -677,6 +1202,116 @@ export class LocalStorageRosterGrowthPersistence implements RosterGrowthPersiste
   }
 }
 
+/** Browser persistence for the SP child boundary. */
+export class LocalStorageSkillPointsPersistence implements SkillPointsPersistence {
+  constructor(
+    private readonly points: {
+      loadPoints: () => Promise<number> | number
+      savePoints: (points: number) => Promise<void> | void
+      savePointsWithMarkers: (points: number, markers: SkillPointsSettlementMarker[], operationId?: string) => Promise<void> | void
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadPoints(): Promise<number> {
+    return Promise.resolve(this.points.loadPoints())
+  }
+
+  savePoints(points: number): Promise<void> {
+    return Promise.resolve(this.points.savePoints(points))
+  }
+
+  async loadMarkers(): Promise<SkillPointsSettlementMarker[]> {
+    if (!this.storage) return []
+    const embedded = readEmbeddedMarkers<SkillPointsSettlementMarker>(
+      this.storage.getItem('mobie.skillpoints.v1'),
+      'SP 結算標記',
+    )
+    if (embedded) return embedded
+    return parseArray<SkillPointsSettlementMarker>(
+      this.storage.getItem(SKILL_POINTS_SETTLEMENT_MARKER_KEY),
+      'SP 結算標記',
+    )
+  }
+
+  async savePending(points: number, markers: SkillPointsSettlementMarker[], operationId?: string): Promise<void> {
+    const completed = markers.map((marker) => marker.resultId === operationId
+      ? { ...marker, canonicalApplied: true }
+      : marker)
+    try {
+      await this.points.savePointsWithMarkers(points, completed, operationId)
+      try { this.storage?.setItem(SKILL_POINTS_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存 SP 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: SkillPointsSettlementMarker[]): Promise<void> {
+    try {
+      const points = await this.loadPoints()
+      await this.points.savePointsWithMarkers(points, markers)
+      try { this.storage?.setItem(SKILL_POINTS_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存 SP 結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
+/** Browser persistence for the Meta child boundary. */
+export class LocalStorageMetaSettlementPersistence implements MetaSettlementPersistence {
+  constructor(
+    private readonly meta: {
+      loadMeta: () => Promise<MetaState> | MetaState
+      saveMeta: (meta: MetaState) => Promise<void> | void
+      saveMetaWithMarkers: (meta: MetaState, markers: MetaSettlementMarker[], operationId?: string) => Promise<void> | void
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadMeta(): Promise<MetaState> {
+    return Promise.resolve(this.meta.loadMeta())
+  }
+
+  saveMeta(meta: MetaState): Promise<void> {
+    return Promise.resolve(this.meta.saveMeta(meta))
+  }
+
+  async loadMarkers(): Promise<MetaSettlementMarker[]> {
+    if (!this.storage) return []
+    const embedded = readEmbeddedMarkers<MetaSettlementMarker>(
+      this.storage.getItem('mobie.meta.v1'),
+      'Meta 結算標記',
+    )
+    if (embedded) return embedded
+    return parseArray<MetaSettlementMarker>(
+      this.storage.getItem(META_SETTLEMENT_MARKER_KEY),
+      'Meta 結算標記',
+    )
+  }
+
+  async savePending(meta: MetaState, markers: MetaSettlementMarker[], operationId?: string): Promise<void> {
+    const completed = markers.map((marker) => marker.resultId === operationId
+      ? { ...marker, canonicalApplied: true }
+      : marker)
+    try {
+      await this.meta.saveMetaWithMarkers(meta, completed, operationId)
+      try { this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存 Meta 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: MetaSettlementMarker[]): Promise<void> {
+    try {
+      const meta = await this.loadMeta()
+      await this.meta.saveMetaWithMarkers(meta, markers)
+      try { this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存 Meta 結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
 /** Test-friendly in-memory marker/journal implementations. */
 export class MemorySettlementJournal implements SettlementJournalPersistence {
   entries: SettlementJournalEntry[] = []
@@ -685,13 +1320,23 @@ export class MemorySettlementJournal implements SettlementJournalPersistence {
   failOnSave: number | undefined
 
   async load(): Promise<SettlementJournalEntry[]> {
-    return this.entries.map((entry) => ({ ...entry, rosterGrowth: entry.rosterGrowth ? { ...entry.rosterGrowth } : undefined }))
+    return this.entries.map((entry) => ({
+      ...entry,
+      rosterGrowth: entry.rosterGrowth ? { ...entry.rosterGrowth } : undefined,
+      skillPoints: entry.skillPoints ? { ...entry.skillPoints } : undefined,
+      meta: entry.meta ? { ...entry.meta, meta: cloneMeta(entry.meta.meta) } : undefined,
+    }))
   }
 
   async save(entries: SettlementJournalEntry[]): Promise<void> {
     this.saveCount += 1
     if (this.failSave || this.failOnSave === this.saveCount) throw new Error('journal write failed')
-    this.entries = entries.map((entry) => ({ ...entry, rosterGrowth: entry.rosterGrowth ? { ...entry.rosterGrowth } : undefined }))
+    this.entries = entries.map((entry) => ({
+      ...entry,
+      rosterGrowth: entry.rosterGrowth ? { ...entry.rosterGrowth } : undefined,
+      skillPoints: entry.skillPoints ? { ...entry.skillPoints } : undefined,
+      meta: entry.meta ? { ...entry.meta, meta: cloneMeta(entry.meta.meta) } : undefined,
+    }))
   }
 }
 
@@ -728,5 +1373,128 @@ export class MemoryRosterGrowthPersistence implements RosterGrowthPersistence {
   async saveMarkers(markers: RosterGrowthMarker[]): Promise<void> {
     if (this.failMarker) throw new Error('marker write failed')
     this.markers = markers.map((marker) => ({ ...marker, receipt: { ...marker.receipt } }))
+  }
+}
+
+export class MemorySkillPointsPersistence implements SkillPointsPersistence {
+  points: number
+  markers: SkillPointsSettlementMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(points = 0) {
+    this.points = points
+  }
+
+  async loadPoints(): Promise<number> {
+    return this.points
+  }
+
+  async savePoints(points: number): Promise<void> {
+    this.saveCount += 1
+    this.points = points
+  }
+
+  async loadMarkers(): Promise<SkillPointsSettlementMarker[]> {
+    return this.markers.map((marker) => ({ ...marker, receipt: { ...marker.receipt } }))
+  }
+
+  async savePending(points: number, markers: SkillPointsSettlementMarker[], operationId?: string): Promise<void> {
+    this.markers = markers.map((marker) => ({ ...marker, receipt: { ...marker.receipt } }))
+    if (this.failPending) throw new Error('SP pending write failed')
+    await this.savePoints(points)
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+      receipt: { ...marker.receipt },
+    }))
+  }
+
+  async saveMarkers(markers: SkillPointsSettlementMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('SP marker write failed')
+    this.markers = markers.map((marker) => ({ ...marker, receipt: { ...marker.receipt } }))
+  }
+}
+
+export class MemoryMetaSettlementPersistence implements MetaSettlementPersistence {
+  meta: MetaState
+  markers: MetaSettlementMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(meta: MetaState) {
+    this.meta = cloneMeta(meta)
+  }
+
+  async loadMeta(): Promise<MetaState> {
+    return cloneMeta(this.meta)
+  }
+
+  async saveMeta(meta: MetaState): Promise<void> {
+    this.saveCount += 1
+    this.meta = cloneMeta(meta)
+  }
+
+  async loadMarkers(): Promise<MetaSettlementMarker[]> {
+    return this.markers.map((marker) => ({
+      ...marker,
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      payload: {
+        ...marker.payload,
+        ...(marker.payload.evolutions
+          ? { evolutions: marker.payload.evolutions.map((event) => ({ ...event })) }
+          : {}),
+      },
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+  }
+
+  async savePending(meta: MetaState, markers: MetaSettlementMarker[], operationId?: string): Promise<void> {
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      payload: {
+        ...marker.payload,
+        ...(marker.payload.evolutions
+          ? { evolutions: marker.payload.evolutions.map((event) => ({ ...event })) }
+          : {}),
+      },
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+    if (this.failPending) throw new Error('Meta pending write failed')
+    await this.saveMeta(meta)
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      payload: {
+        ...marker.payload,
+        ...(marker.payload.evolutions
+          ? { evolutions: marker.payload.evolutions.map((event) => ({ ...event })) }
+          : {}),
+      },
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+  }
+
+  async saveMarkers(markers: MetaSettlementMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('Meta marker write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      payload: {
+        ...marker.payload,
+        ...(marker.payload.evolutions
+          ? { evolutions: marker.payload.evolutions.map((event) => ({ ...event })) }
+          : {}),
+      },
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
   }
 }

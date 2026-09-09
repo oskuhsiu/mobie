@@ -10,7 +10,8 @@
 import type { OwnedUnit } from '@/game/types'
 
 export const META_SCHEMA_VERSION = 1
-const KEY = 'mobie.meta.v1'
+export const META_KEY = 'mobie.meta.v1'
+const SETTLEMENT_FIELD = 'resultSettlements'
 
 export interface MetaStats {
   captures: number // 累計收服數
@@ -114,10 +115,31 @@ function hasLS(): boolean {
   return typeof localStorage !== 'undefined'
 }
 
+function existingSettlementMarkers(): unknown[] | undefined {
+  if (!hasLS()) return undefined
+  try {
+    const raw = localStorage.getItem(META_KEY)
+    if (!raw) return undefined
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const markers = (parsed as Record<string, unknown>)[SETTLEMENT_FIELD]
+    return Array.isArray(markers) ? markers : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function encodeMeta(meta: MetaState, markers: unknown[] | undefined): string {
+  return JSON.stringify({
+    ...meta,
+    ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
+  })
+}
+
 export function loadMeta(): MetaState {
   if (!hasLS()) return defaultMeta()
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(META_KEY)
     return raw ? migrateMeta(JSON.parse(raw)) : defaultMeta()
   } catch {
     return defaultMeta()
@@ -127,7 +149,7 @@ export function loadMeta(): MetaState {
 /** Bootstrap read: preserve storage errors so the Title can offer Retry instead of seeding over them. */
 export function loadMetaStrict(): MetaState {
   if (!hasLS()) return defaultMeta()
-  const raw = localStorage.getItem(KEY)
+  const raw = localStorage.getItem(META_KEY)
   if (raw === null) return defaultMeta()
   let parsed: unknown
   try {
@@ -151,7 +173,7 @@ export function loadMetaStrict(): MetaState {
 export function saveMetaState(meta: MetaState): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(KEY, JSON.stringify(meta))
+    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers()))
   } catch {
     /* 配額/隱私模式：忽略 */
   }
@@ -161,8 +183,18 @@ export function saveMetaState(meta: MetaState): void {
 export function saveMetaStateStrict(meta: MetaState): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(KEY, JSON.stringify(meta))
+    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers()))
   } catch (cause) {
     throw new Error(`保存圖鑑與成就失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Child-boundary write: canonical Meta and its settlement markers share one envelope. */
+export function saveMetaStateWithSettlementMarkersStrict(meta: MetaState, markers: unknown[]): void {
+  if (!hasLS()) return
+  try {
+    localStorage.setItem(META_KEY, encodeMeta(meta, markers))
+  } catch (cause) {
+    throw new Error(`保存 Meta 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }
