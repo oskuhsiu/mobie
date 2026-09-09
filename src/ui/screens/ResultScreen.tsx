@@ -23,6 +23,7 @@ import { MobieSprite } from '@/ui/components/MobieSprite'
 import { MobCard } from '@/ui/components/MobCard'
 import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
 import type { OwnedUnit } from '@/game/types'
+import type { GameEvent } from '@/game/machine/gameMachine'
 import { useOverlayController } from '@/ui/shell/OverlayController'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
@@ -286,6 +287,12 @@ export function ResultScreen() {
   const controller = useOverlayController()
   const outcome = context.battleResult?.outcome ?? context.outcome
   const isWin = outcome === 'win'
+  const resultIdentity = useMemo(() => context.battleResult
+    ? {
+        resultId: context.battleResult.resultId,
+        resultFingerprint: context.battleResult.resultFingerprint,
+      }
+    : null, [context.battleResult?.resultFingerprint, context.battleResult?.resultId])
   const tower = context.tower
   // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場/連勝塔勝利不進捕獲流程。
   const canCapture = isWin && !tower && canCaptureIn(context.regionId)
@@ -294,13 +301,24 @@ export function ResultScreen() {
 
   // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
   const grantBattleExp = useRoster((s) => s.grantBattleExp)
+  const settleBattleResult = useRoster((s) => s.settleBattleResult)
+  const markBattleResultLeft = useRoster((s) => s.markBattleResultLeft)
   const captureUnit = useRoster((s) => s.captureUnit)
   const lastResults = useRoster((s) => s.lastResults)
   const lastEvolutions = useRoster((s) => s.lastEvolutions)
-  const grantedRef = useRef(false)
+  type SettlementStatus = 'idle' | 'running' | 'settled' | 'error'
+  const [settlementStatus, setSettlementStatus] = useState<SettlementStatus>(outcome ? 'running' : 'idle')
+  const [settlementError, setSettlementError] = useState<string | null>(null)
+  const [settlementAttempt, setSettlementAttempt] = useState(0)
+  const legacySettlementStartedRef = useRef(false)
+
+  // Non-roster rewards remain on their existing compatibility path until
+  // Tickets 30–32 migrate their own destinations. They are still guarded per
+  // mounted Result so this ticket changes only roster growth/evolution.
+  const progressionStartedRef = useRef(false)
   useEffect(() => {
-    if (!outcome || grantedRef.current) return
-    grantedRef.current = true
+    if (!outcome || progressionStartedRef.current) return
+    progressionStartedRef.current = true
     // 圖鑑/成就：勝利依 mode 計數（塔戰算 arena 純戰鬥）；進化在 grant 完成後登錄
     if (isWin) useMeta.getState().recordWin(!tower && canCaptureIn(context.regionId) ? 'wild' : 'arena')
     // SP 經濟：塔→樓層獎勵（boss 加碼）；野外 boss→依等級；競技場→1
@@ -320,21 +338,70 @@ export function ResultScreen() {
     }
     // 孵化：每場有效戰鬥推進所有蛋的進度（勝 +2 / 敗 +1）
     useIncubator.getState().advance(isWin ? 2 : 1)
-    // 經驗倍率：塔→towerExpMult(樓層)；野外→幸運加碼/補給符 expMult；敗北維持部分比例
-    const winMult = tower ? towerExpMult(tower.floor) : useAccidents.getState().expMult
-    void grantBattleExp(
-      context.playerTeam.map((c) => c.cardId),
-      context.foeTeam.map((c) => c.level),
-      isWin ? winMult : LOSS_EXP_RATIO,
-    ).then(() => {
-      const evos = useRoster.getState().lastEvolutions
-      if (evos.length > 0) useMeta.getState().recordEvolutions(evos)
-    })
-  }, [isWin, outcome, context.regionId, context.playerTeam, context.foeTeam, grantBattleExp])
+  }, [isWin, outcome, context.regionId, context.playerTeam, context.foeTeam])
+
+  // Roster EXP/evolution has one durable destination. The stable identity
+  // makes a second effect run a reconciliation instead of a second reward.
+  useEffect(() => {
+    if (!outcome) {
+      setSettlementStatus('idle')
+      return
+    }
+    setSettlementStatus('running')
+    setSettlementError(null)
+    const unitIds = context.playerTeam.map((card) => card.cardId)
+    const foeLevels = context.foeTeam.map((card) => card.level)
+    const ratio = isWin
+      ? (tower ? towerExpMult(tower.floor) : useAccidents.getState().expMult)
+      : LOSS_EXP_RATIO
+
+    if (resultIdentity) {
+      void settleBattleResult(resultIdentity, { unitIds, foeLevels, ratio, outcome })
+        .then((receipt) => {
+          setSettlementStatus('settled')
+          // Meta evolution registration remains a compatibility side effect;
+          // only the first canonical roster apply is allowed to emit it.
+          if (receipt.status === 'applied' && receipt.evolutions.length > 0) {
+            useMeta.getState().recordEvolutions(receipt.evolutions)
+          }
+        })
+        .catch((cause: unknown) => {
+          setSettlementStatus('error')
+          setSettlementError(cause instanceof Error ? cause.message : 'Result 結算失敗，請重試。')
+        })
+      return
+    }
+
+    // Existing component tests and pre-M23 callers may render a Result
+    // without a battle handoff. Keep that legacy path working while real
+    // battle results always use the durable adapter above.
+    if (legacySettlementStartedRef.current) return
+    legacySettlementStartedRef.current = true
+    void grantBattleExp(unitIds, foeLevels, ratio)
+      .then(() => {
+        setSettlementStatus('settled')
+        const evos = useRoster.getState().lastEvolutions
+        if (evos.length > 0) useMeta.getState().recordEvolutions(evos)
+      })
+      .catch((cause: unknown) => {
+        setSettlementStatus('error')
+        setSettlementError(cause instanceof Error ? cause.message : 'Result 結算失敗，請重試。')
+      })
+  }, [
+    context.playerTeam,
+    context.foeTeam,
+    grantBattleExp,
+    isWin,
+    outcome,
+    resultIdentity,
+    settleBattleResult,
+    settlementAttempt,
+    tower,
+  ])
 
   // 進化演出：等捕獲流程結束（或本來就不捕獲）後才播，避免兩段演出疊在一起
   const [evoDone, setEvoDone] = useState(false)
-  const showEvo = captureDone && !evoDone && lastEvolutions.length > 0
+  const showEvo = settlementStatus === 'settled' && captureDone && !evoDone && lastEvolutions.length > 0
   // 重複捕獲轉化提示（plan/10 §5.3.1 overflow policy：已擁有則轉成孵化蛋，絕不刪既有個體）
   const [dupConverted, setDupConverted] = useState(false)
 
@@ -367,6 +434,11 @@ export function ResultScreen() {
     if (!capturedUnit) return null
     return buildOwnedMobieForDisplay(capturedUnit)
   }, [capturedUnit])
+
+  const leaveResult = useCallback((event: GameEvent) => {
+    if (resultIdentity) void markBattleResultLeft(resultIdentity).catch(() => undefined)
+    send(event)
+  }, [markBattleResultLeft, resultIdentity, send])
 
   const openCapturedCard = () => {
     if (!capturedMon) return
@@ -439,27 +511,47 @@ export function ResultScreen() {
         </motion.div>
       )}
 
+      {settlementStatus === 'error' && (
+        <div className="settlement-error" role="alert">
+          <span>{settlementError ?? 'Result 結算失敗，請重試。'}</span>
+          <div className="row" style={{ gap: 8 }}>
+            <button
+              className="btn btn--sm"
+              onClick={() => {
+                legacySettlementStartedRef.current = false
+                setSettlementAttempt((attempt) => attempt + 1)
+              }}
+            >
+              重試結算
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={() => leaveResult({ type: 'TO_REGIONS' })}>
+              回到區域
+            </button>
+          </div>
+        </div>
+      )}
+
       <AnimatePresence>
-        {captureDone && !showEvo && (
+        {settlementStatus === 'settled' && captureDone && !showEvo && (
           <motion.div className="row center" style={{ gap: 12, justifyContent: 'center', paddingTop: 8 }}
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             {tower ? (
               <>
                 {isWin && (
-                  <button className="btn" onClick={() => send({ type: 'TOWER_CONTINUE' })}>
+                  <button className="btn" onClick={() => leaveResult({ type: 'TOWER_CONTINUE' })}>
                     ⬆ 攻向第 {tower.floor + 1} 層
                   </button>
                 )}
-                <button className="btn btn--ghost" onClick={() => send({ type: 'TOWER_QUIT' })}>
+                <button className="btn btn--ghost" onClick={() => leaveResult({ type: 'TOWER_QUIT' })}>
                   🏳 結束遠征
                 </button>
               </>
             ) : (
               <>
-                <button className="btn" onClick={() => send({ type: 'PLAY_AGAIN' })}>
+                <button className="btn" onClick={() => leaveResult({ type: 'PLAY_AGAIN' })}>
                   🔄 再戰一場
                 </button>
-                <button className="btn btn--ghost" onClick={() => send({ type: 'TO_REGIONS' })}>
+                <button className="btn btn--ghost" onClick={() => leaveResult({ type: 'TO_REGIONS' })}>
                   🗺 回到區域
                 </button>
               </>

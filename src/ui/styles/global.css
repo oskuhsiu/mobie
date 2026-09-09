@@ -1304,6 +1304,13 @@ body {
 .exp-row__name { font-weight: 800; min-width: 5em; }
 .exp-row__exp { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; }
 .exp-row__up { color: var(--good); font-weight: 900; margin-left: auto; }
+.settlement-error {
+  width: min(100%, 560px); margin: 10px auto 0; padding: 10px 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid rgba(255, 120, 120, 0.55); border-radius: 12px;
+  background: rgba(120, 24, 40, 0.24); color: #ffd5d5; font-size: 13px; line-height: 1.4;
+}
+.settlement-error .btn { flex: 0 0 auto; }
 
 /* ============ Misc layout ============ */
 .row { display: flex; align-items: center; gap: 12px; }

@@ -1,17 +1,7 @@
-export interface ResultIdentity {
-  resultId: string
-  resultFingerprint: string
-}
-
-export type ResultIdentityClassification = 'new' | 'same-result' | 'collision'
-
-/** Classifies an incoming settlement identity without inspecting mutable game state. */
-export function classifyResultIdentity(
-  existing: ResultIdentity | null,
-  incoming: ResultIdentity,
-): ResultIdentityClassification {
-  if (!existing || existing.resultId !== incoming.resultId) return 'new'
-  return existing.resultFingerprint === incoming.resultFingerprint
-    ? 'same-result'
-    : 'collision'
-}
+// Keep the battle presentation import path stable while sharing the result
+// settlement identity classifier with the durable roster destination.
+export {
+  classifyResultIdentity,
+  type ResultIdentity,
+  type ResultIdentityClassification,
+} from '@/game/resultSettlement'
