@@ -11,5 +11,7 @@ export const SPECIES_SORTED: Species[] = Object.values(SPECIES).sort((a, b) => a
 export function matchesSpecies(sp: Species, query: string): boolean {
   const s = query.trim().toLowerCase()
   if (!s) return true
-  return sp.nameZh.includes(s) || sp.name.toLowerCase().includes(s) || String(sp.id) === s
+  const idQuery = s.startsWith('#') ? s.slice(1) : s
+  const normalizedId = /^\d+$/.test(idQuery) ? String(Number(idQuery)) : ''
+  return sp.nameZh.includes(s) || sp.name.toLowerCase().includes(s) || normalizedId === String(sp.id)
 }

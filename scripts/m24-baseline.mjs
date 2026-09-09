@@ -132,12 +132,40 @@ const CHECKPOINT_CATALOG = {
     storage: ['mobie.playerskills.v1', 'mobie.skillpoints.v1'], lazy: ['PartnerSkillModal'], capability: 'learned state and SP survive reload',
   },
   dex: {
-    route: 'title/modal:dex', event: 'ToolsMenu.open(dex)', next: ['filter', '關閉'],
-    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'real 1–1025 generated species data',
+    route: 'title/modal:dex', event: 'ToolsMenu.open(dex)', next: ['搜尋', 'filter', 'page', 'detail', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'real 1–1025 generated species data; bounded page ≤60',
   },
   'dex-registered': {
-    route: 'title/modal:dex/registered', event: 'Dex.filter=registered', next: ['filter', '關閉'],
-    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'registered/owned projection',
+    route: 'title/modal:dex/registered', event: 'Dex.filter=registered', next: ['搜尋', 'Grade S/SS', 'detail', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'registered/owned projection with bounded pagination',
+  },
+  'dex-page-last': {
+    route: 'title/modal:dex/page-last', event: 'Dex.page=18', next: ['detail', '上一頁', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'last-page boundary with five current cells',
+  },
+  'dex-detail': {
+    route: 'title/modal:dex/detail', event: 'Dex.openDetail', next: ['返回清單', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'real species detail with artwork/status/Grade/type',
+  },
+  'dex-detail-restore': {
+    route: 'title/modal:dex/page-last', event: 'Dex.closeDetail', next: ['搜尋', 'filter', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'page and exact item focus restore',
+  },
+  'dex-search': {
+    route: 'title/modal:dex/search', event: 'Dex.search=皮卡丘', next: ['Grade S/SS', '清除', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'name/number search over the full catalog',
+  },
+  'dex-grade': {
+    route: 'title/modal:dex/grade', event: 'Dex.filter=shining', next: ['清除', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: '閃耀 Grade S/SS filter semantics',
+  },
+  'dex-empty': {
+    route: 'title/modal:dex/empty', event: 'Dex.search=invalid', next: ['清除搜尋與篩選', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'actionable empty result',
+  },
+  'dex-artwork-fallback': {
+    route: 'title/modal:dex/artwork-fallback', event: 'Dex.artworkError', next: ['搜尋', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.roster.v2'], lazy: ['DexModal'], capability: 'fixed artwork slot with accessible fallback',
   },
   achievements: {
     route: 'title/modal:achievements', event: 'ToolsMenu.open(achievements)', next: ['領取', '關閉'],
@@ -286,7 +314,7 @@ const JOURNEY = [
   'my-mobies', 'my-mobies-detail', 'move-trainer-detail', 'move-trainer-actions', 'card-library', 'card-library-add',
   'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open', 'move-trainer-reloaded', 'move-trainer-insufficient-sp', 'move-trainer-storage-error',
   'partner-skills', 'partner-skills-stale-account', 'partner-skills-insufficient-sp', 'partner-skills-storage-error', 'partner-skills-unlock', 'partner-skills-reloaded',
-  'dex', 'dex-registered', 'achievements', 'achievements-claimed',
+  'dex', 'dex-registered', 'dex-page-last', 'dex-detail', 'dex-detail-restore', 'dex-search', 'dex-grade', 'dex-empty', 'dex-artwork-fallback', 'achievements', 'achievements-claimed',
   'incubator-ready', 'incubator-hatch-reveal', 'save', 'save-busy',
   'save-result', 'save-import-error', 'save-compare-older', 'save-backup-ready',
   'save-restore-result', 'settings-malformed-recovery', 'settings', 'settings-reloaded', 'scanner-on-fallback', 'region-select', 'encounter', 'team-select',
@@ -1311,8 +1339,86 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await openTool('圖鑑', '圖鑑')
     await waitFor('Boolean(document.querySelector(".dex-cell"))', 8_000, 'dex content')
     checkpoints.push(await capture('dex', 'real generated species catalog'))
-    await clickText('已捕', 'button.chip')
+    await clickSelector('[data-dex-filter="registered"]')
     checkpoints.push(await capture('dex-registered', 'real registered filter'))
+    await clickSelector('[data-dex-filter="all"]')
+    await waitFor("document.querySelector('[data-dex-root]')?.dataset.dexVisible === '1025'", 8_000, 'dex all filter')
+    await clickSelector('[data-dex-page="18"]')
+    await waitFor("document.querySelector('[data-dex-root]')?.dataset.dexPage === '18'", 8_000, 'dex last page')
+    await sleep(250)
+    const dexLastPage = await evaluate(`(() => ({
+      page: document.querySelector('[data-dex-root]')?.dataset.dexPage ?? null,
+      visible: document.querySelector('[data-dex-root]')?.dataset.dexVisible ?? null,
+      cells: document.querySelectorAll('[data-dex-cell]').length,
+      first: document.querySelector('[data-dex-cell]')?.dataset.dexSpeciesId ?? null,
+      last: [...document.querySelectorAll('[data-dex-cell]')].at(-1)?.dataset.dexSpeciesId ?? null,
+      focus: document.activeElement?.getAttribute('data-dex-species-id') ?? null,
+    }))()`)
+    if (dexLastPage.page !== '18' || dexLastPage.cells !== 5 || dexLastPage.first !== '1021' || dexLastPage.last !== '1025' || dexLastPage.focus !== '1021') throw new Error(`Dex last page boundary/focus failed: ${JSON.stringify(dexLastPage)}`)
+    checkpoints.push(await capture('dex-page-last', 'real last-page pagination boundary', { observation: dexLastPage }))
+    await clickSelector('[data-dex-cell]')
+    await waitFor('Boolean(document.querySelector("[data-dex-detail]"))', 8_000, 'dex detail')
+    await waitFor('document.activeElement?.matches("[data-dex-detail-close]")', 8_000, 'dex detail focus')
+    const dexDetail = await evaluate(`(() => ({
+      id: document.querySelector('[data-dex-detail]')?.getAttribute('aria-label') ?? null,
+      number: document.querySelector('.dex-detail__number')?.textContent?.trim() ?? null,
+      state: document.querySelector('[data-dex-detail-status]')?.textContent?.trim() ?? null,
+      grade: document.querySelector('[data-dex-detail-grade]')?.textContent?.trim() ?? null,
+      focus: document.activeElement?.getAttribute('aria-label') ?? null,
+      cells: document.querySelectorAll('[data-dex-cell]').length,
+    }))()`)
+    if (dexDetail.number !== '#1021' || !dexDetail.id?.includes('猛雷鼓') || dexDetail.focus !== '返回清單' || dexDetail.cells !== 5) throw new Error(`Dex detail contract failed: ${JSON.stringify(dexDetail)}`)
+    checkpoints.push(await capture('dex-detail', 'real detail with bounded list retained', { observation: dexDetail }))
+    await clickSelector('[data-dex-detail-close]')
+    await waitFor('!document.querySelector("[data-dex-detail]")', 8_000, 'dex detail close')
+    await sleep(250)
+    const dexRestore = await evaluate(`(() => ({
+      page: document.querySelector('[data-dex-root]')?.dataset.dexPage ?? null,
+      focus: document.activeElement?.getAttribute('data-dex-species-id') ?? null,
+      cells: document.querySelectorAll('[data-dex-cell]').length,
+    }))()`)
+    if (dexRestore.page !== '18' || dexRestore.focus !== '1021' || dexRestore.cells !== 5) throw new Error(`Dex detail restore failed: ${JSON.stringify(dexRestore)}`)
+    checkpoints.push(await capture('dex-detail-restore', 'real detail close restores page and item focus', { observation: dexRestore }))
+    await setValue('[aria-label="搜尋圖鑑名稱或編號"]', '皮卡丘')
+    await waitFor("document.querySelector('[data-dex-root]')?.dataset.dexVisible === '1'", 8_000, 'dex search')
+    const dexSearch = await evaluate(`(() => ({
+      visible: document.querySelector('[data-dex-root]')?.dataset.dexVisible ?? null,
+      page: document.querySelector('[data-dex-root]')?.dataset.dexPage ?? null,
+      id: document.querySelector('[data-dex-cell]')?.dataset.dexSpeciesId ?? null,
+      text: document.querySelector('[data-dex-cell]')?.getAttribute('aria-label') ?? null,
+    }))()`)
+    if (dexSearch.visible !== '1' || dexSearch.page !== '1' || dexSearch.id !== '25' || !dexSearch.text?.includes('皮卡丘')) throw new Error(`Dex search failed: ${JSON.stringify(dexSearch)}`)
+    checkpoints.push(await capture('dex-search', 'real name search resets to page one', { observation: dexSearch }))
+    await clickSelector('[data-dex-filter="shining"]')
+    await waitFor("document.querySelector('[data-dex-root]')?.dataset.dexVisible === '1'", 8_000, 'dex Grade S/SS filter')
+    const dexGrade = await evaluate(`(() => ({
+      visible: document.querySelector('[data-dex-root]')?.dataset.dexVisible ?? null,
+      filter: document.querySelector('[data-dex-filter="shining"]')?.getAttribute('aria-pressed') ?? null,
+      id: document.querySelector('[data-dex-cell]')?.dataset.dexSpeciesId ?? null,
+      label: document.querySelector('[data-dex-cell]')?.getAttribute('aria-label') ?? null,
+    }))()`)
+    if (dexGrade.visible !== '1' || dexGrade.filter !== 'true' || dexGrade.id !== '25' || !dexGrade.label?.includes('Grade S')) throw new Error(`Dex Grade S/SS filter failed: ${JSON.stringify(dexGrade)}`)
+    checkpoints.push(await capture('dex-grade', 'real 閃耀 Grade S/SS filter', { observation: dexGrade }))
+    await setValue('[aria-label="搜尋圖鑑名稱或編號"]', 'not-a-real-mobie')
+    await waitFor('document.querySelector("[data-dex-state=\\"empty\\"]") !== null', 8_000, 'dex empty result')
+    const dexEmpty = await evaluate(`(() => ({
+      state: document.querySelector('[data-dex-state="empty"]')?.dataset.dexState ?? null,
+      clear: Boolean(document.querySelector('[data-dex-clear]')),
+      text: document.querySelector('[data-dex-state="empty"]')?.textContent?.trim() ?? null,
+    }))()`)
+    if (dexEmpty.state !== 'empty' || !dexEmpty.clear) throw new Error(`Dex empty recovery failed: ${JSON.stringify(dexEmpty)}`)
+    checkpoints.push(await capture('dex-empty', 'real invalid query with clear action', { observation: dexEmpty }))
+    await clickSelector('[data-dex-clear]')
+    await waitFor("document.querySelector('[data-dex-root]')?.dataset.dexVisible === '1025'", 8_000, 'dex clear')
+    await evaluate(`(() => { const image = document.querySelector('[data-dex-artwork] img'); if (!image) return false; image.src = '/__m24__/missing-dex-artwork.png'; return true })()`)
+    await waitFor('Boolean(document.querySelector("[data-dex-artwork-state=\\"failed\\"]"))', 8_000, 'dex artwork fallback')
+    const dexArtwork = await evaluate(`(() => ({
+      failed: document.querySelectorAll('[data-dex-artwork-state="failed"]').length,
+      accessible: document.querySelector('[data-dex-artwork-state="failed"]')?.getAttribute('aria-label') ?? null,
+      cells: document.querySelectorAll('[data-dex-cell]').length,
+    }))()`)
+    if (dexArtwork.failed < 1 || !dexArtwork.accessible || dexArtwork.cells !== 60) throw new Error(`Dex artwork fallback failed: ${JSON.stringify(dexArtwork)}`)
+    checkpoints.push(await capture('dex-artwork-fallback', 'real image failure with fixed fallback slot', { observation: dexArtwork }))
     await closeTopModal()
 
     await openTool('成就', '成就')
