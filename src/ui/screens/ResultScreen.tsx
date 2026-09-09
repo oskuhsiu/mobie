@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { motion, AnimatePresence } from 'framer-motion'
 import { useGame } from '@/app/GameProvider'
 import { buildBattleMobie } from '@/game/stats'
-import { rollBall, getBall, captureChanceWithBall } from '@/game/battle/engine'
+import { getBall } from '@/game/battle/engine'
 import { audio } from '@/audio/audioEngine'
 import { haptic } from '@/input/haptics'
 import { useRoster } from '@/store/rosterStore'
@@ -11,8 +11,6 @@ import { interactModeOf, INTENSITY_BY_MODE } from '@/game/settings'
 import { SwipeThrow, CircleSeal } from '@/ui/components/CaptureGestures'
 import { useAccidents } from '@/store/accidentStore'
 import { floorReward, towerExpMult, isBossFloor, getAscension } from '@/game/tower'
-import { useMeta } from '@/store/metaStore'
-import { useIncubator } from '@/store/incubatorStore'
 import { getSpecies } from '@/game/data/species'
 import { buildOwnedMobieForDisplay } from '@/game/ownedMobie'
 import { canCaptureIn } from '@/game/data/regionLookup'
@@ -23,6 +21,14 @@ import { EvolutionOverlay } from '@/ui/components/EvolutionOverlay'
 import type { OwnedUnit } from '@/game/types'
 import type { GameEvent } from '@/game/machine/gameMachine'
 import { useOverlayController } from '@/ui/shell/OverlayController'
+import {
+  captureDecisionFor,
+  legacyResultIdentity,
+  storedCaptureDecision,
+  type CaptureDecision,
+  type CaptureSettlementReceipt,
+  type ResultIdentity,
+} from '@/game/resultSettlement'
 
 // 收服用 3D 舞台（同 BattleStage 走 three），lazy 載入
 const CaptureStage = lazy(() => import('@/scene/r3f/CaptureStage'))
@@ -47,9 +53,11 @@ type Stage = 'aim' | 'throw' | 'wobble' | 'seal' | 'result'
 
 function WinView({
   onCaptured,
+  decision,
   duplicateConverted,
 }: {
   onCaptured: (ok: boolean) => void
+  decision: CaptureDecision
   duplicateConverted: boolean
 }) {
   const { context } = useGame()
@@ -58,13 +66,11 @@ function WinView({
     const boss = captureTargetOf(context.foeTeam)
     return boss ? buildBattleMobie(boss) : null
   }, [context.foeTeam])
-  // 捕獲球輪盤：轉出球種 → 套捕獲率係數（M11 幸運捕獲球 captureMult 加成）
-  const ball = useRef(getBall(rollBall()))
-  const captureMult = useAccidents.getState().captureMult
-  // 捕獲命中：掛載時 Math.random 預先決定。M22 手勢只決定演出，**此處一字不動、絕不改機率**。
-  const success = useRef<boolean>(
-    wild ? Math.random() < captureChanceWithBall(wild, ball.current.mult * captureMult) : false,
-  )
+  // Ball roulette and the capture roll are decided by the Result child
+  // coordinator. Gestures only advance this presentation.
+  const ball = getBall(decision.ballId)
+  const successRef = useRef(decision.caught)
+  successRef.current = decision.caught
   // M22 捕獲增強互動 mode（off＝現狀一字不差）。掛載時讀一次，戰中不變。
   const capMode = useMemo(() => interactModeOf(useSettings.getState().settings, 'capture'), [])
   const enhanced = capMode !== 'off'
@@ -82,8 +88,8 @@ function WinView({
     if (finishedRef.current) return
     finishedRef.current = true
     setStage('result')
-    if (success.current) { audio.play('capture'); haptic('capture') } // EXT.1.a：捕獲揭曉節慶式連震
-    onCapturedRef.current(success.current)
+    if (successRef.current) { audio.play('capture'); haptic('capture') } // EXT.1.a：捕獲揭曉節慶式連震
+    onCapturedRef.current(successRef.current)
   }, [])
 
   // off：維持原自動流程（throw→wobble@650→result@2500），DOM 不出現任何手勢 wrapper（零回歸）。
@@ -109,19 +115,19 @@ function WinView({
 
   // 畫圈封印完成：注定逃脫時給一次「再搏一下」（純演出、不改 caught），否則揭曉。
   const onSealed = useCallback(() => {
-    if (!success.current && sealRound === 0) { setSealRound(1); return }
+    if (!successRef.current && sealRound === 0) { setSealRound(1); return }
     reveal()
   }, [sealRound, reveal])
 
   if (!wild) return null
-  const caught = success.current
+  const caught = successRef.current
   const wobbling = stage === 'wobble' || stage === 'seal'
 
   return (
     <div className="center" style={{ flex: 1, gap: 18 }}>
       <motion.div className="eyebrow"
         initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        戰鬥勝利！　<span style={{ color: ball.current.color }}>🎯 {ball.current.nameZh}</span>
+        戰鬥勝利！　<span style={{ color: ball.color }}>🎯 {ball.nameZh}</span>
       </motion.div>
 
       <div style={{ position: 'relative', width: 'min(64vw,300px)', height: 'min(64vw,300px)' }}>
@@ -152,7 +158,7 @@ function WinView({
               ? { duration: 1.6, times: [0, 0.2, 0.45, 0.65, 0.85, 1], repeat: stage === 'seal' ? Infinity : 0 }
               : { type: 'spring', stiffness: 140, damping: 12 }}
           >
-            <Pokeball size={72} color={ball.current.color} />
+            <Pokeball size={72} color={ball.color} />
           </motion.div>
         ) : null}
 
@@ -285,6 +291,7 @@ export function ResultScreen() {
   const controller = useOverlayController()
   const outcome = context.battleResult?.outcome ?? context.outcome
   const isWin = outcome === 'win'
+  const compatibilityIdentityRef = useRef<ResultIdentity | null>(null)
   const resultIdentity = useMemo(() => context.battleResult
     ? {
         resultId: context.battleResult.resultId,
@@ -295,6 +302,30 @@ export function ResultScreen() {
   // 捕獲資格集中由 region.mode 決定（M6 模式 contract）：競技場/連勝塔勝利不進捕獲流程。
   const canCapture = isWin && !tower && canCaptureIn(context.regionId)
   const resultMode = !tower && canCaptureIn(context.regionId) ? 'wild' as const : 'arena' as const
+  const settlementIdentity = useMemo<ResultIdentity | null>(() => {
+    if (resultIdentity) return resultIdentity
+    if (!outcome) return null
+    compatibilityIdentityRef.current ??= legacyResultIdentity({
+      regionId: context.regionId,
+      foeTeam: context.foeTeam,
+      playerTeam: context.playerTeam,
+      outcome,
+    })
+    return compatibilityIdentityRef.current
+  }, [context.foeTeam, context.playerTeam, context.regionId, outcome, resultIdentity])
+  const captureTarget = useMemo(
+    () => (canCapture ? captureTargetOf(context.foeTeam) : null),
+    [canCapture, context.foeTeam],
+  )
+  const captureMult = useAccidents.getState().captureMult
+  const capturePayload = useMemo(
+    () => (captureTarget ? { target: captureTarget, captureMult } : undefined),
+    [captureMult, captureTarget],
+  )
+  const captureDecision = useMemo(() => {
+    if (!settlementIdentity || !capturePayload) return null
+    return storedCaptureDecision(settlementIdentity) ?? captureDecisionFor(settlementIdentity, capturePayload)
+  }, [capturePayload, settlementIdentity])
   // SP reward rules stay identical to the pre-Ticket-30 Result presentation;
   // the value is now forwarded to the SP child destination for durable once-only apply.
   const spReward = useMemo(() => {
@@ -305,19 +336,39 @@ export function ResultScreen() {
   }, [canCapture, context.foeTeam, isWin, tower])
   const [captureDone, setCaptureDone] = useState(!canCapture)
   const [capturedUnit, setCapturedUnit] = useState<OwnedUnit | null>(null)
+  // 重複捕獲轉化提示（overflow policy：已擁有則轉成孵化蛋）
+  const [dupConverted, setDupConverted] = useState(false)
 
   // 結算：給參戰隊伍加經驗、升級、存檔（只做一次）。勝全額、敗給部分（不白忙）。
-  const grantBattleExp = useRoster((s) => s.grantBattleExp)
   const settleBattleResult = useRoster((s) => s.settleBattleResult)
   const markBattleResultLeft = useRoster((s) => s.markBattleResultLeft)
-  const captureUnit = useRoster((s) => s.captureUnit)
   const lastResults = useRoster((s) => s.lastResults)
   const lastEvolutions = useRoster((s) => s.lastEvolutions)
   type SettlementStatus = 'idle' | 'running' | 'settled' | 'error'
   const [settlementStatus, setSettlementStatus] = useState<SettlementStatus>(outcome ? 'running' : 'idle')
   const [settlementError, setSettlementError] = useState<string | null>(null)
   const [settlementAttempt, setSettlementAttempt] = useState(0)
-  const legacySettlementStartedRef = useRef(false)
+  const [captureReceipt, setCaptureReceipt] = useState<CaptureSettlementReceipt | null>(null)
+  const captureReceiptRef = useRef<CaptureSettlementReceipt | null>(null)
+  const [presentationDecision, setPresentationDecision] = useState<CaptureDecision | null>(captureDecision)
+
+  useEffect(() => {
+    if (!captureDecision) {
+      setPresentationDecision(null)
+      return
+    }
+    if (!captureReceiptRef.current || captureReceiptRef.current.resultId !== captureDecision.resultId) {
+      setPresentationDecision(captureDecision)
+    }
+  }, [captureDecision])
+
+  const publishCaptureReceipt = useCallback((receipt: CaptureSettlementReceipt) => {
+    captureReceiptRef.current = receipt
+    setCaptureReceipt(receipt)
+    setPresentationDecision(receipt.decision)
+    if (receipt.outcome === 'captured-duplicate-egg') setDupConverted(true)
+    if (receipt.outcome === 'captured-new' && receipt.unit) setCapturedUnit(receipt.unit)
+  }, [])
 
   // Roster EXP/evolution has one durable destination. The stable identity
   // makes a second effect run a reconciliation instead of a second reward.
@@ -334,8 +385,8 @@ export function ResultScreen() {
       ? (tower ? towerExpMult(tower.floor) : useAccidents.getState().expMult)
       : LOSS_EXP_RATIO
 
-    if (resultIdentity) {
-      void settleBattleResult(resultIdentity, {
+    if (settlementIdentity) {
+      void settleBattleResult(settlementIdentity, {
         unitIds,
         foeLevels,
         ratio,
@@ -350,9 +401,11 @@ export function ResultScreen() {
           },
         } : {}),
         incubator: { amount: isWin ? 2 : 1 },
+        ...(capturePayload ? { capture: capturePayload } : {}),
       })
-        .then(() => {
+        .then((receipt) => {
           setSettlementStatus('settled')
+          if (receipt.capture) publishCaptureReceipt(receipt.capture)
           // Evolution metadata is part of the Meta child payload derived from
           // the roster receipt; no direct Result-side write is needed here.
         })
@@ -362,66 +415,36 @@ export function ResultScreen() {
         })
       return
     }
-
-    // Existing component tests and pre-M23 callers may render a Result
-    // without a battle handoff. Keep that legacy path working while real
-    // battle results always use the durable adapter above.
-    if (legacySettlementStartedRef.current) return
-    legacySettlementStartedRef.current = true
-    void grantBattleExp(unitIds, foeLevels, ratio)
-      .then(() => {
-        setSettlementStatus('settled')
-        const evos = useRoster.getState().lastEvolutions
-        if (evos.length > 0) useMeta.getState().recordEvolutions(evos)
-      })
-      .catch((cause: unknown) => {
-        setSettlementStatus('error')
-        setSettlementError(cause instanceof Error ? cause.message : 'Result 結算失敗，請重試。')
-      })
   }, [
     context.playerTeam,
     context.foeTeam,
-    grantBattleExp,
     isWin,
     outcome,
-    resultIdentity,
+    settlementIdentity,
     settleBattleResult,
     settlementAttempt,
     resultMode,
     spReward,
     tower,
+    capturePayload,
+    publishCaptureReceipt,
   ])
 
   // 進化演出：等捕獲流程結束（或本來就不捕獲）後才播，避免兩段演出疊在一起
   const [evoDone, setEvoDone] = useState(false)
   const showEvo = settlementStatus === 'settled' && captureDone && !evoDone && lastEvolutions.length > 0
-  // 重複捕獲轉化提示（plan/10 §5.3.1 overflow policy：已擁有則轉成孵化蛋，絕不刪既有個體）
-  const [dupConverted, setDupConverted] = useState(false)
-
-  // 收服回呼：穩定參照（避免 WinView 計時器 effect 因父層 re-render churn）
+  // 收服回呼只 completes the presentation. The capture coordinator already
+  // committed (or durably marked) every required child before this callback.
   const onCaptured = useCallback((ok: boolean) => {
-    if (ok) {
-      const boss = captureTargetOf(context.foeTeam)
-      if (boss) {
-        const bp = buildBattleMobie(boss)
-        // 圖鑑一律登錄（registered + captures，異色另計）——不論保留或轉蛋
-        useMeta.getState().recordCapture(boss.speciesId, bp.shiny)
-        const already = useRoster.getState().roster.some((u) => u.speciesId === boss.speciesId)
-        if (already) {
-          // 已擁有 → 轉成孵化蛋（不重複塞同種，絕不刪既有個體）；M12.c 帶父母最進階的招當蛋招繼承
-          const inheritedMoveId = bp.moves.length > 1 ? bp.moves[bp.moves.length - 1].id : undefined
-          useIncubator.getState().addDuplicateEgg(boss.speciesId, `${bp.nameZh} 蛋`, inheritedMoveId)
-          setDupConverted(true)
-        } else {
-          // 新種：加入並存檔到隊伍；只以本次 Promise 的結果驅動 CTA，
-          // 避免上一場的 lastCaptured 在本場失敗時被誤當成新夥伴。
-          void captureUnit(boss).then((unit) => setCapturedUnit(unit))
-        }
-      }
+    const settledCapture = captureReceiptRef.current ?? captureReceipt
+    const captured = settledCapture ? settledCapture.outcome !== 'escaped' : ok
+    if (settledCapture?.outcome === 'captured-duplicate-egg') setDupConverted(true)
+    if (settledCapture?.outcome === 'captured-new' && settledCapture.unit) {
+      setCapturedUnit(settledCapture.unit)
     }
-    send({ type: 'SET_CAPTURED', captured: ok })
+    send({ type: 'SET_CAPTURED', captured })
     setCaptureDone(true)
-  }, [context.foeTeam, captureUnit, send])
+  }, [captureReceipt, send])
 
   const capturedMon = useMemo(() => {
     if (!capturedUnit) return null
@@ -429,9 +452,9 @@ export function ResultScreen() {
   }, [capturedUnit])
 
   const leaveResult = useCallback((event: GameEvent) => {
-    if (resultIdentity) void markBattleResultLeft(resultIdentity).catch(() => undefined)
+    if (settlementIdentity) void markBattleResultLeft(settlementIdentity).catch(() => undefined)
     send(event)
-  }, [markBattleResultLeft, resultIdentity, send])
+  }, [markBattleResultLeft, send, settlementIdentity])
 
   const openCapturedCard = () => {
     if (!capturedMon) return
@@ -447,7 +470,13 @@ export function ResultScreen() {
       {tower
         ? <TowerView isWin={isWin} />
         : canCapture
-          ? <WinView onCaptured={onCaptured} duplicateConverted={dupConverted} />
+          ? (presentationDecision ?? captureDecision)
+            ? <WinView
+                onCaptured={onCaptured}
+                decision={(presentationDecision ?? captureDecision)!}
+                duplicateConverted={dupConverted}
+              />
+            : null
           : isWin
             ? <ArenaWinView />
             : <LoseView />}
@@ -511,7 +540,6 @@ export function ResultScreen() {
             <button
               className="btn btn--sm"
               onClick={() => {
-                legacySettlementStartedRef.current = false
                 setSettlementAttempt((attempt) => attempt + 1)
               }}
             >

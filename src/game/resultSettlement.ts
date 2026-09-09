@@ -1,11 +1,14 @@
-import type { OwnedUnit } from '@/game/types'
-import { applyExp, expYield, type ExpResult } from '@/game/growth'
+import type { Card, OwnedUnit } from '@/game/types'
+import { applyExp, createOwnedUnit, expYield, type ExpResult } from '@/game/growth'
 import { effectiveLearnedMoves, newlyLearned } from '@/game/learnset'
 import { getSpecies } from '@/game/data/species'
 import { PRODUCT_RUNTIME } from '@/game/ext/productRuntime'
 import { addRegistered, bumpStat, type MetaState } from '@/game/meta'
-import { isSupportedEggSource, type Egg, type IncubatorState } from '@/game/incubator'
+import { addEgg, isSupportedEggSource, type Egg, type IncubatorState } from '@/game/incubator'
 import { ASCENSIONS, isBossFloor } from '@/game/tower'
+import { buildBattleMobie } from '@/game/stats'
+import { captureChanceWithBall, getBall, rollBall, type BallId } from '@/game/battle/engine'
+import { hashSeed, makeRng } from '@/game/rng'
 
 /**
  * Result settlement is keyed by the logical battle, not by a React mount or a
@@ -43,9 +46,15 @@ export const SKILL_POINTS_SETTLEMENT_MARKER_KEY = 'mobie.skillpoints.settlement.
 export const META_SETTLEMENT_MARKER_KEY = 'mobie.meta.settlement.v1'
 export const TOWER_SETTLEMENT_MARKER_KEY = 'mobie.tower.settlement.v1'
 export const INCUBATOR_SETTLEMENT_MARKER_KEY = 'mobie.incubator.settlement.v1'
+export const ROSTER_CAPTURE_SETTLEMENT_MARKER_KEY = 'mobie.roster.capture.v1'
+export const META_CAPTURE_SETTLEMENT_MARKER_KEY = 'mobie.meta.capture.v1'
+export const DUPLICATE_EGG_SETTLEMENT_MARKER_KEY = 'mobie.incubator.capture.v1'
 // Descriptive aliases retained for callers that name the progression child explicitly.
 export const TOWER_PROGRESSION_SETTLEMENT_MARKER_KEY = TOWER_SETTLEMENT_MARKER_KEY
 export const INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY = INCUBATOR_SETTLEMENT_MARKER_KEY
+export const CAPTURE_ROSTER_SETTLEMENT_MARKER_KEY = ROSTER_CAPTURE_SETTLEMENT_MARKER_KEY
+export const CAPTURE_META_SETTLEMENT_MARKER_KEY = META_CAPTURE_SETTLEMENT_MARKER_KEY
+export const INCUBATOR_CAPTURE_SETTLEMENT_MARKER_KEY = DUPLICATE_EGG_SETTLEMENT_MARKER_KEY
 
 export type ResultOutcome = 'win' | 'lose'
 
@@ -54,10 +63,51 @@ export interface SkillPointsSettlementPayload {
   delta: number
 }
 
-/** Existing Result meta progression forwarded by Result. Capture/Dex writes remain Ticket 32. */
+/** Existing Result win/evolution Meta progression; capture/Dex uses the namespaced child below. */
 export interface MetaSettlementPayload {
   winMode?: 'arena' | 'wild'
   evolutions?: Array<{ toSpecies: number }>
+}
+
+export type CaptureOutcome = 'escaped' | 'captured-new' | 'captured-duplicate-egg'
+
+/** Inputs that existed before Ticket 32. The capture result never reads retry count or UI state. */
+export interface CaptureSettlementPayload {
+  target: Card
+  captureMult: number
+}
+
+export interface CaptureDecision extends ResultIdentity {
+  ballId: BallId
+  captureChance: number
+  /** The one deterministic draw after the ball roulette. */
+  captureRoll: number
+  caught: boolean
+}
+
+export interface RosterCapturePayload {
+  card: Card
+}
+
+export interface CaptureMetaPayload {
+  speciesId: number
+  shiny: boolean
+  outcome: Exclude<CaptureOutcome, 'escaped'>
+}
+
+export interface DuplicateEggPayload {
+  speciesId: number
+  label: string
+  inheritedMoveId?: number
+}
+
+export interface CaptureSettlementPlan extends ResultIdentity {
+  payload: CaptureSettlementPayload
+  decision: CaptureDecision
+  outcome: CaptureOutcome
+  roster?: RosterCapturePayload
+  meta?: CaptureMetaPayload
+  duplicateEgg?: DuplicateEggPayload
 }
 
 /** Tower run metadata forwarded by Result; in-run floor/team state stays in XState. */
@@ -88,6 +138,7 @@ export interface ResultSettlementPayload extends RosterGrowthPayload {
   meta?: MetaSettlementPayload
   tower?: TowerProgressionPayload
   incubator?: IncubatorProgressionPayload
+  capture?: CaptureSettlementPayload
 }
 
 export interface MoveLearnReceipt {
@@ -148,11 +199,46 @@ export interface IncubatorProgressionReceipt extends ResultIdentity {
   appliedAt: number
 }
 
+export interface RosterCaptureReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  unit: OwnedUnit
+  appliedAt: number
+}
+
+export interface CaptureMetaReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  speciesId: number
+  shiny: boolean
+  outcome: Exclude<CaptureOutcome, 'escaped'>
+  meta: MetaState
+  appliedAt: number
+}
+
+export interface DuplicateEggReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  egg: Egg
+  appliedAt: number
+}
+
+export interface CaptureSettlementReceipt extends ResultIdentity {
+  status: 'applied' | 'already-applied'
+  decision: CaptureDecision
+  outcome: CaptureOutcome
+  target: Card
+  unit?: OwnedUnit
+  egg?: Egg
+  rosterCapture?: RosterCaptureReceipt
+  meta?: CaptureMetaReceipt
+  duplicateEgg?: DuplicateEggReceipt
+  appliedAt: number
+}
+
 export interface ResultSettlementReceipt extends RosterGrowthReceipt {
   skillPoints?: SkillPointsSettlementReceipt
   meta?: MetaSettlementReceipt
   tower?: TowerProgressionReceipt
   incubator?: IncubatorProgressionReceipt
+  capture?: CaptureSettlementReceipt
 }
 
 export interface EvolutionReceipt {
@@ -233,6 +319,43 @@ export interface IncubatorProgressionMarker extends ResultIdentity {
   receipt: Omit<IncubatorProgressionReceipt, 'status'>
 }
 
+export interface RosterCaptureMarker extends ResultIdentity {
+  destination: 'roster-capture'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  canonicalApplied?: boolean
+  payload: RosterCapturePayload
+  unit: OwnedUnit
+  receipt: Omit<RosterCaptureReceipt, 'status'>
+}
+
+export interface CaptureMetaMarker extends ResultIdentity {
+  destination: 'meta-capture'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  canonicalApplied?: boolean
+  payload: CaptureMetaPayload
+  before: MetaState
+  after: MetaState
+  receipt: Omit<CaptureMetaReceipt, 'status'>
+}
+
+export interface DuplicateEggMarker extends ResultIdentity {
+  destination: 'incubator-capture'
+  status: ResultMarkerStatus
+  createdAt: number
+  settledAt?: number
+  leftResultAt?: number
+  canonicalApplied?: boolean
+  payload: DuplicateEggPayload
+  egg: Egg
+  receipt: Omit<DuplicateEggReceipt, 'status'>
+}
+
 export interface SettlementJournalEntry extends ResultIdentity {
   status: ResultMarkerStatus
   createdAt: number
@@ -242,11 +365,14 @@ export interface SettlementJournalEntry extends ResultIdentity {
   /** Original child intent retained when a stage fails before its receipt is journaled. */
   towerPayload?: TowerProgressionPayload
   incubatorPayload?: IncubatorProgressionPayload
+  capturePayload?: CaptureSettlementPayload
+  capturePlan?: CaptureSettlementPlan
   rosterGrowth?: RosterGrowthReceipt
   skillPoints?: SkillPointsSettlementReceipt
   meta?: MetaSettlementReceipt
   tower?: TowerProgressionReceipt
   incubator?: IncubatorProgressionReceipt
+  capture?: CaptureSettlementReceipt
   error?: string
 }
 
@@ -301,11 +427,39 @@ export interface IncubatorProgressionPersistence {
   saveMarkers: (markers: IncubatorProgressionMarker[]) => Promise<void>
 }
 
+export interface RosterCapturePersistence {
+  loadRoster: () => Promise<OwnedUnit[]>
+  loadMarkers: () => Promise<RosterCaptureMarker[]>
+  /** Durable write-ahead step: capture marker + canonical roster boundary. */
+  savePending: (roster: OwnedUnit[], markers: RosterCaptureMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical roster write has succeeded. */
+  saveMarkers: (markers: RosterCaptureMarker[]) => Promise<void>
+}
+
+export interface CaptureMetaPersistence {
+  loadMeta: () => Promise<MetaState>
+  loadMarkers: () => Promise<CaptureMetaMarker[]>
+  /** Durable write-ahead step: capture/Dex marker + canonical Meta boundary. */
+  savePending: (meta: MetaState, markers: CaptureMetaMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical Meta write has succeeded. */
+  saveMarkers: (markers: CaptureMetaMarker[]) => Promise<void>
+}
+
+export interface DuplicateEggPersistence {
+  loadState: () => Promise<IncubatorState>
+  loadMarkers: () => Promise<DuplicateEggMarker[]>
+  /** Durable write-ahead step: duplicate egg marker + canonical incubator boundary. */
+  savePending: (state: IncubatorState, markers: DuplicateEggMarker[], operationId?: string) => Promise<void>
+  /** Final marker step after the canonical incubator write has succeeded. */
+  saveMarkers: (markers: DuplicateEggMarker[]) => Promise<void>
+}
+
 export interface ResultSettlementChildren {
   skillPoints?: SkillPointsDestination
   meta?: MetaSettlementDestination
   tower?: TowerProgressionDestination
   incubator?: IncubatorProgressionDestination
+  capture?: CaptureSettlementCoordinator
 }
 
 export interface SettlementJournalPersistence {
@@ -376,8 +530,91 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
+/**
+ * Decide the ball and capture roll from the logical Result identity and the
+ * original battle inputs. The UI never supplies an RNG and retries never
+ * consume another stream value.
+ */
+export function deterministicCaptureDecision(
+  identity: ResultIdentity,
+  payload: CaptureSettlementPayload,
+): CaptureDecision {
+  const target = buildBattleMobie(payload.target)
+  const rng = makeRng(`capture|${identity.resultId}|${identity.resultFingerprint}|${stableJson(payload)}`)
+  const ballId = rollBall(rng)
+  const ball = getBall(ballId)
+  const captureMult = Number.isFinite(payload.captureMult) ? payload.captureMult : 1
+  const captureChance = captureChanceWithBall(target, ball.mult * captureMult)
+  const captureRoll = rng()
+  return {
+    ...identity,
+    ballId,
+    captureChance,
+    captureRoll,
+    caught: captureRoll < captureChance,
+  }
+}
+
+// Short aliases make the pure decision seam discoverable without changing the
+// canonical name used by the Result coordinator.
+export const decideCapture = deterministicCaptureDecision
+export const captureDecisionFor = deterministicCaptureDecision
+
+/** Read only the durable presentation hint when a Result remounts. */
+export function storedCaptureDecision(identity: ResultIdentity): CaptureDecision | null {
+  const storage = safeStorage()
+  if (!storage) return null
+  try {
+    const entries = parseArray<SettlementJournalEntry>(
+      storage.getItem(RESULT_SETTLEMENT_JOURNAL_KEY),
+      'Result 結算進度',
+    )
+    const plan = entries.find((entry) => entry.resultId === identity.resultId)?.capturePlan
+    if (!plan || plan.resultFingerprint !== identity.resultFingerprint) return null
+    return { ...plan.decision }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Compatibility identity for pre-handoff Result callers (tests and old
+ * embedded screens). Production battles always provide the Web Crypto pair
+ * from `BattleSession`; this fallback keeps those callers stable without
+ * putting UI state or retry count into the capture roll.
+ */
+export function legacyResultIdentity(input: {
+  regionId: string | null
+  foeTeam: readonly Card[]
+  playerTeam: readonly Card[]
+  outcome: ResultOutcome
+}): ResultIdentity {
+  const basis = stableJson(input)
+  return {
+    resultId: `legacy-${hashSeed(`result|${basis}`).toString(16)}`,
+    resultFingerprint: `legacy-${hashSeed(`fingerprint|${basis}`).toString(16)}`,
+  }
+}
+
 function sameUnit(left: OwnedUnit | undefined, right: OwnedUnit): boolean {
   return Boolean(left && stableJson(left) === stableJson(right))
+}
+
+function cloneCard(card: Card): Card {
+  return {
+    ...card,
+    ...(card.ivs ? { ivs: { ...card.ivs } } : {}),
+    ...(card.equippedMoveIds ? { equippedMoveIds: [...card.equippedMoveIds] } : {}),
+  }
+}
+
+function cloneOwnedUnit(unit: OwnedUnit): OwnedUnit {
+  return {
+    ...unit,
+    ivs: { ...unit.ivs },
+    ...(unit.learnedMoveIds ? { learnedMoveIds: [...unit.learnedMoveIds] } : {}),
+    ...(unit.equippedMoveIds ? { equippedMoveIds: [...unit.equippedMoveIds] } : {}),
+  }
 }
 
 function mergeGrowthUnit(current: OwnedUnit, update: OwnedUnit): OwnedUnit {
@@ -669,6 +906,191 @@ export class RosterGrowthDestination {
   }
 }
 
+function replaceRosterCaptureMarker(
+  markers: readonly RosterCaptureMarker[],
+  marker: RosterCaptureMarker,
+): RosterCaptureMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function rosterCaptureReceipt(
+  identity: ResultIdentity,
+  unit: OwnedUnit,
+  appliedAt: number,
+  status: RosterCaptureReceipt['status'],
+): RosterCaptureReceipt {
+  return { ...identity, status, unit: cloneOwnedUnit(unit), appliedAt }
+}
+
+function rosterCaptureMarkerFor(
+  identity: ResultIdentity,
+  receipt: RosterCaptureReceipt,
+  payload: RosterCapturePayload,
+  unit: OwnedUnit,
+  now: number,
+  status: ResultMarkerStatus,
+  previous?: RosterCaptureMarker,
+): RosterCaptureMarker {
+  return {
+    ...identity,
+    destination: 'roster-capture',
+    status,
+    createdAt: previous?.createdAt ?? now,
+    ...(status === 'settled' ? { settledAt: previous?.settledAt ?? now } : {}),
+    ...(previous?.leftResultAt === undefined ? {} : { leftResultAt: previous.leftResultAt }),
+    canonicalApplied: previous?.canonicalApplied ?? false,
+    payload: { card: cloneCard(payload.card) },
+    unit: cloneOwnedUnit(previous?.unit ?? unit),
+    receipt: {
+      resultId: receipt.resultId,
+      resultFingerprint: receipt.resultFingerprint,
+      unit: cloneOwnedUnit(receipt.unit),
+      appliedAt: receipt.appliedAt,
+    },
+  }
+}
+
+/** Durable Result child that adds one captured Card to the canonical roster. */
+export class RosterCaptureDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: RosterCapturePersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: RosterCapturePayload): Promise<RosterCaptureReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        if (marker.status === 'settled' || marker.canonicalApplied === true) return true
+        // The roster marker is written before the canonical array because the
+        // browser adapter has no cross-key transaction. Presence of the exact
+        // captured id is the durable reconciliation evidence when the final
+        // marker write was interrupted.
+        const roster = await this.persistence.loadRoster()
+        return roster.some((unit) => unit.id === marker.unit.id)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取收服 Mobie 結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceRosterCaptureMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存收服 Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(
+    identity: ResultIdentity,
+    payload: RosterCapturePayload,
+  ): Promise<RosterCaptureReceipt> {
+    let markers: RosterCaptureMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取收服 Mobie 結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (existing?.status === 'settled') {
+      return { ...existing.receipt, unit: cloneOwnedUnit(existing.receipt.unit), status: 'already-applied' }
+    }
+
+    let roster: OwnedUnit[]
+    try {
+      roster = (await this.persistence.loadRoster()).map(cloneOwnedUnit)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical roster 失敗，請重試。', cause)
+    }
+
+    if (existing) {
+      const canonicalUnit = roster.find((unit) => unit.id === existing.unit.id)
+      if (existing.canonicalApplied !== true && !canonicalUnit) {
+        try {
+          await this.persistence.savePending(
+            [...roster, cloneOwnedUnit(existing.unit)],
+            markers,
+            identity.resultId,
+          )
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復收服 Mobie 資料失敗，請重試。', cause)
+        }
+      } else if (existing.canonicalApplied !== true) {
+        // A scanner/import may have supplied the same canonical id while the
+        // receipt was pending. Preserve that unit and finalize the marker.
+        existing.canonicalApplied = true
+      }
+      const settled: RosterCaptureMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceRosterCaptureMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, '收服 Mobie 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return { ...existing.receipt, unit: cloneOwnedUnit(existing.receipt.unit), status: 'already-applied' }
+    }
+
+    const unit = createOwnedUnit(payload.card.cardId, payload.card.speciesId, payload.card.level, payload.card)
+    const canonicalUnit = roster.find((item) => item.id === unit.id)
+    const appliedUnit = canonicalUnit ?? unit
+    const appliedAt = this.now()
+    const receipt = rosterCaptureReceipt(identity, appliedUnit, appliedAt, 'applied')
+    const pending = rosterCaptureMarkerFor(identity, receipt, payload, appliedUnit, appliedAt, 'pending')
+    try {
+      await this.persistence.savePending(
+        canonicalUnit ? roster : [...roster, unit],
+        replaceRosterCaptureMarker(markers, pending),
+        identity.resultId,
+      )
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存收服 Mobie 結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled = rosterCaptureMarkerFor(identity, receipt, payload, appliedUnit, appliedAt, 'settled', pending)
+    try {
+      await this.persistence.saveMarkers(replaceRosterCaptureMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, '收服 Mobie 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
 function replaceSkillPointsMarker(
   markers: readonly SkillPointsSettlementMarker[],
   marker: SkillPointsSettlementMarker,
@@ -884,7 +1306,7 @@ export class SkillPointsDestination {
   }
 }
 
-/** Meta/Dex progression child destination. Capture writes remain a later child. */
+/** Existing Result win/evolution Meta child destination. Capture has its own marker namespace below. */
 export class MetaSettlementDestination {
   private queue: Promise<unknown> = Promise.resolve()
 
@@ -1009,6 +1431,203 @@ export class MetaSettlementDestination {
       await this.persistence.saveMarkers(replaceMetaMarker(markers, settled))
     } catch (cause) {
       throw new ResultSettlementError('receipt', identity, 'Meta 已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
+function replaceCaptureMetaMarker(
+  markers: readonly CaptureMetaMarker[],
+  marker: CaptureMetaMarker,
+): CaptureMetaMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function captureMetaReceipt(
+  identity: ResultIdentity,
+  payload: CaptureMetaPayload,
+  meta: MetaState,
+  appliedAt: number,
+  status: CaptureMetaReceipt['status'],
+): CaptureMetaReceipt {
+  return {
+    ...identity,
+    status,
+    speciesId: payload.speciesId,
+    shiny: payload.shiny,
+    outcome: payload.outcome,
+    meta: cloneMeta(meta),
+    appliedAt,
+  }
+}
+
+function captureMetaMarkerFor(
+  identity: ResultIdentity,
+  receipt: CaptureMetaReceipt,
+  payload: CaptureMetaPayload,
+  before: MetaState,
+  after: MetaState,
+  now: number,
+  status: ResultMarkerStatus,
+  previous?: CaptureMetaMarker,
+): CaptureMetaMarker {
+  return {
+    ...identity,
+    destination: 'meta-capture',
+    status,
+    createdAt: previous?.createdAt ?? now,
+    ...(status === 'settled' ? { settledAt: previous?.settledAt ?? now } : {}),
+    ...(previous?.leftResultAt === undefined ? {} : { leftResultAt: previous.leftResultAt }),
+    canonicalApplied: previous?.canonicalApplied ?? false,
+    payload: { ...payload },
+    before: cloneMeta(previous?.before ?? before),
+    after: cloneMeta(previous?.after ?? after),
+    receipt: {
+      resultId: receipt.resultId,
+      resultFingerprint: receipt.resultFingerprint,
+      speciesId: receipt.speciesId,
+      shiny: receipt.shiny,
+      outcome: receipt.outcome,
+      meta: cloneMeta(receipt.meta),
+      appliedAt: receipt.appliedAt,
+    },
+  }
+}
+
+/** Pure capture/Dex update owned by the capture Meta child. */
+export function calculateCaptureMeta(meta: MetaState, payload: CaptureMetaPayload): MetaState {
+  let next = addRegistered(meta, [payload.speciesId])
+  next = bumpStat(next, 'captures')
+  if (payload.shiny) next = bumpStat(next, 'shinies')
+  return next
+}
+
+/** Durable capture/Dex Meta child; separate from the existing Result win child. */
+export class CaptureMetaDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: CaptureMetaPersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: CaptureMetaPayload): Promise<CaptureMetaReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return marker.status === 'settled' || marker.canonicalApplied === true
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取捕獲圖鑑結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceCaptureMetaMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存捕獲圖鑑 Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(identity: ResultIdentity, payload: CaptureMetaPayload): Promise<CaptureMetaReceipt> {
+    let markers: CaptureMetaMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取捕獲圖鑑結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (existing?.status === 'settled') {
+      return {
+        ...existing.receipt,
+        meta: cloneMeta(existing.receipt.meta),
+        status: 'already-applied',
+      }
+    }
+
+    let meta: MetaState
+    try {
+      meta = cloneMeta(await this.persistence.loadMeta())
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical Meta 失敗，請重試。', cause)
+    }
+
+    if (existing) {
+      if (existing.canonicalApplied !== true) {
+        const reconciled = calculateCaptureMeta(meta, existing.payload)
+        try {
+          await this.persistence.savePending(reconciled, markers, identity.resultId)
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復捕獲圖鑑資料失敗，請重試。', cause)
+        }
+      }
+      const settled: CaptureMetaMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceCaptureMetaMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, '捕獲圖鑑已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return {
+        ...existing.receipt,
+        meta: cloneMeta(existing.receipt.meta),
+        status: 'already-applied',
+      }
+    }
+
+    const normalized: CaptureMetaPayload = {
+      speciesId: Number.isFinite(payload.speciesId) ? Math.max(1, Math.floor(payload.speciesId)) : 1,
+      shiny: payload.shiny === true,
+      outcome: payload.outcome === 'captured-duplicate-egg' ? 'captured-duplicate-egg' : 'captured-new',
+    }
+    const after = calculateCaptureMeta(meta, normalized)
+    const appliedAt = this.now()
+    const receipt = captureMetaReceipt(identity, normalized, after, appliedAt, 'applied')
+    const pending = captureMetaMarkerFor(identity, receipt, normalized, meta, after, appliedAt, 'pending')
+    try {
+      await this.persistence.savePending(after, replaceCaptureMetaMarker(markers, pending), identity.resultId)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存捕獲圖鑑結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled = captureMetaMarkerFor(identity, receipt, normalized, meta, after, appliedAt, 'settled', pending)
+    try {
+      await this.persistence.saveMarkers(replaceCaptureMetaMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, '捕獲圖鑑已寫入，但回條保存失敗；請重試以完成對帳。', cause)
     }
     return receipt
   }
@@ -1540,6 +2159,473 @@ export class IncubatorProgressionDestination {
   }
 }
 
+function replaceDuplicateEggMarker(
+  markers: readonly DuplicateEggMarker[],
+  marker: DuplicateEggMarker,
+): DuplicateEggMarker[] {
+  const index = markers.findIndex((item) => item.resultId === marker.resultId)
+  const next = [...markers]
+  if (index < 0) next.push(marker)
+  else next[index] = marker
+  return next
+}
+
+function cloneDuplicateEggPayload(payload: DuplicateEggPayload): DuplicateEggPayload {
+  return {
+    speciesId: payload.speciesId,
+    label: payload.label,
+    ...(payload.inheritedMoveId === undefined ? {} : { inheritedMoveId: payload.inheritedMoveId }),
+  }
+}
+
+function normalizeDuplicateEggPayload(payload: DuplicateEggPayload): DuplicateEggPayload {
+  return {
+    speciesId: Number.isFinite(payload.speciesId) ? Math.max(1, Math.floor(payload.speciesId)) : 1,
+    label: typeof payload.label === 'string' && payload.label.length > 0 ? payload.label : '重複轉化蛋',
+    ...(Number.isInteger(payload.inheritedMoveId) && (payload.inheritedMoveId as number) > 0
+      ? { inheritedMoveId: payload.inheritedMoveId }
+      : {}),
+  }
+}
+
+/** Pure duplicate-capture egg creation. */
+export function calculateDuplicateEgg(
+  state: IncubatorState,
+  payload: DuplicateEggPayload,
+): { state: IncubatorState; egg: Egg } {
+  const normalized = normalizeDuplicateEggPayload(payload)
+  const next = addEgg(state, {
+    source: 'duplicate',
+    speciesPool: [normalized.speciesId],
+    label: normalized.label,
+    ...(normalized.inheritedMoveId === undefined ? {} : { inheritedMoveId: normalized.inheritedMoveId }),
+  })
+  const egg = next.eggs.at(-1)
+  if (!egg || next === state) throw new Error('duplicate egg payload did not create an egg')
+  return { state: next, egg: cloneEgg(egg) }
+}
+
+function duplicateEggReceipt(
+  identity: ResultIdentity,
+  egg: Egg,
+  appliedAt: number,
+  status: DuplicateEggReceipt['status'],
+): DuplicateEggReceipt {
+  return { ...identity, status, egg: cloneEgg(egg), appliedAt }
+}
+
+function duplicateEggMarkerFor(
+  identity: ResultIdentity,
+  receipt: DuplicateEggReceipt,
+  payload: DuplicateEggPayload,
+  egg: Egg,
+  now: number,
+  status: ResultMarkerStatus,
+  previous?: DuplicateEggMarker,
+): DuplicateEggMarker {
+  return {
+    ...identity,
+    destination: 'incubator-capture',
+    status,
+    createdAt: previous?.createdAt ?? now,
+    ...(status === 'settled' ? { settledAt: previous?.settledAt ?? now } : {}),
+    ...(previous?.leftResultAt === undefined ? {} : { leftResultAt: previous.leftResultAt }),
+    canonicalApplied: previous?.canonicalApplied ?? false,
+    payload: cloneDuplicateEggPayload(payload),
+    egg: cloneEgg(previous?.egg ?? egg),
+    receipt: {
+      resultId: receipt.resultId,
+      resultFingerprint: receipt.resultFingerprint,
+      egg: cloneEgg(receipt.egg),
+      appliedAt: receipt.appliedAt,
+    },
+  }
+}
+
+/** Durable duplicate-capture child; this is the only writer that creates the egg. */
+export class DuplicateEggDestination {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  constructor(
+    private readonly persistence: DuplicateEggPersistence,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  applyOnce(identity: ResultIdentity, payload: DuplicateEggPayload): Promise<DuplicateEggReceipt> {
+    const run = this.queue.then(() => this.applySerialized(identity, payload))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  hasApplied(identity: ResultIdentity): Promise<boolean> {
+    const run = this.queue.then(async () => {
+      try {
+        const marker = (await this.persistence.loadMarkers()).find((item) => item.resultId === identity.resultId)
+        if (!marker) return false
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return marker.status === 'settled' || marker.canonicalApplied === true
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '讀取重複蛋結算標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      try {
+        const markers = await this.persistence.loadMarkers()
+        const marker = markers.find((item) => item.resultId === identity.resultId)
+        if (!marker) return
+        if (marker.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        await this.persistence.saveMarkers(retainResultMarkers(
+          replaceDuplicateEggMarker(markers, { ...marker, leftResultAt: this.now() }),
+          identity,
+        ))
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '保存重複蛋 Result 離場標記失敗，請重試。', error)
+      }
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  private async applySerialized(identity: ResultIdentity, payload: DuplicateEggPayload): Promise<DuplicateEggReceipt> {
+    let markers: DuplicateEggMarker[]
+    try {
+      markers = await this.persistence.loadMarkers()
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取重複蛋結算標記失敗，請重試。', cause)
+    }
+    const existing = markers.find((item) => item.resultId === identity.resultId)
+    if (existing && existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+    if (existing?.status === 'settled') {
+      return { ...existing.receipt, egg: cloneEgg(existing.receipt.egg), status: 'already-applied' }
+    }
+
+    let state: IncubatorState
+    try {
+      state = cloneIncubatorState(await this.persistence.loadState())
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '讀取 canonical 孵化所資料失敗，請重試。', cause)
+    }
+
+    if (existing) {
+      const canonicalEgg = state.eggs.find((egg) => egg.id === existing.egg.id)
+      if (existing.canonicalApplied !== true && !canonicalEgg) {
+        try {
+          const reconciled: IncubatorState = {
+            ...state,
+            eggs: [...state.eggs.map(cloneEgg), cloneEgg(existing.egg)],
+            nextId: Math.max(state.nextId, Number(existing.egg.id.replace(/^egg-/, '')) + 1 || state.nextId),
+          }
+          await this.persistence.savePending(reconciled, markers, identity.resultId)
+          existing.canonicalApplied = true
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '恢復重複蛋資料失敗，請重試。', cause)
+        }
+      } else if (existing.canonicalApplied !== true) {
+        existing.canonicalApplied = true
+      }
+      const settled: DuplicateEggMarker = {
+        ...existing,
+        status: 'settled',
+        settledAt: existing.settledAt ?? this.now(),
+      }
+      try {
+        await this.persistence.saveMarkers(replaceDuplicateEggMarker(markers, settled))
+      } catch (cause) {
+        throw new ResultSettlementError('receipt', identity, '重複蛋已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+      }
+      return { ...existing.receipt, egg: cloneEgg(existing.receipt.egg), status: 'already-applied' }
+    }
+
+    const normalized = normalizeDuplicateEggPayload(payload)
+    let calculated: { state: IncubatorState; egg: Egg }
+    try {
+      calculated = calculateDuplicateEgg(state, normalized)
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '重複蛋資料無效，請重試。', cause)
+    }
+    const appliedAt = this.now()
+    const receipt = duplicateEggReceipt(identity, calculated.egg, appliedAt, 'applied')
+    const pending = duplicateEggMarkerFor(identity, receipt, normalized, calculated.egg, appliedAt, 'pending')
+    try {
+      await this.persistence.savePending(
+        calculated.state,
+        replaceDuplicateEggMarker(markers, pending),
+        identity.resultId,
+      )
+    } catch (cause) {
+      throw new ResultSettlementError('storage', identity, '保存重複蛋結果失敗，請重試。', cause)
+    }
+    pending.canonicalApplied = true
+    const settled = duplicateEggMarkerFor(identity, receipt, normalized, calculated.egg, appliedAt, 'settled', pending)
+    try {
+      await this.persistence.saveMarkers(replaceDuplicateEggMarker(markers, settled))
+    } catch (cause) {
+      throw new ResultSettlementError('receipt', identity, '重複蛋已寫入，但回條保存失敗；請重試以完成對帳。', cause)
+    }
+    return receipt
+  }
+}
+
+export interface CaptureSettlementDependencies {
+  loadRoster: () => Promise<OwnedUnit[]>
+  roster: RosterCaptureDestination
+  meta: CaptureMetaDestination
+  duplicateEgg: DuplicateEggDestination
+}
+
+function capturePlanFor(
+  identity: ResultIdentity,
+  payload: CaptureSettlementPayload,
+  roster: readonly OwnedUnit[],
+): CaptureSettlementPlan {
+  const normalizedPayload: CaptureSettlementPayload = {
+    target: cloneCard(payload.target),
+    captureMult: payload.captureMult,
+  }
+  const decision = deterministicCaptureDecision(identity, normalizedPayload)
+  if (!decision.caught) {
+    return {
+      ...identity,
+      payload: normalizedPayload,
+      decision,
+      outcome: 'escaped',
+    }
+  }
+
+  const wild = buildBattleMobie(normalizedPayload.target)
+  const alreadyOwned = roster.some((unit) => unit.speciesId === normalizedPayload.target.speciesId)
+  if (alreadyOwned) {
+    const inheritedMoveId = wild.moves.length > 1 ? wild.moves[wild.moves.length - 1]?.id : undefined
+    return {
+      ...identity,
+      payload: normalizedPayload,
+      decision,
+      outcome: 'captured-duplicate-egg',
+      meta: {
+        speciesId: normalizedPayload.target.speciesId,
+        shiny: wild.shiny,
+        outcome: 'captured-duplicate-egg',
+      },
+      duplicateEgg: {
+        speciesId: normalizedPayload.target.speciesId,
+        label: `${wild.nameZh} 蛋`,
+        ...(inheritedMoveId === undefined ? {} : { inheritedMoveId }),
+      },
+    }
+  }
+
+  return {
+    ...identity,
+    payload: normalizedPayload,
+    decision,
+    outcome: 'captured-new',
+    roster: { card: cloneCard(normalizedPayload.target) },
+    meta: {
+      speciesId: normalizedPayload.target.speciesId,
+      shiny: wild.shiny,
+      outcome: 'captured-new',
+    },
+  }
+}
+
+/** Pure plan builder exposed for deterministic decision tests and diagnostics. */
+export function planCaptureSettlement(
+  identity: ResultIdentity,
+  payload: CaptureSettlementPayload,
+  roster: readonly OwnedUnit[],
+): CaptureSettlementPlan {
+  return capturePlanFor(identity, payload, roster)
+}
+
+function cloneCapturePlan(plan: CaptureSettlementPlan): CaptureSettlementPlan {
+  return {
+    ...plan,
+    payload: { target: cloneCard(plan.payload.target), captureMult: plan.payload.captureMult },
+    decision: { ...plan.decision },
+    ...(plan.roster ? { roster: { card: cloneCard(plan.roster.card) } } : {}),
+    ...(plan.meta ? { meta: { ...plan.meta } } : {}),
+    ...(plan.duplicateEgg ? { duplicateEgg: cloneDuplicateEggPayload(plan.duplicateEgg) } : {}),
+  }
+}
+
+function cloneCaptureReceipt(receipt: CaptureSettlementReceipt): CaptureSettlementReceipt {
+  return {
+    ...receipt,
+    target: cloneCard(receipt.target),
+    decision: { ...receipt.decision },
+    ...(receipt.unit ? { unit: cloneOwnedUnit(receipt.unit) } : {}),
+    ...(receipt.egg ? { egg: cloneEgg(receipt.egg) } : {}),
+    ...(receipt.rosterCapture
+      ? { rosterCapture: { ...receipt.rosterCapture, unit: cloneOwnedUnit(receipt.rosterCapture.unit) } }
+      : {}),
+    ...(receipt.meta
+      ? { meta: { ...receipt.meta, meta: cloneMeta(receipt.meta.meta) } }
+      : {}),
+    ...(receipt.duplicateEgg
+      ? { duplicateEgg: { ...receipt.duplicateEgg, egg: cloneEgg(receipt.duplicateEgg.egg) } }
+      : {}),
+  }
+}
+
+/**
+ * Capture child coordinator. It owns deterministic plan selection and invokes
+ * each canonical destination independently; it never writes a store itself.
+ */
+export class CaptureSettlementCoordinator {
+  private queue: Promise<unknown> = Promise.resolve()
+  private readonly plans = new Map<string, CaptureSettlementPlan>()
+  private readonly completed = new Set<string>()
+
+  constructor(
+    private readonly dependencies: CaptureSettlementDependencies,
+    private readonly now: () => number = () => Date.now(),
+  ) {}
+
+  prepare(identity: ResultIdentity, payload: CaptureSettlementPayload): Promise<CaptureSettlementPlan> {
+    const run = this.queue.then(async () => {
+      const existing = this.plans.get(identity.resultId)
+      if (existing) {
+        if (existing.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        return cloneCapturePlan(existing)
+      }
+      let roster: OwnedUnit[]
+      try {
+        roster = await this.dependencies.loadRoster()
+      } catch (cause) {
+        throw new ResultSettlementError('storage', identity, '讀取收服判定所需 roster 失敗，請重試。', cause)
+      }
+      const plan = capturePlanFor(identity, payload, roster)
+      this.plans.set(identity.resultId, plan)
+      return cloneCapturePlan(plan)
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  markResultLeft(identity: ResultIdentity): Promise<void> {
+    const run = this.queue.then(async () => {
+      const plan = this.plans.get(identity.resultId)
+      if (plan && plan.resultFingerprint !== identity.resultFingerprint) collision(identity)
+      await this.dependencies.roster.markResultLeft(identity)
+      await this.dependencies.meta.markResultLeft(identity)
+      await this.dependencies.duplicateEgg.markResultLeft(identity)
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+
+  settle(
+    identity: ResultIdentity,
+    payload: CaptureSettlementPayload,
+    existingPlan?: CaptureSettlementPlan,
+  ): Promise<CaptureSettlementReceipt> {
+    const run = this.queue.then(async () => {
+      let plan: CaptureSettlementPlan
+      if (existingPlan) {
+        if (existingPlan.resultFingerprint !== identity.resultFingerprint) collision(identity)
+        plan = cloneCapturePlan(existingPlan)
+        this.plans.set(identity.resultId, plan)
+      } else {
+        const cached = this.plans.get(identity.resultId)
+        if (cached) {
+          if (cached.resultFingerprint !== identity.resultFingerprint) collision(identity)
+          plan = cloneCapturePlan(cached)
+        } else {
+          let roster: OwnedUnit[]
+          try {
+            roster = await this.dependencies.loadRoster()
+          } catch (cause) {
+            throw new ResultSettlementError('storage', identity, '讀取收服判定所需 roster 失敗，請重試。', cause)
+          }
+          plan = capturePlanFor(identity, payload, roster)
+          this.plans.set(identity.resultId, plan)
+        }
+      }
+
+      if (plan.outcome === 'escaped') {
+        const status: CaptureSettlementReceipt['status'] = this.completed.has(identity.resultId)
+          ? 'already-applied'
+          : 'applied'
+        this.completed.add(identity.resultId)
+        return {
+          ...identity,
+          status,
+          decision: { ...plan.decision },
+          outcome: plan.outcome,
+          target: cloneCard(plan.payload.target),
+          appliedAt: this.now(),
+        }
+      }
+
+      let rosterReceipt: RosterCaptureReceipt | undefined
+      if (plan.roster) {
+        try {
+          rosterReceipt = await this.dependencies.roster.applyOnce(identity, plan.roster)
+        } catch (error) {
+          if (error instanceof ResultSettlementError) throw error
+          throw new ResultSettlementError('storage', identity, '收服 Mobie 子結算失敗，請重試。', error)
+        }
+      }
+
+      let metaReceipt: CaptureMetaReceipt | undefined
+      if (plan.meta) {
+        try {
+          metaReceipt = await this.dependencies.meta.applyOnce(identity, plan.meta)
+        } catch (error) {
+          if (error instanceof ResultSettlementError) throw error
+          throw new ResultSettlementError('storage', identity, '捕獲圖鑑子結算失敗，請重試。', error)
+        }
+      }
+
+      let duplicateEggReceipt: DuplicateEggReceipt | undefined
+      if (plan.duplicateEgg) {
+        try {
+          duplicateEggReceipt = await this.dependencies.duplicateEgg.applyOnce(identity, plan.duplicateEgg)
+        } catch (error) {
+          if (error instanceof ResultSettlementError) throw error
+          throw new ResultSettlementError('storage', identity, '重複蛋子結算失敗，請重試。', error)
+        }
+      }
+
+      const status = [rosterReceipt?.status, metaReceipt?.status, duplicateEggReceipt?.status]
+        .some((childStatus) => childStatus === 'already-applied')
+        ? 'already-applied' as const
+        : 'applied' as const
+      this.completed.add(identity.resultId)
+      const unit = rosterReceipt?.unit
+      const egg = duplicateEggReceipt?.egg
+      return cloneCaptureReceipt({
+        ...identity,
+        status,
+        decision: { ...plan.decision },
+        outcome: plan.outcome,
+        target: cloneCard(plan.payload.target),
+        ...(unit ? { unit: cloneOwnedUnit(unit) } : {}),
+        ...(egg ? { egg: cloneEgg(egg) } : {}),
+        ...(rosterReceipt ? { rosterCapture: rosterReceipt } : {}),
+        ...(metaReceipt ? { meta: metaReceipt } : {}),
+        ...(duplicateEggReceipt ? { duplicateEgg: duplicateEggReceipt } : {}),
+        appliedAt: this.now(),
+      })
+    })
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+}
+
+// Compatibility aliases for callers that use the child-first vocabulary.
+export { RosterCaptureDestination as CaptureRosterDestination }
+export { CaptureMetaDestination as MetaCaptureDestination }
+export { DuplicateEggDestination as IncubatorCaptureDestination }
+export type CapturePlan = CaptureSettlementPlan
+
 // Explicit aliases keep the boundary vocabulary readable to future Tickets 32–33 callers.
 export { TowerProgressionDestination as TowerSettlementDestination }
 export { TowerProgressionDestination as TowerProgressDestination }
@@ -1553,6 +2639,9 @@ export type TowerSettlementMarker = TowerProgressionMarker
 export type IncubatorSettlementMarker = IncubatorProgressionMarker
 export type TowerSettlementPersistence = TowerProgressionPersistence
 export type IncubatorSettlementPersistence = IncubatorProgressionPersistence
+export type CaptureSettlementPersistence = RosterCapturePersistence
+export type MetaCaptureSettlementPersistence = CaptureMetaPersistence
+export type DuplicateEggSettlementPersistence = DuplicateEggPersistence
 
 /** Result-level journal; it never mutates the roster and is not exactly-once authority. */
 export class ResultSettlementCoordinator {
@@ -1582,12 +2671,18 @@ export class ResultSettlementCoordinator {
             entries.map((item) => item.resultId === identity.resultId ? { ...item, leftResultAt: this.now() } : item),
             identity,
           ))
+          // A failed/pending Result may still have only some children durable.
+          // Keep every child marker eligible for reconciliation until the
+          // parent journal reaches settled; leave-time pruning is never a
+          // proof that a pending mutation was completed.
+          if (entry.status !== 'settled') return
         }
         await this.destination.markResultLeft(identity)
         if (this.children.skillPoints) await this.children.skillPoints.markResultLeft(identity)
         if (this.children.meta) await this.children.meta.markResultLeft(identity)
         if (this.children.tower) await this.children.tower.markResultLeft(identity)
         if (this.children.incubator) await this.children.incubator.markResultLeft(identity)
+        if (this.children.capture) await this.children.capture.markResultLeft(identity)
       } catch (error) {
         if (error instanceof ResultSettlementError) throw error
         throw new ResultSettlementError('storage', identity, '保存 Result 離場標記失敗，請重試。', error)
@@ -1622,8 +2717,10 @@ export class ResultSettlementCoordinator {
     const incubatorPayload = payload.incubator ?? existing?.incubatorPayload ?? (existing?.incubator
       ? { amount: existing.incubator.amount }
       : undefined)
+    const capturePayload = payload.capture ?? existing?.capturePayload
     const towerRequired = Boolean(this.children.tower && towerPayload)
     const incubatorRequired = Boolean(this.children.incubator && incubatorPayload)
+    const captureRequired = Boolean(this.children.capture && capturePayload)
     if (existing) {
       // Reconciliation starts with the child authority. The journal is only
       // orchestration state and cannot prove that the roster write happened.
@@ -1639,7 +2736,7 @@ export class ResultSettlementCoordinator {
       }
     }
 
-    const allChildrenSettled = existing?.status === 'settled'
+    const allChildrenSettled = !captureRequired && existing?.status === 'settled'
       && existing.rosterGrowth
       && childAlreadyApplied
       && (!this.children.skillPoints || (existing.skillPoints && skillPointsAlreadyApplied))
@@ -1689,12 +2786,13 @@ export class ResultSettlementCoordinator {
       }
     }
 
-    const running: SettlementJournalEntry = existing
+    let running: SettlementJournalEntry = existing
       ? {
           ...existing,
           status: 'pending',
           ...(towerPayload ? { towerPayload } : {}),
           ...(incubatorPayload ? { incubatorPayload } : {}),
+          ...(capturePayload ? { capturePayload } : {}),
           error: undefined,
         }
       : {
@@ -1705,6 +2803,7 @@ export class ResultSettlementCoordinator {
           ...(payload.outcome ? { outcome: payload.outcome } : {}),
           ...(towerPayload ? { towerPayload } : {}),
           ...(incubatorPayload ? { incubatorPayload } : {}),
+          ...(capturePayload ? { capturePayload } : {}),
         }
     try {
       await this.journal.save(replaceJournal(entries, running))
@@ -1769,6 +2868,33 @@ export class ResultSettlementCoordinator {
       }
     }
 
+    let captureReceipt: CaptureSettlementReceipt | undefined
+    if (captureRequired && this.children.capture && capturePayload) {
+      let capturePlan = existing?.capturePlan
+      if (!capturePlan) {
+        try {
+          capturePlan = await this.children.capture.prepare(identity, capturePayload)
+        } catch (error) {
+          if (error instanceof ResultSettlementError) throw error
+          throw new ResultSettlementError('storage', identity, '建立捕獲結算判定失敗，請重試。', error)
+        }
+        // Persist the decision and the outcome-specific child intent before
+        // any capture child writes. A retry therefore never rolls again.
+        running = { ...running, capturePayload, capturePlan }
+        try {
+          await this.journal.save(replaceJournal(entries, running))
+        } catch (cause) {
+          throw new ResultSettlementError('storage', identity, '保存捕獲結算判定失敗，請重試。', cause)
+        }
+      }
+      try {
+        captureReceipt = await this.children.capture.settle(identity, capturePayload, capturePlan)
+      } catch (error) {
+        if (error instanceof ResultSettlementError) throw error
+        throw new ResultSettlementError('storage', identity, '捕獲子結算失敗，請重試。', error)
+      }
+    }
+
     const settled: SettlementJournalEntry = {
       ...running,
       status: 'settled',
@@ -1778,6 +2904,7 @@ export class ResultSettlementCoordinator {
       ...(metaReceipt ? { meta: metaReceipt } : {}),
       ...(towerReceipt ? { tower: towerReceipt } : {}),
       ...(incubatorReceipt ? { incubator: incubatorReceipt } : {}),
+      ...(captureReceipt ? { capture: captureReceipt } : {}),
       error: undefined,
     }
     try {
@@ -1795,6 +2922,7 @@ export class ResultSettlementCoordinator {
       ...(metaReceipt ? { meta: metaReceipt } : {}),
       ...(towerReceipt ? { tower: towerReceipt } : {}),
       ...(incubatorReceipt ? { incubator: incubatorReceipt } : {}),
+      ...(captureReceipt ? { capture: captureReceipt } : {}),
     }
   }
 }
@@ -1837,6 +2965,42 @@ function readEmbeddedMarkers<T>(raw: string | null, label: string): T[] | null {
   if (markers === undefined) return null
   if (!Array.isArray(markers)) throw new Error(`${label} 格式無效：必須是陣列`)
   return markers as T[]
+}
+
+function markerDestination(marker: unknown): string | undefined {
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return undefined
+  const destination = (marker as Record<string, unknown>).destination
+  return typeof destination === 'string' ? destination : undefined
+}
+
+function markersForDestination<T>(markers: readonly unknown[], destination: string): T[] {
+  return markers.filter((marker) => markerDestination(marker) === destination) as T[]
+}
+
+function readSharedMarkers(
+  storage: ResultStorage | null,
+  canonicalKey: string,
+  mirrorKey: string,
+  label: string,
+): unknown[] {
+  if (!storage) return []
+  const embedded = readEmbeddedMarkers<unknown>(storage.getItem(canonicalKey), label)
+  if (embedded) return embedded
+  return parseArray<unknown>(storage.getItem(mirrorKey), label)
+}
+
+function mergeSharedMarkers(
+  storage: ResultStorage | null,
+  canonicalKey: string,
+  mirrorKey: string,
+  destination: string,
+  incoming: readonly unknown[],
+  label: string,
+): unknown[] {
+  const existing = readSharedMarkers(storage, canonicalKey, mirrorKey, label)
+  const preserved = existing.filter((marker) => markerDestination(marker) !== destination)
+  const merged = [...preserved, ...incoming]
+  return merged
 }
 
 function storageFailure(identity: ResultIdentity, message: string, cause: unknown): ResultSettlementError {
@@ -1911,6 +3075,73 @@ export class LocalStorageRosterGrowthPersistence implements RosterGrowthPersiste
   }
 }
 
+/** Browser persistence for the captured-new roster child boundary. */
+export class LocalStorageRosterCapturePersistence implements RosterCapturePersistence {
+  constructor(
+    private readonly roster: {
+      loadRoster: () => Promise<OwnedUnit[]>
+      saveRoster: (units: OwnedUnit[]) => Promise<void>
+      saveRosterWithCaptureMarkers?: (units: OwnedUnit[], markers: unknown[]) => Promise<void>
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadRoster(): Promise<OwnedUnit[]> {
+    return this.roster.loadRoster()
+  }
+
+  async loadMarkers(): Promise<RosterCaptureMarker[]> {
+    if (!this.storage) return []
+    const embedded = readEmbeddedMarkers<RosterCaptureMarker>(
+      this.storage.getItem('mobie.roster.v2'),
+      '收服 Mobie 結算標記',
+    )
+    if (embedded) return markersForDestination<RosterCaptureMarker>(embedded, 'roster-capture')
+    return parseArray<RosterCaptureMarker>(
+      this.storage.getItem(ROSTER_CAPTURE_SETTLEMENT_MARKER_KEY),
+      '收服 Mobie 結算標記',
+    )
+  }
+
+  async savePending(roster: OwnedUnit[], markers: RosterCaptureMarker[], operationId?: string): Promise<void> {
+    if (!this.storage) {
+      await this.roster.saveRoster(roster)
+      return
+    }
+    try {
+      if (this.roster.saveRosterWithCaptureMarkers) {
+        // One canonical envelope write contains both the roster mutation and
+        // its write-ahead marker. No cross-key transaction is implied.
+        const completed = markers.map((marker) => marker.resultId === operationId
+          ? { ...marker, canonicalApplied: true }
+          : marker)
+        await this.roster.saveRosterWithCaptureMarkers(roster, completed)
+        try { this.storage.setItem(ROSTER_CAPTURE_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+      } else {
+        // Compatibility adapter for old persistence implementations that only
+        // expose the legacy array writer.
+        this.storage.setItem(ROSTER_CAPTURE_SETTLEMENT_MARKER_KEY, JSON.stringify(markers))
+        await this.roster.saveRoster(roster)
+      }
+    } catch (cause) {
+      throw new Error(`保存收服 Mobie 資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: RosterCaptureMarker[]): Promise<void> {
+    if (!this.storage) return
+    try {
+      if (this.roster.saveRosterWithCaptureMarkers) {
+        const roster = await this.roster.loadRoster()
+        await this.roster.saveRosterWithCaptureMarkers(roster, markers)
+      }
+      try { this.storage.setItem(ROSTER_CAPTURE_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存收服 Mobie 結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
 /** Browser persistence for the SP child boundary. */
 export class LocalStorageSkillPointsPersistence implements SkillPointsPersistence {
   constructor(
@@ -1972,7 +3203,7 @@ export class LocalStorageMetaSettlementPersistence implements MetaSettlementPers
     private readonly meta: {
       loadMeta: () => Promise<MetaState> | MetaState
       saveMeta: (meta: MetaState) => Promise<void> | void
-      saveMetaWithMarkers: (meta: MetaState, markers: MetaSettlementMarker[], operationId?: string) => Promise<void> | void
+      saveMetaWithMarkers: (meta: MetaState, markers: unknown[], operationId?: string) => Promise<void> | void
     },
     private readonly storage: ResultStorage | null = safeStorage(),
   ) {}
@@ -1987,14 +3218,9 @@ export class LocalStorageMetaSettlementPersistence implements MetaSettlementPers
 
   async loadMarkers(): Promise<MetaSettlementMarker[]> {
     if (!this.storage) return []
-    const embedded = readEmbeddedMarkers<MetaSettlementMarker>(
-      this.storage.getItem('mobie.meta.v1'),
-      'Meta 結算標記',
-    )
-    if (embedded) return embedded
-    return parseArray<MetaSettlementMarker>(
-      this.storage.getItem(META_SETTLEMENT_MARKER_KEY),
-      'Meta 結算標記',
+    return markersForDestination<MetaSettlementMarker>(
+      readSharedMarkers(this.storage, 'mobie.meta.v1', META_SETTLEMENT_MARKER_KEY, 'Meta 結算標記'),
+      'meta',
     )
   }
 
@@ -2002,9 +3228,17 @@ export class LocalStorageMetaSettlementPersistence implements MetaSettlementPers
     const completed = markers.map((marker) => marker.resultId === operationId
       ? { ...marker, canonicalApplied: true }
       : marker)
+    const merged = mergeSharedMarkers(
+      this.storage,
+      'mobie.meta.v1',
+      META_SETTLEMENT_MARKER_KEY,
+      'meta',
+      completed,
+      'Meta 結算標記',
+    )
     try {
-      await this.meta.saveMetaWithMarkers(meta, completed, operationId)
-      try { this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+      await this.meta.saveMetaWithMarkers(meta, merged, operationId)
+      try { this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(merged)) } catch { /* canonical envelope is authoritative */ }
     } catch (cause) {
       throw new Error(`保存 Meta 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
     }
@@ -2013,13 +3247,95 @@ export class LocalStorageMetaSettlementPersistence implements MetaSettlementPers
   async saveMarkers(markers: MetaSettlementMarker[]): Promise<void> {
     try {
       const meta = await this.loadMeta()
-      await this.meta.saveMetaWithMarkers(meta, markers)
-      try { this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+      const merged = mergeSharedMarkers(
+        this.storage,
+        'mobie.meta.v1',
+        META_SETTLEMENT_MARKER_KEY,
+        'meta',
+        markers,
+        'Meta 結算標記',
+      )
+      await this.meta.saveMetaWithMarkers(meta, merged)
+      try { this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(merged)) } catch { /* canonical envelope is authoritative */ }
     } catch (cause) {
       throw new Error(`保存 Meta 結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
     }
   }
 }
+
+/** Browser persistence for capture/Dex Meta markers sharing the Meta envelope. */
+export class LocalStorageCaptureMetaPersistence implements CaptureMetaPersistence {
+  constructor(
+    private readonly meta: {
+      loadMeta: () => Promise<MetaState> | MetaState
+      saveMetaWithMarkers: (meta: MetaState, markers: unknown[]) => Promise<void> | void
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadMeta(): Promise<MetaState> {
+    return Promise.resolve(this.meta.loadMeta())
+  }
+
+  async loadMarkers(): Promise<CaptureMetaMarker[]> {
+    if (!this.storage) return []
+    return markersForDestination<CaptureMetaMarker>(
+      readSharedMarkers(this.storage, 'mobie.meta.v1', META_SETTLEMENT_MARKER_KEY, '捕獲圖鑑結算標記'),
+      'meta-capture',
+    )
+  }
+
+  async savePending(meta: MetaState, markers: CaptureMetaMarker[], operationId?: string): Promise<void> {
+    const completed = markers.map((marker) => marker.resultId === operationId
+      ? { ...marker, canonicalApplied: true }
+      : marker)
+    const merged = mergeSharedMarkers(
+      this.storage,
+      'mobie.meta.v1',
+      META_SETTLEMENT_MARKER_KEY,
+      'meta-capture',
+      completed,
+      '捕獲圖鑑結算標記',
+    )
+    try {
+      await this.meta.saveMetaWithMarkers(meta, merged)
+      try {
+        this.storage?.setItem(META_CAPTURE_SETTLEMENT_MARKER_KEY, JSON.stringify(
+          markersForDestination<CaptureMetaMarker>(merged, 'meta-capture'),
+        ))
+        this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(merged))
+      } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存捕獲圖鑑結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: CaptureMetaMarker[]): Promise<void> {
+    try {
+      const meta = await this.loadMeta()
+      const merged = mergeSharedMarkers(
+        this.storage,
+        'mobie.meta.v1',
+        META_SETTLEMENT_MARKER_KEY,
+        'meta-capture',
+        markers,
+        '捕獲圖鑑結算標記',
+      )
+      await this.meta.saveMetaWithMarkers(meta, merged)
+      try {
+        this.storage?.setItem(META_CAPTURE_SETTLEMENT_MARKER_KEY, JSON.stringify(
+          markersForDestination<CaptureMetaMarker>(merged, 'meta-capture'),
+        ))
+        this.storage?.setItem(META_SETTLEMENT_MARKER_KEY, JSON.stringify(merged))
+      } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存捕獲圖鑑結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
+// Naming alias used by the destination-oriented vocabulary.
+export { LocalStorageCaptureMetaPersistence as LocalStorageMetaCapturePersistence }
 
 /** Browser persistence for the Tower progression child boundary. */
 export class LocalStorageTowerProgressionPersistence implements TowerProgressionPersistence {
@@ -2080,7 +3396,7 @@ export class LocalStorageIncubatorProgressionPersistence implements IncubatorPro
   constructor(
     private readonly incubator: {
       loadState: () => Promise<IncubatorState> | IncubatorState
-      saveStateWithMarkers: (state: IncubatorState, markers: IncubatorProgressionMarker[]) => Promise<void> | void
+      saveStateWithMarkers: (state: IncubatorState, markers: unknown[]) => Promise<void> | void
     },
     private readonly storage: ResultStorage | null = safeStorage(),
   ) {}
@@ -2091,14 +3407,14 @@ export class LocalStorageIncubatorProgressionPersistence implements IncubatorPro
 
   async loadMarkers(): Promise<IncubatorProgressionMarker[]> {
     if (!this.storage) return []
-    const embedded = readEmbeddedMarkers<IncubatorProgressionMarker>(
-      this.storage.getItem('mobie.incubator.v1'),
-      '孵化進度結算標記',
-    )
-    if (embedded) return embedded
-    return parseArray<IncubatorProgressionMarker>(
-      this.storage.getItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY),
-      '孵化進度結算標記',
+    return markersForDestination<IncubatorProgressionMarker>(
+      readSharedMarkers(
+        this.storage,
+        'mobie.incubator.v1',
+        INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY,
+        '孵化進度結算標記',
+      ),
+      'incubator-progression',
     )
   }
 
@@ -2110,9 +3426,17 @@ export class LocalStorageIncubatorProgressionPersistence implements IncubatorPro
     const completed = markers.map((marker) => marker.resultId === operationId
       ? { ...marker, canonicalApplied: true }
       : marker)
+    const merged = mergeSharedMarkers(
+      this.storage,
+      'mobie.incubator.v1',
+      INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY,
+      'incubator-progression',
+      completed,
+      '孵化進度結算標記',
+    )
     try {
-      await this.incubator.saveStateWithMarkers(state, completed)
-      try { this.storage?.setItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(completed)) } catch { /* canonical envelope is authoritative */ }
+      await this.incubator.saveStateWithMarkers(state, merged)
+      try { this.storage?.setItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(merged)) } catch { /* canonical envelope is authoritative */ }
     } catch (cause) {
       throw new Error(`保存孵化進度結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
     }
@@ -2121,13 +3445,100 @@ export class LocalStorageIncubatorProgressionPersistence implements IncubatorPro
   async saveMarkers(markers: IncubatorProgressionMarker[]): Promise<void> {
     try {
       const state = await this.loadState()
-      await this.incubator.saveStateWithMarkers(state, markers)
-      try { this.storage?.setItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(markers)) } catch { /* canonical envelope is authoritative */ }
+      const merged = mergeSharedMarkers(
+        this.storage,
+        'mobie.incubator.v1',
+        INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY,
+        'incubator-progression',
+        markers,
+        '孵化進度結算標記',
+      )
+      await this.incubator.saveStateWithMarkers(state, merged)
+      try { this.storage?.setItem(INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY, JSON.stringify(merged)) } catch { /* canonical envelope is authoritative */ }
     } catch (cause) {
       throw new Error(`保存孵化進度結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
     }
   }
 }
+
+/** Browser persistence for the duplicate-capture egg child sharing incubator state. */
+export class LocalStorageDuplicateEggPersistence implements DuplicateEggPersistence {
+  constructor(
+    private readonly incubator: {
+      loadState: () => Promise<IncubatorState> | IncubatorState
+      saveStateWithMarkers: (state: IncubatorState, markers: unknown[]) => Promise<void> | void
+    },
+    private readonly storage: ResultStorage | null = safeStorage(),
+  ) {}
+
+  loadState(): Promise<IncubatorState> {
+    return Promise.resolve(this.incubator.loadState())
+  }
+
+  async loadMarkers(): Promise<DuplicateEggMarker[]> {
+    if (!this.storage) return []
+    return markersForDestination<DuplicateEggMarker>(
+      readSharedMarkers(
+        this.storage,
+        'mobie.incubator.v1',
+        INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY,
+        '重複蛋結算標記',
+      ),
+      'incubator-capture',
+    )
+  }
+
+  async savePending(state: IncubatorState, markers: DuplicateEggMarker[], operationId?: string): Promise<void> {
+    const completed = markers.map((marker) => marker.resultId === operationId
+      ? { ...marker, canonicalApplied: true }
+      : marker)
+    const merged = mergeSharedMarkers(
+      this.storage,
+      'mobie.incubator.v1',
+      INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY,
+      'incubator-capture',
+      completed,
+      '重複蛋結算標記',
+    )
+    try {
+      await this.incubator.saveStateWithMarkers(state, merged)
+      try {
+        this.storage?.setItem(DUPLICATE_EGG_SETTLEMENT_MARKER_KEY, JSON.stringify(
+          markersForDestination<DuplicateEggMarker>(merged, 'incubator-capture'),
+        ))
+        this.storage?.setItem(INCUBATOR_SETTLEMENT_MARKER_KEY, JSON.stringify(merged))
+      } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存重複蛋結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  async saveMarkers(markers: DuplicateEggMarker[]): Promise<void> {
+    try {
+      const state = await this.loadState()
+      const merged = mergeSharedMarkers(
+        this.storage,
+        'mobie.incubator.v1',
+        INCUBATOR_PROGRESSION_SETTLEMENT_MARKER_KEY,
+        'incubator-capture',
+        markers,
+        '重複蛋結算標記',
+      )
+      await this.incubator.saveStateWithMarkers(state, merged)
+      try {
+        this.storage?.setItem(DUPLICATE_EGG_SETTLEMENT_MARKER_KEY, JSON.stringify(
+          markersForDestination<DuplicateEggMarker>(merged, 'incubator-capture'),
+        ))
+        this.storage?.setItem(INCUBATOR_SETTLEMENT_MARKER_KEY, JSON.stringify(merged))
+      } catch { /* canonical envelope is authoritative */ }
+    } catch (cause) {
+      throw new Error(`保存重複蛋結算標記失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+}
+
+// Naming alias used by the destination-oriented vocabulary.
+export { LocalStorageDuplicateEggPersistence as LocalStorageIncubatorCapturePersistence }
 
 // Compatibility aliases used by the Result settlement vocabulary.
 export { LocalStorageTowerProgressionPersistence as LocalStorageTowerSettlementPersistence }
@@ -2155,6 +3566,12 @@ export class MemorySettlementJournal implements SettlementJournalPersistence {
         ...entry.incubator,
         updates: cloneProgressUpdates(entry.incubator.updates),
       } : undefined,
+      capture: entry.capture ? cloneCaptureReceipt(entry.capture) : undefined,
+      capturePlan: entry.capturePlan ? cloneCapturePlan(entry.capturePlan) : undefined,
+      capturePayload: entry.capturePayload ? {
+        target: cloneCard(entry.capturePayload.target),
+        captureMult: entry.capturePayload.captureMult,
+      } : undefined,
     }))
   }
 
@@ -2174,6 +3591,12 @@ export class MemorySettlementJournal implements SettlementJournalPersistence {
       incubator: entry.incubator ? {
         ...entry.incubator,
         updates: cloneProgressUpdates(entry.incubator.updates),
+      } : undefined,
+      capture: entry.capture ? cloneCaptureReceipt(entry.capture) : undefined,
+      capturePlan: entry.capturePlan ? cloneCapturePlan(entry.capturePlan) : undefined,
+      capturePayload: entry.capturePayload ? {
+        target: cloneCard(entry.capturePayload.target),
+        captureMult: entry.capturePayload.captureMult,
       } : undefined,
     }))
   }
@@ -2212,6 +3635,57 @@ export class MemoryRosterGrowthPersistence implements RosterGrowthPersistence {
   async saveMarkers(markers: RosterGrowthMarker[]): Promise<void> {
     if (this.failMarker) throw new Error('marker write failed')
     this.markers = markers.map((marker) => ({ ...marker, receipt: { ...marker.receipt } }))
+  }
+}
+
+export class MemoryRosterCapturePersistence implements RosterCapturePersistence {
+  roster: OwnedUnit[]
+  markers: RosterCaptureMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(roster: OwnedUnit[]) {
+    this.roster = roster.map(cloneOwnedUnit)
+  }
+
+  async loadRoster(): Promise<OwnedUnit[]> {
+    return this.roster.map(cloneOwnedUnit)
+  }
+
+  async loadMarkers(): Promise<RosterCaptureMarker[]> {
+    return this.markers.map((marker) => ({
+      ...marker,
+      payload: { card: cloneCard(marker.payload.card) },
+      unit: cloneOwnedUnit(marker.unit),
+      receipt: { ...marker.receipt, unit: cloneOwnedUnit(marker.receipt.unit) },
+    }))
+  }
+
+  async savePending(roster: OwnedUnit[], markers: RosterCaptureMarker[], operationId?: string): Promise<void> {
+    if (this.failPending) throw new Error('capture roster pending write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { card: cloneCard(marker.payload.card) },
+      unit: cloneOwnedUnit(marker.unit),
+      receipt: { ...marker.receipt, unit: cloneOwnedUnit(marker.receipt.unit) },
+    }))
+    this.saveCount += 1
+    this.roster = roster.map(cloneOwnedUnit)
+    this.markers = this.markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+    }))
+  }
+
+  async saveMarkers(markers: RosterCaptureMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('capture roster marker write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { card: cloneCard(marker.payload.card) },
+      unit: cloneOwnedUnit(marker.unit),
+      receipt: { ...marker.receipt, unit: cloneOwnedUnit(marker.receipt.unit) },
+    }))
   }
 }
 
@@ -2338,6 +3812,60 @@ export class MemoryMetaSettlementPersistence implements MetaSettlementPersistenc
   }
 }
 
+export class MemoryCaptureMetaPersistence implements CaptureMetaPersistence {
+  meta: MetaState
+  markers: CaptureMetaMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(meta: MetaState) {
+    this.meta = cloneMeta(meta)
+  }
+
+  async loadMeta(): Promise<MetaState> {
+    return cloneMeta(this.meta)
+  }
+
+  async loadMarkers(): Promise<CaptureMetaMarker[]> {
+    return this.markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+  }
+
+  async savePending(meta: MetaState, markers: CaptureMetaMarker[], operationId?: string): Promise<void> {
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+    if (this.failPending) throw new Error('capture meta pending write failed')
+    this.saveCount += 1
+    this.meta = cloneMeta(meta)
+    this.markers = this.markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+    }))
+  }
+
+  async saveMarkers(markers: CaptureMetaMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('capture meta marker write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: { ...marker.payload },
+      before: cloneMeta(marker.before),
+      after: cloneMeta(marker.after),
+      receipt: { ...marker.receipt, meta: cloneMeta(marker.receipt.meta) },
+    }))
+  }
+}
+
 export class MemoryTowerProgressionPersistence implements TowerProgressionPersistence {
   run: TowerProgressionState
   markers: TowerProgressionMarker[] = []
@@ -2451,6 +3979,57 @@ export class MemoryIncubatorProgressionPersistence implements IncubatorProgressi
       payload: { ...marker.payload },
       updates: cloneProgressUpdates(marker.updates),
       receipt: { ...marker.receipt, updates: cloneProgressUpdates(marker.receipt.updates) },
+    }))
+  }
+}
+
+export class MemoryDuplicateEggPersistence implements DuplicateEggPersistence {
+  state: IncubatorState
+  markers: DuplicateEggMarker[] = []
+  failPending = false
+  failMarker = false
+  saveCount = 0
+
+  constructor(state: IncubatorState) {
+    this.state = cloneIncubatorState(state)
+  }
+
+  async loadState(): Promise<IncubatorState> {
+    return cloneIncubatorState(this.state)
+  }
+
+  async loadMarkers(): Promise<DuplicateEggMarker[]> {
+    return this.markers.map((marker) => ({
+      ...marker,
+      payload: cloneDuplicateEggPayload(marker.payload),
+      egg: cloneEgg(marker.egg),
+      receipt: { ...marker.receipt, egg: cloneEgg(marker.receipt.egg) },
+    }))
+  }
+
+  async savePending(state: IncubatorState, markers: DuplicateEggMarker[], operationId?: string): Promise<void> {
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: cloneDuplicateEggPayload(marker.payload),
+      egg: cloneEgg(marker.egg),
+      receipt: { ...marker.receipt, egg: cloneEgg(marker.receipt.egg) },
+    }))
+    if (this.failPending) throw new Error('duplicate egg pending write failed')
+    this.saveCount += 1
+    this.state = cloneIncubatorState(state)
+    this.markers = this.markers.map((marker) => ({
+      ...marker,
+      ...(marker.resultId === operationId ? { canonicalApplied: true } : {}),
+    }))
+  }
+
+  async saveMarkers(markers: DuplicateEggMarker[]): Promise<void> {
+    if (this.failMarker) throw new Error('duplicate egg marker write failed')
+    this.markers = markers.map((marker) => ({
+      ...marker,
+      payload: cloneDuplicateEggPayload(marker.payload),
+      egg: cloneEgg(marker.egg),
+      receipt: { ...marker.receipt, egg: cloneEgg(marker.receipt.egg) },
     }))
   }
 }

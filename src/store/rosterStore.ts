@@ -19,12 +19,19 @@ import {
 import {
   calculateRosterGrowth,
   LocalStorageRosterGrowthPersistence,
+  LocalStorageRosterCapturePersistence,
   LocalStorageSkillPointsPersistence,
   LocalStorageMetaSettlementPersistence,
+  LocalStorageMetaCapturePersistence,
   LocalStorageTowerProgressionPersistence,
   LocalStorageIncubatorProgressionPersistence,
+  LocalStorageDuplicateEggPersistence,
   LocalStorageSettlementJournal,
   MetaSettlementDestination,
+  CaptureMetaDestination,
+  RosterCaptureDestination,
+  DuplicateEggDestination,
+  CaptureSettlementCoordinator,
   ResultSettlementCoordinator,
   RosterGrowthDestination,
   SkillPointsDestination,
@@ -116,6 +123,15 @@ export const useRoster = create<RosterState>((set, get) => {
     saveRoster: strictSaveRoster,
   })
   const growthDestination = new RosterGrowthDestination(growthPersistence)
+  const captureRosterPersistence = new LocalStorageRosterCapturePersistence({
+    loadRoster: async () => {
+      const persisted = await adapter.loadRoster()
+      return (persisted.length > 0 ? persisted : get().roster).map((unit) => ({ ...unit }))
+    },
+    saveRoster: strictSaveRoster,
+    saveRosterWithCaptureMarkers: adapter.saveRosterWithCaptureMarkersStrict?.bind(adapter),
+  })
+  const captureRosterDestination = new RosterCaptureDestination(captureRosterPersistence)
   const skillPointsPersistence = new LocalStorageSkillPointsPersistence({
     loadPoints: loadSkillPointsStrict,
     savePoints: async (points) => {
@@ -144,6 +160,14 @@ export const useRoster = create<RosterState>((set, get) => {
   })
   const skillPointsDestination = new SkillPointsDestination(skillPointsPersistence)
   const metaDestination = new MetaSettlementDestination(metaPersistence)
+  const captureMetaPersistence = new LocalStorageMetaCapturePersistence({
+    loadMeta: loadMetaStrict,
+    saveMetaWithMarkers: (meta, markers) => {
+      saveMetaStateWithSettlementMarkersStrict(meta, markers)
+      useMeta.setState({ meta })
+    },
+  })
+  const captureMetaDestination = new CaptureMetaDestination(captureMetaPersistence)
   const towerPersistence = new LocalStorageTowerProgressionPersistence({
     loadRun: loadRunStrict,
     saveRunWithMarkers: (run, markers) => {
@@ -162,6 +186,23 @@ export const useRoster = create<RosterState>((set, get) => {
     },
   })
   const incubatorDestination = new IncubatorProgressionDestination(incubatorPersistence)
+  const duplicateEggPersistence = new LocalStorageDuplicateEggPersistence({
+    loadState: loadIncubatorStrict,
+    saveStateWithMarkers: (state, markers) => {
+      saveIncubatorStateWithSettlementMarkersStrict(state, markers)
+      useIncubator.setState({ state })
+    },
+  })
+  const duplicateEggDestination = new DuplicateEggDestination(duplicateEggPersistence)
+  const captureCoordinator = new CaptureSettlementCoordinator({
+    loadRoster: async () => {
+      const persisted = await adapter.loadRoster()
+      return (persisted.length > 0 ? persisted : get().roster).map((unit) => ({ ...unit }))
+    },
+    roster: captureRosterDestination,
+    meta: captureMetaDestination,
+    duplicateEgg: duplicateEggDestination,
+  })
   const settlementCoordinator = new ResultSettlementCoordinator(
     growthDestination,
     new LocalStorageSettlementJournal(),
@@ -171,6 +212,7 @@ export const useRoster = create<RosterState>((set, get) => {
       meta: metaDestination,
       tower: towerDestination,
       incubator: incubatorDestination,
+      capture: captureCoordinator,
     },
   )
 
@@ -185,6 +227,9 @@ export const useRoster = create<RosterState>((set, get) => {
       lastResults: receipt.results,
       lastEvolutions: receipt.evolutions,
       lastMoveLearns: receipt.moveLearns,
+      lastCaptured: receipt.capture?.outcome === 'captured-new' && receipt.capture.unit
+        ? receipt.capture.unit
+        : null,
     })
   }
 

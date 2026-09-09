@@ -7,6 +7,15 @@ import {
   MemorySettlementJournal,
   MetaSettlementDestination,
   MemoryIncubatorProgressionPersistence,
+  MemoryRosterCapturePersistence,
+  MemoryCaptureMetaPersistence,
+  MemoryDuplicateEggPersistence,
+  CaptureMetaDestination,
+  DuplicateEggDestination,
+  RosterCaptureDestination,
+  CaptureSettlementCoordinator,
+  deterministicCaptureDecision,
+  planCaptureSettlement,
   MemoryTowerProgressionPersistence,
   IncubatorProgressionDestination,
   ResultSettlementCoordinator,
@@ -25,6 +34,15 @@ import { addEgg, defaultIncubator } from './incubator'
 const identity: ResultIdentity = { resultId: 'battle-1', resultFingerprint: 'fp-1' }
 const unit = createOwnedUnit('unit-1', 1, 15)
 const payload = { unitIds: [unit.id], foeLevels: [30], ratio: 1, outcome: 'win' as const }
+const captureCard = { cardId: 'capture-target', speciesId: 10, level: 13 }
+
+function identityWithCapture(desired: boolean): ResultIdentity {
+  for (let index = 0; index < 10_000; index += 1) {
+    const candidate = { resultId: `capture-battle-${index}`, resultFingerprint: `capture-fp-${index}` }
+    if (deterministicCaptureDecision(candidate, { target: captureCard, captureMult: 1 }).caught === desired) return candidate
+  }
+  throw new Error(`could not find deterministic ${desired ? 'caught' : 'escaped'} fixture`)
+}
 
 describe('roster result settlement', () => {
   it('applies growth/evolution once and returns the existing receipt on concurrent retry', async () => {
@@ -339,6 +357,217 @@ describe('Tower and incubator result settlement children', () => {
     expect(towerPersistence.saveCount).toBe(1)
     expect(incubatorPersistence.saveCount).toBe(1)
     expect(incubatorPersistence.state.eggs[0]?.progress).toBe(2)
+  })
+})
+
+describe('deterministic capture settlement children', () => {
+  it('keeps the roulette and capture roll stable for the same identity and inputs', () => {
+    const first = deterministicCaptureDecision(identity, { target: captureCard, captureMult: 1 })
+    const second = deterministicCaptureDecision(identity, { target: captureCard, captureMult: 1 })
+    expect(second).toEqual(first)
+    expect(deterministicCaptureDecision(
+      { ...identity, resultFingerprint: 'different' },
+      { target: captureCard, captureMult: 1 },
+    )).not.toEqual(first)
+  })
+
+  it('builds new-versus-duplicate plans without changing the deterministic caught result', () => {
+    const caughtIdentity = identityWithCapture(true)
+    const newPlan = planCaptureSettlement(caughtIdentity, { target: captureCard, captureMult: 1 }, [])
+    const duplicatePlan = planCaptureSettlement(
+      caughtIdentity,
+      { target: captureCard, captureMult: 1 },
+      [createOwnedUnit('existing-target', captureCard.speciesId, 5)],
+    )
+    expect(newPlan).toMatchObject({ outcome: 'captured-new', meta: { speciesId: captureCard.speciesId } })
+    expect(duplicatePlan).toMatchObject({ outcome: 'captured-duplicate-egg', duplicateEgg: { speciesId: captureCard.speciesId } })
+    expect(duplicatePlan.decision).toEqual(newPlan.decision)
+    expect(planCaptureSettlement(identityWithCapture(false), { target: captureCard, captureMult: 1 }, []).outcome)
+      .toBe('escaped')
+  })
+
+  it('applies a captured-new roster child once and reconciles a failed receipt', async () => {
+    const persistence = new MemoryRosterCapturePersistence([])
+    const destination = new RosterCaptureDestination(persistence, () => 600)
+    persistence.failMarker = true
+    await expect(destination.applyOnce(identity, { card: captureCard })).rejects.toMatchObject({ code: 'receipt' })
+    expect(persistence.saveCount).toBe(1)
+    expect(persistence.roster).toHaveLength(1)
+    expect(await destination.hasApplied(identity)).toBe(true)
+    persistence.failMarker = false
+    const retry = await destination.applyOnce(identity, { card: { ...captureCard, level: 99 } })
+    expect(retry.status).toBe('already-applied')
+    expect(persistence.saveCount).toBe(1)
+    expect((await persistence.loadMarkers())[0]).toMatchObject({ status: 'settled', destination: 'roster-capture' })
+  })
+
+  it('applies capture Meta and duplicate egg children independently', async () => {
+    const metaPersistence = new MemoryCaptureMetaPersistence(defaultMeta())
+    const meta = new CaptureMetaDestination(metaPersistence, () => 601)
+    const metaFirst = await meta.applyOnce(identity, {
+      speciesId: captureCard.speciesId,
+      shiny: true,
+      outcome: 'captured-duplicate-egg',
+    })
+    const metaSecond = await meta.applyOnce(identity, {
+      speciesId: 99,
+      shiny: false,
+      outcome: 'captured-new',
+    })
+    expect(metaFirst).toMatchObject({ status: 'applied', speciesId: captureCard.speciesId, shiny: true })
+    expect(metaSecond).toMatchObject({ status: 'already-applied', speciesId: captureCard.speciesId })
+    expect(metaPersistence.meta.stats.captures).toBe(1)
+    expect(metaPersistence.meta.stats.shinies).toBe(1)
+
+    const eggPersistence = new MemoryDuplicateEggPersistence(defaultIncubator())
+    const egg = new DuplicateEggDestination(eggPersistence, () => 602)
+    const eggFirst = await egg.applyOnce(identity, {
+      speciesId: captureCard.speciesId,
+      label: 'capture egg',
+      inheritedMoveId: 33,
+    })
+    const eggSecond = await egg.applyOnce(identity, { speciesId: 99, label: 'different' })
+    expect(eggFirst).toMatchObject({ status: 'applied', egg: { source: 'duplicate', speciesPool: [captureCard.speciesId] } })
+    expect(eggSecond).toMatchObject({ status: 'already-applied', egg: eggFirst.egg })
+    expect(eggPersistence.state.eggs).toHaveLength(1)
+    await expect(egg.applyOnce({ ...identity, resultFingerprint: 'collision' }, {
+      speciesId: captureCard.speciesId,
+      label: 'collision',
+    })).rejects.toMatchObject({ code: 'collision' })
+  })
+
+  it('reconciles a pending-write failure without losing the capture intent', async () => {
+    const metaPersistence = new MemoryCaptureMetaPersistence(defaultMeta())
+    const meta = new CaptureMetaDestination(metaPersistence, () => 603)
+    metaPersistence.failPending = true
+    await expect(meta.applyOnce({ resultId: 'pending-meta', resultFingerprint: 'fp' }, {
+      speciesId: captureCard.speciesId,
+      shiny: false,
+      outcome: 'captured-new',
+    })).rejects.toMatchObject({ code: 'storage' })
+    expect(metaPersistence.meta.stats.captures).toBe(0)
+    metaPersistence.failPending = false
+    await expect(meta.applyOnce({ resultId: 'pending-meta', resultFingerprint: 'fp' }, {
+      speciesId: 99,
+      shiny: true,
+      outcome: 'captured-duplicate-egg',
+    })).resolves.toMatchObject({ status: 'already-applied', speciesId: captureCard.speciesId })
+
+    const eggPersistence = new MemoryDuplicateEggPersistence(defaultIncubator())
+    const egg = new DuplicateEggDestination(eggPersistence, () => 604)
+    eggPersistence.failPending = true
+    await expect(egg.applyOnce({ resultId: 'pending-egg', resultFingerprint: 'fp' }, {
+      speciesId: captureCard.speciesId,
+      label: 'pending egg',
+    })).rejects.toMatchObject({ code: 'storage' })
+    expect(eggPersistence.state.eggs).toHaveLength(0)
+    eggPersistence.failPending = false
+    await expect(egg.applyOnce({ resultId: 'pending-egg', resultFingerprint: 'fp' }, {
+      speciesId: 99,
+      label: 'different',
+    })).resolves.toMatchObject({ status: 'already-applied', egg: { speciesPool: [captureCard.speciesId] } })
+  })
+
+  it('retries only the failed capture child after a partial settlement', async () => {
+    const rosterPersistence = new MemoryRosterCapturePersistence([])
+    const roster = new RosterCaptureDestination(rosterPersistence, () => 610)
+    const metaPersistence = new MemoryCaptureMetaPersistence(defaultMeta())
+    const meta = new CaptureMetaDestination(metaPersistence, () => 611)
+    const eggPersistence = new MemoryDuplicateEggPersistence(defaultIncubator())
+    const egg = new DuplicateEggDestination(eggPersistence, () => 612)
+    const coordinator = new CaptureSettlementCoordinator({
+      loadRoster: () => rosterPersistence.loadRoster(),
+      roster,
+      meta,
+      duplicateEgg: egg,
+    })
+    const existing = [createOwnedUnit('existing-target', captureCard.speciesId, 5)]
+    rosterPersistence.roster = existing
+    eggPersistence.failMarker = true
+    const duplicateIdentity = identityWithCapture(true)
+    const plan = await coordinator.prepare(duplicateIdentity, { target: captureCard, captureMult: 1 })
+    await expect(coordinator.settle(duplicateIdentity, { target: captureCard, captureMult: 1 }, plan))
+      .rejects.toMatchObject({ code: 'receipt' })
+    expect(metaPersistence.meta.stats.captures).toBe(1)
+    expect(eggPersistence.state.eggs).toHaveLength(1)
+    eggPersistence.failMarker = false
+    const retry = await coordinator.settle(duplicateIdentity, { target: captureCard, captureMult: 1 }, plan)
+    expect(retry.status).toBe('already-applied')
+    expect(metaPersistence.meta.stats.captures).toBe(1)
+    expect(eggPersistence.state.eggs).toHaveLength(1)
+  })
+
+  it('does not mark successful capture children left while the parent Result is pending', async () => {
+    const rosterPersistence = new MemoryRosterCapturePersistence([createOwnedUnit('existing-target', captureCard.speciesId, 5)])
+    const roster = new RosterCaptureDestination(rosterPersistence)
+    const metaPersistence = new MemoryCaptureMetaPersistence(defaultMeta())
+    const meta = new CaptureMetaDestination(metaPersistence)
+    const eggPersistence = new MemoryDuplicateEggPersistence(defaultIncubator())
+    const egg = new DuplicateEggDestination(eggPersistence)
+    const capture = new CaptureSettlementCoordinator({
+      loadRoster: () => rosterPersistence.loadRoster(),
+      roster,
+      meta,
+      duplicateEgg: egg,
+    })
+    const growthPersistence = new MemoryRosterGrowthPersistence([unit])
+    const coordinator = new ResultSettlementCoordinator(
+      new RosterGrowthDestination(growthPersistence),
+      new MemorySettlementJournal(),
+      () => 630,
+      { capture },
+    )
+    const duplicateIdentity = identityWithCapture(true)
+    eggPersistence.failMarker = true
+    await expect(coordinator.settle(duplicateIdentity, {
+      ...payload,
+      capture: { target: captureCard, captureMult: 1 },
+    })).rejects.toMatchObject({ code: 'receipt' })
+    await coordinator.markResultLeft(duplicateIdentity)
+    expect((await metaPersistence.loadMarkers())[0]?.leftResultAt).toBeUndefined()
+    expect((await eggPersistence.loadMarkers())[0]?.leftResultAt).toBeUndefined()
+  })
+
+  it('persists the capture plan before child writes and replays it without rerolling', async () => {
+    const rosterGrowthPersistence = new MemoryRosterGrowthPersistence([unit])
+    const growth = new RosterGrowthDestination(rosterGrowthPersistence, () => 620)
+    const captureRosterPersistence = new MemoryRosterCapturePersistence([])
+    const captureRoster = new RosterCaptureDestination(captureRosterPersistence, () => 621)
+    const captureMetaPersistence = new MemoryCaptureMetaPersistence(defaultMeta())
+    const captureMeta = new CaptureMetaDestination(captureMetaPersistence, () => 622)
+    const duplicateEggPersistence = new MemoryDuplicateEggPersistence(defaultIncubator())
+    const duplicateEgg = new DuplicateEggDestination(duplicateEggPersistence, () => 623)
+    const capture = new CaptureSettlementCoordinator({
+      loadRoster: () => captureRosterPersistence.loadRoster(),
+      roster: captureRoster,
+      meta: captureMeta,
+      duplicateEgg,
+    })
+    const journal = new MemorySettlementJournal()
+    const coordinator = new ResultSettlementCoordinator(growth, journal, () => 624, { capture })
+    const caughtIdentity = identityWithCapture(true)
+    const first = await coordinator.settle(caughtIdentity, {
+      ...payload,
+      capture: { target: captureCard, captureMult: 1 },
+    })
+    expect(first.capture).toMatchObject({ status: 'applied', outcome: 'captured-new', unit: { speciesId: captureCard.speciesId } })
+    expect(captureRosterPersistence.roster).toHaveLength(1)
+    expect(captureMetaPersistence.meta.stats.captures).toBe(1)
+    expect((await journal.load())[0]).toMatchObject({
+      status: 'settled',
+      capturePlan: { outcome: 'captured-new' },
+      capture: { outcome: 'captured-new' },
+    })
+
+    const second = await coordinator.settle(caughtIdentity, {
+      ...payload,
+      ratio: 0,
+      capture: { target: { ...captureCard, level: 99 }, captureMult: 1.5 },
+    })
+    expect(second.status).toBe('already-applied')
+    expect(second.capture).toMatchObject({ status: 'already-applied', outcome: 'captured-new' })
+    expect(captureRosterPersistence.roster).toHaveLength(1)
+    expect(captureMetaPersistence.meta.stats.captures).toBe(1)
   })
 })
 
