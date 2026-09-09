@@ -13,6 +13,7 @@ import { TypeBadges } from '@/ui/components/TypeBadge'
 import { GestureGate } from '@/ui/components/GestureGate'
 import { useSettings } from '@/store/settingsStore'
 import { interactModeOf } from '@/game/settings'
+import { useOverlayController } from '@/ui/shell/OverlayController'
 
 /**
  * M11 連勝塔出戰準備：選 3 隻 run 隊伍 + 難度階（Ascension，受 runStore 解鎖上限限制）→ 開始遠征。
@@ -20,6 +21,7 @@ import { interactModeOf } from '@/game/settings'
  */
 export function TowerSetupScreen() {
   const { send } = useGame()
+  const controller = useOverlayController()
   const roster = useRoster((s) => s.roster)
   const bestFloor = useRun((s) => s.bestFloor)
   const ascensionUnlocked = useRun((s) => s.ascensionUnlocked)
@@ -31,7 +33,6 @@ export function TowerSetupScreen() {
   const [ascension, setAscension] = useState(0)
   // M22.j：開場破門手勢（純演出，整段遠征一次）。off＝直接開始。
   const gateOn = useSettings((s) => interactModeOf(s.settings, 'tower') !== 'off')
-  const [breakGate, setBreakGate] = useState(false)
 
   const toggle = (cardId: string) => {
     audio.play('select')
@@ -47,7 +48,20 @@ export function TowerSetupScreen() {
   }
   const start = () => {
     if (!ready) return
-    if (gateOn) setBreakGate(true); else beginRun()
+    if (!gateOn) { beginRun(); return }
+    controller.push({
+      id: 'tower-gate',
+      policy: 'explicit-action-only',
+      content: (
+        <GestureGate
+          title="🗼 破門而入"
+          icon="🚪"
+          hint="來回推撞塔門，闖進連勝塔！"
+          onComplete={() => { controller.pop(); beginRun() }}
+          onCancel={controller.pop}
+        />
+      ),
+    })
   }
 
   return (
@@ -119,18 +133,6 @@ export function TowerSetupScreen() {
         🗼 開始遠征　<span style={{ fontSize: 14, opacity: 0.85 }}>{picked.length}/{TEAM_SIZE}</span>
       </motion.button>
 
-      {/* M22.j 破門 gate（純演出，破門或逾時即開始遠征） */}
-      <AnimatePresence>
-        {breakGate && (
-          <GestureGate
-            title="🗼 破門而入"
-            icon="🚪"
-            hint="來回推撞塔門，闖進連勝塔！"
-            onComplete={() => { setBreakGate(false); beginRun() }}
-            onCancel={() => setBreakGate(false)}
-          />
-        )}
-      </AnimatePresence>
     </div>
   )
 }
