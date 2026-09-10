@@ -118,6 +118,7 @@ is enabled by `npm install` (the `prepare` script sets `core.hooksPath`) — so 
 | `npm run baseline:m24 -- --viewport=wide-landscape` | Re-runnable post-M23 non-battle Chrome baseline; use `--all` for the five viewport matrix |
 | `npm run baseline:m24-shell -- --port=9222` | Ticket 23 cold boot, readiness gates, Retry, zoom, and Title handoff evidence |
 | `npm run baseline:m24-overlay -- --port=9222` | Ticket 24 More→Settings overlay, focus, inert, scroll, and route cleanup evidence |
+| `npm run qualification:m24 -- --port=9222` | Final M24 web-app qualification at iPad portrait/landscape viewports and full Ticket 01–50 gate review |
 
 ## Project layout
 
@@ -163,12 +164,14 @@ files), M6 (extension foundation: seams S1–S8 + arena/wild mode contract), M7 
 abilities), M8 (field/terrain), M9 (combo chain), M10 (evolution / star grade / dex+achievements /
 egg incubator), M11 (tower / Ascension / wild accidents), M16 (mob info card), M17 (partner skills),
 M18 (rename to Mobie, code complete), M19 (multi-move learnsets + move trainer), M21 (battle FX), and
-M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–24 implementation checks
-are complete** for the current automated qualification pass — **683 Vitest tests**, typecheck, and build are
+M22 a–e (enhanced-interactivity MVP), M23 Tickets 01–19, and M24 Tickets 20–51
+are complete** for the current automated qualification pass — Vitest, typecheck, and build are
 green. Content:
 national dex 1–1025, 16 regions (+ arena),
-16 starters. Current Chrome evidence covers the next renderer and its compatibility fallback. Physical
-iPad Safari qualification remains an external release gate.
+16 starters. Current Chrome evidence covers the next renderer and its compatibility fallback. The final
+M24 web-app qualification covers iPad-sized portrait/landscape, safe-area, touch-style input, scroll,
+zoom, focus, persistence, and data-tool journeys; native iPad Safari hardware is outside the owner-approved
+web-app release boundary.
 
 The whole project has had a real-case verification pass: a **data-integrity** suite (every one of the
 1025 species / moves / regions / cards / type-chart entries swept), a **battle-simulation** stress suite
@@ -187,8 +190,9 @@ written under the ignored `test-runs/m24/` directories. The baseline route/state
 renderer policy and retirement history are tracked in **[docs/m23-release-b.md](docs/m23-release-b.md)**.
 Run the baseline with a Chrome/CDP target to produce the Ticket 22 sentinel-storage evidence; that
 device run remains an external qualification step when no target is available.
-Physical iPad Safari qualification remains an external device evidence step for Ticket 16; sparse initial
-loadouts and the M22 f–j interaction backlog remain later work. M4 (MediaPipe motion-control QTE) remains
+The final web-app qualification evidence and Ticket 48–50 closure gates are recorded by
+`npm run qualification:m24` under the ignored `test-runs/m24/ticket51-ipad-safari/` directory. Native
+iPad hardware is intentionally outside this web-app gate; sparse initial loadouts and the M22 f–j interaction backlog remain later work. M4 (MediaPipe motion-control QTE) remains
 skipped by the owner. **Owner-only leftover:** M18.e
 renames the repo directory + git remote (`pokemon-mezastar` → `mobie`). See `docs/m23-release-b.md` for
 the current release record and `handoff.md` for the live working state.

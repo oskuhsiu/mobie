@@ -242,7 +242,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>檔名：<b>{filename}</b></span>
             </div>
             <div className="lib-hint" style={{ marginLeft: 0 }}>
-              新存檔固定只含 Mobie 與卡片進度；custom GLB/GLTF 已停用，既有本機資料不會被讀取或刪除。
+              新存檔固定只含 Mobie 與卡片進度；停用的舊版外觀資料不會寫入，既有本機資料不會被讀取或刪除。
             </div>
 
             <button className="btn" data-save-export onClick={() => void doExport()} disabled={busy || saveBlocked}>
@@ -315,7 +315,7 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
 
                   {pending.legacyModelCount > 0 && (
                     <div className="lib-hint" style={{ marginLeft: 0 }}>
-                      這份舊版存檔含 {pending.legacyModelCount} 個停用的 custom model entry；只驗證檔案完整性，匯入時會忽略，且不會碰本機舊資料。
+                      這份舊版存檔含 {pending.legacyModelCount} 個停用的外觀資料；只驗證檔案完整性，匯入時會忽略，且不會碰本機舊資料。
                     </div>
                   )}
 

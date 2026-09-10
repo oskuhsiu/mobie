@@ -107,7 +107,7 @@ body {
   border: 1px solid var(--stroke);
 }
 .btn--danger { background: linear-gradient(180deg, #ff6b76, var(--accent-2)); color: #fff; }
-.btn--sm { min-height: 44px; padding: 9px 16px; font-size: 14px; box-shadow: none; }
+.btn--sm { min-height: 45px; padding: 9px 16px; font-size: 14px; box-shadow: none; }
 .btn:disabled { opacity: 0.5; pointer-events: none; }
 
 .panel {
@@ -183,6 +183,7 @@ body {
 .tools-menu-more {
   position: absolute; z-index: 15; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
   width: min(100%, 760px); max-height: min(48vh, 360px); overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 12px; padding: 14px;
   border-radius: 18px; background: rgba(7, 10, 28, 0.78);
   border: 1px solid var(--stroke); box-shadow: var(--shadow); backdrop-filter: blur(16px);
@@ -1357,7 +1358,7 @@ body {
 }
 .chip--on { background: var(--accent); border-color: var(--accent); color: #1b160a; }
 .modal-surface.dex-surface { width: min(96vw, 1080px); height: min(92dvh, 880px); }
-.dex-surface .modal-surface__body { overflow-y: auto; }
+.dex-surface .modal-surface__body { overflow-y: auto; overscroll-behavior: contain; }
 .dex-layout { display: flex; flex-direction: column; gap: 14px; min-width: 0; min-height: min-content; }
 .dex-browser { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .dex-controls { display: flex; flex-direction: column; gap: 10px; }
@@ -1531,7 +1532,7 @@ body {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
-.scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 /* flex 直向佈局中要「填滿剩餘高度並內部捲動」的列表：必須 min-height:0，
    否則 flex item 預設 min-height:auto 會撐到內容全高、溢出被 .app{overflow:hidden}
    裁切 → 手機上捲不動、底部按鈕（如「出戰」）被切掉。配合畫面根容器也需 min-height:0。 */
