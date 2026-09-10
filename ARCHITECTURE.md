@@ -276,7 +276,10 @@ into v2 and writes the migration, then falls back to defaults. The v1 `modules` 
 projected; it remains untouched rollback input. The v2 prefs contain enhanced interaction, replay
 recording, attack input, juice, haptics, graphics preference, and the default-off `scannerEnabled`
 capability. Settings never assemble battle features; Team/Partner surfaces contain no module-off
-warnings.
+warnings. `ui/components/SettingsModal.tsx` presents those prefs in four labelled sections (operation,
+display/feedback, data, device) with direct v2 controls, read-only interaction-surface scope chips,
+default/scope/effect metadata, and switch semantics. `ModalSurface` remains the only scroll owner;
+the Settings footer and close affordance stay reachable at narrow widths and zoom.
 
 ## 7. Persistence & progression
 
