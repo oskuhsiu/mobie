@@ -80,6 +80,13 @@ export function ToolsMenu() {
     setMoreOpen(false)
     controller.open({ id, policy, content }, { invoker })
   }
+  const openLibraryFromScanner = () => {
+    controller.open({
+      id: 'library',
+      policy: DEFAULT_POLICY,
+      content: <CardLibraryModal onClose={controller.close} />,
+    }, { invoker: moreButtonRef.current })
+  }
   const toggleMore = () => { void audio.unlock(); setMoreOpen((openNow) => !openNow) }
 
   return (
@@ -141,7 +148,7 @@ export function ToolsMenu() {
               <h2 id="tools-menu-data-heading">資料與設定</h2>
               <div className="tools-menu-more__items">
                 <button className="btn btn--ghost btn--sm" onClick={() => open('replays', <ReplayListModal onClose={controller.close} />)}>🎬 回放</button>
-                {scannerEnabled && <button {...dataGate('掃卡')} className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner', <CardScannerModal onClose={controller.close} />)}>📷 掃卡</button>}
+                {scannerEnabled && <button {...dataGate('掃卡')} className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner', <CardScannerModal onClose={controller.close} onBackToLibrary={openLibraryFromScanner} />)}>📷 掃卡</button>}
                 <button {...dataGate('存檔')} className="btn btn--ghost btn--sm" onClick={() => open('save', <SaveManagerModal onClose={controller.close} />)}>☁️ 存檔</button>
                 <button className="btn btn--ghost btn--sm" onClick={() => open('settings', <SettingsModal onClose={controller.close} />)}>⚙️ 設定</button>
               </div>

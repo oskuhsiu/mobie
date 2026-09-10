@@ -228,8 +228,12 @@ const CHECKPOINT_CATALOG = {
     storage: ['mobie.settings.v1', 'mobie.settings.v2'], lazy: ['SettingsModal'], capability: 'malformed v1/v2 safely falls back to defaults',
   },
   'scanner-on-fallback': {
-    route: 'title/modal:scanner', event: 'ToolsMenu.open(scanner)', next: ['手動輸入卡碼', '關閉'],
-    storage: ['mobie.settings.v2', 'mz-cards'], lazy: ['CardScannerModal', 'jsqr'], capability: 'explicit capability on; unsupported/denied fallback',
+    route: 'title/modal:scanner', event: 'Scanner.openCamera→unsupported', next: ['手動輸入卡碼', '回到卡庫', '關閉'],
+    storage: ['mobie.settings.v2', 'mz-cards'], lazy: ['CardScannerModal', 'jsqr'], capability: 'explicit camera action; unsupported/denied fallback',
+  },
+  'scanner-on-starting': {
+    route: 'title/modal:scanner', event: 'ToolsMenu.open(scanner)', next: ['開啟相機', '手動輸入卡碼', '回到卡庫'],
+    storage: ['mobie.settings.v2', 'mz-cards'], lazy: ['CardScannerModal'], capability: 'capability on; permission remains unrequested until explicit camera action',
   },
   'region-select': {
     route: 'regionSelect', event: 'START', next: ['SELECT_REGION', 'OPEN_TOWER', 'BACK'],
@@ -1598,6 +1602,18 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     if (!(await exists('#tools-menu-more'))) await clickText('更多')
     const scannerEntryVisible = await exists('[data-tool="scanner"]')
     await clickText('掃卡')
+    await waitFor('Boolean(document.querySelector("[data-scanner-state=\\"starting\\"]"))', 8_000, 'scanner starting state')
+    const scannerStartingEvidence = await evaluate(`(() => ({
+      state: document.querySelector('[data-scanner]')?.getAttribute('data-scanner-state') ?? null,
+      cameraRequests: Number(window.__M24_CAMERA_REQUESTS__ ?? 0),
+      cameraActionVisible: Boolean(document.querySelector('[data-scan-camera]')),
+      manualActionVisible: Boolean(document.querySelector('[data-scan-manual]')),
+    }))()`)
+    if (scannerStartingEvidence.state !== 'starting' || scannerStartingEvidence.cameraRequests !== 0 || !scannerStartingEvidence.cameraActionVisible || !scannerStartingEvidence.manualActionVisible) {
+      throw new Error(`Scanner starting boundary failed: ${JSON.stringify(scannerStartingEvidence)}`)
+    }
+    checkpoints.push(await capture('scanner-on-starting', 'explicit capability entry with permission deferred', { observation: scannerStartingEvidence }))
+    await clickText('開啟相機')
     await waitFor('Boolean(document.querySelector(".scan-nocam"))', 8_000, 'scanner unsupported fallback')
     scannerOnEvidence = await evaluate(`(() => ({
       scannerVisible: ${JSON.stringify(scannerEntryVisible)},

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import QRCode from 'qrcode'
 import { getSpecies } from '@/game/data/species'
@@ -19,6 +19,12 @@ import { MobieSprite } from '@/ui/components/MobieSprite'
 import type { Card, CardSource } from '@/game/types'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
 import { useOverlayController } from '@/ui/shell/OverlayController'
+import { useSettings } from '@/store/settingsStore'
+
+// Keep scanner code out of the Card Library chunk. The capability switch only
+// exposes this action; the scanner module is requested after the player chooses
+// the explicit scanner action.
+const CardScannerModal = lazy(() => import('@/ui/components/CardScannerModal').then((m) => ({ default: m.CardScannerModal })))
 
 type Panel = 'none' | 'add' | 'import'
 type LibraryState = 'loading' | 'ready' | 'empty' | 'error'
@@ -84,6 +90,7 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
   const noticeRef = useRef<HTMLDivElement>(null)
   const aliveRef = useRef(true)
   const controller = useOverlayController()
+  const scannerEnabled = useSettings((s) => s.settings.prefs.scannerEnabled)
 
   useEffect(() => {
     pendingLibraryNotice = null
@@ -149,6 +156,15 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
     })
   }, [controller])
 
+  const openScanner = useCallback(() => {
+    if (!scannerEnabled) return
+    controller.push({
+      id: 'card-scanner',
+      policy: 'escape-and-backdrop',
+      content: <CardScannerModal onClose={controller.pop} />,
+    }, { restoreFocus: () => document.querySelector<HTMLElement>('[data-card-library-scanner]') })
+  }, [controller, scannerEnabled])
+
   const openDetail = useCallback((card: Card) => {
     controller.push({
       id: `card-detail:${card.cardId}`,
@@ -200,6 +216,13 @@ export function CardLibraryModal({ onClose }: { onClose: () => void }) {
             data-card-library-import
             onClick={() => setPanel(panel === 'import' ? 'none' : 'import')}
           >📥 匯入 JSON/CSV</button>
+          {scannerEnabled && (
+            <button
+              className="btn btn--ghost btn--sm"
+              data-card-library-scanner
+              onClick={openScanner}
+            >📷 掃卡</button>
+          )}
         </div>
 
         {notice && (

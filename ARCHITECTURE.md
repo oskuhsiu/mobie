@@ -24,7 +24,9 @@ gitignored; that workflow does not alter the authority of documents already trac
 - **Lazy-loaded heavies** (dynamic-imported so they stay out of the main bundle): `three` /
   `@react-three/fiber` / `@react-three/drei`, `qrcode`, `tone`, `fflate`, and the capability-gated
   Scanner entry (which owns `jsqr`). Scanner is absent from the default Tools menu and its chunk is
-  requested only after `scannerEnabled` is turned on and the player selects 掃卡.
+  requested only after `scannerEnabled` is turned on and the player selects 掃卡. Opening the scanner
+  starts in a permission-deferred state; `getUserMedia` is called only by the explicit 開啟相機 action,
+  and denied/unsupported devices stay on the manual card-code fallback without another prompt.
 
 ## 2. Layered structure (`src/`)
 
