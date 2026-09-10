@@ -13,7 +13,7 @@
 // 解包採「分類錯誤」風格（對齊 cardCode.ts 的 format/version/crc）：壞檔給明確 error 而非默默吞掉。
 
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
-import type { Card, OwnedUnit, Stats } from '@/game/types'
+import type { Card, CardSource, OwnedUnit, Stats } from '@/game/types'
 import { SAVE_SCHEMA_VERSION, migrateMeta, type SaveMeta } from './saveMeta'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { crc32Bytes } from '@/game/crc32'
@@ -125,6 +125,9 @@ function coerceCard(raw: unknown): Card | null {
   }
   if (typeof o.nature === 'number') card.nature = o.nature
   if (o.shiny === true) card.shiny = true
+  if (typeof o.owner === 'string' && o.owner.trim()) card.owner = o.owner.trim()
+  if (o.source === 'starter' || o.source === 'manual' || o.source === 'import') card.source = o.source as CardSource
+  if (typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) && o.createdAt >= 0) card.createdAt = Math.floor(o.createdAt)
   return card
 }
 

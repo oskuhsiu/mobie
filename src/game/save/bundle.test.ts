@@ -22,7 +22,7 @@ const slices = (over: Partial<SaveSlices> = {}): SaveSlices => ({
   roster: [unit('a', 1), unit('b', 4)],
   cards: [
     { cardId: 'C1', speciesId: 1, level: 5 },
-    { cardId: 'C2', speciesId: 7, level: 9, ivs: { hp: 31, atk: 31 }, nature: 2, shiny: true },
+    { cardId: 'C2', speciesId: 7, level: 9, ivs: { hp: 31, atk: 31 }, nature: 2, shiny: true, owner: '本機訓練家', source: 'import', createdAt: 1234 },
   ],
   ...over,
 })
@@ -37,6 +37,7 @@ describe('bundle：packSave / unpackSave round-trip', () => {
     expect(r.cards).toHaveLength(2)
     // 掃描/自製卡的 ivs/nature/shiny 必須保全（不可被丟棄）
     expect(r.cards[1]).toMatchObject({ cardId: 'C2', ivs: { hp: 31, atk: 31 }, nature: 2, shiny: true })
+    expect(r.cards[1]).toMatchObject({ owner: '本機訓練家', source: 'import', createdAt: 1234 })
     expect(r.meta).toMatchObject({ profileName: 'Red', updatedAt: 1000, revision: 4 })
   })
 

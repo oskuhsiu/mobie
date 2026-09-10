@@ -99,6 +99,9 @@ export interface Species {
   evolveLevel?: number
 }
 
+/** 卡片在本機卡庫的來源；只描述資料 provenance，不參與戰鬥規則。 */
+export type CardSource = 'starter' | 'manual' | 'import'
+
 /** 實體卡（M2 由 QR 反查），M1 用本地假卡 roster 取代 */
 export interface Card {
   cardId: string
@@ -113,6 +116,12 @@ export interface Card {
   heldItemId?: string
   /** 出戰裝備招式 id（M19，從 OwnedUnit 帶進戰鬥；缺省＝由種族學習表依等級自動裝備） */
   equippedMoveIds?: number[]
+  /** 卡庫顯示用的持有人；舊卡缺省時由 cardLibrary 補成本機訓練家。 */
+  owner?: string
+  /** 卡庫顯示用的來源；不影響卡片的戰鬥行為。 */
+  source?: CardSource
+  /** 卡庫第一次建立此 card 的 wall-clock（ms）；舊卡缺省。 */
+  createdAt?: number
 }
 
 /**

@@ -4,6 +4,7 @@
 // 驗證 checksum，永不進入這層。
 
 import type { OwnedUnit } from '@/game/types'
+import { SPECIES } from '@/game/data/species'
 import { packSave, unpackSave, type UnpackResult, type UnpackOk } from './bundle'
 import { loadMeta, adoptMeta, type SaveMeta } from './saveMeta'
 import { listCards, replaceAllCards } from '@/game/cardLibrary'
@@ -94,6 +95,16 @@ export async function backupCurrentSave(now: number): Promise<void> {
  */
 export async function applyImportedSave(parsed: UnpackOk): Promise<void> {
   assertResultSettlementIdle('匯入')
+  const seenCardIds = new Set<string>()
+  for (const card of parsed.cards) {
+    if (!card || typeof card.cardId !== 'string' || !card.cardId.trim() || !Number.isInteger(card.level) || card.level < 1 || card.level > 100 || !SPECIES[card.speciesId]) {
+      throw new Error(`匯入卡片資料結構無效（${card?.cardId ?? 'unknown'}），既有進度未變更。`)
+    }
+    if (seenCardIds.has(card.cardId)) {
+      throw new Error(`匯入卡片資料包含重複 cardId（${card.cardId}），既有進度未變更。`)
+    }
+    seenCardIds.add(card.cardId)
+  }
   await useRoster.getState().replaceAll(parsed.roster)
   await replaceAllCards(parsed.cards)
   adoptMeta(parsed.meta)

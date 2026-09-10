@@ -37,6 +37,27 @@ describe('parseCardsImport', () => {
     expect(errors).toHaveLength(3)
   })
 
+  it('同一匯入批次的重複 cardId 只保留第一筆', () => {
+    const { cards, errors } = parseCardsImport(JSON.stringify([
+      { cardId: 'dup', speciesId: 25, level: 12 },
+      { cardId: 'dup', speciesId: 25, level: 20 },
+    ]))
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toMatchObject({ cardId: 'dup', level: 12 })
+    expect(errors).toEqual(['第 2 筆：cardId 重複（dup）'])
+  })
+
+  it('未知 species 與超出範圍 nature 視為驗證錯誤', () => {
+    const { cards, errors } = parseCardsImport(JSON.stringify([
+      { cardId: 'unknown', speciesId: 99999, level: 10 },
+      { cardId: 'nature', speciesId: 25, level: 10, nature: 25 },
+    ]))
+    expect(cards).toHaveLength(0)
+    expect(errors).toHaveLength(2)
+    expect(errors[0]).toMatch(/speciesId/)
+    expect(errors[1]).toMatch(/nature/)
+  })
+
   it('JSON 解析失敗 → error', () => {
     expect(parseCardsImport('{ not json').errors[0]).toMatch(/JSON/)
   })

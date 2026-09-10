@@ -302,7 +302,7 @@ warnings.
 (incubator child mirror) · `mobie.incubator.capture.v1` (duplicate-egg child marker) · `mobie.result.settlement.v1`
 (Result orchestration journal) · `mobie.achievement.claim.meta.v1`, `mobie.achievement.claim.incubator.v1`,
 and `mobie.achievement.claim.sp.v1` (best-effort claim receipt mirrors; canonical claim outboxes live in
-the Meta, incubator, and SP envelopes) · `mobie.meta.hatch.v1` / `mobie.roster.hatch.v1` (best-effort hatch child marker mirrors; canonical markers live beside their Meta/roster writes) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
+the Meta, incubator, and SP envelopes) · `mobie.meta.hatch.v1` / `mobie.roster.hatch.v1` (best-effort hatch child marker mirrors; canonical markers live beside their Meta/roster writes) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-cards.initialized.v1` (localStorage marker that prevents an intentionally emptied card library from being reseeded after reload) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
 `mobie.settings.v1` (read-only migration/rollback source) ·
