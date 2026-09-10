@@ -10,6 +10,18 @@ const STORE = 'replays'
 /** 保留上限（FIFO）：超過丟最舊，避免 IndexedDB 無限長大。 */
 export const REPLAY_FIFO_LIMIT = 50
 
+export type ReplayStorageErrorCode = 'unavailable' | 'open' | 'read' | 'write' | 'delete'
+
+export class ReplayStorageError extends Error {
+  readonly code: ReplayStorageErrorCode
+
+  constructor(code: ReplayStorageErrorCode, message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'ReplayStorageError'
+    this.code = code
+  }
+}
+
 /** 列表用輕量 meta（不必 decode json 即可渲染清單）。 */
 export interface ReplayRecordMeta {
   battleId: string
@@ -19,6 +31,10 @@ export interface ReplayRecordMeta {
   outcome: 'win' | 'lose'
   players: string[]
   foes: string[]
+  /** Cached list facts. Old records derive these from their canonical JSON. */
+  durationMs?: number
+  turnCount?: number
+  eventCount?: number
 }
 
 /** 完整紀錄：meta + canonical json 字串。 */
@@ -32,10 +48,24 @@ function hasIDB(): boolean {
   return typeof indexedDB !== 'undefined'
 }
 
+/** Whether this browser can expose the replay IndexedDB namespace. */
+export function replayStorageAvailable(): boolean {
+  return hasIDB()
+}
+
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
+  if (!hasIDB()) {
+    return Promise.reject(new ReplayStorageError('unavailable', '此瀏覽器沒有可用的回放儲存空間。請改用支援 IndexedDB 的瀏覽器。'))
+  }
+  const opening = new Promise<IDBDatabase>((resolve, reject) => {
+    let req: IDBOpenDBRequest
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION)
+    } catch (error) {
+      reject(new ReplayStorageError('open', '回放儲存空間無法開啟。請重新載入頁面後再試一次。', { cause: error }))
+      return
+    }
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE)) {
@@ -44,21 +74,44 @@ function openDb(): Promise<IDBDatabase> {
       }
     }
     req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onerror = () => reject(new ReplayStorageError('open', '回放儲存空間無法開啟。請重新載入頁面後再試一次。', { cause: req.error }))
+  })
+  dbPromise = opening.catch((error) => {
+    // A transient private-mode/quota failure should be retryable from the UI
+    // after the player changes browser state or reloads the storage namespace.
+    dbPromise = null
+    throw error
   })
   return dbPromise
 }
 
-function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  return openDb().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const t = db.transaction(STORE, mode)
-        const req = run(t.objectStore(STORE))
-        req.onsuccess = () => resolve(req.result)
-        req.onerror = () => reject(req.error)
-      }),
-  )
+function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>, code: ReplayStorageErrorCode = mode === 'readonly' ? 'read' : 'write'): Promise<T> {
+  return openDb().then((db) => new Promise<T>((resolve, reject) => {
+    let transaction: IDBTransaction
+    let request: IDBRequest<T>
+    let result: T
+    let settled = false
+    const fail = (error: unknown) => {
+      if (settled) return
+      settled = true
+      reject(error instanceof ReplayStorageError ? error : new ReplayStorageError(code, '回放儲存空間讀寫失敗。請再試一次。', { cause: error }))
+    }
+    try {
+      transaction = db.transaction(STORE, mode)
+      request = run(transaction.objectStore(STORE))
+      request.onsuccess = () => { result = request.result }
+      request.onerror = () => fail(request.error)
+      transaction.onerror = () => fail(transaction.error)
+      transaction.onabort = () => fail(transaction.error ?? new Error('transaction aborted'))
+      transaction.oncomplete = () => {
+        if (settled) return
+        settled = true
+        resolve(result)
+      }
+    } catch (error) {
+      fail(error)
+    }
+  }))
 }
 
 const listeners = new Set<() => void>()
@@ -80,7 +133,7 @@ export async function putReplay(record: ReplayRecord): Promise<void> {
   if (!hasIDB()) return
   const exists = await tx<ReplayRecord | undefined>('readonly', (s) => s.get(record.battleId) as IDBRequest<ReplayRecord | undefined>)
   if (exists) return // 同一場（同 seed+snapshot）重看不重存
-  await tx('readwrite', (s) => s.put(record))
+  await tx('readwrite', (s) => s.put(record), 'write')
   await trimFifo()
   emit()
 }
@@ -102,7 +155,7 @@ export async function getReplay(battleId: string): Promise<ReplayRecord | null> 
 /** 刪除一筆回放。 */
 export async function deleteReplay(battleId: string): Promise<void> {
   if (!hasIDB()) return
-  await tx('readwrite', (s) => s.delete(battleId))
+  await tx('readwrite', (s) => s.delete(battleId), 'delete')
   emit()
 }
 

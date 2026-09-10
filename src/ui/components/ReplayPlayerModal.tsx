@@ -126,29 +126,33 @@ export function ReplayPlayerModal({ log, onClose, portal = false }: { log: Repla
       className="replay-player"
       portal={portal}
     >
+      <div className="replay-player__content" data-replay-player data-replay-battle-id={log.header.battleId}>
         <div className="replay-stage">
           <TeamColumn side="foe" label="對手" units={units} active={active.foe} />
           <TeamColumn side="player" label="我方" units={units} active={active.player} />
         </div>
 
         <div className="replay-report" ref={logRef}>
-          {visibleLines.length === 0 && <div className="replay-report__line replay-report__line--cur">▶ 按播放開始回放…</div>}
+          {steps.length === 0
+            ? <div className="replay-report__line replay-report__line--cur">此回放沒有可播放的事件。</div>
+            : visibleLines.length === 0 && <div className="replay-report__line replay-report__line--cur">▶ 按播放開始回放…</div>}
           {visibleLines.map((line, i) => (
             <div key={i} className={`replay-report__line ${i === visibleLines.length - 1 ? 'replay-report__line--cur' : ''}`}>{line}</div>
           ))}
         </div>
 
         <div className="replay-controls">
-          <button className="btn btn--ghost btn--sm" onClick={() => step(-1)} disabled={cursor === 0}>⏮ 上一步</button>
-          <button className="btn btn--primary btn--sm" onClick={togglePlay}>{atEnd ? '🔁 重播' : playing ? '⏸ 暫停' : '▶ 播放'}</button>
-          <button className="btn btn--ghost btn--sm" onClick={() => step(1)} disabled={atEnd}>下一步 ⏭</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => step(-1)} disabled={cursor === 0}>⏮ 上一步</button>
+          <button type="button" className="btn btn--primary btn--sm" onClick={togglePlay} disabled={steps.length === 0}>{atEnd ? '🔁 重播' : playing ? '⏸ 暫停' : '▶ 播放'}</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => step(1)} disabled={atEnd}>下一步 ⏭</button>
           <div className="replay-speed">
             {SPEEDS.map((s) => (
-              <button key={s} className={`btn btn--sm ${speed === s ? 'btn--primary' : 'btn--ghost'}`} onClick={() => setSpeed(s)}>{s}×</button>
+              <button type="button" key={s} className={`btn btn--sm ${speed === s ? 'btn--primary' : 'btn--ghost'}`} onClick={() => setSpeed(s)}>{s}×</button>
             ))}
           </div>
         </div>
-        <div className="replay-progress"><div className="replay-progress__fill" style={{ width: `${steps.length ? (cursor / steps.length) * 100 : 0}%` }} /></div>
+        <div className="replay-progress" data-replay-progress><div className="replay-progress__fill" style={{ width: `${steps.length ? (cursor / steps.length) * 100 : 0}%` }} /></div>
+      </div>
     </ModalSurface>
   )
 }

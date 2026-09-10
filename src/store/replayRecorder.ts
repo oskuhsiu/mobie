@@ -98,7 +98,7 @@ export class ReplayRecorder {
   }
 
   /** 結束錄製 → 組 ReplayLog（不持久化，純資料）。無 base/無回合 → null。 */
-  build(outcome: 'win' | 'lose'): ReplayLog | null {
+  build(outcome: 'win' | 'lose', durationMs?: number): ReplayLog | null {
     if (this.failed || !this.base || this.turns.length === 0) return null
     try {
       const { battleSeed, regionId, mode, snapshot, createdAt } = this.base
@@ -106,7 +106,17 @@ export class ReplayRecorder {
         `${battleSeed}|${snapshot.map((u) => `${u.instanceId}:${u.speciesId}:${u.level}`).join(',')}`,
       ).toString(16)
       return {
-        header: { formatVersion: REPLAY_FORMAT_VERSION, battleId, battleSeed, createdAt, regionId, mode, outcome, snapshot },
+        header: {
+          formatVersion: REPLAY_FORMAT_VERSION,
+          battleId,
+          battleSeed,
+          createdAt,
+          regionId,
+          mode,
+          outcome,
+          ...(typeof durationMs === 'number' && Number.isFinite(durationMs) ? { durationMs: Math.max(0, durationMs) } : {}),
+          snapshot,
+        },
         turns: this.turns,
       }
     } catch {
@@ -119,13 +129,17 @@ export class ReplayRecorder {
   async finish(outcome: 'win' | 'lose'): Promise<boolean> {
     try {
       if (this.failed) return false
-      const log = this.build(outcome)
+      const startedAt = this.base?.createdAt
+      if (typeof startedAt !== 'number') return false
+      const log = this.build(outcome, Math.max(0, Date.now() - startedAt))
       if (!log) {
         this.abandon()
         return false
       }
       const players = log.header.snapshot.filter((u) => u.side === 'player').map((u) => u.displayName)
       const foes = log.header.snapshot.filter((u) => u.side === 'foe').map((u) => u.displayName)
+      const turnCount = log.turns.length
+      const eventCount = log.turns.reduce((count, turn) => count + turn.events.length, 0)
       const json = this.dependencies.encodeReplay(log)
       await this.dependencies.putReplay({
         battleId: log.header.battleId,
@@ -135,6 +149,9 @@ export class ReplayRecorder {
         outcome,
         players,
         foes,
+        durationMs: log.header.durationMs,
+        turnCount,
+        eventCount,
         json,
       })
       this.abandon()

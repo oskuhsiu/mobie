@@ -45,6 +45,8 @@ export interface ReplayHeader {
   regionId: string
   mode: 'arena' | 'wild'
   outcome: 'win' | 'lose'
+  /** Optional elapsed battle time added by newer recorders; old replays omit it. */
+  durationMs?: number
   snapshot: DisplayUnitSnapshot[] // 雙方全員
   /** payload（turns）的 crc32 十六進位；擋截斷/手改壞檔（沿用 bundle.ts 精神）。 */
   checksum?: string

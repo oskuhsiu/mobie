@@ -418,7 +418,12 @@ all updated — plan/15 §10 coupling-governance made mechanical (M12.d's `combo
 `BattleTurnCoordinator` (gated by `prefs.recordReplays`, default off); recording failure disables only
 that session's replay and never reruns the reducer. `ReplayPlayerModal` re-folds the event stream to
 reconstruct HP/active with a synced text-report sidebar. **No `.txt` is persisted** — it's a pure
-projection generated on export.
+projection generated on export. `ReplayListModal` reads and decodes every IndexedDB row before exposing
+actions, derives participant/turn/event/duration facts from the canonical log, and keeps loading, empty,
+partial/decode-error, and storage-error states actionable. Play/export/delete are sibling semantic
+controls; delete is a stacked confirmation with cancel/Escape/backdrop behavior and focus restoration.
+Replay export uses the same share → download → clipboard → selectable manual fallback policy as Save
+Manager, while the replay recording preference only gates future writes and never hides existing rows.
 
 ### 7.1 Portable save files (M5 — `game/save/`)
 

@@ -94,4 +94,26 @@ describe('replay codec — 分類錯誤', () => {
     const res = decodeReplay(JSON.stringify(obj))
     expect(res).toMatchObject({ ok: false, error: 'bad-checksum' })
   })
+
+  it('bad-shape：已知事件的 payload 不完整也拒絕播放', () => {
+    const obj = JSON.parse(encodeReplay(sampleLog()))
+    obj.turns[0].events[0] = { type: 'random' }
+    const res = decodeReplay(JSON.stringify(obj))
+    expect(res).toMatchObject({ ok: false, error: 'bad-shape' })
+  })
+
+  it('bad-shape：checksum 欄位被改成錯誤型別時不降級成未校驗舊檔', () => {
+    const obj = JSON.parse(encodeReplay(sampleLog()))
+    obj.header.checksum = null
+    obj.turns[0].events[0].event.roll = 0.9
+    const res = decodeReplay(JSON.stringify(obj))
+    expect(res).toMatchObject({ ok: false, error: 'bad-shape' })
+  })
+
+  it('bad-shape：snapshot instanceId 必須與 side/slot 對應', () => {
+    const obj = JSON.parse(encodeReplay(sampleLog()))
+    obj.header.snapshot[0].instanceId = 'foe:0'
+    const res = decodeReplay(JSON.stringify(obj))
+    expect(res).toMatchObject({ ok: false, error: 'bad-shape' })
+  })
 })
