@@ -1,5 +1,5 @@
 // M10 — 圖鑑/成就 meta store（mobie.meta.v1）。在 canonical 事件點（看到/收服/勝利/進化）更新 meta，
-// 獨立 store、**不寫 roster**（plan/10 §3.2）。claim 走明確 action（exactly-once、防重領）。
+// 獨立 store、**不寫 roster**（plan/10 §3.2）。claim 走 durable outbox 與明確 action。
 
 import { create } from 'zustand'
 import type { OwnedUnit } from '@/game/types'
@@ -10,13 +10,32 @@ import {
   addRegistered,
   addSeen,
   bumpStat,
-  markClaimed,
   currentlyOwnedSpecies,
   loadMetaStrict,
   saveMetaStateStrict,
   type MetaState,
 } from '@/game/meta'
-import { computeAchievements, getAchievement, type AchievementReward } from '@/game/achievements'
+import {
+  AchievementClaimCoordinator,
+  AchievementClaimError,
+  AchievementEggDestination,
+  AchievementSpDestination,
+  ACHIEVEMENT_CLAIM_EGG_MIRROR_KEY,
+  ACHIEVEMENT_CLAIM_META_MIRROR_KEY,
+  ACHIEVEMENT_CLAIM_SP_MIRROR_KEY,
+  type AchievementClaimResult,
+} from '@/game/achievementClaim'
+import {
+  loadIncubatorStrict,
+  saveIncubatorStateWithAchievementClaimsStrict,
+} from '@/game/incubator'
+import { useIncubator } from '@/store/incubatorStore'
+import {
+  loadSkillPointAchievementClaimsStrict,
+  loadSkillPointsStrict,
+  saveSkillPointsWithAchievementClaimsStrict,
+  useSkillPoints,
+} from '@/store/skillPointsStore'
 
 interface MetaStore {
   meta: MetaState
@@ -33,11 +52,23 @@ interface MetaStore {
   recordWin: (mode: 'arena' | 'wild') => void
   /** 進化：登錄進化後物種 + evolutions 計數。 */
   recordEvolutions: (events: { toSpecies: number }[]) => void
-  /** 領取成就獎勵（exactly-once）：已解鎖且未領取才標記+回傳 reward（給 incubator 產蛋）；否則 null。 */
-  claimAchievement: (id: string) => AchievementReward | null
+  /** 領取成就獎勵（durable outbox + per-boundary applyOnce）。 */
+  claimAchievement: (id: string) => Promise<AchievementClaimResult | null>
+  /** Reload/remount recovery for pending claim outboxes. */
+  reconcileAchievementClaims: () => Promise<{ attempted: number; completed: number; errors: Array<{ achievementId: string; message: string; code?: string }> }>
+  claimBusy: string | null
+  claimErrors: Record<string, string>
 }
 
 export const useMeta = create<MetaStore>((set, get) => {
+  const saveClaimMirror = (key: string, value: unknown): void => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(key, JSON.stringify(value))
+    } catch {
+      /* Canonical envelope remains the authority when the evidence mirror fails. */
+    }
+  }
+
   // 共用提交：meta 無變動（同參照）則略過存檔（純更新函數無新增時回原物件）
   const commit = (meta: MetaState) => {
     if (meta === get().meta) return
@@ -54,9 +85,62 @@ export const useMeta = create<MetaStore>((set, get) => {
     write(meta)
     set({ meta, loaded: true })
   }
+
+  const persistClaimMeta = (meta: MetaState): void => {
+    saveMetaStateStrict(meta)
+    saveClaimMirror(ACHIEVEMENT_CLAIM_META_MIRROR_KEY, meta.achievementClaims ?? [])
+    set({ meta })
+  }
+
+  const claimCoordinator = new AchievementClaimCoordinator({
+    meta: {
+      loadMeta: async () => loadMetaStrict(),
+      savePending: async (meta) => { persistClaimMeta(meta) },
+      saveFinal: async (meta) => { persistClaimMeta(meta) },
+    },
+    egg: new AchievementEggDestination({
+      loadState: async () => loadIncubatorStrict(),
+      loadMarkers: async () => (await loadIncubatorStrict()).achievementClaims ?? [],
+      savePending: async (state, markers, operationId) => {
+        const completed = markers.map((marker) => marker.claimOperationId === operationId
+          ? { ...marker, canonicalApplied: true }
+          : marker)
+        const next = { ...state, achievementClaims: completed }
+        saveIncubatorStateWithAchievementClaimsStrict(next, completed)
+        saveClaimMirror(ACHIEVEMENT_CLAIM_EGG_MIRROR_KEY, completed)
+        useIncubator.setState({ state: next })
+      },
+      saveMarkers: async (markers) => {
+        const state = await loadIncubatorStrict()
+        const next = { ...state, achievementClaims: markers }
+        saveIncubatorStateWithAchievementClaimsStrict(next, markers)
+        saveClaimMirror(ACHIEVEMENT_CLAIM_EGG_MIRROR_KEY, markers)
+        useIncubator.setState({ state: next })
+      },
+    }),
+    sp: new AchievementSpDestination({
+      loadPoints: async () => loadSkillPointsStrict(),
+      loadMarkers: async () => loadSkillPointAchievementClaimsStrict(),
+      savePending: async (points, markers, operationId) => {
+        const completed = markers.map((marker) => marker.claimOperationId === operationId
+          ? { ...marker, canonicalApplied: true }
+          : marker)
+        saveSkillPointsWithAchievementClaimsStrict(points, completed)
+        saveClaimMirror(ACHIEVEMENT_CLAIM_SP_MIRROR_KEY, completed)
+        useSkillPoints.setState({ sp: points })
+      },
+      saveMarkers: async (markers) => {
+        const points = await loadSkillPointsStrict()
+        saveSkillPointsWithAchievementClaimsStrict(points, markers)
+        saveClaimMirror(ACHIEVEMENT_CLAIM_SP_MIRROR_KEY, markers)
+      },
+    }),
+  })
   return {
     meta: defaultMeta(),
     loaded: false,
+    claimBusy: null,
+    claimErrors: {},
 
     load: (roster) => hydrate(roster, loadMeta, saveMetaState),
 
@@ -78,13 +162,43 @@ export const useMeta = create<MetaStore>((set, get) => {
       commit(meta)
     },
 
-    claimAchievement: (id) => {
-      const def = getAchievement(id)
-      if (!def) return null
-      const view = computeAchievements(get().meta).find((a) => a.def.id === id)
-      if (!view || !view.unlocked || view.claimed) return null // 防重領 / 未解鎖
-      commit(markClaimed(get().meta, id, Date.now()))
-      return def.reward
+    claimAchievement: async (id) => {
+      set({ claimBusy: id, claimErrors: { ...get().claimErrors, [id]: '' } })
+      try {
+        const result = await claimCoordinator.claimOnce(id)
+        const nextErrors = { ...get().claimErrors }
+        delete nextErrors[id]
+        delete nextErrors['*']
+        set({ meta: result.meta, claimErrors: nextErrors })
+        return result
+      } catch (cause) {
+        if (cause instanceof AchievementClaimError && (cause.code === 'locked' || cause.code === 'claimed')) {
+          // The modal can be stale after another tab/remount claimed the same
+          // item. Refresh the canonical projection before returning the legacy
+          // null result so the UI cannot keep offering a stale action.
+          try { set({ meta: loadMetaStrict() }) } catch { /* preserve the current recoverable error state */ }
+          return null
+        }
+        const message = cause instanceof Error ? cause.message : String(cause)
+        set({ claimErrors: { ...get().claimErrors, [id]: message } })
+        throw cause
+      } finally {
+        set({ claimBusy: null })
+      }
+    },
+
+    reconcileAchievementClaims: async () => {
+      const recovery = await claimCoordinator.recoverPending()
+      const nextErrors = { ...get().claimErrors }
+      if (recovery.errors.length > 0) {
+        for (const error of recovery.errors) nextErrors[error.achievementId] = error.message
+        set({ claimErrors: nextErrors })
+      }
+      else if (nextErrors['*']) {
+        delete nextErrors['*']
+        set({ claimErrors: nextErrors })
+      }
+      return recovery
     },
   }
 })

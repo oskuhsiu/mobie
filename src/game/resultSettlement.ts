@@ -9,6 +9,7 @@ import { ASCENSIONS, isBossFloor } from '@/game/tower'
 import { buildBattleMobie } from '@/game/stats'
 import { captureChanceWithBall, getBall, rollBall, type BallId } from '@/game/battle/engine'
 import { hashSeed, makeRng } from '@/game/rng'
+import type { AchievementRewardMarker, AchievementClaimOutbox } from '@/game/achievementClaim'
 
 /**
  * Result settlement is keyed by the logical battle, not by a React mount or a
@@ -1129,6 +1130,29 @@ function cloneMeta(meta: MetaState): MetaState {
     seen: [...meta.seen],
     stats: { ...meta.stats },
     achievements: { ...meta.achievements },
+    ...(meta.achievementClaims
+      ? {
+          achievementClaims: meta.achievementClaims.map((claim: AchievementClaimOutbox) => ({
+            ...claim,
+            reward: claim.reward.kind === 'egg'
+              ? { kind: 'egg' as const, label: claim.reward.label, speciesPool: [...claim.reward.speciesPool] }
+              : { kind: 'sp' as const, label: claim.reward.label, amount: claim.reward.amount },
+            ...(claim.rewardReceipt
+              ? {
+                  rewardReceipt: {
+                    ...claim.rewardReceipt,
+                    reward: claim.rewardReceipt.reward.kind === 'egg'
+                      ? { kind: 'egg' as const, label: claim.rewardReceipt.reward.label, speciesPool: [...claim.rewardReceipt.reward.speciesPool] }
+                      : { kind: 'sp' as const, label: claim.rewardReceipt.reward.label, amount: claim.rewardReceipt.reward.amount },
+                    ...(claim.rewardReceipt.egg
+                      ? { egg: { ...claim.rewardReceipt.egg, speciesPool: [...claim.rewardReceipt.egg.speciesPool] } }
+                      : {}),
+                  },
+                }
+              : {}),
+          })),
+        }
+      : {}),
   }
 }
 
@@ -1910,6 +1934,25 @@ function cloneIncubatorState(state: IncubatorState): IncubatorState {
     schemaVersion: state.schemaVersion,
     nextId: state.nextId,
     eggs: state.eggs.map(cloneEgg),
+    ...(state.achievementClaims
+      ? {
+          achievementClaims: state.achievementClaims.map((claim: AchievementRewardMarker) => ({
+            ...claim,
+            reward: claim.reward.kind === 'egg'
+              ? { kind: 'egg' as const, label: claim.reward.label, speciesPool: [...claim.reward.speciesPool] }
+              : { kind: 'sp' as const, label: claim.reward.label, amount: claim.reward.amount },
+            receipt: {
+              ...claim.receipt,
+              reward: claim.receipt.reward.kind === 'egg'
+                ? { kind: 'egg' as const, label: claim.receipt.reward.label, speciesPool: [...claim.receipt.reward.speciesPool] }
+                : { kind: 'sp' as const, label: claim.receipt.reward.label, amount: claim.receipt.reward.amount },
+              ...(claim.receipt.egg
+                ? { egg: { ...claim.receipt.egg, speciesPool: [...claim.receipt.egg.speciesPool] } }
+                : {}),
+            },
+          })),
+        }
+      : {}),
   }
 }
 

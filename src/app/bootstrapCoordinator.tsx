@@ -179,6 +179,14 @@ async function loadAttempt(attemptNumber: number): Promise<BootstrapSnapshot> {
 
   await incubatorPromise
 
+  // A claim may have completed its reward write just before the page closed.
+  // Reconcile the Meta outbox after both canonical stores are available so a
+  // reload resumes the child boundary without requiring the modal to be opened.
+  if (errors.length === 0) {
+    try { await useMeta.getState().reconcileAchievementClaims() }
+    catch { /* the pending outbox remains durable; the Achievements modal exposes retry */ }
+  }
+
   if (errors.length === 0) {
     const ready: BootstrapSnapshot = { status: 'ready', attempt: attemptNumber, error: null, failedStages: [] }
     publish(ready)

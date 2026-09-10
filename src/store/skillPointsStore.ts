@@ -4,11 +4,12 @@
 // （plan/17 §3.1 護欄：避免玩家誤以為同類）。獨立 save slice，不塞進 OwnedUnit（守 canonical roster）。
 
 import { create } from 'zustand'
+import type { AchievementRewardMarker } from '@/game/achievementClaim'
 
 export const SKILL_POINTS_KEY = 'mobie.skillpoints.v1'
 const SETTLEMENT_FIELD = 'resultSettlements'
 
-function decode(raw: string | null): { points: number; settlements?: unknown[] } | null {
+function decode(raw: string | null): { points: number; settlements?: unknown[]; achievementClaims?: AchievementRewardMarker[] } | null {
   if (raw === null) return null
   const parsed: unknown = JSON.parse(raw)
   if (typeof parsed === 'number') return Number.isFinite(parsed) && parsed >= 0 ? { points: Math.floor(parsed) } : null
@@ -18,12 +19,17 @@ function decode(raw: string | null): { points: number; settlements?: unknown[] }
   return {
     points: Math.floor(record.sp),
     ...(Array.isArray(record[SETTLEMENT_FIELD]) ? { settlements: record[SETTLEMENT_FIELD] } : {}),
+    ...(Array.isArray(record.achievementClaims) ? { achievementClaims: record.achievementClaims as AchievementRewardMarker[] } : {}),
   }
 }
 
-function encode(n: number, settlements?: unknown[]): string {
-  if (!settlements) return JSON.stringify(Math.max(0, Math.floor(n)))
-  return JSON.stringify({ sp: Math.max(0, Math.floor(n)), [SETTLEMENT_FIELD]: settlements })
+function encode(n: number, settlements?: unknown[], achievementClaims?: AchievementRewardMarker[]): string {
+  if (!settlements && !achievementClaims) return JSON.stringify(Math.max(0, Math.floor(n)))
+  return JSON.stringify({
+    sp: Math.max(0, Math.floor(n)),
+    ...(settlements ? { [SETTLEMENT_FIELD]: settlements } : {}),
+    ...(achievementClaims ? { achievementClaims } : {}),
+  })
 }
 
 export function loadSkillPoints(): number {
@@ -54,7 +60,7 @@ function saveSp(n: number): void {
   if (typeof localStorage === 'undefined') return
   try {
     const current = decode(localStorage.getItem(SKILL_POINTS_KEY))
-    localStorage.setItem(SKILL_POINTS_KEY, encode(n, current?.settlements))
+    localStorage.setItem(SKILL_POINTS_KEY, encode(n, current?.settlements, current?.achievementClaims))
   } catch {
     /* 配額/隱私模式：忽略 */
   }
@@ -64,7 +70,7 @@ export function saveSkillPointsStrict(n: number): void {
   if (typeof localStorage === 'undefined') return
   try {
     const current = decode(localStorage.getItem(SKILL_POINTS_KEY))
-    localStorage.setItem(SKILL_POINTS_KEY, encode(n, current?.settlements))
+    localStorage.setItem(SKILL_POINTS_KEY, encode(n, current?.settlements, current?.achievementClaims))
   } catch (cause) {
     throw new Error(`保存 SP 失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
@@ -74,9 +80,43 @@ export function saveSkillPointsStrict(n: number): void {
 export function saveSkillPointsWithSettlementMarkersStrict(n: number, markers: unknown[]): void {
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(SKILL_POINTS_KEY, encode(n, markers))
+    const current = decode(localStorage.getItem(SKILL_POINTS_KEY))
+    localStorage.setItem(SKILL_POINTS_KEY, encode(n, markers, current?.achievementClaims))
   } catch (cause) {
     throw new Error(`保存 SP 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Read the SP child markers owned by the Achievement claim boundary. */
+export function loadSkillPointAchievementClaims(): AchievementRewardMarker[] {
+  if (typeof localStorage === 'undefined') return []
+  try { return decode(localStorage.getItem(SKILL_POINTS_KEY))?.achievementClaims ?? [] }
+  catch { return [] }
+}
+
+/** Strict claim-marker read: a malformed/unavailable wallet must block a retry. */
+export function loadSkillPointAchievementClaimsStrict(): AchievementRewardMarker[] {
+  if (typeof localStorage === 'undefined') return []
+  const raw = localStorage.getItem(SKILL_POINTS_KEY)
+  if (raw === null) return []
+  let decoded: { achievementClaims?: AchievementRewardMarker[] } | null
+  try { decoded = decode(raw) }
+  catch (cause) { throw new Error(`讀取成就 SP 領取標記失敗：${cause instanceof Error ? cause.message : String(cause)}`) }
+  if (!decoded) throw new Error('讀取成就 SP 領取標記失敗：資料格式無效')
+  return decoded.achievementClaims ?? []
+}
+
+/** Claim child-boundary write: canonical SP and achievement receipt markers share one envelope. */
+export function saveSkillPointsWithAchievementClaimsStrict(
+  points: number,
+  claims: AchievementRewardMarker[],
+): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const current = decode(localStorage.getItem(SKILL_POINTS_KEY))
+    localStorage.setItem(SKILL_POINTS_KEY, encode(points, current?.settlements, claims))
+  } catch (cause) {
+    throw new Error(`保存成就 SP 領取資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }
 

@@ -9,6 +9,7 @@ import { createOwnedUnit } from '@/game/growth'
 import { hashSeed } from '@/game/individual'
 import { getSpecies } from '@/game/data/species'
 import { teachableOf } from '@/game/learnset'
+import type { AchievementRewardMarker } from '@/game/achievementClaim'
 
 export const INCUBATOR_SCHEMA_VERSION = 1
 const KEY = 'mobie.incubator.v1'
@@ -43,6 +44,8 @@ export interface IncubatorState {
   eggs: Egg[]
   /** 決定論 egg id 計數（避免 Math.random，孵化結果穩定）。 */
   nextId: number
+  /** Ticket 40 egg-reward receipts; kept beside canonical eggs for recovery. */
+  achievementClaims?: AchievementRewardMarker[]
 }
 
 /** 孵出個體的起始等級。 */
@@ -51,7 +54,7 @@ export const HATCH_LEVEL = 5
 const REQUIRED: Record<EggSource, number> = { achievement: 6, duplicate: 8, tower: 5 }
 
 export function defaultIncubator(): IncubatorState {
-  return { schemaVersion: INCUBATOR_SCHEMA_VERSION, eggs: [], nextId: 1 }
+  return { schemaVersion: INCUBATOR_SCHEMA_VERSION, eggs: [], nextId: 1, achievementClaims: [] }
 }
 
 /** 新增一顆蛋（純函數，決定論 id/seed）。speciesPool 過濾後為空則不新增（回原 state）。 */
@@ -114,10 +117,21 @@ export function migrateIncubator(raw: unknown): IncubatorState {
         && typeof (e as Egg).seed === 'string'
         && Array.isArray((e as Egg).speciesPool) && (e as Egg).speciesPool.length > 0)
     : []
+  const achievementClaims = Array.isArray(o.achievementClaims)
+    ? o.achievementClaims.filter((claim): claim is AchievementRewardMarker => (
+      !!claim && typeof claim === 'object'
+      && typeof (claim as AchievementRewardMarker).claimOperationId === 'string'
+      && typeof (claim as AchievementRewardMarker).rewardFingerprint === 'string'
+      && typeof (claim as AchievementRewardMarker).achievementId === 'string'
+      && ((claim as AchievementRewardMarker).status === 'pending' || (claim as AchievementRewardMarker).status === 'settled')
+      && !!(claim as AchievementRewardMarker).receipt
+    ))
+    : []
   return {
     schemaVersion: typeof o.schemaVersion === 'number' ? o.schemaVersion : base.schemaVersion,
     eggs,
     nextId: typeof o.nextId === 'number' && o.nextId > 0 ? o.nextId : eggs.length + 1,
+    achievementClaims,
   }
 }
 
@@ -156,12 +170,17 @@ export function saveIncubatorState(state: IncubatorState): void {
   if (!hasLS()) return
   try {
     let markers: unknown[] | undefined
+    let achievementClaims: unknown[] | undefined = state.achievementClaims
     const current = localStorage.getItem(KEY)
     if (current) {
       const parsed: unknown = JSON.parse(current)
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const embedded = (parsed as Record<string, unknown>)[SETTLEMENT_FIELD]
         if (Array.isArray(embedded)) markers = embedded
+        if (!achievementClaims) {
+          const claims = (parsed as Record<string, unknown>).achievementClaims
+          if (Array.isArray(claims)) achievementClaims = claims
+        }
       }
     }
     if (!markers) {
@@ -174,6 +193,7 @@ export function saveIncubatorState(state: IncubatorState): void {
     localStorage.setItem(KEY, JSON.stringify({
       ...state,
       ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
+      ...(achievementClaims ? { achievementClaims } : {}),
     }))
   } catch {
     /* 配額/隱私模式：忽略 */
@@ -184,8 +204,49 @@ export function saveIncubatorState(state: IncubatorState): void {
 export function saveIncubatorStateWithSettlementMarkersStrict(state: IncubatorState, markers: unknown[]): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...state, [SETTLEMENT_FIELD]: markers }))
+    let achievementClaims: unknown[] | undefined = state.achievementClaims
+    if (!achievementClaims) {
+      const current = localStorage.getItem(KEY)
+      if (current) {
+        const parsed: unknown = JSON.parse(current)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const claims = (parsed as Record<string, unknown>).achievementClaims
+          if (Array.isArray(claims)) achievementClaims = claims
+        }
+      }
+    }
+    localStorage.setItem(KEY, JSON.stringify({
+      ...state,
+      [SETTLEMENT_FIELD]: markers,
+      ...(achievementClaims ? { achievementClaims } : {}),
+    }))
   } catch (cause) {
     throw new Error(`保存孵化進度結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Claim child-boundary write: canonical eggs and achievement receipt markers share one envelope. */
+export function saveIncubatorStateWithAchievementClaimsStrict(
+  state: IncubatorState,
+  claims: AchievementRewardMarker[],
+): void {
+  if (!hasLS()) return
+  try {
+    let settlements: unknown[] | undefined
+    const current = localStorage.getItem(KEY)
+    if (current) {
+      const parsed: unknown = JSON.parse(current)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const embedded = (parsed as Record<string, unknown>)[SETTLEMENT_FIELD]
+        if (Array.isArray(embedded)) settlements = embedded
+      }
+    }
+    localStorage.setItem(KEY, JSON.stringify({
+      ...state,
+      ...(settlements ? { [SETTLEMENT_FIELD]: settlements } : {}),
+      achievementClaims: claims,
+    }))
+  } catch (cause) {
+    throw new Error(`保存成就蛋領取資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }

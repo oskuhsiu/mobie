@@ -8,6 +8,7 @@
 // stats / achievements 累計量 roster 也推不出，故存 meta。純函數可單測；localStorage I/O 薄、無 LS 時退回預設。
 
 import type { OwnedUnit } from '@/game/types'
+import type { AchievementClaimOutbox } from '@/game/achievementClaim'
 
 export const META_SCHEMA_VERSION = 1
 export const META_KEY = 'mobie.meta.v1'
@@ -29,6 +30,8 @@ export interface MetaState {
   stats: MetaStats
   /** 成就領取狀態：id → claimedAt（present＝已領取）。是否「解鎖」由 computeAchievements 派生。 */
   achievements: Record<string, number>
+  /** Ticket 40 durable claim outbox. Pending entries retain the exact reward payload. */
+  achievementClaims?: AchievementClaimOutbox[]
 }
 
 function zeroStats(): MetaStats {
@@ -36,7 +39,14 @@ function zeroStats(): MetaStats {
 }
 
 export function defaultMeta(): MetaState {
-  return { schemaVersion: META_SCHEMA_VERSION, registered: [], seen: [], stats: zeroStats(), achievements: {} }
+  return {
+    schemaVersion: META_SCHEMA_VERSION,
+    registered: [],
+    seen: [],
+    stats: zeroStats(),
+    achievements: {},
+    achievementClaims: [],
+  }
 }
 
 // ── 純更新（immutable，無變動則回原物件，方便 store 判斷是否需存檔）──
@@ -102,12 +112,23 @@ export function migrateMeta(raw: unknown): MetaState {
       if (typeof at === 'number') ach[id] = at
     }
   }
+  const achievementClaims = Array.isArray(o.achievementClaims)
+    ? o.achievementClaims.filter((claim): claim is AchievementClaimOutbox => (
+      !!claim && typeof claim === 'object'
+      && typeof (claim as AchievementClaimOutbox).claimOperationId === 'string'
+      && typeof (claim as AchievementClaimOutbox).rewardFingerprint === 'string'
+      && typeof (claim as AchievementClaimOutbox).achievementId === 'string'
+      && ((claim as AchievementClaimOutbox).status === 'pending' || (claim as AchievementClaimOutbox).status === 'settled')
+      && !!(claim as AchievementClaimOutbox).reward
+    ))
+    : []
   return {
     schemaVersion: typeof o.schemaVersion === 'number' ? o.schemaVersion : base.schemaVersion,
     registered: nums(o.registered),
     seen: nums(o.seen),
     stats,
     achievements: ach,
+    achievementClaims,
   }
 }
 
@@ -129,10 +150,25 @@ function existingSettlementMarkers(): unknown[] | undefined {
   }
 }
 
-function encodeMeta(meta: MetaState, markers: unknown[] | undefined): string {
+function existingAchievementClaims(): unknown[] | undefined {
+  if (!hasLS()) return undefined
+  try {
+    const raw = localStorage.getItem(META_KEY)
+    if (!raw) return undefined
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const claims = (parsed as Record<string, unknown>).achievementClaims
+    return Array.isArray(claims) ? claims : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function encodeMeta(meta: MetaState, markers: unknown[] | undefined, claims: unknown[] | undefined): string {
   return JSON.stringify({
     ...meta,
     ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
+    ...(claims ? { achievementClaims: claims } : {}),
   })
 }
 
@@ -173,7 +209,7 @@ export function loadMetaStrict(): MetaState {
 export function saveMetaState(meta: MetaState): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers()))
+    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers(), meta.achievementClaims ?? existingAchievementClaims()))
   } catch {
     /* 配額/隱私模式：忽略 */
   }
@@ -183,7 +219,7 @@ export function saveMetaState(meta: MetaState): void {
 export function saveMetaStateStrict(meta: MetaState): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers()))
+    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers(), meta.achievementClaims ?? existingAchievementClaims()))
   } catch (cause) {
     throw new Error(`保存圖鑑與成就失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
@@ -193,7 +229,7 @@ export function saveMetaStateStrict(meta: MetaState): void {
 export function saveMetaStateWithSettlementMarkersStrict(meta: MetaState, markers: unknown[]): void {
   if (!hasLS()) return
   try {
-    localStorage.setItem(META_KEY, encodeMeta(meta, markers))
+    localStorage.setItem(META_KEY, encodeMeta(meta, markers, meta.achievementClaims ?? existingAchievementClaims()))
   } catch (cause) {
     throw new Error(`保存 Meta 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }

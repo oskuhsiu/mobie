@@ -299,7 +299,9 @@ warnings.
 `mobie.run.v1` (canonical Tower run metadata) · `mobie.incubator.v1` (canonical incubator eggs/progress) ·
 `mobie.tower.settlement.v1` (Tower child mirror) · `mobie.incubator.settlement.v1`
 (incubator child mirror) · `mobie.incubator.capture.v1` (duplicate-egg child marker) · `mobie.result.settlement.v1`
-(Result orchestration journal) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
+(Result orchestration journal) · `mobie.achievement.claim.meta.v1`, `mobie.achievement.claim.incubator.v1`,
+and `mobie.achievement.claim.sp.v1` (best-effort claim receipt mirrors; canonical claim outboxes live in
+the Meta, incubator, and SP envelopes) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
 `mobie.settings.v1` (read-only migration/rollback source) ·
@@ -359,6 +361,16 @@ best-floor, and Ascension data from the settled child receipts; Continue is enab
 Tower outcome, floor, and Ascension match the current run. Running, missing, stale, malformed, and timeout
 states keep a recoverable status and safe Region Hub exit, while `TOWER_CONTINUE` creates the next floor
 from the existing XState run context without granting a second reward.
+
+M24 Ticket 40 adds `game/achievementClaim.ts` for durable achievement claims. `AchievementClaimCoordinator`
+writes a namespaced `achievement-claim:v1:<id>` outbox and exact reward payload into the Meta envelope before
+calling either `AchievementEggDestination` or `AchievementSpDestination`. Each reward boundary writes its
+own `achievementClaims` marker beside the canonical egg/SP value and exposes `applyOnce`/`hasApplied`.
+Only after the child reports success does the coordinator finalize `meta.achievements[id]` and the Meta receipt;
+a failed finalize therefore retries the receipt without sending another egg or SP. A changed reward fingerprint
+for an existing operation is a recoverable collision. Bootstrap and the Achievements modal reconcile pending
+outboxes after reload, while egg creation remains restricted to the `achievement` source (Tower never produces
+eggs).
 
 Ticket 33 adds `ResultSettlementProjectionController` and the
 `store/resultSettlementProjection.ts` adapter. The adapter assembles the

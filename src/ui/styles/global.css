@@ -1430,6 +1430,7 @@ body {
   border-radius: 14px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke);
 }
 .ach-row--done { border-color: rgba(255,210,63,0.5); background: rgba(255,210,63,0.06); }
+.ach-row--pending { border-color: rgba(122,224,255,0.55); background: rgba(122,224,255,0.06); }
 .ach-row__icon, .egg-row__icon { font-size: 26px; }
 .ach-row__body, .egg-row__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ach-row__top, .egg-row__top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -1443,6 +1444,8 @@ body {
 .ach-row__claim { white-space: nowrap; }
 .ach-row__claimed { color: var(--good); font-weight: 800; font-size: 13px; white-space: nowrap; }
 .ach-row__lock { color: var(--text-dim); font-size: 13px; white-space: nowrap; }
+.ach-row__error { color: #ffadad; font-size: 12px; line-height: 1.35; }
+.achievements-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid rgba(255,107,107,0.55); border-radius: 12px; color: #ffadad; font-size: 13px; }
 .egg-row--ready { border-color: var(--good); box-shadow: 0 0 12px rgba(74,222,128,0.25); }
 
 .hatch-reveal {

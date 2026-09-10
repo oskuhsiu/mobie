@@ -1,18 +1,31 @@
 // M10 — 成就（Achievements）。設計真相：plan/10 §3.3。
 //
 // 成就判定純由 meta（registered/stats）派生（computeAchievements）；領取狀態存 meta.achievements。
-// 發獎走明確 action `claimAchievementReward(id)` → 產 egg（incubator 入口；plan/10 §3.3）——
+// 發獎走明確 claim action → 產 egg（incubator 入口；plan/10 §3.3）——
 // **不在圖鑑讀取時自動寫入**，副作用可測、可防重領。本檔只定義「成就 + 進度 + 獎勵描述」純資料/純函數；
-// 實際把 egg 寫入 incubator 由 metaStore.claimAchievement 接 incubatorStore 完成。
+// durable outbox 與 reward boundary 由 game/achievementClaim.ts 負責。
 
 import type { MetaState } from '@/game/meta'
 
 /** 成就獎勵：一顆蛋（incubator 來源 'achievement'）。speciesPool＝可孵出的物種池。 */
-export interface AchievementReward {
+export interface AchievementEggReward {
   kind: 'egg'
   label: string
   speciesPool: number[]
 }
+
+/**
+ * 帳號級 SP 獎勵保留給未來的成就定義。Ticket 40 的 claim boundary 同時
+ * 支援 SP 與 egg，讓每個 reward destination 都能各自 applyOnce；目前內建
+ * 成就仍全部使用 egg。
+ */
+export interface AchievementSpReward {
+  kind: 'sp'
+  label: string
+  amount: number
+}
+
+export type AchievementReward = AchievementEggReward | AchievementSpReward
 
 export interface AchievementDef {
   id: string
@@ -49,23 +62,36 @@ export interface AchievementView {
   target: number
   unlocked: boolean
   claimed: boolean
+  /** durable claim outbox is pending; the reward is not sent again on retry. */
+  claimPending: boolean
+  status: 'locked' | 'ready' | 'pending' | 'claimed'
 }
 
 /** 純函數：產每個成就的進度展示（unlocked＝progress≥target；claimed＝meta 有 claimedAt）。 */
 export function computeAchievements(meta: MetaState): AchievementView[] {
   return ACHIEVEMENTS.map((def) => {
     const progress = Math.min(def.progress(meta), def.target)
+    const claimed = meta.achievements[def.id] !== undefined
+    const claimPending = (meta.achievementClaims ?? []).some((claim) => (
+      claim.achievementId === def.id && claim.status === 'pending'
+    ))
     return {
       def,
       progress,
       target: def.target,
       unlocked: progress >= def.target,
-      claimed: meta.achievements[def.id] !== undefined,
+      claimed,
+      claimPending,
+      status: claimed
+        ? 'claimed'
+        : claimPending
+          ? 'pending'
+          : progress >= def.target ? 'ready' : 'locked',
     }
   })
 }
 
 /** 可領取數（已解鎖但未領取），給入口紅點。 */
 export function claimableCount(meta: MetaState): number {
-  return computeAchievements(meta).filter((a) => a.unlocked && !a.claimed).length
+  return computeAchievements(meta).filter((a) => a.status === 'ready').length
 }

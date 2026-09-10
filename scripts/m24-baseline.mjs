@@ -175,6 +175,10 @@ const CHECKPOINT_CATALOG = {
     route: 'title/modal:achievements/claimed', event: 'Meta.claimAchievement', next: ['開啟孵化所', '關閉'],
     storage: ['mobie.meta.v1', 'mobie.incubator.v1'], lazy: ['AchievementsModal'], capability: 'exactly-once reward',
   },
+  'achievements-reloaded': {
+    route: 'title/modal:achievements/reloaded', event: 'Page.reload→AchievementClaim.reconcile', next: ['開啟孵化所', '關閉'],
+    storage: ['mobie.meta.v1', 'mobie.incubator.v1', 'mobie.achievement.claim.meta.v1', 'mobie.achievement.claim.incubator.v1'], lazy: ['AchievementsModal'], capability: 'settled claim and reward receipt survive reload without duplicate egg',
+  },
   'incubator-ready': {
     route: 'title/modal:incubator/ready', event: 'Incubator.advance', next: ['孵化', '關閉'],
     storage: ['mobie.incubator.v1'], lazy: ['IncubatorModal'], capability: 'ready egg state',
@@ -314,7 +318,7 @@ const JOURNEY = [
   'my-mobies', 'my-mobies-detail', 'move-trainer-detail', 'move-trainer-actions', 'card-library', 'card-library-add',
   'card-library-import-error', 'card-library-qr', 'move-trainer', 'move-trainer-open', 'move-trainer-reloaded', 'move-trainer-insufficient-sp', 'move-trainer-storage-error',
   'partner-skills', 'partner-skills-stale-account', 'partner-skills-insufficient-sp', 'partner-skills-storage-error', 'partner-skills-unlock', 'partner-skills-reloaded',
-  'dex', 'dex-registered', 'dex-page-last', 'dex-detail', 'dex-detail-restore', 'dex-search', 'dex-grade', 'dex-empty', 'dex-artwork-fallback', 'achievements', 'achievements-claimed',
+  'dex', 'dex-registered', 'dex-page-last', 'dex-detail', 'dex-detail-restore', 'dex-search', 'dex-grade', 'dex-empty', 'dex-artwork-fallback', 'achievements', 'achievements-claimed', 'achievements-reloaded',
   'incubator-ready', 'incubator-hatch-reveal', 'save', 'save-busy',
   'save-result', 'save-import-error', 'save-compare-older', 'save-backup-ready',
   'save-restore-result', 'settings-malformed-recovery', 'settings', 'settings-reloaded', 'scanner-on-fallback', 'region-select', 'encounter', 'team-select',
@@ -1423,12 +1427,42 @@ async function runViewport(cdp, config, viewport, browserInfo) {
 
     await openTool('成就', '成就')
     await waitFor('Boolean(document.querySelector(".ach-row"))', 8_000, 'achievement content')
-    checkpoints.push(await capture('achievements', 'real derived achievement progress'))
-    if (await exists('.ach-row__claim')) {
-      await clickSelector('.ach-row__claim')
-      await sleep(300)
-      checkpoints.push(await capture('achievements-claimed', 'real exactly-once achievement claim'))
-    }
+    const achievementBefore = await evaluate(`(() => ({
+      rows: [...document.querySelectorAll('.ach-row')].map((row) => ({ id: row.dataset.achievementId, status: row.dataset.achievementStatus, progress: row.querySelector('.ach-row__count')?.textContent ?? null })),
+      ready: document.querySelectorAll('[data-achievement-status="ready"] .ach-row__claim').length,
+      loading: Boolean(document.querySelector('[data-achievements-state="loading"]')),
+    }))()`)
+    if (achievementBefore.ready < 1 || achievementBefore.loading) throw new Error(`Achievement progress is not claim-ready: ${JSON.stringify(achievementBefore)}`)
+    checkpoints.push(await capture('achievements', 'real derived achievement progress', { observation: achievementBefore }))
+    await clickSelector('[data-achievement-status="ready"] .ach-row__claim')
+    await waitFor('Boolean(document.querySelector("[data-achievement-status=\\"claimed\\"]"))', 8_000, 'achievement claim completion')
+    const achievementClaimed = await evaluate(`(() => {
+      const parse = (key) => { try { return JSON.parse(localStorage.getItem(key) ?? 'null') } catch { return null } }
+      const meta = parse('mobie.meta.v1')
+      const incubator = parse('mobie.incubator.v1')
+      const id = document.querySelector('[data-achievement-status="claimed"]')?.dataset.achievementId ?? null
+      const claim = meta?.achievementClaims?.find((entry) => entry.achievementId === id) ?? null
+      const eggClaim = incubator?.achievementClaims?.find((entry) => entry.achievementId === id) ?? null
+      return { id, claimStatus: claim?.status ?? null, claimOperationId: claim?.claimOperationId ?? null, rewardFingerprint: claim?.rewardFingerprint ?? null, eggStatus: eggClaim?.status ?? null, achievementEggs: (incubator?.eggs ?? []).filter((egg) => egg.source === 'achievement').length, claimButtons: document.querySelectorAll('[data-achievement-status="claimed"] .ach-row__claim').length }
+    })()`)
+    if (!achievementClaimed.id || achievementClaimed.claimStatus !== 'settled' || achievementClaimed.eggStatus !== 'settled' || !achievementClaimed.claimOperationId?.startsWith('achievement-claim:') || !achievementClaimed.rewardFingerprint?.startsWith('achievement-reward:') || achievementClaimed.achievementEggs < 1 || achievementClaimed.claimButtons !== 0) throw new Error(`Achievement exactly-once claim failed: ${JSON.stringify(achievementClaimed)}`)
+    checkpoints.push(await capture('achievements-claimed', 'real exactly-once achievement claim', { observation: achievementClaimed }))
+    await closeTopModal()
+
+    await call('Page.reload', { ignoreCache: true })
+    await waitFor('document.readyState === "complete"', 20_000, 'achievement claim reload')
+    await waitFor('Boolean(document.querySelector(".title-screen__adventure"))', 15_000, 'Title after achievement claim reload')
+    await openTool('成就', '成就')
+    await waitFor('Boolean(document.querySelector(".ach-row"))', 8_000, 'achievement reload content')
+    const achievementReloaded = await evaluate(`(() => {
+      const parse = (key) => { try { return JSON.parse(localStorage.getItem(key) ?? 'null') } catch { return null } }
+      const meta = parse('mobie.meta.v1')
+      const incubator = parse('mobie.incubator.v1')
+      const id = ${JSON.stringify(achievementClaimed.id)}
+      return { status: document.querySelector('[data-achievement-id="' + id + '"]')?.dataset.achievementStatus ?? null, claimButtons: document.querySelectorAll('[data-achievement-id="' + id + '"] .ach-row__claim').length, achievementEggs: (incubator?.eggs ?? []).filter((egg) => egg.source === 'achievement').length, claimStatus: meta?.achievementClaims?.find((entry) => entry.achievementId === id)?.status ?? null, mirror: (() => { try { return JSON.parse(localStorage.getItem('mobie.achievement.claim.meta.v1') ?? 'null')?.find((entry) => entry.achievementId === id)?.status ?? null } catch { return null } })() }
+    })()`)
+    if (achievementReloaded.status !== 'claimed' || achievementReloaded.claimButtons !== 0 || achievementReloaded.claimStatus !== 'settled' || achievementReloaded.mirror !== 'settled' || achievementReloaded.achievementEggs !== achievementClaimed.achievementEggs) throw new Error(`Achievement reload/reconcile duplicated or lost reward: ${JSON.stringify({ achievementClaimed, achievementReloaded })}`)
+    checkpoints.push(await capture('achievements-reloaded', 'real claim receipt after page reload', { observation: achievementReloaded }))
     await closeTopModal()
 
     await openTool('孵化所', '孵化所')
