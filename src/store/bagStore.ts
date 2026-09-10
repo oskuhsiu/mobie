@@ -5,10 +5,11 @@
 // 裝備對帳走 exactly-once：卸下舊道具→歸還 +1、裝上新道具→扣庫存 -1，由 equip 一次算清。
 
 import { create } from 'zustand'
-import { ITEMS } from '@/game/ext/items'
+import { ITEMS, getItem } from '@/game/ext/items'
 import { useRoster } from '@/store/rosterStore'
 
-const KEY = 'mobie.itembag.v1'
+export const ITEM_BAG_STORAGE_KEY = 'mobie.itembag.v1'
+const KEY = ITEM_BAG_STORAGE_KEY
 
 type Bag = Record<string, number>
 
@@ -42,12 +43,13 @@ function loadBag(): Bag {
   }
 }
 
-function saveBag(bag: Bag): void {
+/** Canonical equipment writes must report a failure to the UI transaction. */
+function saveBagStrict(bag: Bag): void {
   if (typeof localStorage === 'undefined') return
   try {
     localStorage.setItem(KEY, JSON.stringify(bag))
-  } catch {
-    /* 配額/隱私模式：忽略 */
+  } catch (cause) {
+    throw new Error(`保存道具庫存失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }
 
@@ -73,15 +75,27 @@ export const useBag = create<BagStore>((set, get) => ({
       const currentUnit = useRoster.getState().roster.find((u) => u.id === unitId)
       if (!currentUnit) return false
       const prev = currentUnit.heldItemId
+      if (itemId && !getItem(itemId)) return false
       if (itemId && itemId === prev) return true // 已裝同一個＝no-op
+      if (!itemId && prev === undefined) return true // already unequipped
       const bag = { ...get().bag }
       if (itemId && (bag[itemId] ?? 0) <= 0) return false // 庫存不足
 
+      const nextBag = { ...bag }
+      if (prev) nextBag[prev] = (nextBag[prev] ?? 0) + 1 // 歸還卸下的舊道具
+      if (itemId) nextBag[itemId] = Math.max(0, (nextBag[itemId] ?? 0) - 1) // 扣裝上的新道具
+
+      // The roster boundary writes first, then the bag boundary. If the second
+      // write fails, restore the previous held item before surfacing one
+      // retryable error; neither in-memory projection is published halfway.
       const real = await useRoster.getState().setHeldItem(unitId, itemId ?? undefined)
-      if (real) bag[real] = (bag[real] ?? 0) + 1 // 歸還卸下的舊道具
-      if (itemId) bag[itemId] = Math.max(0, (bag[itemId] ?? 0) - 1) // 扣裝上的新道具
-      set({ bag })
-      saveBag(bag)
+      try {
+        saveBagStrict(nextBag)
+      } catch (cause) {
+        try { await useRoster.getState().setHeldItem(unitId, real) } catch { /* best effort */ }
+        throw cause
+      }
+      set({ bag: nextBag })
       return true
     })
     equipQueue = operation.then(() => undefined, () => undefined)

@@ -72,11 +72,22 @@ function readDexCatalog(fixture: DexFixture): DexCatalogState {
 }
 
 function scheduleFrame(callback: () => void): void {
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(callback)
-  } else {
+  if (typeof window === 'undefined') {
+    callback()
+    return
+  }
+  // Hidden/headless Chrome may pause rAF. Keep one bounded timer fallback so
+  // detail/page focus still lands on the logical target in that environment.
+  let finished = false
+  const run = () => {
+    if (finished) return
+    finished = true
     callback()
   }
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(run))
+  }
+  window.setTimeout(run, 50)
 }
 
 function stateCopy(state: DexState): string {
@@ -284,7 +295,7 @@ export function DexModal({ onClose }: { onClose: () => void }) {
         if (owner) owner.scrollTop = top
         const cell = speciesId === null ? null : cellRefs.current.get(speciesId)
         if (cell?.isConnected && !cell.disabled) {
-          cell.focus()
+          cell.focus({ preventScroll: true })
           return
         }
         if (remaining > 0 && typeof window !== 'undefined') {

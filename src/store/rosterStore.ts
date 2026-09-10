@@ -387,16 +387,22 @@ export const useRoster = create<RosterState>((set, get) => {
   },
 
   setHeldItem: async (unitId, itemId) => {
-    let prev: string | undefined
-    const roster = get().roster.map((u) => {
+    const currentRoster = get().roster
+    const current = currentRoster.find((u) => u.id === unitId)
+    if (!current) return undefined
+    const prev = current.heldItemId
+    if (prev === itemId) return prev
+    const roster = currentRoster.map((u) => {
       if (u.id !== unitId) return u
-      prev = u.heldItemId
       if (itemId) return { ...u, heldItemId: itemId }
       const { heldItemId: _drop, ...rest } = u // 卸下：移除欄位（保持 canonical 乾淨）
       return rest
     })
+    // Equipment is a user-visible resource transaction. Persist the canonical
+    // roster before publishing the projection so a quota/private-mode error
+    // cannot leave a held item visible only in memory.
+    await strictSaveRoster(roster)
     set({ roster })
-    await adapter.saveRoster(roster)
     bumpSaveMeta(Date.now())
     return prev
   },

@@ -19,6 +19,10 @@ const MoveTrainerModal = lazy(() => import('@/ui/components/MoveTrainerModal').t
 const COLLECTION_BREAKPOINT = 760
 const PAGE_SIZE = 24
 
+// A compact key lets the pushed detail sheet restore the parent body's scroll
+// position after the CollectionShell remounts on narrow viewports.
+const compactCollectionScroll = new Map<string, number>()
+
 function useCompactCollection(): boolean {
   const [compact, setCompact] = useState(() => typeof window !== 'undefined' && window.innerWidth <= COLLECTION_BREAKPOINT)
 
@@ -63,13 +67,14 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [page, setPage] = useState(1)
   const [pendingEquip, setPendingEquip] = useState<string | null>(null)
   const [equipNotice, setEquipNotice] = useState<{ unitId: string; tone: 'error' | 'status'; text: string } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const invokerRefs = useRef(new Map<string, HTMLButtonElement>())
   const detailCloseRef = useRef<HTMLButtonElement>(null)
   const lastSelectedId = useRef<string | null>(null)
+  const listScrollTopRef = useRef(0)
 
   const filteredRoster = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
@@ -79,10 +84,15 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
       return `${species.nameZh} ${species.name} ${species.id} ${unit.id}`.toLocaleLowerCase().includes(needle)
     })
   }, [query, roster])
-  const visibleRoster = filteredRoster.slice(0, visibleCount)
+  const pageCount = Math.max(1, Math.ceil(filteredRoster.length / PAGE_SIZE))
+  const visibleRoster = filteredRoster.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const selectedUnit = selectedId ? roster.find((unit) => unit.id === selectedId) ?? null : null
 
-  useEffect(() => { setVisibleCount(PAGE_SIZE) }, [query])
+  useEffect(() => { setPage(1) }, [query])
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
 
   useEffect(() => {
     if (selectedId && !roster.some((unit) => unit.id === selectedId)) setSelectedId(null)
@@ -90,7 +100,13 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
 
   const restoreListFocus = useCallback((unitId: string | null) => {
     if (!unitId) return
-    requestAnimationFrame(() => invokerRefs.current.get(unitId)?.focus())
+    requestAnimationFrame(() => {
+      const list = document.querySelector<HTMLElement>('[data-collection-scroll-owner="list"]')
+      const top = listScrollTopRef.current
+      if (list) list.scrollTop = top
+      invokerRefs.current.get(unitId)?.focus({ preventScroll: true })
+      if (list) list.scrollTop = top
+    })
   }, [])
 
   const closeDetail = useCallback(() => {
@@ -100,13 +116,17 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   }, [restoreListFocus])
 
   const closeCompactDetail = useCallback((unitId: string) => {
+    const top = compactCollectionScroll.get(unitId) ?? 0
     controller.pop()
     const focusInvoker = () => {
+      const body = document.querySelector<HTMLElement>('[data-modal-body]')
+      if (body) body.scrollTop = top
       const element = [...document.querySelectorAll<HTMLElement>('[data-mobie-invoker]')]
         .find((candidate) => candidate.dataset.mobieInvoker === unitId)
         ?? document.querySelector<HTMLElement>('[data-mobie-invoker]')
       if (element?.isConnected && !element.hasAttribute('disabled')) {
-        element.focus()
+        element.focus({ preventScroll: true })
+        if (body) body.scrollTop = top
       }
     }
     // The root surface creates its portal in a layout effect after pop. Retry
@@ -134,6 +154,9 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   const openDetail = useCallback((unit: OwnedUnit) => {
     const mon = buildOwnedMobieForDisplay(unit)
     lastSelectedId.current = unit.id
+    const list = document.querySelector<HTMLElement>('[data-collection-scroll-owner="list"]')
+    listScrollTopRef.current = list?.scrollTop ?? 0
+    if (compact) compactCollectionScroll.set(unit.id, document.querySelector<HTMLElement>('[data-modal-body]')?.scrollTop ?? 0)
     setOpenId(null)
     setEquipNotice(null)
     audio.play('select')
@@ -186,7 +209,6 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
   // Tests and a just-hydrated bootstrap may already expose canonical units
   // before the loaded flag publishes; a non-empty roster is safe to render.
   const collectionState = loadError ? 'error' : !loaded && roster.length === 0 ? 'loading' : roster.length === 0 ? 'empty' : 'ready'
-  const hasMore = visibleRoster.length < filteredRoster.length
   const detailOpen = Boolean(selectedUnit)
 
   return (
@@ -203,6 +225,11 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
         data-collection-state={collectionState}
         data-layout={compact ? 'compact' : 'wide'}
         data-detail-open={detailOpen ? 'true' : 'false'}
+        data-collection-roster-total={roster.length}
+        data-collection-total={filteredRoster.length}
+        data-collection-dom-cap={visibleRoster.length}
+        data-collection-page={page}
+        data-collection-page-count={pageCount}
       >
         <ResourceSummary roster={roster} bag={bag} />
 
@@ -308,6 +335,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                           className="team-row__item-btn"
                           aria-label={`${species.nameZh} 道具裝備`}
                           aria-expanded={open}
+                          data-item-picker-toggle={unit.id}
                           onClick={() => { audio.play('select'); setEquipNotice(null); setOpenId(open ? null : unit.id) }}
                         >
                           {held ? '更換' : '裝備'} ▾
@@ -333,7 +361,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                             {busy && <div className="item-picker__status" role="status">正在更新裝備…</div>}
                             {notice && <div className="item-picker__status item-picker__status--error" role={notice.tone === 'error' ? 'alert' : 'status'}>{notice.text}</div>}
                             {held && (
-                              <button className="item-chip" disabled={busy} onClick={() => void choose(unit.id, null)} aria-label={`${species.nameZh} 卸下 ${held.name}`}>
+                              <button className="item-chip" data-item-unequip={unit.id} disabled={busy} onClick={() => void choose(unit.id, null)} aria-label={`${species.nameZh} 卸下 ${held.name}`}>
                                 ✕ 卸下<span className="item-chip__count">歸還 1 件</span>
                               </button>
                             )}
@@ -346,6 +374,7 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
                                 <button
                                   key={item.id}
                                   className={`item-chip ${equipped ? 'item-chip--on' : ''}`}
+                                  data-item-equip={item.id}
                                   disabled={disabled}
                                   title={`${item.desc}（${status}）`}
                                   aria-label={`${item.name}，${status}`}
@@ -368,10 +397,28 @@ export function TeamModal({ onClose }: { onClose: () => void }) {
               </div>
 
               {visibleRoster.length === 0 && <div className="collection-no-results" role="status">找不到符合的 Mobie。清除搜尋後再試一次。</div>}
-              {hasMore && (
-                <button className="btn btn--ghost btn--sm collection-load-more" data-collection-load-more onClick={() => setVisibleCount((count) => Math.min(filteredRoster.length, count + PAGE_SIZE))}>
-                  顯示更多（還有 {filteredRoster.length - visibleRoster.length} 隻）
-                </button>
+              {(page > 1 || page < pageCount) && (
+                <div className="collection-pagination" data-collection-pagination>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    data-collection-page-prev
+                    disabled={page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    ← 上一頁
+                  </button>
+                  <span>第 {page} / {pageCount} 頁</span>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm collection-load-more"
+                    data-collection-load-more
+                    disabled={page >= pageCount}
+                    onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                  >
+                    下一頁 →
+                  </button>
+                </div>
               )}
             </section>
 

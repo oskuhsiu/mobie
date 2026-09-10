@@ -3,14 +3,17 @@ import { putCards, listCards } from '@/game/cardLibrary'
 import { loadMeta } from '@/game/save/saveMeta'
 import { crc32Bytes } from '@/game/crc32'
 import { useIncubator } from '@/store/incubatorStore'
+import { ITEM_BAG_STORAGE_KEY, useBag } from '@/store/bagStore'
 import { useMeta } from '@/store/metaStore'
 import { usePlayerSkills } from '@/store/playerSkillsStore'
 import { useRoster } from '@/store/rosterStore'
 import { useRun } from '@/store/runStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
+import { saveSkillPointsStrict } from '@/store/skillPointsStore'
 import { useBattleStore } from '@/store/battleStore'
 import type { GameEvent, Outcome } from '@/game/machine/gameMachine'
 import type { OwnedUnit } from '@/game/types'
+import { createOwnedUnit } from '@/game/growth'
 import type { BattleRuntimeError } from '@/store/battleStore'
 import {
   M24_BASELINE_SCENARIO_ID,
@@ -56,11 +59,21 @@ export interface M24BaselineDriver {
   /** DEV-only presentation fixtures; canonical roster/storage are restored afterwards. */
   prepareRosterFixture: (kind: 'empty' | 'evolution') => void
   restoreRosterFixture: () => void
+  prepareCollectionLoading: () => void
+  prepareCollectionError: () => void
+  prepareIncubatorLoading: () => void
+  prepareIncubatorError: () => void
+  prepareIncubatorEmpty: () => void
+  restoreIncubatorFixture: () => void
   rosterPreview: () => Array<{ id: string; speciesId: number; level: number; exp: number }>
+  /** DEV-only bounded-list fixture for the Collection/Growth closure matrix. */
+  prepareCollectionFixture: (count?: number) => Promise<void>
   sendGameEvent: (event: GameEvent) => void
   snapshot: () => M24SeedSnapshot & { battle: boolean }
   dispose: () => void
 }
+
+type RosterLoad = ReturnType<typeof useRoster.getState>['load']
 
 declare global {
   interface Window {
@@ -103,7 +116,9 @@ export function installM24BaselineDriver(): M24BaselineDriver {
   let seeded = false
   let resultSerial = 0
   let cardCount = 0
-  let rosterFixtureBackup: { roster: OwnedUnit[]; raw: string | null } | null = null
+  let rosterFixtureBackup: { roster: OwnedUnit[]; raw: string | null; load: RosterLoad } | null = null
+  let collectionFixturePrepared = false
+  let incubatorFixtureBackup: { state: ReturnType<typeof useIncubator.getState>['state']; loaded: boolean; loadError: string | null } | null = null
 
   const storesReady = () => useRoster.getState().loaded && useMeta.getState().loaded && useIncubator.getState().loaded
 
@@ -274,6 +289,7 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     rosterFixtureBackup = {
       roster: structuredClone(current.roster),
       raw: localStorage.getItem('mobie.roster.v2'),
+      load: current.load,
     }
     if (kind === 'empty') {
       useRoster.setState({ roster: [], loaded: true })
@@ -307,6 +323,7 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     useRoster.setState({
       roster: structuredClone(backup.roster),
       loaded: true,
+      load: backup.load,
       lastResults: [],
       lastEvolutions: [],
       lastMoveLearns: [],
@@ -316,12 +333,77 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     else localStorage.setItem('mobie.roster.v2', backup.raw)
   }
 
+  const prepareCollectionLoading = (): void => {
+    if (rosterFixtureBackup) return
+    const current = useRoster.getState()
+    rosterFixtureBackup = { roster: structuredClone(current.roster), raw: localStorage.getItem('mobie.roster.v2'), load: current.load }
+    useRoster.setState({ roster: [], loaded: false })
+  }
+
+  const prepareCollectionError = (): void => {
+    if (rosterFixtureBackup) return
+    const current = useRoster.getState()
+    rosterFixtureBackup = { roster: structuredClone(current.roster), raw: localStorage.getItem('mobie.roster.v2'), load: current.load }
+    useRoster.setState({
+      roster: [],
+      loaded: false,
+      load: async () => { throw new Error('Ticket 49 injected collection load failure') },
+    })
+  }
+
+  const backupIncubatorFixture = (): void => {
+    if (incubatorFixtureBackup) return
+    const current = useIncubator.getState()
+    incubatorFixtureBackup = { state: structuredClone(current.state), loaded: current.loaded, loadError: current.loadError }
+  }
+
+  const prepareIncubatorLoading = (): void => {
+    backupIncubatorFixture()
+    useIncubator.setState({ loaded: false, loadError: null })
+  }
+
+  const prepareIncubatorError = (): void => {
+    backupIncubatorFixture()
+    useIncubator.setState({ loaded: false, loadError: 'Ticket 49 injected incubator load failure' })
+  }
+
+  const prepareIncubatorEmpty = (): void => {
+    backupIncubatorFixture()
+    useIncubator.setState({ state: { ...useIncubator.getState().state, eggs: [] }, loaded: true, loadError: null })
+  }
+
+  const restoreIncubatorFixture = (): void => {
+    if (!incubatorFixtureBackup) return
+    const backup = incubatorFixtureBackup
+    incubatorFixtureBackup = null
+    useIncubator.setState({ state: structuredClone(backup.state), loaded: backup.loaded, loadError: backup.loadError })
+  }
+
   const rosterPreview = () => useRoster.getState().roster.slice(0, 3).map((unit) => ({
     id: unit.id,
     speciesId: unit.speciesId,
     level: unit.level,
     exp: unit.exp,
   }))
+
+  const prepareCollectionFixture = async (count = 48): Promise<void> => {
+    if (collectionFixturePrepared) return
+    collectionFixturePrepared = true
+    const safeCount = Math.max(25, Math.min(96, Math.floor(count)))
+    const speciesIds = [1, 4, 7, 25, 133, 66, 92, 74, 35, 63, 81, 123, 131, 143, 147, 198]
+    const roster = Array.from({ length: safeCount }, (_, index) => createOwnedUnit(
+      `m24-collection-${index + 1}`,
+      speciesIds[index % speciesIds.length],
+      5 + (index % 12),
+      { shiny: index === 0 || index === 25 },
+    ))
+    await useRoster.getState().replaceAll(roster)
+    const bag: Record<string, number> = { headband: 2, glasses: 1, vest: 1, leftovers: 1 }
+    useBag.setState({ bag })
+    localStorage.setItem(ITEM_BAG_STORAGE_KEY, JSON.stringify(bag))
+    saveSkillPointsStrict(18)
+    useSkillPoints.setState({ sp: 18 })
+  }
 
   const driver: M24BaselineDriver = {
     active: true,
@@ -339,7 +421,14 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     endBattleWithIdentity,
     prepareRosterFixture,
     restoreRosterFixture,
+    prepareCollectionLoading,
+    prepareCollectionError,
+    prepareIncubatorLoading,
+    prepareIncubatorError,
+    prepareIncubatorEmpty,
+    restoreIncubatorFixture,
     rosterPreview,
+    prepareCollectionFixture,
     sendGameEvent: dispatchGameEvent,
     snapshot,
     dispose: () => {

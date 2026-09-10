@@ -14,12 +14,17 @@ import {
 import { TYPE_LABEL_ZH, typeColor } from '@/ui/typeMeta'
 import { audio } from '@/audio/audioEngine'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 
 const CATEGORY_LABEL: Record<Move['category'], string> = {
   physical: '物理',
   special: '特殊',
   status: '變化',
 }
+
+// Keep a large canonical roster out of the accessibility tree until the
+// player explicitly asks for the next bounded page.
+const TRAINER_PAGE_SIZE = 24
 
 type Notice = {
   unitId?: string
@@ -121,6 +126,7 @@ export function MoveTrainerModal({ onClose, initialUnitId }: { onClose: () => vo
   const [openId, setOpenId] = useState<string | null>(initialUnitId ?? null)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [page, setPage] = useState(1)
   const actionRefs = useRef(new Map<string, HTMLButtonElement>())
   const focusKey = useRef<string | null>(null)
 
@@ -150,7 +156,21 @@ export function MoveTrainerModal({ onClose, initialUnitId }: { onClose: () => vo
 
   const initialTargetMissing = Boolean(initialUnitId && !roster.some((unit) => unit.id === initialUnitId))
   const rosterById = useMemo(() => new Map(roster.map((unit) => [unit.id, unit])), [roster])
+  const pageCount = Math.max(1, Math.ceil(roster.length / TRAINER_PAGE_SIZE))
+  const initialTargetIndex = initialUnitId ? roster.findIndex((unit) => unit.id === initialUnitId) : -1
+  const initialTargetPage = initialTargetIndex < 0 ? 1 : Math.floor(initialTargetIndex / TRAINER_PAGE_SIZE) + 1
+  const visibleRoster = roster.slice((page - 1) * TRAINER_PAGE_SIZE, page * TRAINER_PAGE_SIZE)
+  const hasMoreRoster = page < pageCount
   const busy = pendingKey !== null
+
+  useEffect(() => {
+    if (initialTargetIndex < 0 || page >= initialTargetPage) return
+    setPage(initialTargetPage)
+  }, [initialTargetIndex, initialTargetPage, page])
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
 
   const runMutation = useCallback(async (
     key: string,
@@ -263,7 +283,7 @@ export function MoveTrainerModal({ onClose, initialUnitId }: { onClose: () => vo
             aria-label={`${species.nameZh} Lv.${unit.level}，${open ? '收合' : '開啟'}招式管理`}
             onClick={() => { audio.play('select'); setOpenId(open ? null : unit.id); setNotice(null) }}
           >
-            <div className="team-row__art"><img src={species.artworkUrl} alt={species.nameZh} /></div>
+            <div className="team-row__art"><MobieSprite src={species.artworkUrl} alt={species.nameZh} shiny={unit.shiny} /></div>
             <div className="team-row__info">
               <div className="team-row__name">{species.nameZh} <span className="hpbar__lv">Lv.{unit.level}</span></div>
               <div className="team-row__sub">已學 {learned.length} 招・出戰 {equipped.length}/{MOVE_SLOT_CAP} 槽</div>
@@ -446,7 +466,16 @@ export function MoveTrainerModal({ onClose, initialUnitId }: { onClose: () => vo
       headerAside={<span className="sp-badge" data-sp-ledger data-sp-current={sp}>✦ SP 餘額 {sp}</span>}
       footer={<div className="utility-foot">SP 與夥伴技能共用同一錢包；招式學習是一次性扣款。loadout 只在非戰鬥流程變更，下一場 battle 讀取已保存順序。</div>}
     >
-      <div className="move-trainer" data-move-trainer data-move-trainer-initial={initialUnitId ?? ''} data-move-trainer-busy={busy ? 'true' : 'false'}>
+        <div
+          className="move-trainer"
+          data-move-trainer
+          data-move-trainer-initial={initialUnitId ?? ''}
+          data-move-trainer-busy={busy ? 'true' : 'false'}
+          data-trainer-total={roster.length}
+          data-trainer-dom-cap={visibleRoster.length}
+          data-trainer-page={page}
+          data-trainer-page-count={pageCount}
+        >
         <div className="trainer-ledger" data-sp-ledger-summary>
           <span>可用 SP</span>
           <strong>{sp}</strong>
@@ -459,7 +488,14 @@ export function MoveTrainerModal({ onClose, initialUnitId }: { onClose: () => vo
           <EmptyTrainerState onClose={onClose} message="目前沒有可訓練的 Mobie" />
         ) : (
           <div className="trainer-units" role="list" aria-label="可訓練 Mobie">
-            {roster.map((unit) => <div key={unit.id} role="listitem">{renderUnit(unit)}</div>)}
+            {visibleRoster.map((unit) => <div key={unit.id} role="listitem">{renderUnit(unit)}</div>)}
+            {(page > 1 || hasMoreRoster) && (
+              <div className="trainer-pagination" data-trainer-pagination>
+                <button type="button" className="btn btn--ghost btn--sm" data-trainer-page-prev disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>← 上一頁</button>
+                <span>第 {page} / {pageCount} 頁</span>
+                <button type="button" className="btn btn--ghost btn--sm trainer-load-more" data-trainer-load-more disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>下一頁 →</button>
+              </div>
+            )}
           </div>
         )}
         {openId && rosterById.has(openId) && <span className="sr-only" data-move-trainer-open-id>{openId}</span>}

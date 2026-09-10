@@ -1,5 +1,5 @@
 // M24 Ticket 41 — canonical Incubator projection and durable hatch reveal.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useIncubator } from '@/store/incubatorStore'
 import { isHatchable, isSupportedEggSource } from '@/game/incubator'
@@ -22,6 +22,8 @@ const SOURCE_LABEL: Record<string, string> = {
   duplicate: '重複捕獲轉化',
   tower: '舊資料（不可孵化）',
 }
+
+const INCUBATOR_PAGE_SIZE = 24
 
 function sourceLabel(source: string): string {
   return SOURCE_LABEL[source] ?? '未知來源（不可孵化）'
@@ -47,6 +49,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
   // durable coordinator 決定。off＝直接孵化，timeout／skip 也只跳過演出。
   const rubOn = useSettings((state) => interactModeOf(state.settings, 'hatch') !== 'off')
   const controller = useOverlayController()
+  const [page, setPage] = useState(1)
   const globalError = hatchErrors['*']
   const rootState = loadError
     ? 'error'
@@ -57,6 +60,14 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
         : eggs.every((egg) => !isSupportedEggSource(egg.source))
           ? 'invalid-source'
           : 'ready'
+
+  const pageCount = Math.max(1, Math.ceil(eggs.length / INCUBATOR_PAGE_SIZE))
+  const visibleEggs = eggs.slice((page - 1) * INCUBATOR_PAGE_SIZE, page * INCUBATOR_PAGE_SIZE)
+  const hasMoreEggs = page < pageCount
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
 
   const doHatch = async (id: string) => {
     try {
@@ -107,6 +118,10 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
         className="modal-surface__stack"
         data-incubator-root
         data-incubator-state={rootState}
+        data-incubator-total={eggs.length}
+        data-incubator-dom-cap={visibleEggs.length}
+        data-incubator-page={page}
+        data-incubator-page-count={pageCount}
         aria-live="polite"
       >
         {rootState === 'loading' && (
@@ -114,6 +129,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
             <span className="incubator-state__icon" aria-hidden="true">⏳</span>
             <b>孵化所資料載入中…</b>
             <span>正在讀取本機的 canonical 蛋資料。</span>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => { try { load() } catch { /* keep the visible loading state */ } }}>重新載入</button>
           </div>
         )}
         {rootState === 'error' && (
@@ -138,7 +154,7 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
             <span>還沒有蛋。領取成就獎勵，或在野外重複捕獲已擁有的 Mobie，就會取得合法的蛋。</span>
           </div>
         )}
-        {(rootState === 'ready' || rootState === 'invalid-source') && eggs.map((egg) => {
+        {(rootState === 'ready' || rootState === 'invalid-source') && visibleEggs.map((egg) => {
           const validSource = isSupportedEggSource(egg.source)
           const ready = validSource && isHatchable(egg)
           const error = hatchErrors[egg.id]
@@ -198,6 +214,13 @@ export function IncubatorModal({ onClose }: { onClose: () => void }) {
             </article>
           )
         })}
+        {(rootState === 'ready' || rootState === 'invalid-source') && (page > 1 || hasMoreEggs) && (
+          <div className="incubator-pagination" data-incubator-pagination>
+            <button type="button" className="btn btn--ghost btn--sm" data-incubator-page-prev disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>← 上一頁</button>
+            <span>第 {page} / {pageCount} 頁</span>
+            {hasMoreEggs && <button type="button" className="btn btn--ghost btn--sm incubator-load-more" data-incubator-load-more onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>下一頁 →</button>}
+          </div>
+        )}
       </div>
     </ModalSurface>
   )
@@ -262,7 +285,7 @@ export function HatchReveal({ receipt, onClose }: { receipt: HatchReceipt; onClo
           <span>✓ 已登錄 Dex #{String(species.id).padStart(3, '0')}</span>
           {receipt.unit.learnedMoveIds?.length ? <span>🧬 已保留 {receipt.unit.learnedMoveIds.length} 個可用招式</span> : null}
         </div>
-        <button type="button" className="btn hatch-reveal__dismiss" data-hatch-dismiss onClick={onClose}>完成</button>
+        <button type="button" className="btn hatch-reveal__dismiss" data-hatch-dismiss onClick={(event) => { event.stopPropagation(); onClose() }}>完成</button>
         <div className="h-sub">點擊背景、按 Escape 或選擇「完成」關閉</div>
       </div>
     </ModalSurface>
