@@ -333,12 +333,13 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
                   <div className="row" style={{ gap: 8, marginTop: 6 }}>
                     <button
                       className="btn btn--sm"
+                      data-save-import-confirm
                       onClick={() => void doImport()}
                       disabled={busy || saveBlocked || (direction === 'older' && !confirmOlder)}
                     >
                       {direction === 'older' ? '仍要覆蓋並匯入' : '覆蓋並匯入'}
                     </button>
-                    <button className="btn btn--ghost btn--sm" onClick={() => setPending(null)} disabled={busy || saveBlocked}>取消</button>
+                    <button className="btn btn--ghost btn--sm" data-save-import-cancel onClick={() => setPending(null)} disabled={busy || saveBlocked}>取消</button>
                   </div>
                 </motion.div>
               )}

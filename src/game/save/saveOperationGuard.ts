@@ -1,5 +1,14 @@
 import { SAVE_TRANSACTION_KEY } from './saveTransaction'
 
+declare global {
+  interface Window {
+    /** DEV-only command guard seam used by the Chrome closure runner. */
+    __MOBIE_SAVE_GUARD__?: {
+      assertIdle: (action: string) => void
+    }
+  }
+}
+
 /** Durable operations that must reach a receipt before a save can move data. */
 export type SaveBlockingOperation = 'result' | 'achievement-claim' | 'hatch' | 'save-transaction' | 'storage'
 export type SaveRewardOperation = Exclude<SaveBlockingOperation, 'save-transaction' | 'storage'>
@@ -192,4 +201,10 @@ export function subscribeSaveOperationGuard(listener: () => void): () => void {
 export function assertSaveOperationsIdle(action: string): void {
   const current = snapshot()
   if (current.blocked) throw new Error(`${current.message ?? '存檔操作暫時停用'} 請完成目前操作後再${action}。`)
+}
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  window.__MOBIE_SAVE_GUARD__ = {
+    assertIdle: assertSaveOperationsIdle,
+  }
 }

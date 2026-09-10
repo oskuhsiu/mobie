@@ -162,7 +162,12 @@ async function loadAttempt(attemptNumber: number): Promise<BootstrapSnapshot> {
   // canonical slice. Reconcile it before the first store is exposed so a
   // reload cannot let gameplay observe (or edit) a half-applied import.
   try {
-    await ensureStage('save', () => recoverSaveTransaction(), fixture)
+    // The DEV delay models slow canonical reads. Save recovery is the journal
+    // fence itself, so delaying it would hide the roster/incubator loading
+    // window and make a cold-boot retry look like a second bootstrap attempt.
+    // Keep recovery ordered before the canonical stores while allowing their
+    // own loading states to be observed immediately after the fence clears.
+    await ensureStage('save', () => recoverSaveTransaction(), { ...fixture, delayMs: 0 })
   } catch (cause) {
     errors.push({ stage: 'save', cause })
   }

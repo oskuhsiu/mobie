@@ -10,6 +10,7 @@ import { useRoster } from '@/store/rosterStore'
 import { audio } from '@/audio/audioEngine'
 import type { Card, OwnedUnit, Species } from '@/game/types'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { MobieSprite } from '@/ui/components/MobieSprite'
 
 type CameraStatus = 'starting' | 'permission' | 'scanning' | CameraFailure | 'manual'
 type ScanResult =
@@ -458,7 +459,7 @@ function ScanResultPanel({ result, onRescan, onManual, panelRef }: {
       <p className="scan-state__next"><strong>下一步：</strong>{next}</p>
       {card && species && (
         <div className="scan-result__card" data-scan-card-summary>
-          <img className="scan-result__art" src={species.artworkUrl} alt={species.nameZh} />
+          <MobieSprite className="scan-result__art" src={species.artworkUrl} alt={species.nameZh} shiny={card.shiny} />
           <strong>{species.nameZh} Lv.{card.level}</strong>
           <span>卡片 ID：#{card.cardId}</span>
         </div>

@@ -90,11 +90,12 @@ export function ToolsMenu() {
   const toggleMore = () => { void audio.unlock(); setMoreOpen((openNow) => !openNow) }
 
   return (
-    <div className="tools-menu">
+    <div className="tools-menu" data-tools-menu data-tools-menu-state={moreOpen ? 'open' : 'closed'}>
       <div className="row tools-menu-primary">
         <button
           {...dataGate('我的 Mobie')}
           aria-label="我的 Mobie"
+          data-tool="team"
           className="btn btn--ghost tools-menu-primary__mobies"
           onClick={() => open('team', <TeamModal onClose={controller.close} />)}
         >✨ 我的 Mobie</button>
@@ -132,14 +133,14 @@ export function ToolsMenu() {
             <section className="tools-menu-more__group" aria-labelledby="tools-menu-growth-heading">
               <h2 id="tools-menu-growth-heading">成長與收藏</h2>
               <div className="tools-menu-more__items">
-                <button {...dataGate('卡庫')} className="btn btn--ghost btn--sm" onClick={() => open('library', <CardLibraryModal onClose={controller.close} />)}>🗂 卡庫</button>
-                <button {...dataGate('招式訓練所')} className="btn btn--ghost btn--sm" onClick={() => open('moves', <MoveTrainerModal onClose={controller.close} />)}>📖 招式</button>
-                <button {...dataGate('夥伴技能')} className="btn btn--ghost btn--sm" onClick={() => open('partner', <PartnerSkillModal onClose={controller.close} />)}>✨ 夥伴技能</button>
-                <button {...dataGate('圖鑑')} className="btn btn--ghost btn--sm" onClick={() => open('dex', <DexModal onClose={controller.close} />)}>📚 圖鑑</button>
-                <button {...dataGate('成就')} className="btn btn--ghost btn--sm" onClick={() => open('achievements', <AchievementsModal onClose={controller.close} />)}>
+                <button {...dataGate('卡庫')} data-tool="library" className="btn btn--ghost btn--sm" onClick={() => open('library', <CardLibraryModal onClose={controller.close} />)}>🗂 卡庫</button>
+                <button {...dataGate('招式訓練所')} data-tool="moves" className="btn btn--ghost btn--sm" onClick={() => open('moves', <MoveTrainerModal onClose={controller.close} />)}>📖 招式</button>
+                <button {...dataGate('夥伴技能')} data-tool="partner" className="btn btn--ghost btn--sm" onClick={() => open('partner', <PartnerSkillModal onClose={controller.close} />)}>✨ 夥伴技能</button>
+                <button {...dataGate('圖鑑')} data-tool="dex" className="btn btn--ghost btn--sm" onClick={() => open('dex', <DexModal onClose={controller.close} />)}>📚 圖鑑</button>
+                <button {...dataGate('成就')} data-tool="achievements" className="btn btn--ghost btn--sm" onClick={() => open('achievements', <AchievementsModal onClose={controller.close} />)}>
                   🏆 成就{claimable > 0 && <span className="title-dot">{claimable}</span>}
                 </button>
-                <button {...dataGate('孵化所')} className="btn btn--ghost btn--sm" onClick={() => open('incubator', <IncubatorModal onClose={controller.close} />)}>
+                <button {...dataGate('孵化所')} data-tool="incubator" className="btn btn--ghost btn--sm" onClick={() => open('incubator', <IncubatorModal onClose={controller.close} />)}>
                   🥚 孵化所{hatchable && <span className="title-dot">!</span>}
                 </button>
               </div>
@@ -147,10 +148,10 @@ export function ToolsMenu() {
             <section className="tools-menu-more__group" aria-labelledby="tools-menu-data-heading">
               <h2 id="tools-menu-data-heading">資料與設定</h2>
               <div className="tools-menu-more__items">
-                <button className="btn btn--ghost btn--sm" onClick={() => open('replays', <ReplayListModal onClose={controller.close} />)}>🎬 回放</button>
+                <button data-tool="replays" className="btn btn--ghost btn--sm" onClick={() => open('replays', <ReplayListModal onClose={controller.close} />)}>🎬 回放</button>
                 {scannerEnabled && <button {...dataGate('掃卡')} className="btn btn--ghost btn--sm" data-tool="scanner" onClick={() => open('scanner', <CardScannerModal onClose={controller.close} onBackToLibrary={openLibraryFromScanner} />)}>📷 掃卡</button>}
-                <button {...dataGate('存檔')} className="btn btn--ghost btn--sm" onClick={() => open('save', <SaveManagerModal onClose={controller.close} />)}>☁️ 存檔</button>
-                <button className="btn btn--ghost btn--sm" onClick={() => open('settings', <SettingsModal onClose={controller.close} />)}>⚙️ 設定</button>
+                <button {...dataGate('存檔')} data-tool="save" className="btn btn--ghost btn--sm" onClick={() => open('save', <SaveManagerModal onClose={controller.close} />)}>☁️ 存檔</button>
+                <button data-tool="settings" className="btn btn--ghost btn--sm" onClick={() => open('settings', <SettingsModal onClose={controller.close} />)}>⚙️ 設定</button>
               </div>
             </section>
           </motion.div>

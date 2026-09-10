@@ -1,4 +1,5 @@
 import {
+  Component,
   Suspense,
   useCallback,
   useEffect,
@@ -194,15 +195,55 @@ export function OverlayHost() {
       data-overlay-policy={current.policy}
       data-overlay-depth={snapshot.stack.length}
     >
-      <Suspense fallback={(
-        <ModalSurface title={title} description="工具載入中…" onClose={close} policy={current.policy}>
-          <div className="overlay-loading__copy" role="status">載入中…</div>
-        </ModalSurface>
-      )}>
-        {current.content}
-      </Suspense>
+      <OverlayChunkBoundary title={title} policy={current.policy} onClose={close}>
+        <Suspense fallback={(
+          <ModalSurface title={title} description="工具載入中…" onClose={close} policy={current.policy}>
+            <div className="overlay-loading__copy" role="status">載入中…</div>
+          </ModalSurface>
+        )}>
+          {current.content}
+        </Suspense>
+      </OverlayChunkBoundary>
     </div>
   )
+}
+
+interface OverlayChunkBoundaryProps {
+  title: string
+  policy: OverlayDismissPolicy
+  onClose: () => void
+  children: ReactNode
+}
+
+interface OverlayChunkBoundaryState {
+  error: Error | null
+}
+
+/** A rejected lazy tool chunk must leave the route usable and explain recovery. */
+class OverlayChunkBoundary extends Component<OverlayChunkBoundaryProps, OverlayChunkBoundaryState> {
+  state: OverlayChunkBoundaryState = { error: null }
+
+  static getDerivedStateFromError(error: unknown): OverlayChunkBoundaryState {
+    return { error: error instanceof Error ? error : new Error(String(error)) }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <ModalSurface
+        title={this.props.title}
+        description="工具載入失敗"
+        onClose={this.props.onClose}
+        policy={this.props.policy}
+      >
+        <div className="overlay-loading__copy overlay-loading__copy--error" role="alert" data-overlay-chunk-error>
+          <strong>這個工具暫時無法載入</strong>
+          <span>請重新載入頁面後再試；目前的冒險進度不會被改動。</span>
+          <button type="button" className="btn btn--ghost btn--sm" data-overlay-chunk-close onClick={this.props.onClose}>回到遊戲</button>
+        </div>
+      </ModalSurface>
+    )
+  }
 }
 
 /** Small bridge kept beside the controller so the shell exports one overlay vocabulary. */
