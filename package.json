@@ -1,7 +1,7 @@
 {
   "name": "mobie",
   "private": true,
-  "version": "0.1.97",
+  "version": "0.1.98",
   "type": "module",
   "description": "Mobie — an iPad-first monster-battler (personal use)",
   "scripts": {

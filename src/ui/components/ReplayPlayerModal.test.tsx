@@ -71,4 +71,17 @@ describe('ReplayPlayerModal transport', () => {
       expect(button.className).toContain('btn--primary')
     }
   })
+
+  it('keeps decode and empty player states recoverable', () => {
+    const retry = vi.fn()
+    render(<ReplayPlayerModal log={null} loadState="decode-error" error="資料損毀" onRetry={retry} onClose={vi.fn()} />)
+    expect(screen.getByRole('alert').textContent).toContain('資料損毀')
+    fireEvent.click(screen.getByRole('button', { name: '重新載入' }))
+    expect(retry).toHaveBeenCalledOnce()
+
+    cleanup()
+    const { container } = render(<ReplayPlayerModal log={{ ...LOG, turns: [] }} onClose={vi.fn()} />)
+    expect(screen.getByText('此回放沒有可播放的事件。')).toBeTruthy()
+    expect((container.querySelector('[data-replay-toggle]') as HTMLButtonElement).disabled).toBe(true)
+  })
 })

@@ -416,8 +416,15 @@ stream so a recorded log can be re-simulated. `codec.ts` does stable-key-order `
 all updated — plan/15 §10 coupling-governance made mechanical (M12.d's `comboCast` bumped it to v2).
 `ReplayRecorder` is owned by the non-persisted battle runtime session and is called exactly once by
 `BattleTurnCoordinator` (gated by `prefs.recordReplays`, default off); recording failure disables only
-that session's replay and never reruns the reducer. `ReplayPlayerModal` re-folds the event stream to
-reconstruct HP/active with a synced text-report sidebar. **No `.txt` is persisted** — it's a pure
+that session's replay and never reruns the reducer. `game/replay/projection.ts` flattens and folds only
+a decoded event prefix into the display projection used by `ReplayPlayerModal`: HP/faint/active, terrain,
+temporary statuses, chain/combo marks, outcome, feed, and report all follow canonical event order.
+End-of-turn expiry mirrors the reducer's temporary-field tick, while missing optional payloads remain
+visible as degraded copy. The player owns only cursor, transport, speed, visibility, and reduced-motion
+state; it imports no battle store/resolver/RNG and never submits a result or reward. The modal body is the
+sole replay scroll owner, keeps the footer controls visible at narrow/zoomed sizes, and pause/step/seek/
+restart, keyboard controls, hidden-tab pause, and stacked overlay focus restoration do not mutate the
+replay row. **No `.txt` is persisted** — it's a pure
 projection generated on export. `ReplayListModal` reads and decodes every IndexedDB row before exposing
 actions, derives participant/turn/event/duration facts from the canonical log, and keeps loading, empty,
 partial/decode-error, and storage-error states actionable. Play/export/delete are sibling semantic
