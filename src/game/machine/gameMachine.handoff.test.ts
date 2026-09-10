@@ -124,4 +124,82 @@ describe('gameMachine result handoff', () => {
     })
     actor.stop()
   })
+
+  it('rejects malformed route events instead of bypassing the handoff contract', () => {
+    const regionActor = createActor(gameMachine, {
+      snapshot: gameMachine.resolveState({ value: 'regionSelect', context: INITIAL_GAME_CONTEXT }),
+    }).start()
+    regionActor.send({ type: 'SELECT_REGION', regionId: 'not-a-region' })
+    expect(regionActor.getSnapshot().value).toBe('regionSelect')
+    expect(regionActor.getSnapshot().context).toEqual(INITIAL_GAME_CONTEXT)
+    regionActor.stop()
+
+    const encounterActor = createActor(gameMachine, {
+      snapshot: gameMachine.resolveState({
+        value: 'encounter',
+        context: { ...INITIAL_GAME_CONTEXT, regionId: 'practice', foeTeam: [] },
+      }),
+    }).start()
+    encounterActor.send({ type: 'ENGAGE' })
+    expect(encounterActor.getSnapshot().value).toBe('encounter')
+    encounterActor.stop()
+
+    const retryActor = createActor(gameMachine, {
+      snapshot: gameMachine.resolveState({
+        value: 'encounter',
+        context: { ...INITIAL_GAME_CONTEXT, regionId: 'practice', foeTeam: PLAYER_CARDS.slice(0, 3) },
+      }),
+    }).start()
+    retryActor.send({ type: 'RETRY_ENCOUNTER' })
+    expect(retryActor.getSnapshot().value).toBe('encounter')
+    expect(retryActor.getSnapshot().context.foeTeam).toHaveLength(3)
+    retryActor.stop()
+
+    const cardActor = createActor(gameMachine, {
+      snapshot: gameMachine.resolveState({
+        value: 'cardSelect',
+        context: { ...INITIAL_GAME_CONTEXT, regionId: 'practice', foeTeam: PLAYER_CARDS.slice(0, 3) },
+      }),
+    }).start()
+    cardActor.send({ type: 'SELECT_TEAM', cards: PLAYER_CARDS.slice(0, 2) })
+    expect(cardActor.getSnapshot().value).toBe('cardSelect')
+    cardActor.stop()
+  })
+
+  it('does not allow a losing Tower Result to continue, while malformed Tower can still quit', () => {
+    const cards = PLAYER_CARDS.slice(0, 3)
+    const loseActor = createActor(gameMachine, {
+      snapshot: gameMachine.resolveState({
+        value: 'result',
+        context: {
+          ...INITIAL_GAME_CONTEXT,
+          regionId: 'practice',
+          foeTeam: cards,
+          playerTeam: cards,
+          outcome: 'lose',
+          battleResult: { resultId: 'tower-lose', resultFingerprint: 'tower-lose-fp', outcome: 'lose' },
+          tower: { ascension: 0, floor: 2, seed: 'tower', teamCards: cards },
+        },
+      }),
+    }).start()
+    loseActor.send({ type: 'TOWER_CONTINUE' })
+    expect(loseActor.getSnapshot().value).toBe('result')
+    expect(loseActor.getSnapshot().context.tower?.floor).toBe(2)
+    loseActor.stop()
+
+    const malformedActor = createActor(gameMachine, {
+      snapshot: gameMachine.resolveState({
+        value: 'result',
+        context: {
+          ...INITIAL_GAME_CONTEXT,
+          outcome: 'win',
+          tower: { ascension: 0, floor: 0, seed: 'bad', teamCards: cards } as never,
+        },
+      }),
+    }).start()
+    malformedActor.send({ type: 'TOWER_QUIT' })
+    expect(malformedActor.getSnapshot().value).toBe('regionSelect')
+    expect(malformedActor.getSnapshot().context.tower).toBeNull()
+    malformedActor.stop()
+  })
 })

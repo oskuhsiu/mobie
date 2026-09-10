@@ -65,13 +65,23 @@ function activeElement(): HTMLElement | null {
 }
 
 function restoreFocus(entry: OverlayEntry): void {
+  const target = (): HTMLElement | null => {
+    const preferred = entry.restoreFocus?.()
+    if (preferred?.isConnected && !preferred.hasAttribute('disabled')) return preferred
+    return entry.invoker?.isConnected && !entry.invoker.hasAttribute('disabled')
+      ? entry.invoker
+      : null
+  }
+
+  // Focus the live invoker synchronously when it is already mounted. This
+  // keeps keyboard users anchored even when a parent route re-renders in the
+  // same frame; the bounded retries below still handle a remounted portal.
+  const immediate = target()
+  if (immediate?.isConnected && !immediate.hasAttribute('disabled')) immediate.focus()
+
   const attempt = (remaining: number) => {
     const resolve = () => queueMicrotask(() => {
-      const element = entry.restoreFocus
-        ? entry.restoreFocus()
-        : entry.invoker?.isConnected && !entry.invoker.hasAttribute('disabled')
-          ? entry.invoker
-          : null
+      const element = target()
       if (element?.isConnected && !element.hasAttribute('disabled')) {
         element.focus()
         if (entry.restoreFocus && remaining > 0) requestAnimationFrame(() => attempt(remaining - 1))
@@ -80,9 +90,19 @@ function restoreFocus(entry: OverlayEntry): void {
       if (remaining > 0) requestAnimationFrame(() => attempt(remaining - 1))
     })
     // A popped surface remounts its parent portal during this frame. Resolve
-    // its logical target after that mount and after the surface's own initial focus.
-    if (entry.restoreFocus) requestAnimationFrame(() => requestAnimationFrame(resolve))
-    else resolve()
+    // its logical target after that mount and after the surface's own initial
+    // focus. Headless Chrome can pause rAF while the page is hidden, so keep a
+    // timer fallback for the same bounded attempt.
+    let finished = false
+    let timer: number | undefined
+    const resolveOnce = () => {
+      if (finished) return
+      finished = true
+      if (timer !== undefined) window.clearTimeout(timer)
+      resolve()
+    }
+    requestAnimationFrame(() => requestAnimationFrame(resolveOnce))
+    timer = window.setTimeout(resolveOnce, 50)
   }
   attempt(3)
 }

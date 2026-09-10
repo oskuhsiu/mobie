@@ -74,4 +74,16 @@ describe('wild hunt target journey', () => {
     expect(screen.queryByText('擊敗後可嘗試收服')).toBeNull()
     expect(screen.queryByText('可收服目標')).toBeNull()
   })
+
+  it('keeps malformed encounter handoff recoverable in Team Select', async () => {
+    renderGameJourney({
+      state: 'cardSelect',
+      context: { regionId: 'verdant-forest', foeTeam: [] },
+    })
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    const back = screen.getByRole('button', { name: '返回 Encounter' })
+    expect(back).toBeTruthy()
+    expect(document.activeElement).toBe(back)
+  })
 })

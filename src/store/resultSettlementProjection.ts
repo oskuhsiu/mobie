@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import type { Card, OwnedUnit } from '@/game/types'
-import { isValidTowerRun, type BattleResultHandoff, type GameContext, type Outcome, type TowerRun } from '@/game/machine/gameMachine'
+import { isValidTowerRun, sameCardOrder, type BattleResultHandoff, type GameContext, type Outcome, type TowerRun } from '@/game/machine/gameMachine'
 import { canCaptureIn } from '@/game/data/regionLookup'
 import { captureTargetOf } from '@/game/hunt'
 import { floorReward, towerExpMult } from '@/game/tower'
@@ -103,18 +103,6 @@ function identityFor(context: ResultSettlementScreenContext, outcome: Outcome): 
     foeTeam: context.foeTeam,
     playerTeam: context.playerTeam,
     outcome,
-  })
-}
-
-function sameCardOrder(left: readonly Card[], right: readonly Card[]): boolean {
-  return left.length === right.length && left.every((card, index) => {
-    const paired = right[index]
-    return paired?.cardId === card.cardId
-      && paired.speciesId === card.speciesId
-      && paired.level === card.level
-      && paired.shiny === card.shiny
-      && paired.nature === card.nature
-      && JSON.stringify(paired.ivs ?? null) === JSON.stringify(card.ivs ?? null)
   })
 }
 

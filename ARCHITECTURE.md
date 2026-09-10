@@ -71,6 +71,12 @@ title → regionSelect → encounter → cardSelect → battle → result
   final member as the featured boss/capture target),
   `playerTeam` (3 Cards), `outcome`, `captured`, and the M11 `tower` run. **It does not run the
   battle** — turn/HP/QTE/switch are handled by `battleStore` + the pure reducer.
+- Route events are guarded at the machine boundary: region, opponent/team, result handoff, and Tower
+  start payloads must be structurally valid; `TOWER_CONTINUE` requires a winning result with the
+  unchanged fixed team, while `PLAY_AGAIN` and `SET_CAPTURED` are restricted to their wild-result
+  contracts. `TOWER_QUIT` remains available for malformed Tower recovery so a stale handoff cannot
+  trap the player on Result. Encounter and Team Select render recoverable missing/context/roster
+  states instead of throwing, and route screens focus their first safe action after handoff.
 - `ABORT_BATTLE` is the non-result exit from battle: it targets `regionSelect`, clears encounter/tower
   runtime through `resetEncounter`, and never records an outcome or result handoff.
 - **Hub + tools (mid-game access):** `title` and `regionSelect` both render the shared

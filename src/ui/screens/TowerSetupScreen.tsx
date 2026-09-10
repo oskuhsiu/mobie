@@ -19,6 +19,7 @@ import { useSettings } from '@/store/settingsStore'
 import { interactModeOf } from '@/game/settings'
 import { useOverlayController } from '@/ui/shell/OverlayController'
 import { TYPE_LABEL_ZH } from '@/ui/typeMeta'
+import { useRouteFocus } from '@/ui/accessibility/useRouteFocus'
 
 const TEAM_PAGE_SIZE = 24
 const TOWER_DRAFT_KEY = 'tower-setup'
@@ -364,7 +365,7 @@ function TowerEmptyRoster({ loaded, busy, onBack, onRetry, retrying }: { loaded:
   )
 }
 
-function TowerLoadError({ message, onRetry, onBack, retrying }: { message: string; onRetry: () => void; onBack: () => void; retrying: boolean }) {
+function TowerLoadError({ message, onRetry, onBack, retrying, actionRef }: { message: string; onRetry: () => void; onBack: () => void; retrying: boolean; actionRef: React.RefObject<HTMLButtonElement> }) {
   return (
     <div className="encounter-error tower-setup-error" data-tower-setup data-tower-setup-state="error" data-tower-setup-error="load">
       <div className="encounter-error__card" role="alert">
@@ -374,14 +375,14 @@ function TowerLoadError({ message, onRetry, onBack, retrying }: { message: strin
         <p className="h-sub">{message}</p>
         <div className="row encounter-error__actions">
           <button type="button" className="btn" onClick={onRetry} disabled={retrying}>{retrying ? '重新載入中…' : '重新嘗試'}</button>
-          <button type="button" className="btn btn--ghost" onClick={onBack}>返回區域</button>
+          <button ref={actionRef} autoFocus type="button" className="btn btn--ghost" onClick={onBack}>返回區域</button>
         </div>
       </div>
     </div>
   )
 }
 
-function TowerStaleContext({ onBack }: { onBack: () => void }) {
+function TowerStaleContext({ onBack, actionRef }: { onBack: () => void; actionRef: React.RefObject<HTMLButtonElement> }) {
   return (
     <div className="encounter-error tower-setup-error" data-tower-setup data-tower-setup-state="stale" data-tower-setup-error="stale">
       <div className="encounter-error__card" role="alert">
@@ -389,7 +390,7 @@ function TowerStaleContext({ onBack }: { onBack: () => void }) {
         <div className="eyebrow">Tower Setup recovery</div>
         <h1 className="h-title">這次遠征入口已過期</h1>
         <p className="h-sub">目前畫面帶著上一場 Tower 的暫存內容，不能在這裡重用。返回 Region Hub 會清掉未開始的暫存 handoff；已完成的進度不受影響，請重新選擇 Tower。</p>
-        <button type="button" className="btn btn--ghost" onClick={onBack}>返回區域並重新選 Tower</button>
+        <button ref={actionRef} autoFocus type="button" className="btn btn--ghost" onClick={onBack}>返回區域並重新選 Tower</button>
       </div>
     </div>
   )
@@ -435,6 +436,8 @@ export function TowerSetupScreen() {
   const [retrying, setRetrying] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const startedRef = useRef(false)
+  const towerBackRef = useRef<HTMLButtonElement>(null)
+  const towerRecoveryRef = useRef<HTMLButtonElement>(null)
 
   const projection = useMemo(() => {
     try {
@@ -463,6 +466,9 @@ export function TowerSetupScreen() {
   const loadError = bootstrapSnapshot.status === 'partial-error' || Boolean(projection.error)
   const loading = !loaded || bootstrapSnapshot.status === 'loading'
   const ready = !staleContext && !loadError && !loading && cards.length >= TEAM_SIZE && pickedEntries.length === TEAM_SIZE && !startedRef.current
+
+  useRouteFocus(towerRecoveryRef, staleContext || loadError)
+  useRouteFocus(towerBackRef, !staleContext && !loadError)
 
   useEffect(() => {
     setPicked((previous) => [...new Set(previous)].filter((id) => cardsById.has(id)).slice(0, TEAM_SIZE))
@@ -579,9 +585,9 @@ export function TowerSetupScreen() {
               ? '正在準備 Tower handoff…'
               : ''
 
-  if (staleContext) return <TowerStaleContext onBack={handleBack} />
+  if (staleContext) return <TowerStaleContext onBack={handleBack} actionRef={towerRecoveryRef} />
   if (loadError) {
-    return <TowerLoadError message={projection.error ?? bootstrapSnapshot.error ?? 'Tower 需要先完成資料載入。'} onRetry={retry} onBack={handleBack} retrying={retrying} />
+    return <TowerLoadError message={projection.error ?? bootstrapSnapshot.error ?? 'Tower 需要先完成資料載入。'} onRetry={retry} onBack={handleBack} retrying={retrying} actionRef={towerRecoveryRef} />
   }
 
   return (
@@ -593,7 +599,7 @@ export function TowerSetupScreen() {
       data-tower-ascension={ascension}
     >
       <div className="tower-setup__topbar">
-        <button type="button" className="btn btn--ghost" onClick={handleBack} disabled={startBusy || startedRef.current}>← 返回區域</button>
+        <button ref={towerBackRef} autoFocus type="button" className="btn btn--ghost" onClick={handleBack} disabled={startBusy || startedRef.current}>← 返回區域</button>
         <span className="tower-setup__route-label">Region Hub → Tower Setup</span>
       </div>
 

@@ -49,9 +49,14 @@ export function isValidTowerRun(value: unknown): value is TowerRun {
   if (!Number.isInteger(candidate.floor) || (candidate.floor ?? 0) < 1) return false
   if (!Number.isInteger(candidate.ascension) || (candidate.ascension ?? -1) < 0 || (candidate.ascension ?? Infinity) >= ASCENSIONS.length) return false
   if (typeof candidate.seed !== 'string' || candidate.seed.trim().length === 0) return false
-  if (!Array.isArray(candidate.teamCards) || candidate.teamCards.length !== TEAM_SIZE) return false
+  return isValidBattleTeam(candidate.teamCards)
+}
+
+/** Runtime boundary for card selections arriving from UI or a restored handoff. */
+export function isValidBattleTeam(value: unknown): value is Card[] {
+  if (!Array.isArray(value) || value.length !== TEAM_SIZE) return false
   const ids = new Set<string>()
-  return candidate.teamCards.every((card) => {
+  return value.every((card) => {
     if (!card || typeof card !== 'object') return false
     if (typeof card.cardId !== 'string' || card.cardId.trim().length === 0 || ids.has(card.cardId)) return false
     if (!Number.isInteger(card.speciesId) || card.speciesId < 1) return false
@@ -59,6 +64,41 @@ export function isValidTowerRun(value: unknown): value is TowerRun {
     ids.add(card.cardId)
     return true
   })
+}
+
+function validRegionId(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim().length === 0) return false
+  try {
+    lookupRegion(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function sameCardOrder(left: readonly Card[], right: readonly Card[]): boolean {
+  return left.length === right.length && left.every((card, index) => {
+    const paired = right[index]
+    return paired?.cardId === card.cardId
+      && paired.speciesId === card.speciesId
+      && paired.level === card.level
+      && paired.shiny === card.shiny
+      && paired.nature === card.nature
+      && paired.heldItemId === card.heldItemId
+      && JSON.stringify(paired.ivs ?? null) === JSON.stringify(card.ivs ?? null)
+      && JSON.stringify(paired.equippedMoveIds ?? null) === JSON.stringify(card.equippedMoveIds ?? null)
+  })
+}
+
+function validResultHandoff(value: unknown): value is BattleResultHandoff {
+  if (!value || typeof value !== 'object') return false
+  const handoff = value as Partial<BattleResultHandoff>
+  return typeof handoff.resultId === 'string'
+    && handoff.resultId.trim().length > 0
+    && typeof handoff.resultFingerprint === 'string'
+    && handoff.resultFingerprint.trim().length > 0
+    && (handoff.outcome === 'win' || handoff.outcome === 'lose')
+    && (handoff.reason === undefined || handoff.reason === 'timeout')
 }
 
 export type GameEvent =
@@ -155,6 +195,42 @@ export const gameMachine = setup({
       return { foeTeam, playerTeam: [], outcome: null, battleResult: null, captured: false }
     }),
   },
+  guards: {
+    validRegion: ({ event }) => event.type === 'SELECT_REGION' && validRegionId(event.regionId),
+    validEncounterRetry: ({ context }) => context.tower === null && validRegionId(context.regionId),
+    validEncounter: ({ context }) => context.tower === null
+      && validRegionId(context.regionId)
+      && isValidBattleTeam(context.foeTeam),
+    validPlayerTeam: ({ context, event }) => event.type === 'SELECT_TEAM'
+      && context.tower === null
+      && validRegionId(context.regionId)
+      && isValidBattleTeam(event.cards)
+      && isValidBattleTeam(context.foeTeam),
+    validTowerStart: ({ event }) => event.type === 'START_TOWER'
+      && isValidBattleTeam(event.cards)
+      && Number.isInteger(event.ascension)
+      && event.ascension >= 0
+      && event.ascension < ASCENSIONS.length
+      && typeof event.seed === 'string'
+      && event.seed.trim().length > 0,
+    validBattleResult: ({ event }) => event.type === 'END_BATTLE' && validResultHandoff(event),
+    capturableResult: ({ context, event }) => event.type === 'SET_CAPTURED'
+      && context.tower === null
+      && context.outcome === 'win'
+      && validRegionId(context.regionId)
+      && lookupRegion(context.regionId).mode === 'wild',
+    towerContinue: ({ context }) => context.tower !== null
+      && context.outcome === 'win'
+      && isValidTowerRun(context.tower)
+      && isValidBattleTeam(context.playerTeam)
+      && sameCardOrder(context.tower.teamCards, context.playerTeam),
+    wildResult: ({ context }) => context.tower === null
+      && context.outcome !== null
+      && validRegionId(context.regionId),
+    // TOWER_QUIT is the recovery escape hatch as well, so it must clear a
+    // malformed/stale tower context instead of trapping the player on Result.
+    activeTower: ({ context }) => context.tower !== null,
+  },
 }).createMachine({
   id: 'game',
   initial: 'title',
@@ -166,44 +242,44 @@ export const gameMachine = setup({
     regionSelect: {
       entry: 'resetEncounter',
       on: {
-        SELECT_REGION: { target: 'encounter', actions: 'rollFoes' },
+        SELECT_REGION: { target: 'encounter', actions: 'rollFoes', guard: 'validRegion' },
         OPEN_TOWER: 'towerSetup',
         BACK: 'title',
       },
     },
     towerSetup: {
       on: {
-        START_TOWER: { target: 'battle', actions: 'startTower' },
+        START_TOWER: { target: 'battle', actions: 'startTower', guard: 'validTowerStart' },
         BACK: 'regionSelect',
       },
     },
     encounter: {
       on: {
-        RETRY_ENCOUNTER: { actions: 'rerollFoes' },
-        ENGAGE: 'cardSelect',
+        RETRY_ENCOUNTER: { actions: 'rerollFoes', guard: 'validEncounterRetry' },
+        ENGAGE: { target: 'cardSelect', guard: 'validEncounter' },
         BACK: 'regionSelect',
       },
     },
     cardSelect: {
       on: {
-        SELECT_TEAM: { target: 'battle', actions: 'pickTeam' },
+        SELECT_TEAM: { target: 'battle', actions: 'pickTeam', guard: 'validPlayerTeam' },
         BACK: 'encounter',
       },
     },
     battle: {
       on: {
-        END_BATTLE: { target: 'result', actions: 'recordOutcome' },
+        END_BATTLE: { target: 'result', actions: 'recordOutcome', guard: 'validBattleResult' },
         ABORT_BATTLE: { target: 'regionSelect', actions: 'resetEncounter' },
       },
     },
     result: {
       on: {
-        SET_CAPTURED: { actions: 'setCaptured' },
-        PLAY_AGAIN: { target: 'encounter', actions: 'rerollFoes' },
+        SET_CAPTURED: { actions: 'setCaptured', guard: 'capturableResult' },
+        PLAY_AGAIN: { target: 'encounter', actions: 'rerollFoes', guard: 'wildResult' },
         TO_REGIONS: 'regionSelect',
         // M11 連勝塔：勝利續攻下一樓 / 結束遠征（settle）
-        TOWER_CONTINUE: { target: 'battle', actions: 'towerAdvance' },
-        TOWER_QUIT: { target: 'regionSelect', actions: 'endTower' },
+        TOWER_CONTINUE: { target: 'battle', actions: 'towerAdvance', guard: 'towerContinue' },
+        TOWER_QUIT: { target: 'regionSelect', actions: 'endTower', guard: 'activeTower' },
       },
     },
   },

@@ -10,6 +10,7 @@ import { useRun } from '@/store/runStore'
 import { useSkillPoints } from '@/store/skillPointsStore'
 import { useBattleStore } from '@/store/battleStore'
 import type { GameEvent, Outcome } from '@/game/machine/gameMachine'
+import type { OwnedUnit } from '@/game/types'
 import type { BattleRuntimeError } from '@/store/battleStore'
 import {
   M24_BASELINE_SCENARIO_ID,
@@ -50,6 +51,12 @@ export interface M24BaselineDriver {
   makeOlderSave: () => Promise<number[]>
   makeMalformedLegacySave: () => Promise<number[]>
   endBattle: (outcome: Outcome) => void
+  /** DEV-only closure hook for remount/cold-reload identity regression. */
+  endBattleWithIdentity: (outcome: Outcome, identity: { resultId: string; resultFingerprint: string; reason?: 'timeout' }) => void
+  /** DEV-only presentation fixtures; canonical roster/storage are restored afterwards. */
+  prepareRosterFixture: (kind: 'empty' | 'evolution') => void
+  restoreRosterFixture: () => void
+  rosterPreview: () => Array<{ id: string; speciesId: number; level: number; exp: number }>
   sendGameEvent: (event: GameEvent) => void
   snapshot: () => M24SeedSnapshot & { battle: boolean }
   dispose: () => void
@@ -96,6 +103,7 @@ export function installM24BaselineDriver(): M24BaselineDriver {
   let seeded = false
   let resultSerial = 0
   let cardCount = 0
+  let rosterFixtureBackup: { roster: OwnedUnit[]; raw: string | null } | null = null
 
   const storesReady = () => useRoster.getState().loaded && useMeta.getState().loaded && useIncubator.getState().loaded
 
@@ -242,15 +250,78 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     return buildLegacySave(new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x23]), validBytes)
   }
 
-  const endBattle = (outcome: Outcome): void => {
-    resultSerial += 1
+  const endBattleWithIdentity = (outcome: Outcome, identity: { resultId: string; resultFingerprint: string; reason?: 'timeout' }): void => {
     dispatchGameEvent({
       type: 'END_BATTLE',
-      resultId: `${options.seed}:result:${resultSerial}`,
-      resultFingerprint: `${options.seed}:fingerprint:${resultSerial}`,
+      resultId: identity.resultId,
+      resultFingerprint: identity.resultFingerprint,
       outcome,
+      ...(identity.reason ? { reason: identity.reason } : {}),
     })
   }
+
+  const endBattle = (outcome: Outcome): void => {
+    resultSerial += 1
+    endBattleWithIdentity(outcome, {
+      resultId: `${options.seed}:result:${resultSerial}`,
+      resultFingerprint: `${options.seed}:fingerprint:${resultSerial}`,
+    })
+  }
+
+  const prepareRosterFixture = (kind: 'empty' | 'evolution'): void => {
+    if (rosterFixtureBackup) return
+    const current = useRoster.getState()
+    rosterFixtureBackup = {
+      roster: structuredClone(current.roster),
+      raw: localStorage.getItem('mobie.roster.v2'),
+    }
+    if (kind === 'empty') {
+      useRoster.setState({ roster: [], loaded: true })
+      return
+    }
+    // The first starter evolves at level 16. Put it one point below that
+    // boundary so the next real Result settlement produces an evolution receipt.
+    const fixtureRoster = current.roster.map((unit, index) => index === 0
+      ? { ...unit, speciesId: 1, level: 15, exp: 4095 }
+      : unit)
+    useRoster.setState({
+      roster: fixtureRoster,
+      loaded: true,
+    })
+    try {
+      const parsed = JSON.parse(localStorage.getItem('mobie.roster.v2') ?? 'null')
+      localStorage.setItem('mobie.roster.v2', JSON.stringify(
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? { ...parsed, roster: fixtureRoster }
+          : fixtureRoster,
+      ))
+    } catch {
+      localStorage.setItem('mobie.roster.v2', JSON.stringify(fixtureRoster))
+    }
+  }
+
+  const restoreRosterFixture = (): void => {
+    if (!rosterFixtureBackup) return
+    const backup = rosterFixtureBackup
+    rosterFixtureBackup = null
+    useRoster.setState({
+      roster: structuredClone(backup.roster),
+      loaded: true,
+      lastResults: [],
+      lastEvolutions: [],
+      lastMoveLearns: [],
+      lastCaptured: null,
+    })
+    if (backup.raw === null) localStorage.removeItem('mobie.roster.v2')
+    else localStorage.setItem('mobie.roster.v2', backup.raw)
+  }
+
+  const rosterPreview = () => useRoster.getState().roster.slice(0, 3).map((unit) => ({
+    id: unit.id,
+    speciesId: unit.speciesId,
+    level: unit.level,
+    exp: unit.exp,
+  }))
 
   const driver: M24BaselineDriver = {
     active: true,
@@ -265,6 +336,10 @@ export function installM24BaselineDriver(): M24BaselineDriver {
     makeOlderSave,
     makeMalformedLegacySave,
     endBattle,
+    endBattleWithIdentity,
+    prepareRosterFixture,
+    restoreRosterFixture,
+    rosterPreview,
     sendGameEvent: dispatchGameEvent,
     snapshot,
     dispose: () => {

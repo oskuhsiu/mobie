@@ -29,8 +29,24 @@ import { getSpecies } from '@/game/data/species'
 import { lookupTerrain } from '@/game/data/terrains'
 import { TYPE_LABEL_ZH } from '@/ui/typeMeta'
 import { useOverlayController } from '@/ui/shell/OverlayController'
+import { useRouteFocus } from '@/ui/accessibility/useRouteFocus'
 const TEAM_PAGE_SIZE = 24
 const TEAM_DRAFTS = new Map<string, string[]>()
+
+type CardSelectErrorKind = 'missing-context' | 'missing-target' | 'context-mismatch' | 'roster-error'
+
+function cardSelectErrorMessage(kind: CardSelectErrorKind): string {
+  switch (kind) {
+    case 'missing-context':
+      return '找不到這次遭遇的目的地。請返回 Encounter 重新選擇區域。'
+    case 'missing-target':
+      return '這次遭遇沒有完整的對手隊伍或 featured target。請返回 Encounter 重新嘗試。'
+    case 'context-mismatch':
+      return '對手資料與遭遇內容不一致，不能把不完整的隊伍交給 Battle。請返回 Encounter 重新嘗試。'
+    case 'roster-error':
+      return '你的 Mobie 資料無法安全解析。請返回 Encounter，資料修復後再重新組隊。'
+  }
+}
 
 function encounterDraftKey(regionId: string | null, foes: readonly Card[]): string {
   return `${regionId ?? 'none'}:${foes.map((card) => card.cardId).join('|')}`
@@ -543,6 +559,30 @@ function EmptyRoster({ loaded, busy, onBack }: { loaded: boolean; busy: boolean;
   )
 }
 
+function CardSelectRecovery({
+  kind,
+  message,
+  actionRef,
+  onBack,
+}: {
+  kind: CardSelectErrorKind
+  message: string
+  actionRef: React.RefObject<HTMLButtonElement>
+  onBack: () => void
+}) {
+  return (
+    <div className="encounter-error team-select-error" data-team-select data-team-select-state="error" data-team-select-error-kind={kind}>
+      <div className="encounter-error__card" role="alert" data-team-select-error>
+        <div className="encounter-error__icon" aria-hidden="true">⚠️</div>
+        <div className="eyebrow">Team Select recovery</div>
+        <h1 className="h-title">隊伍資料需要重新準備</h1>
+        <p className="h-sub">{message}</p>
+        <button ref={actionRef} autoFocus type="button" className="btn btn--ghost" data-team-select-back onClick={onBack}>返回 Encounter</button>
+      </div>
+    </div>
+  )
+}
+
 function StartFooter({
   ready,
   busy,
@@ -578,7 +618,14 @@ function StartFooter({
 
 export function CardSelectScreen() {
   const { context, send } = useGame()
-  const foes = useMemo(() => context.foeTeam.map(buildBattleMobie), [context.foeTeam])
+  const foeCards = Array.isArray(context.foeTeam) ? context.foeTeam : []
+  const foes = useMemo(() => {
+    try {
+      return foeCards.map(buildBattleMobie)
+    } catch {
+      return [] as BattleMobie[]
+    }
+  }, [foeCards])
   const target = captureTargetOf(foes) ?? null
   const captureEligible = canCaptureIn(context.regionId)
   const region = useMemo(() => {
@@ -586,8 +633,8 @@ export function CardSelectScreen() {
     try { return lookupRegion(context.regionId) } catch { return null }
   }, [context.regionId])
   const encounterAccidents = useMemo(
-    () => region ? rollEncounterAccidents(region, context.foeTeam) : { luckyExpMult: 1, supply: null },
-    [context.foeTeam, region],
+    () => region ? rollEncounterAccidents(region, foeCards) : { luckyExpMult: 1, supply: null },
+    [foeCards, region],
   )
   const expMult = useAccidents((s) => s.expMult)
   const captureMult = useAccidents((s) => s.captureMult)
@@ -598,20 +645,30 @@ export function CardSelectScreen() {
   const [visiblePage, setVisiblePage] = useState(0)
   const [submitBusy, setSubmitBusy] = useState(false)
   const submitRef = useRef(false)
+  const topBackRef = useRef<HTMLButtonElement>(null)
   const controller = useOverlayController()
-  const draftKey = encounterDraftKey(context.regionId, context.foeTeam)
+  const draftKey = encounterDraftKey(context.regionId, foeCards)
   const roster = useRoster((s) => s.roster)
   const loaded = useRoster((s) => s.loaded)
   const learnedSkillIds = usePlayerSkills((s) => s.learnedSkillIds)
-  const cards = useMemo<CardEntry[]>(
-    () => roster.map((unit) => {
-      const card = ownedToCard(unit)
-      return { card, mon: buildBattleMobie(card), unit }
-    }),
+  const cardProjection = useMemo<{ cards: CardEntry[]; error: string | null }>(() => {
+    try {
+      return {
+        cards: roster.map((unit) => {
+          const card = ownedToCard(unit)
+          return { card, mon: buildBattleMobie(card), unit }
+        }),
+        error: null,
+      }
+    } catch {
+      return { cards: [], error: cardSelectErrorMessage('roster-error') }
+    }
+  },
     [roster],
   )
+  const cards = cardProjection.cards
   const cardsById = useMemo(() => new Map(cards.map((entry) => [entry.card.cardId, entry])), [cards])
-  const [picked, setPicked] = useState<string[]>(() => TEAM_DRAFTS.get(draftKey)?.slice(0, TEAM_SIZE) ?? [...new Set(context.playerTeam.map((card) => card.cardId))].slice(0, TEAM_SIZE))
+  const [picked, setPicked] = useState<string[]>(() => TEAM_DRAFTS.get(draftKey)?.slice(0, TEAM_SIZE) ?? [...new Set((Array.isArray(context.playerTeam) ? context.playerTeam : []).map((card) => card.cardId))].slice(0, TEAM_SIZE))
 
   useEffect(() => {
     setPicked((previous) => [...new Set(previous)].filter((id) => cardsById.has(id)).slice(0, TEAM_SIZE))
@@ -646,6 +703,24 @@ export function CardSelectScreen() {
   useEffect(() => {
     if (visiblePage >= pageCount) setVisiblePage(pageCount - 1)
   }, [pageCount, visiblePage])
+
+  const recoveryRef = useRef<HTMLButtonElement>(null)
+  const contextError: { kind: CardSelectErrorKind; message: string } | null = !context.regionId
+    ? { kind: 'missing-context', message: cardSelectErrorMessage('missing-context') }
+    : !region
+      ? { kind: 'context-mismatch', message: cardSelectErrorMessage('context-mismatch') }
+      : foeCards.length === 0
+        ? { kind: 'missing-target', message: cardSelectErrorMessage('missing-target') }
+        : foeCards.length !== TEAM_SIZE || foes.length !== foeCards.length
+          ? { kind: 'context-mismatch', message: cardSelectErrorMessage('context-mismatch') }
+          : !target
+            ? { kind: 'missing-target', message: cardSelectErrorMessage('missing-target') }
+            : null
+
+  const recovery = contextError ?? (cardProjection.error ? { kind: 'roster-error' as const, message: cardProjection.error } : null)
+
+  useRouteFocus(recoveryRef, Boolean(recovery))
+  useRouteFocus(topBackRef, !recovery)
 
   const openCard = useCallback((mon: BattleMobie, owner: boolean, invoker: HTMLButtonElement, id: string) => {
     audio.play('select')
@@ -696,6 +771,17 @@ export function CardSelectScreen() {
     send({ type: 'SELECT_TEAM', cards: chosen })
   }, [draftKey, pickedEntries, ready, send])
 
+  if (recovery) {
+    return (
+      <CardSelectRecovery
+        kind={recovery.kind}
+        message={recovery.message}
+        actionRef={recoveryRef}
+        onBack={() => send({ type: 'BACK' })}
+      />
+    )
+  }
+
   return (
     <div
       className="team-select-screen"
@@ -704,7 +790,7 @@ export function CardSelectScreen() {
       data-team-select-busy={submitBusy ? 'true' : 'false'}
     >
       <div className="team-select__topbar">
-        <button className="btn btn--ghost" style={{ padding: '10px 18px' }} onClick={handleBack} disabled={submitBusy}>
+        <button ref={topBackRef} autoFocus className="btn btn--ghost" style={{ padding: '10px 18px' }} onClick={handleBack} disabled={submitBusy}>
           ← 返回
         </button>
         <motion.button

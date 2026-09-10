@@ -18,6 +18,7 @@ export function EvolutionOverlay({ evolutions, onDone }: {
   const reducedMotion = useReducedMotion() ?? false
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
+  const overlayRef = useRef<HTMLDivElement>(null)
 
   const ev = evolutions[idx]
 
@@ -25,6 +26,7 @@ export function EvolutionOverlay({ evolutions, onDone }: {
   // Result 必須保留可讀回條又快速回到合法 CTA，避免多隻進化把下一步鎖太久。
   useEffect(() => {
     if (!ev) return
+    overlayRef.current?.focus({ preventScroll: true })
     setPhase('morph')
     audio.play('select')
     const morphMs = reducedMotion ? 0 : 700
@@ -48,6 +50,16 @@ export function EvolutionOverlay({ evolutions, onDone }: {
   }
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      overlayRef.current?.focus()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      skip()
+      return
+    }
     if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     skip()
@@ -55,7 +67,8 @@ export function EvolutionOverlay({ evolutions, onDone }: {
 
   return (
     <motion.div
-      className="evo-overlay" role="button" tabIndex={0} aria-label="跳過進化演出" onClick={skip} onKeyDown={onKeyDown}
+      ref={overlayRef}
+      className="evo-overlay" role="dialog" aria-modal="true" tabIndex={0} aria-label="進化演出，按 Enter 或空白鍵跳過" onClick={skip} onKeyDown={onKeyDown}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={reducedMotion ? { duration: 0 } : undefined}
     >

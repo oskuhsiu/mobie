@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderGameJourney } from '@/test/renderGameJourney'
 import { PLAYER_CARDS } from '@/game/data/playerCards'
 import { createOwnedUnit } from '@/game/growth'
@@ -247,5 +247,42 @@ describe('Result roster settlement journey', () => {
     expect(screen.getByRole('heading', { name: /第 4 層時間到，依 HP 判定突破/ })).toBeTruthy()
     expect(screen.getByText(/回合上限已到，勝負依剩餘 HP 判定/)).toBeTruthy()
     expect(continueButton).toHaveProperty('disabled', false)
+  }, 8_000)
+
+  it('offers a safe region exit when a non-Tower Result has no battle outcome', async () => {
+    renderGameJourney({
+      state: 'result',
+      context: {
+        regionId: 'practice',
+        foeTeam: playerTeam,
+        playerTeam,
+        outcome: null,
+        battleResult: null,
+      },
+    })
+
+    const back = await screen.findByRole('button', { name: /回到區域/ }, { timeout: 4_000 })
+    expect(document.querySelector('[data-result-settlement-status="idle"]')).toBeTruthy()
+    fireEvent.click(back)
+    await waitFor(() => expect(document.querySelector('[data-region-hub]')).toBeTruthy())
+  }, 8_000)
+
+  it('blocks a Tower handoff whose fixed team differs by loadout metadata', async () => {
+    const staleTowerTeam = [{ ...playerTeam[0], heldItemId: 'lifeorb' }, ...playerTeam.slice(1)]
+    renderGameJourney({
+      state: 'result',
+      context: {
+        ...resultContext,
+        tower: {
+          floor: 2,
+          ascension: 0,
+          seed: 'stale-loadout-tower',
+          teamCards: staleTowerTeam,
+        },
+      },
+    })
+
+    expect(await screen.findByText('Tower 結果需要恢復')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /攻向第 3 層/ })).toBeNull()
   }, 8_000)
 })

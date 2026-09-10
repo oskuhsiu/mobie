@@ -628,12 +628,14 @@ function NextActionSection({
   showEvo,
   onNext,
   onRegions,
+  actionRef,
 }: {
   status: ResultSettlementViewModel['status']
   captureDone: boolean
   showEvo: boolean
   onNext: () => void
   onRegions: () => void
+  actionRef: React.RefObject<HTMLButtonElement>
 }) {
   const ready = status === 'settled' && captureDone && !showEvo
   const reason = status === 'running'
@@ -652,9 +654,17 @@ function NextActionSection({
       title="下一步"
       description={ready ? '選擇下一場，或回到區域查看其他目的地。' : '完成必要的整理與演出後，合法操作才會開啟。'}
     >
-      {ready ? (
+      {status === 'idle' ? (
+        <div className="result-next__recovery" role="alert" data-result-idle-recovery>
+          <div>
+            <strong>尚未收到這場戰鬥結果</strong>
+            <p>目前沒有可結算的獎勵或演出；返回區域後重新開始，避免提交不完整的結果。</p>
+          </div>
+          <button ref={actionRef} className="btn btn--ghost" data-result-next="regions" onClick={onRegions}>🗺 回到區域</button>
+        </div>
+      ) : ready ? (
         <div className="result-next__actions" data-result-next-actions>
-          <button className="btn" data-result-next="play-again" onClick={onNext}>🔄 再戰一場</button>
+          <button ref={actionRef} className="btn" data-result-next="play-again" onClick={onNext}>🔄 再戰一場</button>
           <button className="btn btn--ghost" data-result-next="regions" onClick={onRegions}>🗺 回到區域</button>
         </div>
       ) : (
@@ -952,6 +962,7 @@ export function ResultScreen() {
   const inspectRef = useRef<HTMLButtonElement>(null)
   const collectionRef = useRef<HTMLButtonElement>(null)
   const towerActionRef = useRef<HTMLButtonElement>(null)
+  const resultActionRef = useRef<HTMLButtonElement>(null)
 
   // Result reuses the route viewport between Battle and Result. Reset its
   // scroll position for each logical result, then focus the first safe CTA so
@@ -973,6 +984,15 @@ export function ResultScreen() {
     queueMicrotask(focus)
   }, [invalidTowerContext, settlementStatus, showEvo, tower])
 
+  useLayoutEffect(() => {
+    if (tower) return
+    const shouldFocus = settlementStatus === 'idle'
+      || settlementStatus === 'error'
+      || (settlementStatus === 'settled' && captureDone && !showEvo)
+    if (!shouldFocus) return
+    resultActionRef.current?.focus({ preventScroll: true })
+  }, [captureDone, settlementStatus, showEvo, tower])
+
   useEffect(() => {
     if (!tower) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -991,6 +1011,8 @@ export function ResultScreen() {
         data-result
         data-result-mode="tower"
         data-result-outcome={outcome ?? 'pending'}
+        data-result-id={settlementIdentity?.resultId ?? undefined}
+        data-result-fingerprint={settlementIdentity?.resultFingerprint ?? undefined}
         data-result-tower-result-state="invalid"
         data-result-settlement-status={settlementStatus}
         data-result-settlement-attempt={projection.attempt}
@@ -1054,6 +1076,8 @@ export function ResultScreen() {
         data-result
         data-result-mode="tower"
         data-result-outcome={outcome ?? 'pending'}
+        data-result-id={settlementIdentity?.resultId ?? undefined}
+        data-result-fingerprint={settlementIdentity?.resultFingerprint ?? undefined}
         data-result-reason={context.battleResult?.reason ?? 'natural'}
         data-result-tower-result-state={!outcome ? 'pending' : context.battleResult?.reason === 'timeout' ? 'timeout' : isWin ? 'win' : 'lose'}
         data-result-tower-run-state={towerRunState}
@@ -1109,6 +1133,8 @@ export function ResultScreen() {
       data-result
       data-result-mode={resultMode}
       data-result-outcome={outcome ?? 'pending'}
+      data-result-id={settlementIdentity?.resultId ?? undefined}
+      data-result-fingerprint={settlementIdentity?.resultFingerprint ?? undefined}
       data-result-capture-outcome={captureOutcome ?? 'pending'}
       data-result-evolution-count={lastEvolutions.length}
       data-result-settlement-status={settlementStatus}
@@ -1151,7 +1177,7 @@ export function ResultScreen() {
           </div>
         )}
         {settlementStatus === 'error' && (
-          <ResultErrorPanel projection={projection} retry={retrySettlement} onBack={() => leaveResult({ type: 'TO_REGIONS' })} />
+          <ResultErrorPanel projection={projection} retry={retrySettlement} onBack={() => leaveResult({ type: 'TO_REGIONS' })} backRef={resultActionRef} />
         )}
 
         <NextActionSection
@@ -1160,6 +1186,7 @@ export function ResultScreen() {
           showEvo={showEvo}
           onNext={() => leaveResult({ type: 'PLAY_AGAIN' })}
           onRegions={() => leaveResult({ type: 'TO_REGIONS' })}
+          actionRef={resultActionRef}
         />
       </div>
 

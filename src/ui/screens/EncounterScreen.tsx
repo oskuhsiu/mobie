@@ -20,6 +20,7 @@ import { captureTargetOf } from '@/game/hunt'
 import { TEAM_SIZE } from '@/game/machine/gameMachine'
 import { useOverlayController } from '@/ui/shell/OverlayController'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
+import { useRouteFocus } from '@/ui/accessibility/useRouteFocus'
 
 type EncounterErrorKind = 'missing-context' | 'missing-target' | 'context-mismatch' | 'load-error'
 type EncounterFixture = 'missing-target' | 'context-mismatch' | 'artwork-failure'
@@ -156,6 +157,7 @@ export function EncounterScreen() {
   const leavingRef = useRef(false)
   const [artworkState, setArtworkState] = useState<'loading' | 'loaded' | 'failed'>('loading')
   const [artworkRetry, setArtworkRetry] = useState(0)
+  const encounterBackRef = useRef<HTMLButtonElement>(null)
 
   const handleArtworkState = useCallback((state: 'loading' | 'loaded' | 'failed') => {
     setArtworkState(state)
@@ -222,9 +224,14 @@ export function EncounterScreen() {
             onReturn={leaveEncounter}
           />
         ),
-      })
+      }, { restoreFocus: () => encounterBackRef.current })
     }
   }, [context.foeTeam, encounterKey, leaveEncounter, pickSupply, view])
+
+  useRouteFocus(
+    encounterBackRef,
+    view.status === 'error' || (view.status === 'ready' && (!view.accidents.supply || supplyResolved)),
+  )
 
   const openCard = useCallback((mon: BattleMobie) => {
     audio.play('select')
@@ -276,7 +283,7 @@ export function EncounterScreen() {
           <p className="h-sub">{view.message}</p>
           <div className="row encounter-error__actions">
             {view.canRetry && <button className="btn" data-encounter-retry onClick={retryEncounter}>重新嘗試</button>}
-            <button className="btn btn--ghost" data-encounter-back onClick={leaveEncounter}>返回區域</button>
+            <button ref={encounterBackRef} autoFocus className="btn btn--ghost" data-encounter-back onClick={leaveEncounter}>返回區域</button>
           </div>
         </div>
       </div>
@@ -291,7 +298,7 @@ export function EncounterScreen() {
 
   return (
     <div className="encounter-screen col" data-encounter data-encounter-state="ready" data-encounter-region={region.id} data-encounter-capture={captureEligible ? 'eligible' : 'ineligible'}>
-      <button className="btn btn--ghost encounter-back" style={{ alignSelf: 'flex-start', padding: '10px 18px' }} onClick={leaveEncounter}>
+      <button ref={encounterBackRef} autoFocus={!view.accidents.supply} className="btn btn--ghost encounter-back" data-encounter-back style={{ alignSelf: 'flex-start', padding: '10px 18px' }} onClick={leaveEncounter}>
         ← 返回區域
       </button>
 
