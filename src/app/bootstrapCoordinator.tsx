@@ -185,6 +185,8 @@ async function loadAttempt(attemptNumber: number): Promise<BootstrapSnapshot> {
   if (errors.length === 0) {
     try { await useMeta.getState().reconcileAchievementClaims() }
     catch { /* the pending outbox remains durable; the Achievements modal exposes retry */ }
+    try { await useIncubator.getState().reconcileHatches() }
+    catch { /* the pending hatch remains durable; the Incubator modal exposes retry */ }
   }
 
   if (errors.length === 0) {

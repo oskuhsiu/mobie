@@ -1447,6 +1447,31 @@ body {
 .ach-row__error { color: #ffadad; font-size: 12px; line-height: 1.35; }
 .achievements-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid rgba(255,107,107,0.55); border-radius: 12px; color: #ffadad; font-size: 13px; }
 .egg-row--ready { border-color: var(--good); box-shadow: 0 0 12px rgba(74,222,128,0.25); }
+.egg-row--hatching { border-color: var(--accent); background: rgba(122,224,255,0.1); }
+.egg-row--invalid-source { border-color: rgba(255,107,107,0.55); background: rgba(255,107,107,0.08); }
+.egg-row--error { border-color: rgba(255,173,173,0.72); background: rgba(255,107,107,0.09); }
+.egg-row__error { color: #ffadad; font-size: 12px; line-height: 1.4; }
+
+.incubator-state {
+  min-height: 220px; padding: 24px; border: 1px dashed var(--stroke); border-radius: 16px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px;
+  text-align: center; color: var(--text-dim); line-height: 1.55;
+}
+.incubator-state b { color: var(--text); font-size: 18px; }
+.incubator-state__icon { font-size: 34px; }
+.incubator-state--error { border-color: rgba(255,107,107,0.6); background: rgba(255,107,107,0.08); }
+.incubator-state--error b { color: #ffd1d1; }
+
+.hatch-reveal__facts { width: min(100%, 460px); display: flex; flex-direction: column; gap: 10px; }
+.hatch-reveal__fact-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; padding: 10px 12px; border: 1px solid var(--stroke); border-radius: 12px; background: rgba(0,0,0,0.24); font-size: 12px; }
+.hatch-reveal__fact-grid span { color: var(--text-dim); }
+.hatch-reveal__fact-grid b { text-align: right; overflow-wrap: anywhere; }
+.hatch-reveal__stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.hatch-reveal__stats span { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 3px; border-radius: 9px; background: rgba(122,224,255,0.08); border: 1px solid rgba(122,224,255,0.18); }
+.hatch-reveal__stats small { color: var(--text-dim); font-size: 10px; }
+.hatch-reveal__stats b { font-variant-numeric: tabular-nums; }
+.hatch-reveal__feed { width: min(100%, 460px); display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 12px; color: #bceec8; font-size: 12px; }
+.hatch-reveal__dismiss { min-width: 140px; }
 
 .hatch-reveal {
   position: absolute; inset: 0; z-index: 5; border-radius: 22px; cursor: pointer;
@@ -2276,6 +2301,10 @@ body {
 .gesture-gate__fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #f97316); transition: width 0.08s linear; }
 
 .interact-seg--sub .interact-seg__btn { padding: 8px 6px; }
+
+@media (max-width: 520px) {
+  .hatch-reveal__stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 /* M12.c 蛋招繼承顯示 */
 .egg-row__inherit { font-size: 11px; font-weight: 700; color: #9be7a0; margin-top: 3px; }

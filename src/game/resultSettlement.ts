@@ -10,6 +10,7 @@ import { buildBattleMobie } from '@/game/stats'
 import { captureChanceWithBall, getBall, rollBall, type BallId } from '@/game/battle/engine'
 import { hashSeed, makeRng } from '@/game/rng'
 import type { AchievementRewardMarker, AchievementClaimOutbox } from '@/game/achievementClaim'
+import type { HatchOutbox } from '@/game/incubatorHatch'
 
 /**
  * Result settlement is keyed by the logical battle, not by a React mount or a
@@ -1930,6 +1931,30 @@ function cloneEgg(egg: Egg): Egg {
 }
 
 function cloneIncubatorState(state: IncubatorState): IncubatorState {
+  const cloneHatchOutbox = (entry: HatchOutbox): HatchOutbox => ({
+    ...entry,
+    egg: cloneEgg(entry.egg),
+    payload: {
+      ...entry.payload,
+      egg: cloneEgg(entry.payload.egg),
+      unit: cloneOwnedUnit(entry.payload.unit),
+    },
+    ...(entry.receipt ? {
+      receipt: {
+        ...entry.receipt,
+        egg: cloneEgg(entry.receipt.egg),
+        unit: cloneOwnedUnit(entry.receipt.unit),
+        roster: {
+          ...entry.receipt.roster,
+          unit: cloneOwnedUnit(entry.receipt.roster.unit),
+        },
+        meta: {
+          ...entry.receipt.meta,
+          meta: cloneMeta(entry.receipt.meta.meta),
+        },
+      },
+    } : {}),
+  })
   return {
     schemaVersion: state.schemaVersion,
     nextId: state.nextId,
@@ -1953,6 +1978,7 @@ function cloneIncubatorState(state: IncubatorState): IncubatorState {
           })),
         }
       : {}),
+    ...(state.hatchOutbox ? { hatchOutbox: state.hatchOutbox.map(cloneHatchOutbox) } : {}),
   }
 }
 

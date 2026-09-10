@@ -13,6 +13,7 @@ import type { AchievementClaimOutbox } from '@/game/achievementClaim'
 export const META_SCHEMA_VERSION = 1
 export const META_KEY = 'mobie.meta.v1'
 const SETTLEMENT_FIELD = 'resultSettlements'
+const HATCH_FIELD = 'hatchSettlements'
 
 export interface MetaStats {
   captures: number // 累計收服數
@@ -164,11 +165,31 @@ function existingAchievementClaims(): unknown[] | undefined {
   }
 }
 
-function encodeMeta(meta: MetaState, markers: unknown[] | undefined, claims: unknown[] | undefined): string {
+function existingHatchMarkers(): unknown[] | undefined {
+  if (!hasLS()) return undefined
+  try {
+    const raw = localStorage.getItem(META_KEY)
+    if (!raw) return undefined
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+    const hatch = (parsed as Record<string, unknown>)[HATCH_FIELD]
+    return Array.isArray(hatch) ? hatch : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function encodeMeta(
+  meta: MetaState,
+  markers: unknown[] | undefined,
+  claims: unknown[] | undefined,
+  hatchMarkers: unknown[] | undefined = existingHatchMarkers(),
+): string {
   return JSON.stringify({
     ...meta,
     ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
     ...(claims ? { achievementClaims: claims } : {}),
+    ...(hatchMarkers ? { [HATCH_FIELD]: hatchMarkers } : {}),
   })
 }
 
@@ -232,5 +253,15 @@ export function saveMetaStateWithSettlementMarkersStrict(meta: MetaState, marker
     localStorage.setItem(META_KEY, encodeMeta(meta, markers, meta.achievementClaims ?? existingAchievementClaims()))
   } catch (cause) {
     throw new Error(`保存 Meta 結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Hatch child-boundary write: canonical Meta/Dex data and hatch markers share one envelope. */
+export function saveMetaStateWithHatchMarkersStrict(meta: MetaState, hatchMarkers: unknown[]): void {
+  if (!hasLS()) return
+  try {
+    localStorage.setItem(META_KEY, encodeMeta(meta, existingSettlementMarkers(), meta.achievementClaims ?? existingAchievementClaims(), hatchMarkers))
+  } catch (cause) {
+    throw new Error(`保存孵化圖鑑結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }

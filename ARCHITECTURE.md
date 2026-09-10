@@ -292,16 +292,17 @@ warnings.
   recommended trio. Advice never mutates selection: the player still chooses and orders the team.
 
 **Storage map (all client-side, no backend):** `mobie.roster.v2` (localStorage, canonical roster, incl.
-`heldItemId`; legacy arrays remain readable, while capture settlement writes a roster envelope containing
-`resultSettlements`) · `mobie.roster.growth.v1` (roster settlement marker) · `mobie.roster.capture.v1`
+`heldItemId`; legacy arrays remain readable, while capture and hatch settlement writes use a roster envelope containing
+`resultSettlements` / `hatchSettlements`) · `mobie.roster.growth.v1` (roster settlement marker) · `mobie.roster.capture.v1`
 (captured-new roster child marker) · `mobie.skillpoints.settlement.v1` (SP child marker) ·
 `mobie.meta.settlement.v1` (Result Meta child marker) · `mobie.meta.capture.v1` (capture/Dex Meta child marker) ·
-`mobie.run.v1` (canonical Tower run metadata) · `mobie.incubator.v1` (canonical incubator eggs/progress) ·
+`mobie.run.v1` (canonical Tower run metadata) · `mobie.incubator.v1` (canonical incubator eggs/progress plus the Ticket 41 hatch outbox) ·
+`mobie.incubator.hatch.v1` (best-effort hatch outbox mirror) ·
 `mobie.tower.settlement.v1` (Tower child mirror) · `mobie.incubator.settlement.v1`
 (incubator child mirror) · `mobie.incubator.capture.v1` (duplicate-egg child marker) · `mobie.result.settlement.v1`
 (Result orchestration journal) · `mobie.achievement.claim.meta.v1`, `mobie.achievement.claim.incubator.v1`,
 and `mobie.achievement.claim.sp.v1` (best-effort claim receipt mirrors; canonical claim outboxes live in
-the Meta, incubator, and SP envelopes) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
+the Meta, incubator, and SP envelopes) · `mobie.meta.hatch.v1` / `mobie.roster.hatch.v1` (best-effort hatch child marker mirrors; canonical markers live beside their Meta/roster writes) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
 (IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
 `mobie.settings.v1` (read-only migration/rollback source) ·
@@ -371,6 +372,16 @@ a failed finalize therefore retries the receipt without sending another egg or S
 for an existing operation is a recoverable collision. Bootstrap and the Achievements modal reconcile pending
 outboxes after reload, while egg creation remains restricted to the `achievement` source (Tower never produces
 eggs).
+
+M24 Ticket 41 adds `game/incubatorHatch.ts` for durable hatch operations. `HatchCoordinator` derives the
+stable `hatch:v1:<eggId>` identity and deterministic `OwnedUnit` payload, writes a pending outbox inside
+`mobie.incubator.v1`, then asks the independent `HatchRosterDestination` and `HatchMetaDestination` to
+`applyOnce` at their own canonical boundaries. Only after both child receipts succeed does the Incubator
+boundary remove the egg and settle its receipt. Pending operations survive reload; `hasApplied` probes
+reconcile child markers after a partial write, and a changed fingerprint is a recoverable collision. The
+Incubator UI projects empty/loading/incubating/ready/hatching/invalid/error states and keeps skip/timeout
+as presentation controls, while the reduced-motion reveal still exposes the deterministic Mobie name,
+artwork fallback, stats, Grade, source, and roster/Dex feed.
 
 Ticket 33 adds `ResultSettlementProjectionController` and the
 `store/resultSettlementProjection.ts` adapter. The adapter assembles the

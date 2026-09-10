@@ -5,6 +5,7 @@ import {
   type AchievementReward,
 } from '@/game/achievements'
 import { markClaimed, type MetaState } from '@/game/meta'
+import type { HatchOutbox } from '@/game/incubatorHatch'
 
 /**
  * Durable achievement claim protocol (M24 Ticket 40).
@@ -155,6 +156,48 @@ function cloneMeta(meta: MetaState): MetaState {
   }
 }
 
+function cloneHatchOutbox(entry: HatchOutbox): HatchOutbox {
+  return {
+    ...entry,
+    egg: cloneEgg(entry.egg),
+    payload: {
+      ...entry.payload,
+      egg: cloneEgg(entry.payload.egg),
+      unit: {
+        ...entry.payload.unit,
+        ivs: { ...entry.payload.unit.ivs },
+        ...(entry.payload.unit.learnedMoveIds ? { learnedMoveIds: [...entry.payload.unit.learnedMoveIds] } : {}),
+        ...(entry.payload.unit.equippedMoveIds ? { equippedMoveIds: [...entry.payload.unit.equippedMoveIds] } : {}),
+      },
+    },
+    ...(entry.receipt ? {
+      receipt: {
+        ...entry.receipt,
+        egg: cloneEgg(entry.receipt.egg),
+        unit: {
+          ...entry.receipt.unit,
+          ivs: { ...entry.receipt.unit.ivs },
+          ...(entry.receipt.unit.learnedMoveIds ? { learnedMoveIds: [...entry.receipt.unit.learnedMoveIds] } : {}),
+          ...(entry.receipt.unit.equippedMoveIds ? { equippedMoveIds: [...entry.receipt.unit.equippedMoveIds] } : {}),
+        },
+        roster: {
+          ...entry.receipt.roster,
+          unit: {
+            ...entry.receipt.roster.unit,
+            ivs: { ...entry.receipt.roster.unit.ivs },
+            ...(entry.receipt.roster.unit.learnedMoveIds ? { learnedMoveIds: [...entry.receipt.roster.unit.learnedMoveIds] } : {}),
+            ...(entry.receipt.roster.unit.equippedMoveIds ? { equippedMoveIds: [...entry.receipt.roster.unit.equippedMoveIds] } : {}),
+          },
+        },
+        meta: {
+          ...entry.receipt.meta,
+          meta: cloneMeta(entry.receipt.meta.meta),
+        },
+      },
+    } : {}),
+  }
+}
+
 function cloneIncubatorState(state: IncubatorState): IncubatorState {
   return {
     schemaVersion: state.schemaVersion,
@@ -162,6 +205,9 @@ function cloneIncubatorState(state: IncubatorState): IncubatorState {
     eggs: state.eggs.map(cloneEgg),
     ...(state.achievementClaims
       ? { achievementClaims: state.achievementClaims.map(cloneMarker) }
+      : {}),
+    ...(state.hatchOutbox
+      ? { hatchOutbox: state.hatchOutbox.map(cloneHatchOutbox) }
       : {}),
   }
 }

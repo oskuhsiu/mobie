@@ -10,6 +10,7 @@ import { hashSeed } from '@/game/individual'
 import { getSpecies } from '@/game/data/species'
 import { teachableOf } from '@/game/learnset'
 import type { AchievementRewardMarker } from '@/game/achievementClaim'
+import type { HatchOutbox } from '@/game/incubatorHatch'
 
 export const INCUBATOR_SCHEMA_VERSION = 1
 const KEY = 'mobie.incubator.v1'
@@ -46,6 +47,8 @@ export interface IncubatorState {
   nextId: number
   /** Ticket 40 egg-reward receipts; kept beside canonical eggs for recovery. */
   achievementClaims?: AchievementRewardMarker[]
+  /** Ticket 41 durable hatch intent/receipt; canonical incubator boundary owns egg removal. */
+  hatchOutbox?: HatchOutbox[]
 }
 
 /** 孵出個體的起始等級。 */
@@ -54,7 +57,7 @@ export const HATCH_LEVEL = 5
 const REQUIRED: Record<EggSource, number> = { achievement: 6, duplicate: 8, tower: 5 }
 
 export function defaultIncubator(): IncubatorState {
-  return { schemaVersion: INCUBATOR_SCHEMA_VERSION, eggs: [], nextId: 1, achievementClaims: [] }
+  return { schemaVersion: INCUBATOR_SCHEMA_VERSION, eggs: [], nextId: 1, achievementClaims: [], hatchOutbox: [] }
 }
 
 /** 新增一顆蛋（純函數，決定論 id/seed）。speciesPool 過濾後為空則不新增（回原 state）。 */
@@ -127,11 +130,23 @@ export function migrateIncubator(raw: unknown): IncubatorState {
       && !!(claim as AchievementRewardMarker).receipt
     ))
     : []
+  const hatchOutbox = Array.isArray(o.hatchOutbox)
+    ? o.hatchOutbox.filter((entry): entry is HatchOutbox => (
+      !!entry && typeof entry === 'object'
+      && typeof (entry as HatchOutbox).hatchOperationId === 'string'
+      && typeof (entry as HatchOutbox).hatchFingerprint === 'string'
+      && ((entry as HatchOutbox).status === 'pending' || (entry as HatchOutbox).status === 'settled')
+      && typeof (entry as HatchOutbox).eggId === 'string'
+      && !!(entry as HatchOutbox).egg
+      && !!(entry as HatchOutbox).payload
+    ))
+    : []
   return {
     schemaVersion: typeof o.schemaVersion === 'number' ? o.schemaVersion : base.schemaVersion,
     eggs,
     nextId: typeof o.nextId === 'number' && o.nextId > 0 ? o.nextId : eggs.length + 1,
     achievementClaims,
+    hatchOutbox,
   }
 }
 
@@ -171,6 +186,7 @@ export function saveIncubatorState(state: IncubatorState): void {
   try {
     let markers: unknown[] | undefined
     let achievementClaims: unknown[] | undefined = state.achievementClaims
+    let hatchOutbox: unknown[] | undefined = state.hatchOutbox
     const current = localStorage.getItem(KEY)
     if (current) {
       const parsed: unknown = JSON.parse(current)
@@ -180,6 +196,10 @@ export function saveIncubatorState(state: IncubatorState): void {
         if (!achievementClaims) {
           const claims = (parsed as Record<string, unknown>).achievementClaims
           if (Array.isArray(claims)) achievementClaims = claims
+        }
+        if (!hatchOutbox) {
+          const outbox = (parsed as Record<string, unknown>).hatchOutbox
+          if (Array.isArray(outbox)) hatchOutbox = outbox
         }
       }
     }
@@ -194,6 +214,7 @@ export function saveIncubatorState(state: IncubatorState): void {
       ...state,
       ...(markers ? { [SETTLEMENT_FIELD]: markers } : {}),
       ...(achievementClaims ? { achievementClaims } : {}),
+      ...(hatchOutbox ? { hatchOutbox } : {}),
     }))
   } catch {
     /* 配額/隱私模式：忽略 */
@@ -205,20 +226,22 @@ export function saveIncubatorStateWithSettlementMarkersStrict(state: IncubatorSt
   if (!hasLS()) return
   try {
     let achievementClaims: unknown[] | undefined = state.achievementClaims
-    if (!achievementClaims) {
-      const current = localStorage.getItem(KEY)
-      if (current) {
-        const parsed: unknown = JSON.parse(current)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          const claims = (parsed as Record<string, unknown>).achievementClaims
-          if (Array.isArray(claims)) achievementClaims = claims
-        }
+    let hatchOutbox: unknown[] | undefined = state.hatchOutbox
+    const current = localStorage.getItem(KEY)
+    if (current) {
+      const parsed: unknown = JSON.parse(current)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const record = parsed as Record<string, unknown>
+        if (!achievementClaims && Array.isArray(record.achievementClaims)) achievementClaims = record.achievementClaims
+        const outbox = record.hatchOutbox
+        if (!hatchOutbox && Array.isArray(outbox)) hatchOutbox = outbox
       }
     }
     localStorage.setItem(KEY, JSON.stringify({
       ...state,
       [SETTLEMENT_FIELD]: markers,
       ...(achievementClaims ? { achievementClaims } : {}),
+      ...(hatchOutbox ? { hatchOutbox } : {}),
     }))
   } catch (cause) {
     throw new Error(`保存孵化進度結算資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
@@ -233,20 +256,52 @@ export function saveIncubatorStateWithAchievementClaimsStrict(
   if (!hasLS()) return
   try {
     let settlements: unknown[] | undefined
+    let hatchOutbox: unknown[] | undefined = state.hatchOutbox
     const current = localStorage.getItem(KEY)
     if (current) {
       const parsed: unknown = JSON.parse(current)
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         const embedded = (parsed as Record<string, unknown>)[SETTLEMENT_FIELD]
         if (Array.isArray(embedded)) settlements = embedded
+        if (!hatchOutbox) {
+          const outbox = (parsed as Record<string, unknown>).hatchOutbox
+          if (Array.isArray(outbox)) hatchOutbox = outbox
+        }
       }
     }
     localStorage.setItem(KEY, JSON.stringify({
       ...state,
       ...(settlements ? { [SETTLEMENT_FIELD]: settlements } : {}),
       achievementClaims: claims,
+      ...(hatchOutbox ? { hatchOutbox } : {}),
     }))
   } catch (cause) {
     throw new Error(`保存成就蛋領取資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
+/** Hatch child/coordinator boundary write: preserve Result and Achievement markers in the same envelope. */
+export function saveIncubatorStateWithHatchOutboxStrict(state: IncubatorState): void {
+  if (!hasLS()) return
+  try {
+    let settlements: unknown[] | undefined
+    let achievementClaims: unknown[] | undefined = state.achievementClaims
+    const current = localStorage.getItem(KEY)
+    if (current) {
+      const parsed: unknown = JSON.parse(current)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const record = parsed as Record<string, unknown>
+        if (Array.isArray(record[SETTLEMENT_FIELD])) settlements = record[SETTLEMENT_FIELD]
+        if (!achievementClaims && Array.isArray(record.achievementClaims)) achievementClaims = record.achievementClaims
+      }
+    }
+    localStorage.setItem(KEY, JSON.stringify({
+      ...state,
+      ...(settlements ? { [SETTLEMENT_FIELD]: settlements } : {}),
+      ...(achievementClaims ? { achievementClaims } : {}),
+      hatchOutbox: state.hatchOutbox ?? [],
+    }))
+  } catch (cause) {
+    throw new Error(`保存孵化結果資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
   }
 }

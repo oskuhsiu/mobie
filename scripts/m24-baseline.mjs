@@ -185,7 +185,7 @@ const CHECKPOINT_CATALOG = {
   },
   'incubator-hatch-reveal': {
     route: 'title/modal:incubator/reveal', event: 'Incubator.hatch', next: ['點擊關閉'],
-    storage: ['mobie.incubator.v1', 'mobie.roster.v2', 'mobie.meta.v1'], lazy: ['IncubatorModal'], capability: 'deterministic hatch reveal',
+    storage: ['mobie.incubator.v1', 'mobie.incubator.hatch.v1', 'mobie.roster.v2', 'mobie.roster.hatch.v1', 'mobie.meta.v1', 'mobie.meta.hatch.v1'], lazy: ['IncubatorModal'], capability: 'deterministic hatch reveal',
   },
   save: {
     route: 'title/modal:save', event: 'ToolsMenu.open(save)', next: ['匯出存檔', '選擇 .save 檔', '關閉'],
@@ -1468,9 +1468,40 @@ async function runViewport(cdp, config, viewport, browserInfo) {
     await openTool('孵化所', '孵化所')
     await waitFor('Boolean(document.querySelector(".egg-row--ready"))', 8_000, 'ready egg content')
     checkpoints.push(await capture('incubator-ready', 'real ready incubator state'))
+    const hatchBefore = await evaluate(`(() => {
+      const parse = (key) => { try { return JSON.parse(localStorage.getItem(key) ?? 'null') } catch { return null } }
+      const incubator = parse('mobie.incubator.v1')
+      const egg = incubator?.eggs?.find((candidate) => candidate.source === 'achievement' || candidate.source === 'duplicate') ?? null
+      return { eggId: egg?.id ?? null, source: egg?.source ?? null, progress: egg?.progress ?? null, requiredProgress: egg?.requiredProgress ?? null, readyRows: document.querySelectorAll('.egg-row--ready').length }
+    })()`)
+    if (!hatchBefore.eggId || hatchBefore.readyRows < 1 || hatchBefore.progress < hatchBefore.requiredProgress) throw new Error(`Hatch did not start from a canonical ready egg: ${JSON.stringify(hatchBefore)}`)
     await clickText('孵化', '.egg-row--ready button')
     await waitFor('Boolean(document.querySelector(".hatch-reveal"))', 10_000, 'hatch reveal')
-    checkpoints.push(await capture('incubator-hatch-reveal', 'real deterministic hatch result'))
+    const hatchEvidence = await evaluate(`(() => {
+      const parse = (key) => { try { return JSON.parse(localStorage.getItem(key) ?? 'null') } catch { return null } }
+      const rosterRaw = parse('mobie.roster.v2')
+      const roster = Array.isArray(rosterRaw) ? rosterRaw : rosterRaw?.roster ?? []
+      const incubator = parse('mobie.incubator.v1')
+      const meta = parse('mobie.meta.v1')
+      const op = document.querySelector('[data-hatch-reveal]')?.dataset.hatchOperationId ?? null
+      const fingerprint = document.querySelector('[data-hatch-reveal]')?.dataset.hatchFingerprint ?? null
+      const hatchMarker = incubator?.hatchOutbox?.find((entry) => entry.eggId === ${JSON.stringify(hatchBefore.eggId)}) ?? null
+      const rosterMarker = rosterRaw?.hatchSettlements?.find((entry) => entry.hatchOperationId === op) ?? null
+      const metaMarker = meta?.hatchSettlements?.find((entry) => entry.hatchOperationId === op) ?? null
+      return {
+        eggId: ${JSON.stringify(hatchBefore.eggId)}, source: ${JSON.stringify(hatchBefore.source)},
+        operationId: op, fingerprint, revealState: document.querySelector('[data-hatch-reveal]')?.dataset.hatchState ?? null,
+        hatchOutboxStatus: hatchMarker?.status ?? null, remainingEggs: incubator?.eggs?.filter((egg) => egg.id === ${JSON.stringify(hatchBefore.eggId)}).length ?? null,
+        rosterCount: roster.length, rosterId: hatchMarker?.payload?.unit?.id ?? null,
+        rosterMarkerStatus: rosterMarker?.status ?? null, metaMarkerStatus: metaMarker?.status ?? null,
+        metaRegistered: meta?.registered?.includes(hatchMarker?.payload?.speciesId) ?? false,
+        statsVisible: Boolean(document.querySelector('[aria-label="孵出個體能力值"]')),
+        feedVisible: Boolean(document.querySelector('.hatch-reveal__feed')),
+        gradeVisible: Boolean(document.querySelector('.grade-badge')),
+      }
+    })()`)
+    if (hatchEvidence.eggId !== hatchBefore.eggId || !hatchEvidence.operationId?.startsWith('hatch:v1:') || !hatchEvidence.fingerprint?.startsWith('hatch-payload:v1:') || hatchEvidence.revealState !== 'hatched' || hatchEvidence.hatchOutboxStatus !== 'settled' || hatchEvidence.remainingEggs !== 0 || !hatchEvidence.rosterMarkerStatus || !hatchEvidence.metaMarkerStatus || !hatchEvidence.metaRegistered || !hatchEvidence.statsVisible || !hatchEvidence.feedVisible || !hatchEvidence.gradeVisible) throw new Error(`Durable hatch handoff failed: ${JSON.stringify(hatchEvidence)}`)
+    checkpoints.push(await capture('incubator-hatch-reveal', 'real deterministic hatch result', { observation: { hatchBefore, hatchEvidence } }))
     await clickSelector('.hatch-reveal')
     await closeTopModal()
 

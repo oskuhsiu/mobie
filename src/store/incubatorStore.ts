@@ -3,19 +3,35 @@
 // 進度：每場戰鬥推進（advance）。孵化＝移蛋 + 入 roster + 登錄圖鑑。
 
 import { create } from 'zustand'
-import type { OwnedUnit } from '@/game/types'
 import {
   loadIncubator, loadIncubatorStrict, saveIncubatorState, defaultIncubator,
-  addEgg, advanceAll, hatchEgg, isHatchable,
-  type IncubatorState, type Egg,
+  saveIncubatorStateWithHatchOutboxStrict,
+  addEgg, advanceAll, isHatchable,
+  type IncubatorState,
 } from '@/game/incubator'
 import type { AchievementReward } from '@/game/achievements'
 import { useRoster } from '@/store/rosterStore'
 import { useMeta } from '@/store/metaStore'
+import { bumpSaveMeta } from '@/game/save/saveMeta'
+import { loadMetaStrict, saveMetaStateStrict, saveMetaStateWithHatchMarkersStrict } from '@/game/meta'
+import {
+  HatchCoordinator,
+  HatchMetaDestination,
+  HatchRosterDestination,
+  LocalStorageHatchIncubatorPersistence,
+  LocalStorageHatchMetaPersistence,
+  LocalStorageHatchRosterPersistence,
+  type HatchReceipt,
+  type HatchRecovery,
+} from '@/game/incubatorHatch'
 
 interface IncubatorStore {
   state: IncubatorState
   loaded: boolean
+  loadError: string | null
+  hatchBusy: string | null
+  hatchErrors: Record<string, string>
+  lastHatch: HatchReceipt | null
   load: () => void
   /** Cold boot variant: storage errors propagate to the bootstrap coordinator for Retry. */
   loadStrict: () => void
@@ -26,19 +42,59 @@ interface IncubatorStore {
   addDuplicateEgg: (speciesId: number, label?: string, inheritedMoveId?: number) => void
   /** 每場有效戰鬥完成 → 推進所有蛋的孵化進度。 */
   advance: (amount: number) => void
-  /** 孵化一顆蛋（達進度才可）：產 OwnedUnit 入 roster + 登錄圖鑑，移除該蛋。回傳孵出個體。 */
-  hatch: (eggId: string) => Promise<OwnedUnit | null>
+  /** Compatibility projection: return only the canonical unit after a hatch. */
+  hatch: (eggId: string) => Promise<import('@/game/types').OwnedUnit | null>
+  /** Detailed Ticket 41 receipt used by the reveal and reconciliation evidence. */
+  hatchWithReceipt: (eggId: string) => Promise<HatchReceipt | null>
+  /** Reload/remount recovery for pending hatch outboxes. */
+  reconcileHatches: () => Promise<HatchRecovery>
 }
 
 export const useIncubator = create<IncubatorStore>((set, get) => {
   const persist = (state: IncubatorState) => { saveIncubatorState(state); set({ state }) }
+  const persistHatchState = (state: IncubatorState) => set({ state })
+  const hatchCoordinator = new HatchCoordinator({
+    incubator: new LocalStorageHatchIncubatorPersistence({
+      loadState: loadIncubatorStrict,
+      saveStateWithHatchOutbox: (state) => {
+        // The canonical incubator write owns the outbox/egg boundary. The
+        // live Zustand projection is updated only after that write succeeds.
+        saveIncubatorStateWithHatchOutboxStrict(state)
+        persistHatchState(state)
+      },
+    }),
+    roster: new HatchRosterDestination(new LocalStorageHatchRosterPersistence(
+      undefined,
+      undefined,
+      (roster) => { useRoster.setState({ roster }) },
+    )),
+    meta: new HatchMetaDestination(new LocalStorageHatchMetaPersistence(
+      {
+        loadMeta: loadMetaStrict,
+        saveMeta: saveMetaStateStrict,
+        saveMetaWithHatchMarkers: saveMetaStateWithHatchMarkersStrict,
+      },
+      undefined,
+      (meta) => { useMeta.setState({ meta }) },
+    )),
+  })
   const hydrate = (load: () => IncubatorState): void => {
-    set({ loaded: false })
-    set({ state: load(), loaded: true })
+    set({ loaded: false, loadError: null })
+    try {
+      set({ state: load(), loaded: true, loadError: null })
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      set({ loaded: false, loadError: message })
+      throw cause
+    }
   }
   return {
     state: defaultIncubator(),
     loaded: false,
+    loadError: null,
+    hatchBusy: null,
+    hatchErrors: {},
+    lastHatch: null,
 
     load: () => hydrate(loadIncubator),
 
@@ -58,15 +114,44 @@ export const useIncubator = create<IncubatorStore>((set, get) => {
       if (next !== get().state) persist(next)
     },
 
-    hatch: async (eggId) => {
-      const egg = get().state.eggs.find((e) => e.id === eggId)
-      if (!egg || !isHatchable(egg)) return null
-      const unit = hatchEgg(egg)
-      const added = await useRoster.getState().addUnit(unit)
-      // 先移蛋再回報（exactly-once：同一顆蛋不重複孵化）
-      persist({ ...get().state, eggs: get().state.eggs.filter((e: Egg) => e.id !== eggId) })
-      if (added) useMeta.getState().recordCapture(added.speciesId, added.shiny)
-      return added
+    hatchWithReceipt: async (eggId) => {
+      const egg = get().state.eggs.find((candidate) => candidate.id === eggId)
+      const settled = get().state.hatchOutbox?.find((entry) => entry.eggId === eggId && entry.status === 'settled')
+      const pending = get().state.hatchOutbox?.find((entry) => entry.eggId === eggId && entry.status === 'pending')
+      if (!egg && !settled && !pending) return null
+      if (egg && !isHatchable(egg) && !pending) return null
+      set({ hatchBusy: eggId, hatchErrors: { ...get().hatchErrors, [eggId]: '' } })
+      try {
+        const receipt = await hatchCoordinator.hatchOnce(eggId)
+        const nextErrors = { ...get().hatchErrors }
+        delete nextErrors[eggId]
+        set({ lastHatch: receipt, hatchErrors: nextErrors })
+        if (receipt.status === 'applied') bumpSaveMeta(receipt.appliedAt)
+        return receipt
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        set({ hatchErrors: { ...get().hatchErrors, [eggId]: message } })
+        throw cause
+      } finally {
+        set({ hatchBusy: null })
+      }
+    },
+
+    hatch: async (eggId) => (await get().hatchWithReceipt(eggId))?.unit ?? null,
+
+    reconcileHatches: async () => {
+      const recovery = await hatchCoordinator.recoverPending()
+      const nextErrors = { ...get().hatchErrors }
+      for (const error of recovery.errors) nextErrors[error.eggId] = error.message
+      if (recovery.errors.length === 0) delete nextErrors['*']
+      if (recovery.receipts.length > 0) {
+        const latest = recovery.receipts.at(-1)!
+        set({ lastHatch: latest })
+        for (const receipt of recovery.receipts) delete nextErrors[receipt.eggId]
+      }
+      set({ hatchErrors: nextErrors })
+      for (const receipt of recovery.receipts) if (receipt.status === 'applied') bumpSaveMeta(receipt.appliedAt)
+      return recovery
     },
   }
 })
