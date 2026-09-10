@@ -6,6 +6,7 @@ import {
 } from '@/game/achievements'
 import { markClaimed, type MetaState } from '@/game/meta'
 import type { HatchOutbox } from '@/game/incubatorHatch'
+import { tryBeginSaveOperation, setSaveOperationRunning } from '@/game/save/saveOperationGuard'
 
 /**
  * Durable achievement claim protocol (M24 Ticket 40).
@@ -567,13 +568,19 @@ export class AchievementClaimCoordinator {
   ) {}
 
   claimOnce(achievementId: string): Promise<AchievementClaimResult> {
+    if (!tryBeginSaveOperation('achievement-claim')) return Promise.reject(new Error('存檔操作正在進行中，請稍候再試。'))
     const run = this.queue.then(() => this.claimSerialized(achievementId))
+    run.then(
+      () => setSaveOperationRunning('achievement-claim', false),
+      () => setSaveOperationRunning('achievement-claim', false),
+    )
     this.queue = run.catch(() => undefined)
     return run
   }
 
   /** Resume every durable pending outbox. Errors are retained for the next retry. */
   recoverPending(): Promise<AchievementClaimRecovery> {
+    if (!tryBeginSaveOperation('achievement-claim')) return Promise.reject(new Error('存檔操作正在進行中，請稍候再試。'))
     const run = this.queue.then(async () => {
       let meta: MetaState
       try { meta = await this.dependencies.meta.loadMeta() }
@@ -597,6 +604,10 @@ export class AchievementClaimCoordinator {
       }
       return { attempted: pending.length, completed, errors }
     })
+    run.then(
+      () => setSaveOperationRunning('achievement-claim', false),
+      () => setSaveOperationRunning('achievement-claim', false),
+    )
     this.queue = run.catch(() => undefined)
     return run
   }

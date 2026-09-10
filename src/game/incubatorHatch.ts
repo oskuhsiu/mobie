@@ -10,6 +10,7 @@ import {
   type IncubatorState,
 } from '@/game/incubator'
 import { LocalStorageAdapter, type PersistenceAdapter } from '@/game/persistence'
+import { tryBeginSaveOperation, setSaveOperationRunning } from '@/game/save/saveOperationGuard'
 
 /** Durable hatch protocol (M24 Ticket 41).
  *
@@ -689,7 +690,12 @@ export class HatchCoordinator {
   ) {}
 
   hatchOnce(eggId: string): Promise<HatchReceipt> {
+    if (!tryBeginSaveOperation('hatch')) return Promise.reject(new Error('存檔操作正在進行中，請稍候再試。'))
     const run = this.queue.then(() => this.hatchSerialized(eggId))
+    run.then(
+      () => setSaveOperationRunning('hatch', false),
+      () => setSaveOperationRunning('hatch', false),
+    )
     this.queue = run.catch(() => undefined)
     return run
   }
@@ -712,6 +718,7 @@ export class HatchCoordinator {
   }
 
   recoverPending(): Promise<HatchRecovery> {
+    if (!tryBeginSaveOperation('hatch')) return Promise.reject(new Error('存檔操作正在進行中，請稍候再試。'))
     const run = this.queue.then(async () => {
       let state: IncubatorState
       try { state = await this.dependencies.incubator.loadState() }
@@ -730,6 +737,10 @@ export class HatchCoordinator {
       }
       return { attempted: pending.length, completed: receipts.length, receipts, errors }
     })
+    run.then(
+      () => setSaveOperationRunning('hatch', false),
+      () => setSaveOperationRunning('hatch', false),
+    )
     this.queue = run.catch(() => undefined)
     return run
   }

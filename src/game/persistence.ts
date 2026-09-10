@@ -19,7 +19,8 @@ export interface PersistenceAdapter {
 // v2：起始 roster 由 5 隻擴充為跨屬性 16 隻（dex 擴到 251、區域擴到 8）→ 換 key 讓既有存檔重新種子。
 // The legacy value is an OwnedUnit[]; the capture child may add a resultSettlements
 // field around that array without changing the loadRoster contract.
-const KEY = 'mobie.roster.v2'
+export const ROSTER_STORAGE_KEY = 'mobie.roster.v2'
+const KEY = ROSTER_STORAGE_KEY
 
 interface RosterEnvelope {
   roster: OwnedUnit[]

@@ -92,6 +92,16 @@ function writeMeta(meta: SaveMeta): void {
   }
 }
 
+/** Strict counterpart used by atomic save replacement; storage failure must abort the commit. */
+function writeMetaStrict(meta: SaveMeta): void {
+  if (!hasLS()) return
+  try {
+    localStorage.setItem(KEY, JSON.stringify(meta))
+  } catch (cause) {
+    throw new Error(`保存存檔中繼資料失敗：${cause instanceof Error ? cause.message : String(cause)}`)
+  }
+}
+
 /**
  * 任一 canonical 存檔資料（roster / cards）寫入後呼叫：revision++、updatedAt = now。
  * now 由呼叫端傳入（`Date.now()`），保持本模組可測、不直接相依時鐘。
@@ -118,5 +128,12 @@ export function setProfileName(name: string): SaveMeta {
 export function adoptMeta(incoming: SaveMeta): SaveMeta {
   const next: SaveMeta = { ...migrateMeta(incoming), schemaVersion: SAVE_SCHEMA_VERSION }
   writeMeta(next)
+  return next
+}
+
+/** Strict lineage adoption for save import/restore's atomic rollback boundary. */
+export function adoptMetaStrict(incoming: SaveMeta): SaveMeta {
+  const next: SaveMeta = { ...migrateMeta(incoming), schemaVersion: SAVE_SCHEMA_VERSION }
+  writeMetaStrict(next)
   return next
 }

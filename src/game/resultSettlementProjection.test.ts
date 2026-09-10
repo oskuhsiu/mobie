@@ -6,6 +6,7 @@ import {
   type ResultSettlementProjectionDriver,
   type ResultSettlementReceipt,
 } from './resultSettlement'
+import { beginSaveMutation } from './save/saveOperationGuard'
 
 const identity: ResultIdentity = { resultId: 'projection-result', resultFingerprint: 'projection-fp' }
 const payload: ResultSettlementPayload = {
@@ -107,5 +108,21 @@ describe('ResultSettlementProjectionController', () => {
     expect(controller.getSnapshot()).toMatchObject({ status: 'settled', identity: secondIdentity })
     expect(dependencies.settle).toHaveBeenCalledTimes(1)
     expect(dependencies.settle).toHaveBeenCalledWith(secondIdentity, payload)
+  })
+
+  it('does not start Result after Save acquires the shared mutation mutex', async () => {
+    const dependencies = driver()
+    const controller = new ResultSettlementProjectionController(dependencies)
+    const release = beginSaveMutation()
+
+    controller.start({ identity, payload })
+    expect(controller.getSnapshot()).toMatchObject({ status: 'error', error: { code: 'storage' } })
+    expect(dependencies.prepare).not.toHaveBeenCalled()
+
+    release()
+    controller.retry()
+    await flush()
+    expect(controller.getSnapshot().status).toBe('settled')
+    expect(dependencies.settle).toHaveBeenCalledTimes(1)
   })
 })

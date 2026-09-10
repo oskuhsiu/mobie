@@ -1,3 +1,5 @@
+import { setResultOperationRunning } from '@/game/save/saveOperationGuard'
+
 /**
  * Process-local command guard for operations that must not race a Result
  * settlement.  It intentionally carries no journal or canonical data; the
@@ -7,6 +9,7 @@ let settlementRunning = false
 
 export function setResultSettlementRunning(running: boolean): void {
   settlementRunning = running
+  setResultOperationRunning(running)
 }
 
 export function isResultSettlementRunning(): boolean {

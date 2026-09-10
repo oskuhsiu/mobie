@@ -306,7 +306,8 @@ warnings.
 and `mobie.achievement.claim.sp.v1` (best-effort claim receipt mirrors; canonical claim outboxes live in
 the Meta, incubator, and SP envelopes) · `mobie.meta.hatch.v1` / `mobie.roster.hatch.v1` (best-effort hatch child marker mirrors; canonical markers live beside their Meta/roster writes) · `mz-cards` (IndexedDB card library, seeded from `playerCards`, M2) · `mz-cards.initialized.v1` (localStorage marker that prevents an intentionally emptied card library from being reseeded after reload) · `mz.savemeta.v1`
 (localStorage save envelope meta, M5) · `mz-save-backup`
-(IndexedDB single-slot pre-import backup, M5) · `mobie.settings.v2` (writable runtime preferences) ·
+(IndexedDB single-slot pre-import backup, M5) · `mobie.save.transaction.v1` (short-lived crash-recovery
+snapshot for Ticket 44; never portable) · `mobie.settings.v2` (writable runtime preferences) ·
 `mobie.settings.v1` (read-only migration/rollback source) ·
 `mz.itembag.v1` (localStorage item bag, M7) · `mz-replays` (IndexedDB, M14 battle replays — canonical
 `encodeReplay` JSON only, `battleId`-deduped, FIFO-capped 50). The portable save bundles the roster (so
@@ -395,7 +396,13 @@ completions after a new result or collision, while same-pair remounts reuse the
 active operation and retry delegates back to each destination's `applyOnce`.
 The process-local `resultSettlementGuard` is checked by Save Manager UI and
 `saveIO` export/import/restore commands, so those commands cannot race a
-running Result settlement.
+running Result settlement. Ticket 44 extends that command boundary to durable
+achievement-claim and hatch outboxes (including process-local queued calls),
+so Save Manager import/export/backup/restore stays disabled until every
+pending operation reaches a receipt. Save replacement records a pending
+cross-store transaction before writing, marks it committed only after every
+canonical boundary succeeds, and rolls back the recorded snapshot when a
+reload or later write exposes an incomplete transaction.
 
 ### 7.2 Battle replay (M14 — `game/replay/`, `store/replayRecorder.ts`)
 
@@ -432,6 +439,11 @@ deliberately dropped: zero backend, zero secret, zero vendor.
   `navigator.share` (iPad share sheet → Drive/Files), falling back to `<a download>`. Import does a
   **whole-save replace** (roster → cards → `adoptMeta`) after auto-backing-up. It never touches the
   retired `mz-models` store.
+- **Ticket 44 command boundary** — import/export/backup/restore commands read the Result,
+  achievement-claim, hatch, and save-transaction envelopes as well as process-local queues. Import
+  and restore use a persisted snapshot transaction with idempotent retry/rollback. Delivery reports
+  Share/download separately and exposes clipboard or selectable manual recovery text when delivery
+  capabilities are blocked.
 - **`backupStore.ts`** — IndexedDB single-slot backup written *before* any overwrite; restorable
   one-tap. Backs up roster+cards only.
 

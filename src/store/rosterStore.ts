@@ -486,8 +486,12 @@ export const useRoster = create<RosterState>((set, get) => {
 
   replaceAll: async (units) => {
     const clean = sanitizeRoster(units)
+    // Save import/restore uses this boundary as one half of its cross-store
+    // transaction. Persist first and only publish the live projection after
+    // the strict write succeeds; a quota/private-mode failure must not expose
+    // an in-memory roster that was never canonicalized.
+    await strictSaveRoster(clean)
     set({ roster: clean, lastResults: [], lastEvolutions: [], lastMoveLearns: [], lastCaptured: null })
-    await adapter.saveRoster(clean)
   },
 
   clearResults: () => set({ lastResults: [], lastEvolutions: [], lastMoveLearns: [], lastCaptured: null }),

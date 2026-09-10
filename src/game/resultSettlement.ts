@@ -11,6 +11,7 @@ import { captureChanceWithBall, getBall, rollBall, type BallId } from '@/game/ba
 import { hashSeed, makeRng } from '@/game/rng'
 import type { AchievementRewardMarker, AchievementClaimOutbox } from '@/game/achievementClaim'
 import type { HatchOutbox } from '@/game/incubatorHatch'
+import { beginResultOperation } from '@/game/save/saveOperationGuard'
 
 /**
  * Result settlement is keyed by the logical battle, not by a React mount or a
@@ -3132,6 +3133,7 @@ export class ResultSettlementProjectionController {
   private request: ResultSettlementProjectionRequest | null = null
   private generation = 0
   private readonly listeners = new Set<() => void>()
+  private resultRelease: (() => void) | null = null
 
   constructor(private readonly driver: ResultSettlementProjectionDriver) {}
 
@@ -3194,6 +3196,7 @@ export class ResultSettlementProjectionController {
         || this.snapshot.status === 'error') return
       this.request = request
       const generation = ++this.generation
+      if (!this.launch(request, generation)) return
       this.publish({
         status: 'running',
         identity: request.identity,
@@ -3203,12 +3206,12 @@ export class ResultSettlementProjectionController {
         receipt: null,
         error: null,
       })
-      void this.run(request, generation)
       return
     }
 
     this.request = request
     const generation = ++this.generation
+    if (!this.launch(request, generation)) return
     this.publish({
       status: 'running',
       identity: request.identity,
@@ -3218,13 +3221,13 @@ export class ResultSettlementProjectionController {
       receipt: null,
       error: null,
     })
-    void this.run(request, generation)
   }
 
   retry(): void {
     if (this.snapshot.status !== 'error' || !this.request || this.snapshot.error?.code === 'collision') return
     const request = this.request
     const generation = ++this.generation
+    if (!this.launch(request, generation)) return
     this.publish({
       ...this.snapshot,
       status: 'running',
@@ -3234,7 +3237,32 @@ export class ResultSettlementProjectionController {
       receipt: null,
       error: null,
     })
-    void this.run(request, generation)
+  }
+
+  private launch(request: ResultSettlementProjectionRequest, generation: number): boolean {
+    const release = beginResultOperation()
+    if (!release) {
+      this.publish({
+        status: 'error',
+        identity: request.identity,
+        attempt: this.snapshot.attempt,
+        captureDecision: this.snapshot.captureDecision,
+        captureOutcome: this.snapshot.captureOutcome,
+        receipt: null,
+        error: new ResultSettlementError(
+          'storage',
+          request.identity,
+          '存檔操作正在進行中，Result 結算會在存檔完成後再試。',
+        ),
+      })
+      return false
+    }
+    this.resultRelease = release
+    void this.run(request, generation).finally(() => {
+      if (this.resultRelease === release) this.resultRelease = null
+      release()
+    })
+    return true
   }
 
   async markResultLeft(identity: ResultIdentity | null = this.snapshot.identity): Promise<void> {

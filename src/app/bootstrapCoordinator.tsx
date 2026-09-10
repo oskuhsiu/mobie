@@ -2,10 +2,11 @@ import { createContext, useContext, useSyncExternalStore, type ReactNode } from 
 import { useIncubator } from '@/store/incubatorStore'
 import { useMeta } from '@/store/metaStore'
 import { useRoster } from '@/store/rosterStore'
+import { recoverSaveTransaction } from '@/game/save/saveIO'
 
 /** The only readiness states exposed to the application UI. */
 export type BootstrapStatus = 'loading' | 'ready' | 'partial-error'
-export type BootstrapStage = 'roster' | 'meta' | 'incubator'
+export type BootstrapStage = 'save' | 'roster' | 'meta' | 'incubator'
 
 export interface BootstrapSnapshot {
   status: BootstrapStatus
@@ -66,7 +67,7 @@ let cachedPromise: Promise<BootstrapSnapshot> | null = null
 let attempt = 0
 let promiseSerial = 0
 let lastFixture: BootstrapFixture | undefined
-const stageCalls: Record<BootstrapStage, number> = { roster: 0, meta: 0, incubator: 0 }
+const stageCalls: Record<BootstrapStage, number> = { save: 0, roster: 0, meta: 0, incubator: 0 }
 const stagePromises: Partial<Record<BootstrapStage, Promise<void>>> = {}
 const listeners = new Set<() => void>()
 
@@ -96,7 +97,7 @@ function readFixture(): BootstrapFixture {
   const queryDelay = Number(query.get('m24BootstrapDelay'))
   const queryStage = query.get('m24BootstrapFail')
   const configuredOwnsFixture = Boolean(configured && (Object.hasOwn(configured, 'failStage') || Object.hasOwn(configured, 'delayMs')))
-  const queryFailStage: BootstrapStage | undefined = queryStage === 'roster' || queryStage === 'meta' || queryStage === 'incubator'
+  const queryFailStage: BootstrapStage | undefined = queryStage === 'save' || queryStage === 'roster' || queryStage === 'meta' || queryStage === 'incubator'
     ? queryStage
     : undefined
   const failStage: BootstrapStage | undefined = configuredOwnsFixture
@@ -122,6 +123,7 @@ async function runStage<T>(stage: BootstrapStage, task: () => T | Promise<T>, fi
 function prepareStage(stage: BootstrapStage): void {
   // Keep the previous snapshot in memory for recovery, but make the stage's
   // data UI observe the coordinator gate until this stage completes.
+  if (stage === 'save') return
   if (stage === 'roster') useRoster.setState({ loaded: false })
   else if (stage === 'meta') useMeta.setState({ loaded: false })
   else useIncubator.setState({ loaded: false })
@@ -145,6 +147,7 @@ function ensureStage(
 }
 
 function stageLabel(stage: BootstrapStage): string {
+  if (stage === 'save') return '存檔交易回復'
   if (stage === 'roster') return 'Mobie 資料'
   if (stage === 'meta') return '圖鑑與成就'
   return '孵化所'
@@ -154,6 +157,15 @@ async function loadAttempt(attemptNumber: number): Promise<BootstrapSnapshot> {
   const fixture = readFixture()
   lastFixture = fixture
   const errors: BootstrapError[] = []
+
+  // A save replacement writes its recovery journal before touching any
+  // canonical slice. Reconcile it before the first store is exposed so a
+  // reload cannot let gameplay observe (or edit) a half-applied import.
+  try {
+    await ensureStage('save', () => recoverSaveTransaction(), fixture)
+  } catch (cause) {
+    errors.push({ stage: 'save', cause })
+  }
 
   // Incubator has no dependency on roster and starts with the roster request.
   const incubatorPromise = ensureStage('incubator', () => useIncubator.getState().loadStrict(), fixture)

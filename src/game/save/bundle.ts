@@ -14,6 +14,7 @@
 
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 import type { Card, CardSource, OwnedUnit, Stats } from '@/game/types'
+import { SPECIES } from '@/game/data/species'
 import { SAVE_SCHEMA_VERSION, migrateMeta, type SaveMeta } from './saveMeta'
 import { sanitizeRoster } from '@/game/rosterSanitize'
 import { crc32Bytes } from '@/game/crc32'
@@ -78,8 +79,14 @@ function payloadChunks(rosterBytes: Uint8Array, cardsBytes: Uint8Array, models: 
 
 // ── 打包 ──────────────────────────────────────────────────────────────────
 export function packSave(slices: SaveSlices): Uint8Array {
-  const rosterBytes = strToU8(JSON.stringify(slices.roster))
-  const cardsBytes = strToU8(JSON.stringify(slices.cards))
+  // Re-project the input at the portable boundary. This strips accidental
+  // operation envelopes, receipts, journals, model metadata, and diagnostics
+  // even when a caller hands us a wider in-memory object than the canonical
+  // save slice.
+  const roster = sanitizeRoster(slices.roster)
+  const cards = slices.cards.map(coerceCard).filter((card): card is Card => card !== null)
+  const rosterBytes = strToU8(JSON.stringify(roster))
+  const cardsBytes = strToU8(JSON.stringify(cards))
 
   const manifest: SaveManifest = {
     schemaVersion: SAVE_SCHEMA_VERSION,
@@ -87,7 +94,7 @@ export function packSave(slices: SaveSlices): Uint8Array {
     updatedAt: slices.meta.updatedAt,
     revision: slices.meta.revision,
     includesModels: false,
-    counts: { roster: slices.roster.length, cards: slices.cards.length, models: 0 },
+    counts: { roster: roster.length, cards: cards.length, models: 0 },
     checksum: crc32Bytes(payloadChunks(rosterBytes, cardsBytes, [])),
   }
 
@@ -112,7 +119,7 @@ function coerceCard(raw: unknown): Card | null {
   const speciesId = Number(o.speciesId)
   const level = Number(o.level)
   if (!cardId) return null
-  if (!Number.isInteger(speciesId) || speciesId <= 0) return null
+  if (!Number.isInteger(speciesId) || speciesId <= 0 || !SPECIES[speciesId]) return null
   if (!Number.isFinite(level) || level < 1 || level > 100) return null
   const card: Card = { cardId, speciesId, level: Math.floor(level) }
   if (o.ivs && typeof o.ivs === 'object') {
@@ -128,6 +135,11 @@ function coerceCard(raw: unknown): Card | null {
   if (typeof o.owner === 'string' && o.owner.trim()) card.owner = o.owner.trim()
   if (o.source === 'starter' || o.source === 'manual' || o.source === 'import') card.source = o.source as CardSource
   if (typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) && o.createdAt >= 0) card.createdAt = Math.floor(o.createdAt)
+  if (typeof o.heldItemId === 'string' && o.heldItemId.trim()) card.heldItemId = o.heldItemId.trim()
+  if (Array.isArray(o.equippedMoveIds)) {
+    const equipped = [...new Set(o.equippedMoveIds.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0))].slice(0, 4)
+    if (equipped.length > 0) card.equippedMoveIds = equipped
+  }
   return card
 }
 
@@ -212,10 +224,26 @@ export function unpackSave(bytes: Uint8Array): UnpackResult {
     return fail('bad-payload', '存檔的進度資料損毀（JSON 解析失敗）。')
   }
 
-  const roster = sanitizeRoster(Array.isArray(rosterRaw) ? rosterRaw : [])
-  const cards = (Array.isArray(cardsRaw) ? cardsRaw : [])
-    .map(coerceCard)
-    .filter((c): c is Card => c !== null)
+  if (!Array.isArray(rosterRaw) || !Array.isArray(cardsRaw)) {
+    return fail('bad-payload', '存檔的進度資料格式不完整（roster / cards 必須是陣列）。')
+  }
+  if (
+    !Number.isInteger(manifest.counts.roster) || manifest.counts.roster < 0
+    || !Number.isInteger(manifest.counts.cards) || manifest.counts.cards < 0
+    || manifest.counts.roster !== rosterRaw.length
+    || manifest.counts.cards !== cardsRaw.length
+  ) {
+    return fail('bad-payload', '存檔的進度數量與內容不一致，尚未套用任何資料。')
+  }
+  const roster = sanitizeRoster(rosterRaw)
+  if (roster.length !== rosterRaw.length) {
+    return fail('bad-payload', '存檔包含無法辨識的 Mobie 資料，尚未套用任何資料。')
+  }
+  const coercedCards = cardsRaw.map(coerceCard)
+  if (coercedCards.some((card) => card === null)) {
+    return fail('bad-payload', '存檔包含無法辨識的卡片資料，尚未套用任何資料。')
+  }
+  const cards = coercedCards as Card[]
 
   const meta: SaveMeta = {
     schemaVersion: SAVE_SCHEMA_VERSION,

@@ -89,6 +89,26 @@ describe('bundle：packSave / unpackSave round-trip', () => {
     const r = unpackSave(packSave(slices()))
     expect(r.ok && r.manifest.counts).toEqual({ roster: 2, cards: 2, models: 0 })
   })
+
+  it('portable projection 排除 operation outbox/receipt 與其他暫態欄位', () => {
+    const dirtyRoster = [{
+      ...unit('portable', 1),
+      resultSettlements: [{ status: 'pending', resultId: 'r1' }],
+      diagnostics: { retry: 3 },
+    }] as unknown as OwnedUnit[]
+    const dirtyCards = [{
+      ...slices().cards[0],
+      hatchOutbox: [{ status: 'pending', eggId: 'egg-1' }],
+      sessionDiagnostics: { tab: 'test' },
+    }]
+    const entries = unzipSync(packSave(slices({ roster: dirtyRoster, cards: dirtyCards })))
+    const savedRoster = JSON.parse(new TextDecoder().decode(entries['roster.json']))
+    const savedCards = JSON.parse(new TextDecoder().decode(entries['cards.json']))
+    expect(savedRoster[0]).not.toHaveProperty('resultSettlements')
+    expect(savedRoster[0]).not.toHaveProperty('diagnostics')
+    expect(savedCards[0]).not.toHaveProperty('hatchOutbox')
+    expect(savedCards[0]).not.toHaveProperty('sessionDiagnostics')
+  })
 })
 
 describe('bundle：壞檔分類（對齊 cardCode 的明確錯誤）', () => {
@@ -130,5 +150,16 @@ describe('bundle：壞檔分類（對齊 cardCode 的明確錯誤）', () => {
     entries['roster.json'][0] ^= 0xff // 翻一個位元組
     const r = unpackSave(zipSync(entries))
     expect(!r.ok && r.error).toBe('checksum-mismatch')
+  })
+
+  it('roster/cards 不是陣列 → recoverable bad-payload', () => {
+    const packed = packSave(slices())
+    const entries = unzipSync(packed)
+    entries['cards.json'] = strToU8('{}')
+    const manifest = JSON.parse(new TextDecoder().decode(entries['manifest.json']))
+    manifest.checksum = crc32Bytes([entries['roster.json'], entries['cards.json']])
+    entries['manifest.json'] = strToU8(JSON.stringify(manifest))
+    const r = unpackSave(zipSync(entries))
+    expect(r).toMatchObject({ ok: false, error: 'bad-payload' })
   })
 })

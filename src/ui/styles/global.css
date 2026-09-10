@@ -1615,6 +1615,11 @@ body {
   background: rgba(0,0,0,0.3); border: 1px solid var(--stroke); color: var(--text); font-size: 13px; font-family: ui-monospace, monospace;
 }
 .lib-msg { font-size: 13px; color: var(--accent); }
+.save-step { padding: 14px; border: 1px solid var(--stroke); border-radius: var(--radius-sm); background: rgba(255,255,255,0.025); }
+.save-step__title { font-size: 16px; line-height: 1.25; color: var(--text); }
+.save-file-picker { display: flex; align-items: center; }
+.save-recovery { display: flex; flex-direction: column; gap: 6px; color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+.save-recovery textarea { width: 100%; min-height: 150px; resize: vertical; padding: 9px 10px; border: 1px solid var(--stroke); border-radius: 10px; background: rgba(0,0,0,0.3); color: var(--text); font: 11px/1.4 ui-monospace, monospace; }
 .save-compare { display: flex; flex-direction: column; gap: 8px; }
 .save-compare__dir { font-size: 14px; }
 .save-compare__table { width: 100%; border-collapse: collapse; font-size: 13px; }

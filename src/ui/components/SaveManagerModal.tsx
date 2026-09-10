@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRoster } from '@/store/rosterStore'
 import { loadMeta, setProfileName, sanitizeProfileName, compareSaves, type SaveComparison } from '@/game/save/saveMeta'
@@ -6,8 +6,9 @@ import {
   buildSaveFile,
   deliverSaveFile,
   readSaveFile,
-  backupCurrentSave,
   applyImportedSave,
+  backupCurrentSave,
+  recoverSaveTransaction,
   restoreBackup,
 } from '@/game/save/saveIO'
 import { getBackupInfo, type BackupInfo } from '@/game/save/backupStore'
@@ -15,7 +16,7 @@ import { listCards } from '@/game/cardLibrary'
 import type { UnpackOk } from '@/game/save/bundle'
 import { audio } from '@/audio/audioEngine'
 import { ModalSurface } from '@/ui/shell/ModalSurface'
-import { resultSettlementBusy, useResultSettlementProjectionStore } from '@/store/resultSettlementProjection'
+import { getSaveOperationSnapshot, subscribeSaveOperationGuard } from '@/game/save/saveOperationGuard'
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`
@@ -44,7 +45,8 @@ const DIR_COLOR: Record<SaveComparison, string> = {
  */
 export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   const roster = useRoster((s) => s.roster)
-  const settlementRunning = useResultSettlementProjectionStore((s) => s.projection.status === 'running')
+  const saveOperation = useSyncExternalStore(subscribeSaveOperationGuard, getSaveOperationSnapshot, getSaveOperationSnapshot)
+  const saveBlocked = saveOperation.blocked
   const [name, setName] = useState('')
   const [cardsCount, setCardsCount] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -56,7 +58,11 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   const [importErr, setImportErr] = useState<string | null>(null)
   const [confirmOlder, setConfirmOlder] = useState(false)
   const [backup, setBackup] = useState<BackupInfo | null>(null)
+  const [recoveryText, setRecoveryText] = useState<string | null>(null)
+  const [downloadRecovery, setDownloadRecovery] = useState<string | null>(null)
   const compareRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileTriggerRef = useRef<HTMLButtonElement>(null)
 
   // 對照表是匯入最關鍵的資訊（尤其較舊警告）——出現時自動捲入視野，別讓它躲在捲動區下方
   useEffect(() => {
@@ -76,28 +82,45 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
     refreshLocal()
   }, [])
 
+  useEffect(() => {
+    void recoverSaveTransaction().catch((error) => {
+      setMsg(`存檔交易回復失敗：${error instanceof Error ? error.message : String(error)}`)
+    })
+  }, [])
+
   const filename = `${sanitizeProfileName(name) ?? 'trainer'}.save`
 
   const commitName = () => {
-    if (resultSettlementBusy()) return
+    if (saveBlocked) return
     const m = setProfileName(name)
     setMeta(m)
     setName(m.profileName)
   }
 
   const doExport = async () => {
-    if (resultSettlementBusy()) {
-      setMsg('Result 結算進行中，請等待完成後再匯出。')
+    if (saveBlocked) {
+      setMsg(saveOperation.message)
       return
     }
     setBusy(true)
     setMsg(null)
+    setRecoveryText(null)
+    setDownloadRecovery(null)
     commitName()
     try {
       const built = await buildSaveFile(roster)
-      const how = await deliverSaveFile(built)
+      const delivery = await deliverSaveFile(built)
       audio.play('select')
-      setMsg(`已${how === 'shared' ? '開啟分享面板送出' : '下載'} ${built.filename}（${fmtBytes(built.size)}）`)
+      if (delivery.method === 'shared') setMsg(`已開啟分享面板送出 ${built.filename}（${fmtBytes(built.size)}）`)
+      else if (delivery.method === 'downloaded') {
+        setDownloadRecovery(delivery.recoveryText ?? null)
+        setMsg(`已開始下載 ${built.filename}（${fmtBytes(built.size)}）。若瀏覽器未出現檔案，請顯示復原碼。`)
+      }
+      else if (delivery.method === 'copied') setMsg(`下載受阻，已將 ${built.filename} 的復原碼複製到剪貼簿。`)
+      else {
+        setMsg(`下載與剪貼簿都受阻，請在下方手動保存 ${built.filename} 的復原碼。`)
+        setRecoveryText(delivery.recoveryText ?? null)
+      }
       setMeta(loadMeta())
     } catch (e) {
       setMsg((e as Error)?.name === 'AbortError' ? '已取消分享' : `匯出失敗：${(e as Error)?.message ?? String(e)}`)
@@ -107,31 +130,34 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   }
 
   const onPickFile = async (file: File) => {
-    if (resultSettlementBusy()) {
-      setMsg('Result 結算進行中，請等待完成後再匯入。')
+    if (saveBlocked) {
+      setMsg(saveOperation.message)
       return
     }
     setMsg(null)
     setImportErr(null)
     setPending(null)
     setConfirmOlder(false)
-    const r = await readSaveFile(file)
-    if (r.ok) setPending(r)
-    else setImportErr(r.message)
+    try {
+      const r = await readSaveFile(file)
+      if (r.ok) setPending(r)
+      else setImportErr(r.message)
+    } finally {
+      requestAnimationFrame(() => fileTriggerRef.current?.focus())
+    }
   }
 
   const direction: SaveComparison | null = pending ? compareSaves(meta, pending.meta) : null
 
   const doImport = async () => {
     if (!pending) return
-    if (resultSettlementBusy()) {
-      setMsg('Result 結算進行中，請等待完成後再匯入。')
+    if (saveBlocked) {
+      setMsg(saveOperation.message)
       return
     }
     setBusy(true)
     setMsg(null)
     try {
-      await backupCurrentSave(Date.now()) // 安全紅線：覆蓋前一定先備份
       await applyImportedSave(pending)
       audio.play('victory')
       const legacyNotice = pending.legacyModelCount > 0
@@ -148,8 +174,8 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
   }
 
   const doRestore = async () => {
-    if (resultSettlementBusy()) {
-      setMsg('Result 結算進行中，請等待完成後再還原。')
+    if (saveBlocked) {
+      setMsg(saveOperation.message)
       return
     }
     setBusy(true)
@@ -167,6 +193,25 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const doBackup = async () => {
+    if (saveBlocked) {
+      setMsg(saveOperation.message)
+      return
+    }
+    setBusy(true)
+    setMsg(null)
+    try {
+      await backupCurrentSave(Date.now())
+      audio.play('select')
+      setMsg('已建立目前進度備份，可在本頁還原。')
+      refreshLocal()
+    } catch (e) {
+      setMsg(`備份失敗：${(e as Error)?.message ?? String(e)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <ModalSurface
       title="☁️ 存檔"
@@ -175,20 +220,21 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
       footer={<div className="utility-foot">目前進度：{roster.length} 隻Mobie。上次更新：{fmtTime(meta.updatedAt)}（v{meta.revision}）。</div>}
     >
       <div className="modal-surface__stack">
-        {settlementRunning && (
-          <div className="settlement-status" role="status" aria-live="polite" data-save-settlement-gate>
-            Result 結算進行中，匯出、匯入與還原暫時停用。
+        {saveBlocked && (
+          <div className="settlement-status" role="status" aria-live="polite" data-save-settlement-gate data-save-operation-gate>
+            {saveOperation.message}
           </div>
         )}
           {/* ── 匯出 ── */}
-          <div className="lib-panel" style={{ overflow: 'visible' }}>
+          <section className="lib-panel save-step" data-save-step="export" aria-labelledby="save-step-export-heading" style={{ overflow: 'visible' }}>
+            <h3 id="save-step-export-heading" className="save-step__title">1. 匯出目前進度</h3>
             <div className="col" style={{ gap: 4 }}>
               <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>存檔名稱</span>
               <input
                 className="utility-search"
                 value={name}
                 maxLength={24}
-                disabled={busy || settlementRunning}
+                disabled={busy || saveBlocked}
                 placeholder="trainer"
                 onChange={(e) => setName(e.target.value)}
                 onBlur={commitName}
@@ -199,28 +245,48 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
               新存檔固定只含 Mobie 與卡片進度；custom GLB/GLTF 已停用，既有本機資料不會被讀取或刪除。
             </div>
 
-            <button className="btn" style={{ marginTop: 8 }} onClick={() => void doExport()} disabled={busy || settlementRunning}>
-              {busy ? '處理中…' : settlementRunning ? '結算中…' : '⬆ 匯出存檔'}
+            <button className="btn" data-save-export onClick={() => void doExport()} disabled={busy || saveBlocked}>
+              {busy ? '處理中…' : saveBlocked ? '操作暫停…' : '⬆ 匯出存檔'}
             </button>
-          </div>
+            {recoveryText && (
+              <label className="save-recovery">
+                <span>手動保存復原碼（完整選取後貼到安全位置）</span>
+                <textarea data-save-recovery readOnly value={recoveryText} onFocus={(event) => event.currentTarget.select()} />
+              </label>
+            )}
+            {downloadRecovery && !recoveryText && (
+              <button className="btn btn--ghost btn--sm" data-save-recovery-reveal onClick={() => setRecoveryText(downloadRecovery)}>
+                顯示復原碼（若未取得下載檔）
+              </button>
+            )}
+          </section>
 
           {/* ── 匯入 ── */}
-          <div className="lib-panel" style={{ overflow: 'visible' }}>
-            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 2 }}>從 .save 檔還原進度</div>
-            <label className="btn btn--ghost btn--sm" style={{ alignSelf: 'flex-start', opacity: settlementRunning ? 0.55 : undefined }} aria-disabled={settlementRunning}>
-              📂 選擇 .save 檔…
+          <section className="lib-panel save-step" data-save-step="import" aria-labelledby="save-step-import-heading" style={{ overflow: 'visible' }}>
+            <h3 id="save-step-import-heading" className="save-step__title">2. 匯入並比較</h3>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 2 }}>先驗證檔案，再比較目前與匯入進度；覆蓋前會自動建立備份。</div>
+            <div className="save-file-picker">
+              <button
+                ref={fileTriggerRef}
+                type="button"
+                className="btn btn--ghost btn--sm"
+                data-save-import-trigger
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy || saveBlocked}
+              >📂 選擇 .save 檔…</button>
               <input
+                ref={fileInputRef}
                 type="file"
                 accept=".save,.zip,application/zip"
                 hidden
-                disabled={busy || settlementRunning}
+                disabled={busy || saveBlocked}
                 onChange={(e) => {
                   const f = e.target.files?.[0]
                   if (f) void onPickFile(f)
                   e.target.value = ''
                 }}
               />
-            </label>
+            </div>
             {importErr && <div className="lib-msg" style={{ color: '#ff6b6b' }}>⚠️ {importErr}</div>}
 
             <AnimatePresence>
@@ -268,25 +334,34 @@ export function SaveManagerModal({ onClose }: { onClose: () => void }) {
                     <button
                       className="btn btn--sm"
                       onClick={() => void doImport()}
-                      disabled={busy || settlementRunning || (direction === 'older' && !confirmOlder)}
+                      disabled={busy || saveBlocked || (direction === 'older' && !confirmOlder)}
                     >
                       {direction === 'older' ? '仍要覆蓋並匯入' : '覆蓋並匯入'}
                     </button>
-                    <button className="btn btn--ghost btn--sm" onClick={() => setPending(null)} disabled={busy || settlementRunning}>取消</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => setPending(null)} disabled={busy || saveBlocked}>取消</button>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {backup && !pending && (
-              <div className="lib-hint" style={{ marginLeft: 0, marginTop: 6 }}>
-                有匯入前備份（{fmtTime(backup.at)}）。
-                <button className="btn btn--ghost btn--sm" style={{ marginLeft: 8 }} onClick={() => void doRestore()} disabled={busy || settlementRunning}>
-                  ↩ 還原
+          </section>
+
+          {/* ── 備份 / 還原 ── */}
+          <section className="lib-panel save-step" data-save-step="backup" aria-labelledby="save-step-backup-heading" style={{ overflow: 'visible' }}>
+            <h3 id="save-step-backup-heading" className="save-step__title">3. 備份與還原</h3>
+            <div className="lib-hint" style={{ marginLeft: 0 }}>備份只含目前 Mobie 與卡片 canonical data，不含成就、孵化或 Result 待辦回條。</div>
+            <button className="btn btn--ghost btn--sm" data-save-backup onClick={() => void doBackup()} disabled={busy || saveBlocked}>
+              {busy ? '處理中…' : '建立目前進度備份'}
+            </button>
+            {backup && (
+              <div className="lib-hint" style={{ marginLeft: 0 }}>
+                有匯入前備份（可還原，{fmtTime(backup.at)}）。
+                <button className="btn btn--ghost btn--sm" data-save-restore style={{ marginLeft: 8 }} onClick={() => void doRestore()} disabled={busy || saveBlocked}>
+                  ↩ 還原備份
                 </button>
               </div>
             )}
-          </div>
+          </section>
         {msg && <div className="lib-msg" style={{ marginTop: 8 }}>{msg}</div>}
       </div>
     </ModalSurface>
