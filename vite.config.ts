@@ -9,10 +9,9 @@ const pkgVersion = JSON.parse(
   readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
 ).version
 
-// GitHub Pages 專案站服務於 https://<user>.github.io/mobie/，故建置時 base 必須是 '/mobie/'。
-// dev（vite/vitest）維持 '/'，本機開發與測試不受影響。
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/mobie/' : '/',
+// GitHub Pages 綁定自訂網域後，Mobie 從網域根目錄提供服務。
+export default defineConfig({
+  base: '/',
   define: { __APP_VERSION__: JSON.stringify(pkgVersion) },
   plugins: [react()],
   resolve: {
@@ -42,4 +41,4 @@ export default defineConfig(({ command }) => ({
     globals: true,
     environment: 'node',
   },
-}))
+})
